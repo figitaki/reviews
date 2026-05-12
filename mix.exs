@@ -6,6 +6,11 @@ defmodule Reviews.MixProject do
       app: :reviews,
       version: "0.1.0",
       elixir: "~> 1.15",
+      description: "Code-review tool for arbitrary diffs (Phoenix + Rust CLI).",
+      package: [
+        licenses: ["MIT"],
+        links: %{"GitHub" => "https://github.com/figitaki/reviews"}
+      ],
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),

@@ -3,6 +3,8 @@ name = "reviews"
 version = "0.1.0"
 edition = "2021"
 description = "CLI for the Reviews code review tool"
+license = "MIT"
+repository = "https://github.com/figitaki/reviews"
 
 [[bin]]
 name = "reviews"

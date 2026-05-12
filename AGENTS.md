@@ -17,7 +17,7 @@ Don't start a second Phoenix server while one is already running on `:4000` — 
 The Rust CLI at `cli/target/release/reviews` is how you preview your own changes: `cd <any-git-checkout> && reviews push` posts the current branch's diff to the local Phoenix server and prints a `http://localhost:4000/r/<slug>` URL. `reviews push --update <slug>` adds a patchset to an existing review.
 
 ### Git remote
-Origin is a private soft-serve server: `ssh://git.internal/reviews.git` (the SSH config alias maps `git.internal` → `tinycube-server:23231`). Don't add other remotes without checking; don't `git push` to anything but `origin`.
+Whichever git remote the maintainer has configured as `origin` is the canonical one. Don't add other remotes without checking; don't `git push` anywhere but `origin` unless explicitly asked. If a `github` remote is also configured, it's a mirror that's pushed to as part of the release process — see `docs/RELEASE.md`.
 
 ### Plans and memory
 - `.plans/` — project-scoped design plans, **tracked in git**. Start here when picking up work: read any plan that references the area you're touching. `.plans/a11y-design-fixes.md` is the current open plan (P0/P1/P2 a11y items, two flagged `⚠ overlap` with the deferred Shiki swap).
