@@ -639,6 +639,152 @@ button.rdr-line-number-clickable:hover {
   box-shadow: inset 2px 0 0 var(--ds-warn, #ffd166);
 }
 
+/* ---- Bubble enrichments (avatar, pinpoint, status, runs, time, flash) ---- */
+
+.rdr-avatar {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--ds-panel-raised, #0b0b0c);
+  flex: 0 0 auto;
+}
+
+.rdr-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ds-muted, #a3a3a3);
+  border: 1px solid var(--ds-line, #242426);
+}
+
+.rdr-thread-anchor-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.rdr-thread-anchor-link:hover .rdr-anchor-pinpoint {
+  text-decoration: underline;
+}
+.rdr-thread-anchor-link:focus-visible {
+  outline: 2px solid var(--ds-text, #f5f5f5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.rdr-anchor-pinpoint {
+  color: var(--ds-muted, #a3a3a3);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.rdr-status-pill {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--ds-line-strong, #3a3a3d);
+  background: var(--ds-panel-raised, #0b0b0c);
+  color: var(--ds-muted, #a3a3a3);
+}
+.rdr-status-open {
+  color: var(--ds-warn, #ffd166);
+  border-color: color-mix(in srgb, var(--ds-warn, #ffd166) 50%, transparent);
+}
+.rdr-status-resolved {
+  color: var(--ds-add, #25d0a0);
+  border-color: color-mix(in srgb, var(--ds-add, #25d0a0) 50%, transparent);
+}
+.rdr-status-outdated {
+  color: var(--ds-faint, #707073);
+}
+
+.rdr-thread-comments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rdr-thread-run {
+  margin-top: 8px;
+}
+.rdr-thread-run-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.rdr-thread-run-comments {
+  margin: 4px 0 0 0;
+  padding: 0 0 0 26px;
+  list-style: none;
+}
+
+.rdr-thread-comment {
+  padding: 2px 0;
+}
+.rdr-thread-comment-body {
+  white-space: pre-wrap;
+}
+.rdr-thread-comment-time,
+.rdr-draft-time {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--ds-faint, #707073);
+  font-size: 11px;
+}
+
+.rdr-thread-footer {
+  margin-top: 8px;
+  border-top: 1px solid var(--ds-line, #242426);
+  padding-top: 8px;
+}
+.rdr-thread-reply,
+.rdr-draft-edit {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--ds-line-strong, #3a3a3d);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text, #f5f5f5);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rdr-thread-reply:hover,
+.rdr-draft-edit:hover {
+  background: var(--ds-hover, #111113);
+}
+.rdr-draft-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@keyframes rdr-flash {
+  0%   { background-color: color-mix(in srgb, var(--ds-warn, #ffd166) 50%, transparent); }
+  100% { background-color: transparent; }
+}
+.rdr-row-flash {
+  animation: rdr-flash 1.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rdr-row-flash { animation: none; }
+}
+
 @media (max-width: 768px) {
   .review-topbar {
     flex-wrap: wrap;
