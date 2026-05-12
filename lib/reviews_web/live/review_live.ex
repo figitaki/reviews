@@ -259,60 +259,54 @@ defmodule ReviewsWeb.ReviewLive do
     <Layouts.flash_group flash={@flash} />
     <div class="review-page min-h-screen">
       <.ds_shell brand="Reviews" home={~p"/"}>
-        <:nav>
-          <.ds_nav_item navigate={~p"/"}>Home</.ds_nav_item>
-          <.ds_nav_item navigate={~p"/r/#{@review.slug}"} active>Review</.ds_nav_item>
-          <.ds_nav_item :if={@current_user} navigate={~p"/settings"}>Settings</.ds_nav_item>
-        </:nav>
         <:actions>
-          <Layouts.theme_toggle />
+          <div class="review-patchset" id="patchset-selector" aria-label="Patchset">
+            <button
+              :for={ps <- @patchsets}
+              id={"patchset-#{ps.number}"}
+              type="button"
+              phx-click="select_patchset"
+              phx-value-number={ps.number}
+              aria-pressed={
+                if(@selected_patchset && @selected_patchset.id == ps.id,
+                  do: "true",
+                  else: "false"
+                )
+              }
+              class={[
+                "review-chip focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+                @selected_patchset && @selected_patchset.id == ps.id &&
+                  "is-active"
+              ]}
+            >
+              v{ps.number}
+            </button>
+          </div>
+
+          <button
+            id="publish-review-button"
+            type="button"
+            class="review-button review-button-primary"
+            phx-click="open_publish_modal"
+            disabled={@drafts == []}
+          >
+            <%= if @drafts == [] do %>
+              Publish
+            <% else %>
+              Publish ({length(@drafts)})
+            <% end %>
+          </button>
+
+          <.user_menu current_user={@current_user} />
         </:actions>
 
         <div class="design-main">
-          <.ds_page_header
-            class="is-review-header"
-            eyebrow="Review"
-            title={@review.title}
-            description={@review.description || review_summary(@file_diffs, @drafts)}
-          >
-            <:actions>
-              <div class="review-patchset" id="patchset-selector">
-                <span class="review-label">Patchset</span>
-                <button
-                  :for={ps <- @patchsets}
-                  id={"patchset-#{ps.number}"}
-                  type="button"
-                  phx-click="select_patchset"
-                  phx-value-number={ps.number}
-                  aria-pressed={
-                    if(@selected_patchset && @selected_patchset.id == ps.id,
-                      do: "true",
-                      else: "false"
-                    )
-                  }
-                  class={[
-                    "review-chip focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
-                    @selected_patchset && @selected_patchset.id == ps.id &&
-                      "is-active"
-                  ]}
-                >
-                  v{ps.number}
-                </button>
-              </div>
-
-              <.user_menu current_user={@current_user} />
-
-              <button
-                id="publish-review-button"
-                type="button"
-                class="review-button review-button-primary"
-                phx-click="open_publish_modal"
-                disabled={@drafts == []}
-              >
-                Publish Review ({length(@drafts)} draft{if length(@drafts) != 1, do: "s"})
-              </button>
-            </:actions>
-          </.ds_page_header>
+          <header class="review-header">
+            <h1 class="review-title" translate="no">{@review.title}</h1>
+            <p :if={@review.description || @file_diffs != []} class="review-description">
+              {@review.description || review_summary(@file_diffs, @drafts)}
+            </p>
+          </header>
 
           <%!-- Patchset-pushed banner --%>
           <div
@@ -386,7 +380,9 @@ defmodule ReviewsWeb.ReviewLive do
                       <span class="rev-open-thread-path" translate="no">
                         {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
                       </span>
-                      <span class="rev-open-thread-snippet">{ReviewView.first_comment_snippet(t)}</span>
+                      <span class="rev-open-thread-snippet">
+                        {ReviewView.first_comment_snippet(t)}
+                      </span>
                     </span>
                   </button>
                 </div>
@@ -435,7 +431,7 @@ defmodule ReviewsWeb.ReviewLive do
       <%!-- Publish modal (Daisy) --%>
       <dialog id="publish-modal" class={["modal", @show_publish_modal && "modal-open"]}>
         <div class="modal-box review-modal max-w-2xl">
-          <h3 class="review-modal-title">Publish review</h3>
+          <h3 class="review-modal-title">Publish Review</h3>
           <p class="review-description mt-1">
             {length(@drafts)} draft{if length(@drafts) != 1, do: "s"} will go live for everyone with the link.
           </p>
