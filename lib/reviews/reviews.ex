@@ -109,6 +109,29 @@ defmodule Reviews.Reviews do
 
   def get_patchset!(id), do: Repo.get!(Patchset, id)
 
+  def latest_patchset(%Review{id: review_id}) do
+    Repo.one(
+      from p in Patchset,
+        where: p.review_id == ^review_id,
+        order_by: [desc: p.number],
+        limit: 1
+    )
+  end
+
+  def latest_patchset_id(%Review{} = review) do
+    case latest_patchset(review) do
+      %Patchset{id: id} -> id
+      nil -> nil
+    end
+  end
+
+  def latest_patchset_number(%Review{} = review) do
+    case latest_patchset(review) do
+      %Patchset{number: number} -> number
+      nil -> 1
+    end
+  end
+
   def list_files(%Patchset{id: patchset_id}) do
     Repo.all(from f in File, where: f.patchset_id == ^patchset_id, order_by: [asc: f.path])
   end

@@ -12,56 +12,48 @@ defmodule ReviewsWeb.Api.ReviewController do
   """
   use ReviewsWeb, :controller
 
+  alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsContext
-  alias Reviews.Threads, as: ThreadsContext
 
   @doc "GET /api/v1/reviews/:slug"
   def show(conn, %{"slug" => slug} = params) do
-    case ReviewsContext.get_review_by_slug(slug) do
-      nil ->
+    with {:ok, patchset_number} <- parse_patchset_number(params["patchset"]),
+         {:ok, snapshot} <-
+           ReviewView.get_snapshot_by_slug(slug, nil, patchset_number: patchset_number) do
+      json(conn, render_review(snapshot))
+    else
+      {:error, :not_found} ->
         conn
         |> put_status(:not_found)
         |> json(%{errors: %{detail: "Review not found"}})
 
-      review ->
-        patchsets = ReviewsContext.list_patchsets(review)
-        selected = pick_patchset(patchsets, params["patchset"])
-
-        cond do
-          patchsets == [] ->
-            conn |> put_status(:ok) |> json(render_review(review, [], nil, []))
-
-          selected == nil ->
-            conn
-            |> put_status(:not_found)
-            |> json(%{errors: %{detail: "Patchset not found"}})
-
-          true ->
-            threads = ThreadsContext.list_published_threads(review.id)
-            json(conn, render_review(review, patchsets, selected, threads))
-        end
+      {:error, :patchset_not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{errors: %{detail: "Patchset not found"}})
     end
   end
 
-  defp pick_patchset([], _), do: nil
-  defp pick_patchset(patchsets, nil), do: List.last(patchsets)
+  defp parse_patchset_number(nil), do: {:ok, nil}
 
-  defp pick_patchset(patchsets, n) when is_binary(n) do
+  defp parse_patchset_number(n) when is_binary(n) do
     case Integer.parse(n) do
-      {num, ""} -> Enum.find(patchsets, &(&1.number == num))
-      _ -> nil
+      {num, ""} -> {:ok, num}
+      _ -> {:error, :patchset_not_found}
     end
   end
 
-  defp render_review(review, patchsets, selected, threads) do
+  defp render_review(snapshot) do
+    review = snapshot.review
+
     %{
       slug: review.slug,
       title: review.title,
       description: review.description,
       url: url(~p"/r/#{review.slug}"),
-      patchsets: Enum.map(patchsets, &render_patchset_meta/1),
-      selected_patchset: selected && render_patchset(selected),
-      threads: Enum.map(threads, &render_thread/1)
+      patchsets: Enum.map(snapshot.patchsets, &render_patchset_meta/1),
+      selected_patchset: snapshot.selected_patchset && render_patchset(snapshot),
+      threads: Enum.map(snapshot.published_threads, &render_thread/1)
     }
   end
 
@@ -74,30 +66,26 @@ defmodule ReviewsWeb.Api.ReviewController do
     }
   end
 
-  defp render_patchset(ps) do
-    files = ReviewsContext.list_files(ps)
-    parsed = ReviewsContext.parse_diff_files(ps.raw_diff || "") |> Enum.into(%{}, &{&1.path, &1})
-
-    file_payload =
-      Enum.map(files, fn file ->
-        meta = Map.get(parsed, file.path, %{additions: 0, deletions: 0})
-
-        %{
-          path: file.path,
-          old_path: file.old_path,
-          status: file.status,
-          additions: Map.get(meta, :additions, 0),
-          deletions: Map.get(meta, :deletions, 0),
-          raw_diff: ReviewsContext.raw_diff_for_file(ps, file.path) || ""
-        }
-      end)
+  defp render_patchset(snapshot) do
+    ps = snapshot.selected_patchset
 
     %{
       number: ps.number,
       base_sha: ps.base_sha,
       branch_name: ps.branch_name,
       pushed_at: ps.pushed_at,
-      files: file_payload
+      files: Enum.map(ReviewView.file_payloads(snapshot), &render_file/1)
+    }
+  end
+
+  defp render_file(file) do
+    %{
+      path: file.path,
+      old_path: file.old_path,
+      status: file.status,
+      additions: file.additions,
+      deletions: file.deletions,
+      raw_diff: file.raw_diff
     }
   end
 

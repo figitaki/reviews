@@ -15,6 +15,7 @@ defmodule ReviewsWeb.ReviewLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.Accounts
+  alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
 
@@ -33,22 +34,26 @@ defmodule ReviewsWeb.ReviewLive do
         end
 
         current_user = load_current_user(session)
-        patchsets = ReviewsContext.list_patchsets(review)
-        selected = List.last(patchsets) || nil
 
-        socket =
-          socket
-          |> assign(:page_title, review.title)
-          |> assign(:review, review)
-          |> assign(:current_user, current_user)
-          |> assign(:patchsets, patchsets)
-          |> assign(:selected_patchset, selected)
-          |> assign(:show_publish_modal, false)
-          |> assign(:summary_body, "")
-          |> assign(:banner_message, nil)
-          |> assign_files_and_threads()
+        case ReviewView.snapshot(review, current_user) do
+          {:ok, snapshot} ->
+            socket =
+              socket
+              |> assign(:page_title, review.title)
+              |> assign(:current_user, current_user)
+              |> assign(:show_publish_modal, false)
+              |> assign(:summary_body, "")
+              |> assign(:banner_message, nil)
+              |> assign_snapshot(snapshot)
 
-        {:ok, socket}
+            {:ok, socket}
+
+          {:error, :patchset_not_found} ->
+            {:ok,
+             socket
+             |> put_flash(:error, "Patchset not found.")
+             |> push_navigate(to: ~p"/")}
+        end
     end
   end
 
@@ -59,15 +64,9 @@ defmodule ReviewsWeb.ReviewLive do
   def handle_event("select_patchset", %{"number" => number}, socket) do
     case Integer.parse(to_string(number)) do
       {n, _} ->
-        case Enum.find(socket.assigns.patchsets, &(&1.number == n)) do
-          nil ->
-            {:noreply, socket}
-
-          patchset ->
-            {:noreply,
-             socket
-             |> assign(:selected_patchset, patchset)
-             |> assign_files_and_threads()}
+        case refresh_snapshot(socket, patchset_number: n) do
+          {:ok, socket} -> {:noreply, socket}
+          {:error, :patchset_not_found} -> {:noreply, socket}
         end
 
       :error ->
@@ -148,7 +147,7 @@ defmodule ReviewsWeb.ReviewLive do
              |> assign(:show_publish_modal, false)
              |> assign(:summary_body, "")
              |> put_flash(:info, "Review published.")
-             |> assign_files_and_threads()
+             |> refresh_snapshot!()
              |> push_threads_for_all_files()}
 
           {:error, _reason} ->
@@ -159,12 +158,9 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_info({:patchset_pushed, number}, socket) do
-    review = socket.assigns.review
-    patchsets = ReviewsContext.list_patchsets(review)
-
     {:noreply,
      socket
-     |> assign(:patchsets, patchsets)
+     |> refresh_snapshot!()
      |> assign(:banner_message, "Patchset #{number} just pushed.")}
   end
 
@@ -172,7 +168,7 @@ defmodule ReviewsWeb.ReviewLive do
   def handle_info({:thread_published, _thread}, socket) do
     {:noreply,
      socket
-     |> assign_files_and_threads()
+     |> refresh_snapshot!()
      |> push_threads_for_all_files()}
   end
 
@@ -180,100 +176,40 @@ defmodule ReviewsWeb.ReviewLive do
   # Assigns helpers
   # ---------------------------------------------------------------------------
 
-  defp assign_files_and_threads(socket) do
+  defp refresh_snapshot!(socket, opts \\ []) do
+    case refresh_snapshot(socket, opts) do
+      {:ok, socket} -> socket
+      {:error, _reason} -> socket
+    end
+  end
+
+  defp refresh_snapshot(socket, opts) do
     review = socket.assigns.review
-    selected = socket.assigns.selected_patchset
     current_user = socket.assigns.current_user
+    selected = socket.assigns.selected_patchset
 
-    files = if selected, do: ReviewsContext.list_files(selected), else: []
-    file_diffs = file_diff_meta(files, selected)
-    published_threads = Threads.list_published_threads(review.id)
+    patchset_number =
+      Keyword.get_lazy(opts, :patchset_number, fn ->
+        selected && selected.number
+      end)
 
-    drafts =
-      case current_user do
-        nil -> []
-        author -> Threads.list_drafts_for(review, author)
-      end
-
-    socket
-    |> assign(:files, files)
-    |> assign(:file_diffs, file_diffs)
-    |> assign(:published_threads, published_threads)
-    |> assign(:drafts, drafts)
-  end
-
-  defp file_diff_meta(files, selected_patchset) do
-    raw = (selected_patchset && selected_patchset.raw_diff) || ""
-    parsed = ReviewsContext.parse_diff_files(raw) |> Enum.into(%{}, &{&1.path, &1})
-
-    Enum.map(files, fn file ->
-      meta = Map.get(parsed, file.path, %{additions: 0, deletions: 0})
-      raw_for_file = ReviewsContext.raw_diff_for_file(selected_patchset, file.path) || ""
-
-      Map.merge(file_to_map(file), %{
-        additions: Map.get(meta, :additions, 0),
-        deletions: Map.get(meta, :deletions, 0),
-        raw_diff: raw_for_file
-      })
-    end)
-  end
-
-  defp file_to_map(file) do
-    %{
-      id: file.id,
-      path: file.path,
-      old_path: file.old_path,
-      status: file.status
-    }
+    case ReviewView.snapshot(review, current_user, patchset_number: patchset_number) do
+      {:ok, snapshot} -> {:ok, assign_snapshot(socket, snapshot)}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   defp threads_for_file_payload(socket, file_path) do
-    threads =
-      socket.assigns.published_threads
-      |> Enum.filter(&(&1.file_path == file_path))
-      |> Enum.map(&thread_to_payload/1)
-
-    drafts =
-      socket.assigns.drafts
-      |> Enum.filter(&(&1.thread.file_path == file_path))
-      |> Enum.map(&draft_to_payload/1)
-
-    %{threads: threads, drafts: drafts}
-  end
-
-  defp thread_to_payload(thread) do
     %{
-      id: thread.id,
-      file_path: thread.file_path,
-      side: thread.side,
-      anchor: thread.anchor,
-      status: thread.status,
-      author: user_to_payload(thread.author),
-      comments:
-        Enum.map(thread.comments || [], fn c ->
-          %{id: c.id, body: c.body, author: nil}
-        end)
+      threads: ReviewView.thread_payloads_for_file(socket.assigns.review_snapshot, file_path),
+      drafts: ReviewView.draft_payloads_for_file(socket.assigns.review_snapshot, file_path)
     }
   end
-
-  defp draft_to_payload(%{thread: thread, comment: comment}) do
-    %{
-      id: comment.id,
-      thread_id: thread.id,
-      file_path: thread.file_path,
-      side: thread.side,
-      anchor: thread.anchor,
-      body: comment.body
-    }
-  end
-
-  defp user_to_payload(%{username: username}), do: %{username: username}
-  defp user_to_payload(_), do: nil
 
   defp push_threads_for_file(socket, nil), do: socket
 
   defp push_threads_for_file(socket, file_path) when is_binary(file_path) do
-    socket = assign_files_and_threads(socket)
+    socket = refresh_snapshot!(socket)
     payload = threads_for_file_payload(socket, file_path)
     push_event(socket, "threads_updated:#{file_path}", payload)
   end
@@ -595,36 +531,24 @@ defmodule ReviewsWeb.ReviewLive do
   defp anchor_line_hint(_), do: nil
 
   defp threads_json(threads, file_path) do
-    threads
-    |> Enum.filter(&(&1.file_path == file_path))
-    |> Enum.map(fn t ->
-      %{
-        id: t.id,
-        side: t.side,
-        anchor: t.anchor,
-        status: t.status,
-        author: %{username: (t.author && t.author.username) || nil},
-        comments:
-          Enum.map(t.comments || [], fn c ->
-            %{id: c.id, body: c.body, author: nil}
-          end)
-      }
-    end)
-    |> Jason.encode!()
+    snapshot = %{published_threads: threads}
+    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
   end
 
   defp drafts_json(drafts, file_path) do
-    drafts
-    |> Enum.filter(&(&1.thread.file_path == file_path))
-    |> Enum.map(fn %{thread: t, comment: c} ->
-      %{
-        id: c.id,
-        thread_id: t.id,
-        side: t.side,
-        anchor: t.anchor,
-        body: c.body
-      }
-    end)
-    |> Jason.encode!()
+    snapshot = %{drafts: drafts}
+    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
+  end
+
+  defp assign_snapshot(socket, snapshot) do
+    socket
+    |> assign(:review_snapshot, snapshot)
+    |> assign(:review, snapshot.review)
+    |> assign(:patchsets, snapshot.patchsets)
+    |> assign(:selected_patchset, snapshot.selected_patchset)
+    |> assign(:files, snapshot.files)
+    |> assign(:file_diffs, snapshot.file_diffs)
+    |> assign(:published_threads, snapshot.published_threads)
+    |> assign(:drafts, snapshot.drafts)
   end
 end

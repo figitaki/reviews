@@ -13,6 +13,7 @@ defmodule Reviews.Threads do
 
   alias Ecto.Multi
   alias Reviews.Repo
+  alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
   alias Reviews.Accounts.User
   alias Reviews.Threads.{Comment, ReviewSummary, Thread}
@@ -149,14 +150,7 @@ defmodule Reviews.Threads do
     # `originating_patchset_id` is the latest patchset for this review at the
     # moment of saving — the thread "originates" from what the author was
     # looking at. We grab it lazily so tests that seed a single patchset work.
-    originating_patchset_id =
-      Repo.one(
-        from p in Reviews.Reviews.Patchset,
-          where: p.review_id == ^review.id,
-          order_by: [desc: p.number],
-          limit: 1,
-          select: p.id
-      )
+    originating_patchset_id = ReviewsContext.latest_patchset_id(review)
 
     %Thread{}
     |> Thread.changeset(%{
@@ -420,11 +414,7 @@ defmodule Reviews.Threads do
   end
 
   defp round_number_for(%Review{id: review_id}) do
-    Repo.one(
-      from p in Reviews.Reviews.Patchset,
-        where: p.review_id == ^review_id,
-        select: max(p.number)
-    ) || 1
+    ReviewsContext.latest_patchset_number(%Review{id: review_id})
   end
 
   defp presence(nil), do: nil
