@@ -5,6 +5,8 @@ use serde_json::Value;
 use crate::api::ApiClient;
 use crate::config::Config;
 
+const DEFAULT_SERVER: &str = "https://reviews-dev.fly.dev";
+
 #[derive(Args, Debug)]
 pub struct ShowArgs {
     /// Review slug (the `:slug` in `/r/:slug`).
@@ -19,7 +21,7 @@ pub struct ShowArgs {
     pub format: Format,
 
     /// Override server URL. Defaults to the configured server, or
-    /// http://localhost:4000 if not logged in.
+    /// https://reviews-dev.fly.dev if not logged in.
     #[arg(long)]
     pub server: Option<String>,
 }
@@ -52,7 +54,7 @@ fn resolve_server_and_token(server_override: Option<&str>) -> Result<(String, Op
     }
     match Config::load() {
         Ok(cfg) => Ok((cfg.default.server_url, Some(cfg.default.api_token))),
-        Err(_) => Ok(("http://localhost:4000".to_string(), None)),
+        Err(_) => Ok((DEFAULT_SERVER.to_string(), None)),
     }
 }
 

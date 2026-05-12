@@ -4,7 +4,7 @@ use std::io::{self, BufRead, Write};
 use crate::api::ApiClient;
 use crate::config::Config;
 
-const DEFAULT_SERVER: &str = "http://localhost:4000";
+const DEFAULT_SERVER: &str = "https://reviews-dev.fly.dev";
 
 pub fn run() -> Result<()> {
     let stdin = io::stdin();
