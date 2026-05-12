@@ -11,9 +11,26 @@ defmodule ReviewsWeb.AuthController do
   """
   use ReviewsWeb, :controller
 
+  plug :require_oauth_configured when action in [:request]
   plug Ueberauth
 
   alias Reviews.Accounts
+
+  defp require_oauth_configured(conn, _opts) do
+    client_id = Application.get_env(:ueberauth, Ueberauth.Strategy.Github.OAuth)[:client_id]
+
+    if client_id in [nil, ""] do
+      conn
+      |> put_flash(
+        :error,
+        "GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET (see .env.example)."
+      )
+      |> redirect(to: ~p"/")
+      |> halt()
+    else
+      conn
+    end
+  end
 
   def request(conn, _params) do
     # Ueberauth handles the redirect; if we ever land here it means the

@@ -33,6 +33,18 @@ callback URL `http://localhost:4000/auth/github/callback`.
 
 Anonymous viewing works without OAuth; commenting requires sign-in.
 
+## GitHub OAuth (dev setup)
+
+1. Register an OAuth app at <https://github.com/settings/developers>; set the
+   callback URL to `http://localhost:4000/auth/github/callback`.
+2. Copy `.env.example` to `.env.local` and fill in `GITHUB_CLIENT_ID` /
+   `GITHUB_CLIENT_SECRET`.
+3. The `bin/server` script auto-sources `.env.local` (added in parallel).
+   Otherwise, `source .env.local` before `mix phx.server`.
+
+If the env vars are missing, `/auth/github` redirects home with a flash
+explaining what to set, so the failure mode is loud and obvious.
+
 ## Layout
 
 - `lib/reviews/` — contexts (`Accounts`, `Reviews`, `Threads`, `Anchoring`).
