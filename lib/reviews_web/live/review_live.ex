@@ -340,8 +340,11 @@ defmodule ReviewsWeb.ReviewLive do
               type="button"
               phx-click="select_patchset"
               phx-value-number={ps.number}
+              aria-pressed={
+                if(@selected_patchset && @selected_patchset.id == ps.id, do: "true", else: "false")
+              }
               class={[
-                "px-2 py-1 text-xs rounded border",
+                "px-2 py-1 text-xs rounded border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
                 @selected_patchset && @selected_patchset.id == ps.id &&
                   "bg-primary text-primary-content border-primary"
               ]}

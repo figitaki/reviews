@@ -104,6 +104,15 @@
 
 :root {
   --rev-header-h: 3rem;
+  color-scheme: light dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 [id^="file-"] {
@@ -159,6 +168,10 @@ button.rdr-line-number-clickable {
 button.rdr-line-number-clickable:hover {
   background: rgba(99, 102, 241, 0.15);
   color: inherit;
+}
+button.rdr-line-number-clickable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 .rdr-line-content {
