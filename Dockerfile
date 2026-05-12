@@ -16,8 +16,8 @@
 #     reviews:latest
 
 ARG ELIXIR_VERSION=1.18.3
-ARG OTP_VERSION=27.3.4
-ARG DEBIAN_VERSION=bookworm-20250407-slim
+ARG OTP_VERSION=27.3.4.11
+ARG DEBIAN_VERSION=bookworm-20260505-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
@@ -66,8 +66,8 @@ COPY lib lib
 # phx.digest.
 COPY config/runtime.exs config/
 
-RUN mix assets.deploy
 RUN mix compile
+RUN mix assets.deploy
 
 # Optional release overlays (rel/) — copied if present so `mix release` picks
 # them up, but the Dockerfile works without a rel/ directory.
