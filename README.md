@@ -56,10 +56,9 @@ explaining what to set, so the failure mode is loud and obvious.
 - `lib/reviews/` — contexts (`Accounts`, `Reviews`, `Threads`, `Anchoring`).
   Only these touch `Repo`.
 - `lib/reviews_web/` — controllers, LiveViews, plugs.
-- `assets/js/hooks/diff_renderer.js` — the React island hook (Stream 2a fills
-  this in).
-- `cli/` — Rust CLI (Stream 2b; not in this directory yet).
-- `docs/CONTRACTS.md` — REST + hook contracts the streams build against.
+- `assets/js/hooks/diff_renderer.js` — the React island hook for `@pierre/diffs`.
+- `cli/` — Rust CLI.
+- `docs/CONTRACTS.md` — REST + hook contracts.
 
 ## Tests
 
