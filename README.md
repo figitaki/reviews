@@ -19,6 +19,12 @@ mix setup        # fetches deps, creates DB, runs migrations, installs assets
 mix phx.server   # starts the app on http://localhost:4000
 ```
 
+## Running the dev server
+
+Prefer `./bin/server` over `mix phx.server` — it auto-sources `.env.local`
+(gitignored) so `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` are exported
+before Phoenix boots. Copy `.env.example` to `.env.local` to get started.
+
 ## GitHub OAuth
 
 Set these before starting the server if you want to actually sign in:

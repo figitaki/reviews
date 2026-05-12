@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Dev convenience wrapper: source .env.local (if present) and start Phoenix.
+# Not to be confused with the release-mode bin/server from `mix phx.gen.release`.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if [ -f .env.local ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env.local
+  set +a
+  echo "Loaded .env.local" >&2
+else
+  echo "No .env.local found — copy .env.example and fill in GitHub OAuth credentials. Starting server anyway." >&2
+fi
+
+exec mix phx.server
