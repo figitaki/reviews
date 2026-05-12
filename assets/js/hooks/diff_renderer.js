@@ -114,7 +114,7 @@ function DraftBubble({ draft, onRemove }) {
         <span className="rdr-draft-tag">draft</span>
         {onRemove ? (
           <button type="button" className="rdr-draft-remove" onClick={onRemove}>
-            remove
+            Remove
           </button>
         ) : null}
       </div>
@@ -182,7 +182,7 @@ function DraftComposer({ initialValue, onSave, onCancel }) {
       />
       <div className="rdr-composer-actions">
         <button type="button" className="rdr-composer-save" onClick={submit}>
-          Save draft
+          Save Draft
         </button>
         <button type="button" className="rdr-composer-cancel" onClick={onCancel}>
           Cancel
@@ -238,7 +238,7 @@ function DiffRow({
         >
           {row.newNumber ?? ""}
         </button>
-        <pre className="rdr-line-content">{row.content}</pre>
+        <pre className="rdr-line-content" translate="no">{row.content}</pre>
       </div>
 
       {threads.map((t) => (

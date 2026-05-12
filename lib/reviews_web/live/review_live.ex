@@ -326,7 +326,7 @@ defmodule ReviewsWeb.ReviewLive do
         <%!-- Top bar --%>
         <header class="sticky top-0 z-10 bg-base-100 border-b py-2 flex items-center gap-3 flex-wrap min-h-[var(--rev-header-h)]">
           <div class="flex-1 min-w-0">
-            <h1 class="text-lg font-semibold truncate">{@review.title}</h1>
+            <h1 class="text-lg font-semibold truncate" translate="no">{@review.title}</h1>
             <p :if={@review.description} class="text-xs text-base-content/70 truncate">
               {@review.description}
             </p>
@@ -362,7 +362,7 @@ defmodule ReviewsWeb.ReviewLive do
             phx-click="open_publish_modal"
             disabled={@drafts == []}
           >
-            Publish review ({length(@drafts)} draft{if length(@drafts) != 1, do: "s"})
+            Publish Review ({length(@drafts)} draft{if length(@drafts) != 1, do: "s"})
           </button>
         </header>
 
@@ -374,7 +374,7 @@ defmodule ReviewsWeb.ReviewLive do
         >
           <span>{@banner_message}</span>
           <button type="button" phx-click="dismiss_banner" class="btn btn-ghost btn-xs">
-            dismiss
+            Dismiss
           </button>
         </div>
 
@@ -386,7 +386,7 @@ defmodule ReviewsWeb.ReviewLive do
                 <a href={"#file-#{fd.id}"} class="flex items-center justify-between gap-2">
                   <span class="flex items-center gap-2 min-w-0">
                     <.status_icon status={fd.status} />
-                    <span class="truncate font-mono text-xs">{fd.path}</span>
+                    <span class="truncate font-mono text-xs" translate="no">{fd.path}</span>
                   </span>
                   <span class="shrink-0 text-xs whitespace-nowrap">
                     <span class="text-success">+{fd.additions}</span>
@@ -408,7 +408,7 @@ defmodule ReviewsWeb.ReviewLive do
             >
               <header class="px-3 py-2 border-b text-sm font-mono flex items-center gap-2 bg-base-200">
                 <.status_icon status={fd.status} />
-                <span class="truncate">{fd.path}</span>
+                <span class="truncate" translate="no">{fd.path}</span>
                 <span class="ml-auto text-xs">
                   <span class="text-success">+{fd.additions}</span>
                   <span class="text-error">-{fd.deletions}</span>
@@ -452,7 +452,7 @@ defmodule ReviewsWeb.ReviewLive do
               class="border rounded p-2 text-sm flex gap-2 items-start"
             >
               <div class="flex-1 min-w-0">
-                <p class="font-mono text-xs text-base-content/70 truncate">
+                <p class="font-mono text-xs text-base-content/70 truncate" translate="no">
                   {draft.thread.file_path}<span :if={anchor_line_hint(draft.thread)}>:{anchor_line_hint(draft.thread)}</span>
                 </p>
                 <p class="mt-1 whitespace-pre-wrap">{draft.comment.body}</p>
@@ -463,7 +463,7 @@ defmodule ReviewsWeb.ReviewLive do
                 phx-click="delete_draft"
                 phx-value-comment_id={draft.comment.id}
               >
-                remove
+                Remove
               </button>
             </li>
             <li :if={@drafts == []} class="text-sm text-base-content/60 italic">
@@ -479,7 +479,7 @@ defmodule ReviewsWeb.ReviewLive do
                 name="summary"
                 rows="3"
                 class="textarea textarea-bordered w-full"
-                placeholder="Optional summary that ships with the published drafts."
+                placeholder="Optional summary that ships with the published drafts…"
               >{@summary_body}</textarea>
             </label>
           </form>
