@@ -56,6 +56,21 @@ pub struct CreatePatchsetResponse {
     pub url: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct CreateCommentRequest<'a> {
+    pub file_path: &'a str,
+    pub side: &'a str,
+    pub body: &'a str,
+    pub thread_anchor: Value,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateCommentResponse {
+    pub thread_id: i64,
+    pub comment_id: i64,
+    pub url: String,
+}
+
 impl ApiClient {
     pub fn new(base_url: impl Into<String>, token: impl Into<String>) -> Result<Self> {
         Self::build(base_url.into(), Some(token.into()))
@@ -132,6 +147,23 @@ impl ApiClient {
             .with_context(|| format!("could not reach server for POST {path}"))?;
         let resp = check_status(resp, &format!("POST {path}"))?;
         resp.json::<CreatePatchsetResponse>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
+    pub fn create_comment(
+        &self,
+        slug: &str,
+        req: &CreateCommentRequest<'_>,
+    ) -> Result<CreateCommentResponse> {
+        let path = format!("/api/v1/reviews/{slug}/comments");
+        let _ = self.require_token(&format!("POST {path}"))?;
+        let resp = self
+            .auth(self.http.post(self.url(&path)))
+            .json(req)
+            .send()
+            .with_context(|| format!("could not reach server for POST {path}"))?;
+        let resp = check_status(resp, &format!("POST {path}"))?;
+        resp.json::<CreateCommentResponse>()
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 
@@ -320,6 +352,57 @@ mod tests {
         let body = client.show_review("k7m2qz", Some(2)).unwrap();
         assert_eq!(body["selected_patchset"]["number"], 2);
         mock.assert();
+    }
+
+    #[test]
+    fn create_comment_happy_path() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("POST", "/api/v1/reviews/k7m2qz/comments")
+            .match_header("authorization", "Bearer tok")
+            .match_header("content-type", "application/json")
+            .with_status(201)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{"thread_id":7,"comment_id":12,"file_path":"foo","side":"new","anchor":{"granularity":"line"},"url":"http://localhost:4000/r/k7m2qz"}"#,
+            )
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let anchor = serde_json::json!({"granularity": "line", "line_number_hint": 1});
+        let resp = client
+            .create_comment(
+                "k7m2qz",
+                &CreateCommentRequest {
+                    file_path: "foo",
+                    side: "new",
+                    body: "lgtm",
+                    thread_anchor: anchor,
+                },
+            )
+            .unwrap();
+        assert_eq!(resp.thread_id, 7);
+        assert_eq!(resp.comment_id, 12);
+        assert_eq!(resp.url, "http://localhost:4000/r/k7m2qz");
+        mock.assert();
+    }
+
+    #[test]
+    fn create_comment_requires_token() {
+        let client = ApiClient::anonymous("http://example.invalid").unwrap();
+        let err = client
+            .create_comment(
+                "x",
+                &CreateCommentRequest {
+                    file_path: "f",
+                    side: "new",
+                    body: "b",
+                    thread_anchor: serde_json::json!({"granularity": "line"}),
+                },
+            )
+            .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("reviews login"), "msg = {msg}");
     }
 
     #[test]

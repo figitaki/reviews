@@ -228,6 +228,92 @@ defmodule Reviews.Threads do
   ## Publishing
 
   @doc """
+  Creates a new thread + published comment in one transaction, skipping the
+  draft step. Used by the CLI (`reviews comment`) and any other publish-
+  immediately surface.
+
+  `params`:
+
+      %{
+        "file_path"     => "lib/foo.ex",
+        "side"          => "old" | "new",
+        "body"          => "...",
+        "thread_anchor" => %{"granularity" => "line" | "token_range", ...}
+      }
+
+  Token-range anchors carry the substring identification — the relocator in
+  `Reviews.Anchoring` still returns `:not_implemented` for them, so they
+  don't survive a patchset push yet (see CLAUDE.md). They're stored verbatim
+  and rendered as line anchors today via `anchor.line_number_hint`.
+
+  Returns `{:ok, %{thread: t, comment: c}}` or `{:error, reason}`.
+  Broadcasts `{:thread_published, thread}` on `"review:<slug>"`.
+  """
+  def publish_comment(%Review{} = review, %User{} = author, params) when is_map(params) do
+    file_path = params["file_path"] || params[:file_path]
+    side = params["side"] || params[:side]
+    body = String.trim(to_string(params["body"] || params[:body] || ""))
+    anchor = params["thread_anchor"] || params[:thread_anchor] || %{}
+
+    cond do
+      body == "" ->
+        {:error, :empty_body}
+
+      side not in ["old", "new"] ->
+        {:error, :invalid_side}
+
+      !is_binary(file_path) or file_path == "" ->
+        {:error, :invalid_file_path}
+
+      !is_map(anchor) or not Map.has_key?(anchor, "granularity") ->
+        {:error, :invalid_anchor}
+
+      anchor["granularity"] not in ["line", "token_range"] ->
+        {:error, :unknown_granularity}
+
+      true ->
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+        result =
+          Repo.transaction(fn ->
+            thread = create_thread(review, author, file_path, side, anchor)
+
+            comment =
+              %Comment{}
+              |> Comment.changeset(%{
+                thread_id: thread.id,
+                author_id: author.id,
+                body: body,
+                state: "published",
+                published_at: now
+              })
+              |> Repo.insert!()
+
+            %{thread: thread, comment: comment}
+          end)
+
+        case result do
+          {:ok, %{thread: thread, comment: _} = out} ->
+            published_thread =
+              Repo.preload(thread, comments: from(c in Comment, where: c.state == "published"))
+
+            Phoenix.PubSub.broadcast(
+              @pubsub,
+              "review:#{review.slug}",
+              {:thread_published, published_thread}
+            )
+
+            {:ok, out}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  rescue
+    error in [Ecto.InvalidChangesetError, Postgrex.Error] -> {:error, error}
+  end
+
+  @doc """
   Publishes every draft Comment authored by `author` on `review` in one
   transaction. Also flips the optional draft ReviewSummary for this round.
   Returns `{:ok, %{comments: [...], summary: nil | s, threads: [...]}}`.

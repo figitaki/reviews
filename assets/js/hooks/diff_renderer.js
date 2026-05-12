@@ -5,20 +5,14 @@
 // React tree inside `this.el`, and bridges UI events back to LiveView via
 // pushEvent.
 //
-// Stream 2a takeaway: @pierre/diffs ships React components (`FileDiff`,
-// `PatchDiff`) but they expect a fully-wired highlighter + worker pool to
-// render the diff with syntax colors. Bootstrapping that inside a LiveView
-// hook (esbuild + workers as static assets + theme registration) is more
-// involved than this stream's budget allows, so for now the island renders
-// a clean, no-highlight unified diff via a tiny in-file component. Threads
-// + drafts still mount as inline bubbles below the anchored line — which
-// is the user-visible contract that matters.
-//
-// Future stream can swap the `<UnifiedDiffView>` for `<PatchDiff patch=...>`
-// once the worker pool + theme is wired in app.js.
+// The island keeps diff rendering local so thread anchors and draft composers
+// stay simple. Syntax highlighting is applied per rendered row with Shiki.
 
 import React, { useState, useRef, useEffect, useMemo } from "react"
 import { createRoot } from "react-dom/client"
+import { codeToTokens } from "shiki"
+
+const SHIKI_THEME = "github-dark-default"
 
 // ----------------------------------------------------------------------------
 // Parsing — split a single file's unified diff into rows we can render.
@@ -83,6 +77,50 @@ function buildContextSnapshot(rows, anchorIndex, n = 2) {
     after.push(rows[i].content)
   }
   return { before, after }
+}
+
+function languageForFile(path) {
+  const lower = (path || "").toLowerCase()
+  const name = lower.split("/").pop() || ""
+
+  if (name === ".env" || name.startsWith(".env.")) return "dotenv"
+  if (name === "mix.exs") return "elixir"
+  if (name === "mix.lock") return "elixir"
+  if (name.endsWith(".ex") || name.endsWith(".exs")) return "elixir"
+  if (name.endsWith(".heex") || name.endsWith(".html.heex")) return "html"
+  if (name.endsWith(".js") || name.endsWith(".mjs") || name.endsWith(".cjs")) return "javascript"
+  if (name.endsWith(".jsx")) return "jsx"
+  if (name.endsWith(".ts")) return "typescript"
+  if (name.endsWith(".tsx")) return "tsx"
+  if (name.endsWith(".css")) return "css"
+  if (name.endsWith(".json")) return "json"
+  if (name.endsWith(".md") || name.endsWith(".markdown")) return "markdown"
+  if (name.endsWith(".yml") || name.endsWith(".yaml")) return "yaml"
+  if (name.endsWith(".toml")) return "toml"
+  if (name.endsWith(".sh") || name.endsWith(".bash") || name.endsWith(".zsh")) return "bash"
+
+  return null
+}
+
+function tokenStyle(token) {
+  const style = {}
+  if (token.color) style.color = token.color
+  if (token.fontStyle) {
+    if (token.fontStyle & 1) style.fontStyle = "italic"
+    if (token.fontStyle & 2) style.fontWeight = 700
+    if (token.fontStyle & 4) style.textDecoration = "underline"
+  }
+  return style
+}
+
+function HighlightedCode({ content, tokens }) {
+  if (!tokens || tokens.length === 0) return content
+
+  return tokens.map((token, i) => (
+    <span key={i} style={tokenStyle(token)}>
+      {token.content}
+    </span>
+  ))
 }
 
 // ----------------------------------------------------------------------------
@@ -205,6 +243,7 @@ function DiffRow({
   onCloseComposer,
   onSaveDraft,
   onDeleteDraft,
+  highlightedTokens,
 }) {
   if (row.type === "hunk") {
     return (
@@ -238,7 +277,9 @@ function DiffRow({
         >
           {row.newNumber ?? ""}
         </button>
-        <pre className="rdr-line-content" translate="no">{row.content}</pre>
+        <pre className="rdr-line-content" translate="no" data-row-index={index}>
+          <HighlightedCode content={row.content} tokens={highlightedTokens} />
+        </pre>
       </div>
 
       {threads.map((t) => (
@@ -283,7 +324,92 @@ function DiffRow({
 
 function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, drafts, onSaveDraft, onDeleteDraft }) {
   const parsed = useMemo(() => parseUnifiedDiff(rawDiff), [rawDiff])
+  const [highlightedLines, setHighlightedLines] = useState(null)
   const [composerOpenAt, setComposerOpenAt] = useState(null)
+  const [pendingSelection, setPendingSelection] = useState(null)
+  const [selectionPill, setSelectionPill] = useState(null)
+  const fileBodyRef = useRef(null)
+
+  useEffect(() => {
+    const lang = languageForFile(filePath)
+    if (!lang || parsed.rows.length === 0) {
+      setHighlightedLines(null)
+      return
+    }
+
+    let cancelled = false
+    const code = parsed.rows.map((row) => (row.type === "hunk" ? "" : row.content)).join("\n")
+
+    codeToTokens(code, { lang, theme: SHIKI_THEME })
+      .then(({ tokens }) => {
+        if (!cancelled) setHighlightedLines(tokens)
+      })
+      .catch(() => {
+        if (!cancelled) setHighlightedLines(null)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [filePath, parsed.rows])
+
+  useEffect(() => {
+    function onSelectionChange() {
+      if (!fileBodyRef.current) return
+      const sel = window.getSelection?.()
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        setSelectionPill(null)
+        return
+      }
+      const range = sel.getRangeAt(0)
+      const root = fileBodyRef.current
+      if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
+        setSelectionPill(null)
+        return
+      }
+      const startLine = range.startContainer.parentElement?.closest("[data-row-index]")
+      const endLine = range.endContainer.parentElement?.closest("[data-row-index]")
+      if (!startLine || startLine !== endLine) {
+        // Multi-line / cross-row selection: ignore for token anchoring.
+        setSelectionPill(null)
+        return
+      }
+      const rowIndex = Number(startLine.dataset.rowIndex)
+      const selectionText = sel.toString()
+      if (!selectionText.trim()) {
+        setSelectionPill(null)
+        return
+      }
+      const lineText = startLine.textContent || ""
+      // Compute the start offset of the selection within the line's textContent.
+      const lineRange = document.createRange()
+      lineRange.selectNodeContents(startLine)
+      lineRange.setEnd(range.startContainer, range.startOffset)
+      const selectionStart = lineRange.toString().length
+
+      const rect = range.getBoundingClientRect()
+      const rootRect = root.getBoundingClientRect()
+      setSelectionPill({
+        top: rect.top - rootRect.top + root.scrollTop - 30,
+        left: rect.left - rootRect.left + root.scrollLeft,
+      })
+      setPendingSelection({
+        rowIndex,
+        selectionText,
+        selectionStart,
+        lineText,
+      })
+    }
+
+    document.addEventListener("selectionchange", onSelectionChange)
+    return () => document.removeEventListener("selectionchange", onSelectionChange)
+  }, [])
+
+  function openComposerForSelection() {
+    if (!pendingSelection) return
+    setComposerOpenAt(pendingSelection.rowIndex)
+    setSelectionPill(null)
+  }
 
   // Index threads/drafts by row index so we can render them inline. We match
   // by `line_number_hint` + `side`; a real anchoring pass happens server-side
@@ -302,24 +428,44 @@ function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, draf
     if (!row || row.type === "hunk") return
     const ctx = buildContextSnapshot(parsed.rows, rowIndex)
     const lineNumberHint = side === "old" ? row.oldNumber : row.newNumber
-    onSaveDraft({
-      file_path: filePath,
-      side,
-      line_text: row.content,
-      thread_anchor: {
-        granularity: "line",
+
+    const tokenSel =
+      pendingSelection && pendingSelection.rowIndex === rowIndex ? pendingSelection : null
+
+    const anchor = tokenSel
+      ? {
+          granularity: "token_range",
+          line_text: row.content,
+          line_number_hint: lineNumberHint,
+          context_before: ctx.before,
+          context_after: ctx.after,
+          selection_text: tokenSel.selectionText,
+          selection_offset: tokenSel.selectionStart,
+        }
+      : {
+          granularity: "line",
+          line_text: row.content,
+          context_before: ctx.before,
+          context_after: ctx.after,
+          line_number_hint: lineNumberHint,
+        }
+
+    onSaveDraft(
+      {
+        file_path: filePath,
+        side,
         line_text: row.content,
-        context_before: ctx.before,
-        context_after: ctx.after,
-        line_number_hint: lineNumberHint,
+        thread_anchor: anchor,
       },
-    }, body)
+      body
+    )
     setComposerOpenAt(null)
+    setPendingSelection(null)
   }
 
   return (
     <div className="rdr-file">
-      <div className="rdr-file-body">
+      <div className="rdr-file-body" ref={fileBodyRef} style={{ position: "relative" }}>
         {parsed.rows.length === 0 ? (
           <p className="rdr-empty">No hunks in this file.</p>
         ) : (
@@ -334,13 +480,33 @@ function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, draf
               threads={threadsByRow[index] || []}
               drafts={draftsByRow[index] || []}
               composerOpenAt={composerOpenAt}
-              onOpenComposer={(i) => setComposerOpenAt(i)}
+              onOpenComposer={(i) => {
+                setPendingSelection(null)
+                setSelectionPill(null)
+                setComposerOpenAt(i)
+              }}
               onCloseComposer={() => setComposerOpenAt(null)}
               onSaveDraft={handleSave}
               onDeleteDraft={onDeleteDraft}
+              highlightedTokens={highlightedLines?.[index]}
             />
           ))
         )}
+        {selectionPill ? (
+          <button
+            type="button"
+            className="rdr-selection-pill"
+            style={{ top: selectionPill.top, left: selectionPill.left }}
+            // mousedown fires before selectionchange clears, so use it to
+            // preserve the selection up to the click.
+            onMouseDown={(e) => {
+              e.preventDefault()
+              openComposerForSelection()
+            }}
+          >
+            Comment on selection
+          </button>
+        ) : null}
       </div>
     </div>
   )

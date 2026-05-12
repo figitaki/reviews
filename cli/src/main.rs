@@ -33,6 +33,9 @@ enum Command {
 
     /// Fetch a review by slug as JSON or Markdown
     Show(commands::show::ShowArgs),
+
+    /// Publish a comment on a review (requires `reviews login`)
+    Comment(commands::comment::CommentArgs),
 }
 
 fn main() {
@@ -50,5 +53,6 @@ fn run() -> Result<()> {
         Command::Push(args) => commands::push::run(args),
         Command::Diff(args) => commands::diff::run(args),
         Command::Show(args) => commands::show::run(args),
+        Command::Comment(args) => commands::comment::run(args),
     }
 }
