@@ -178,6 +178,103 @@ function splitTokenAtRanges(text, offset, anchorRanges) {
   return pieces
 }
 
+// ----------------------------------------------------------------------------
+// Bubble helpers: relative time, anchor pinpoint, comment grouping, avatar
+// ----------------------------------------------------------------------------
+
+// @example formatRelative("2025-11-08T12:00:00Z", Date.parse("2025-11-08T14:00:00Z"))
+//   => { relative: "2 hours ago", absolute: "2025-11-08T12:00:00.000Z" }
+// @example formatRelative(null) => { relative: "", absolute: "" }
+export function formatRelative(iso, now = Date.now()) {
+  if (!iso) return { relative: "", absolute: "" }
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return { relative: "", absolute: "" }
+  const diffMs = t - now
+  const absSec = Math.round(Math.abs(diffMs) / 1000)
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
+  const units = [
+    ["year", 60 * 60 * 24 * 365],
+    ["month", 60 * 60 * 24 * 30],
+    ["week", 60 * 60 * 24 * 7],
+    ["day", 60 * 60 * 24],
+    ["hour", 60 * 60],
+    ["minute", 60],
+    ["second", 1],
+  ]
+  for (const [unit, sec] of units) {
+    if (absSec >= sec || unit === "second") {
+      const v = Math.round(diffMs / 1000 / sec)
+      return {
+        relative: rtf.format(v, unit),
+        absolute: new Date(t).toISOString(),
+      }
+    }
+  }
+  return { relative: "", absolute: "" }
+}
+
+// @example anchorPinpoint({granularity:"line",line_number_hint:3}, "old") => "line 3 · old"
+// @example anchorPinpoint({granularity:"token_range",line_number_hint:3,selection_text:"FOO"}, "new") => "line 3 · FOO"
+export function anchorPinpoint(anchor, side) {
+  if (!anchor) return null
+  const line = anchor.line_number_hint
+  if (anchor.granularity === "token_range" && anchor.selection_text) {
+    return `line ${line} · ${anchor.selection_text}`
+  }
+  return `line ${line} · ${side === "old" ? "old" : "new"}`
+}
+
+// @example groupCommentsByAuthor([{author:{id:1}},{author:{id:1}},{author:{id:2}}])
+//   => [{authorId:1, comments:[2]},{authorId:2, comments:[1]}]
+export function groupCommentsByAuthor(comments) {
+  const out = []
+  for (const c of comments || []) {
+    const authorId = c.author?.id ?? null
+    const last = out[out.length - 1]
+    if (last && last.authorId === authorId) {
+      last.comments.push(c)
+    } else {
+      out.push({ authorId, author: c.author, comments: [c] })
+    }
+  }
+  return out
+}
+
+function Avatar({ user, size = 20 }) {
+  if (!user) return null
+  if (user.avatar_url) {
+    return (
+      <img
+        className="rdr-avatar"
+        src={user.avatar_url}
+        alt=""
+        width={size}
+        height={size}
+        loading="lazy"
+        decoding="async"
+      />
+    )
+  }
+  const initial = (user.username || "?").slice(0, 1).toUpperCase()
+  return (
+    <span
+      className="rdr-avatar rdr-avatar-fallback"
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      {initial}
+    </span>
+  )
+}
+
+function flashRow(fileId, rowIndex) {
+  const el = document.getElementById(`file-${fileId}-row-${rowIndex}`)
+  if (!el) return
+  el.scrollIntoView({ behavior: "smooth", block: "center" })
+  el.classList.add("rdr-row-flash")
+  window.setTimeout(() => el.classList.remove("rdr-row-flash"), 1200)
+}
+
 function HighlightedCode({ content, tokens, anchorRanges }) {
   const ranges = anchorRanges || []
   // Plain-text fallback (no Shiki tokens available for this line).
@@ -246,35 +343,161 @@ function LineNumber({ number, side, interactive, onClick }) {
 // React components
 // ----------------------------------------------------------------------------
 
-function ThreadBubble({ thread }) {
+function ThreadBubble({ thread, onScrollToAnchor, onReply }) {
+  const [replying, setReplying] = useState(false)
+  const runs = useMemo(() => groupCommentsByAuthor(thread.comments), [thread.comments])
+
   return (
-    <div className="rdr-thread" data-thread-id={thread.id}>
-      <div className="rdr-thread-header">
-        <span className="rdr-thread-author">{thread.author?.username || "reviewer"}</span>
-      </div>
+    <div
+      className="rdr-thread"
+      data-thread-id={thread.id}
+      role="group"
+      aria-label={`Thread by ${thread.author?.username || "reviewer"}`}
+    >
+      <button
+        type="button"
+        className="rdr-thread-anchor-link"
+        onClick={onScrollToAnchor}
+        title="Jump to source line"
+      >
+        <span className="rdr-anchor-pinpoint">
+          {anchorPinpoint(thread.anchor, thread.side)}
+        </span>
+        {thread.status ? (
+          <span className={`rdr-status-pill rdr-status-${thread.status}`}>
+            {thread.status}
+          </span>
+        ) : null}
+      </button>
+
       <ul className="rdr-thread-comments">
-        {(thread.comments || []).map((c) => (
-          <li key={c.id} className="rdr-thread-comment">
-            <span className="rdr-thread-comment-author">{c.author?.username || "reviewer"}</span>
-            <span className="rdr-thread-comment-body">{c.body}</span>
+        {runs.map((run, ri) => (
+          <li key={ri} className="rdr-thread-run">
+            <header className="rdr-thread-run-header">
+              <Avatar user={run.author} />
+              <span className="rdr-thread-author">
+                {run.author?.username || "reviewer"}
+              </span>
+            </header>
+            <ul className="rdr-thread-run-comments">
+              {run.comments.map((c) => {
+                const { relative, absolute } = formatRelative(c.inserted_at)
+                return (
+                  <li key={c.id} className="rdr-thread-comment">
+                    <div className="rdr-thread-comment-body">{c.body}</div>
+                    {relative ? (
+                      <time
+                        className="rdr-thread-comment-time"
+                        dateTime={absolute}
+                        title={absolute}
+                      >
+                        {relative}
+                      </time>
+                    ) : null}
+                  </li>
+                )
+              })}
+            </ul>
           </li>
         ))}
       </ul>
+
+      <footer className="rdr-thread-footer">
+        {replying ? (
+          <DraftComposer
+            initialValue=""
+            autosaveOnBlur={false}
+            saveLabel="Reply"
+            placeholder="Reply… (⌘+Enter to save, Esc to cancel)"
+            onSave={(body) => {
+              onReply?.(thread, body)
+              setReplying(false)
+            }}
+            onCancel={() => setReplying(false)}
+          />
+        ) : onReply ? (
+          <button
+            type="button"
+            className="rdr-thread-reply"
+            onClick={() => setReplying(true)}
+          >
+            Reply
+          </button>
+        ) : null}
+      </footer>
     </div>
   )
 }
 
-function DraftBubble({ draft, onRemove }) {
+function DraftBubble({ draft, onRemove, onEdit, onScrollToAnchor }) {
+  const [editing, setEditing] = useState(false)
+  const { relative, absolute } = formatRelative(draft.updated_at || draft.inserted_at)
+
+  if (editing) {
+    return (
+      <div className="rdr-draft" data-draft-id={draft.id}>
+        <DraftComposer
+          initialValue={draft.body}
+          autosaveOnBlur={false}
+          saveLabel="Save Draft"
+          onSave={(body) => {
+            onEdit?.(draft, body)
+            setEditing(false)
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="rdr-draft" data-draft-id={draft.id}>
-      <div className="rdr-draft-header">
-        <span className="rdr-draft-tag">draft</span>
-        {onRemove ? (
-          <button type="button" className="rdr-draft-remove" onClick={onRemove}>
-            Remove
-          </button>
-        ) : null}
-      </div>
+      <header className="rdr-draft-header">
+        <button
+          type="button"
+          className="rdr-thread-anchor-link"
+          onClick={onScrollToAnchor}
+          title="Jump to source line"
+        >
+          <Avatar user={draft.author} />
+          <span className="rdr-thread-author">
+            {draft.author?.username || "you"}
+          </span>
+          <span className="rdr-draft-tag">draft</span>
+          <span className="rdr-anchor-pinpoint">
+            {anchorPinpoint(draft.anchor, draft.side)}
+          </span>
+        </button>
+        <div className="rdr-draft-actions">
+          {relative ? (
+            <time
+              className="rdr-draft-time"
+              dateTime={absolute}
+              title={absolute}
+            >
+              Saved {relative}
+            </time>
+          ) : null}
+          {onEdit ? (
+            <button
+              type="button"
+              className="rdr-draft-edit"
+              onClick={() => setEditing(true)}
+            >
+              Edit
+            </button>
+          ) : null}
+          {onRemove ? (
+            <button
+              type="button"
+              className="rdr-draft-remove"
+              onClick={onRemove}
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
+      </header>
       <div className="rdr-draft-body">{draft.body}</div>
     </div>
   )
@@ -298,7 +521,14 @@ function SignInPrompt({ onCancel }) {
   )
 }
 
-function DraftComposer({ initialValue, onSave, onCancel }) {
+function DraftComposer({
+  initialValue,
+  onSave,
+  onCancel,
+  autosaveOnBlur = true,
+  saveLabel = "Save Draft",
+  placeholder = "Leave a comment… (⌘+Enter to save, Esc to cancel)",
+}) {
   const [value, setValue] = useState(initialValue || "")
   const textareaRef = useRef(null)
 
@@ -332,14 +562,14 @@ function DraftComposer({ initialValue, onSave, onCancel }) {
         className="rdr-composer-textarea"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onBlur={submit}
+        onBlur={autosaveOnBlur ? submit : undefined}
         onKeyDown={onKeyDown}
-        placeholder="Leave a comment… (⌘+Enter to save, Esc to cancel)"
+        placeholder={placeholder}
         rows={3}
       />
       <div className="rdr-composer-actions">
         <button type="button" className="rdr-composer-save" onClick={submit}>
-          Save Draft
+          {saveLabel}
         </button>
         <button type="button" className="rdr-composer-cancel" onClick={onCancel}>
           Cancel
@@ -352,6 +582,7 @@ function DraftComposer({ initialValue, onSave, onCancel }) {
 function DiffRow({
   row,
   index,
+  fileId,
   filePath,
   side,
   signedIn,
@@ -362,6 +593,8 @@ function DiffRow({
   onCloseComposer,
   onSaveDraft,
   onDeleteDraft,
+  onReply,
+  onEdit,
   highlightedTokens,
 }) {
   if (row.type === "hunk") {
@@ -382,10 +615,15 @@ function DiffRow({
     row.type === "del" ? "old" : row.type === "add" ? "new" : side
   const oldInteractive = row.oldNumber && activeSide === "old"
   const newInteractive = row.newNumber && activeSide === "new"
+  const rowDomId = fileId ? `file-${fileId}-row-${index}` : undefined
+
+  const scrollToThisRow = () => {
+    if (fileId) flashRow(fileId, index)
+  }
 
   return (
     <>
-      <div className={lineClass}>
+      <div className={lineClass} id={rowDomId}>
         <LineNumber
           number={row.oldNumber}
           side="old"
@@ -412,7 +650,11 @@ function DiffRow({
           <span className="rdr-line-number" />
           <span className="rdr-line-number" />
           <div className="rdr-annotation">
-            <ThreadBubble thread={t} />
+            <ThreadBubble
+              thread={t}
+              onScrollToAnchor={scrollToThisRow}
+              onReply={onReply}
+            />
           </div>
         </div>
       ))}
@@ -422,7 +664,12 @@ function DiffRow({
           <span className="rdr-line-number" />
           <span className="rdr-line-number" />
           <div className="rdr-annotation">
-            <DraftBubble draft={d} onRemove={() => onDeleteDraft(d.id)} />
+            <DraftBubble
+              draft={d}
+              onRemove={() => onDeleteDraft(d.id)}
+              onEdit={onEdit}
+              onScrollToAnchor={scrollToThisRow}
+            />
           </div>
         </div>
       ))}
@@ -447,7 +694,18 @@ function DiffRow({
   )
 }
 
-function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, drafts, onSaveDraft, onDeleteDraft }) {
+function DiffFile({
+  fileId,
+  filePath,
+  fileStatus,
+  side,
+  signedIn,
+  rawDiff,
+  threads,
+  drafts,
+  onSaveDraft,
+  onDeleteDraft,
+}) {
   const parsed = useMemo(() => parseUnifiedDiff(rawDiff), [rawDiff])
   const [highlightedLines, setHighlightedLines] = useState(null)
   const [composerOpenAt, setComposerOpenAt] = useState(null)
@@ -588,6 +846,32 @@ function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, draf
     setPendingSelection(null)
   }
 
+  function handleReply(thread, body) {
+    if (!signedIn) return
+    onSaveDraft(
+      {
+        file_path: thread.file_path,
+        side: thread.side,
+        thread_id: thread.id,
+        thread_anchor: thread.anchor,
+      },
+      body
+    )
+  }
+
+  function handleEdit(draft, body) {
+    if (!signedIn) return
+    onSaveDraft(
+      {
+        file_path: draft.file_path,
+        side: draft.side,
+        thread_id: draft.thread_id,
+        thread_anchor: draft.anchor,
+      },
+      body
+    )
+  }
+
   return (
     <div className="rdr-file">
       <div className="rdr-file-body" ref={fileBodyRef} style={{ position: "relative" }}>
@@ -599,6 +883,7 @@ function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, draf
               key={index}
               row={row}
               index={index}
+              fileId={fileId}
               filePath={filePath}
               side={side}
               signedIn={signedIn}
@@ -613,6 +898,8 @@ function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, draf
               onCloseComposer={() => setComposerOpenAt(null)}
               onSaveDraft={handleSave}
               onDeleteDraft={onDeleteDraft}
+              onReply={signedIn ? handleReply : null}
+              onEdit={signedIn ? handleEdit : null}
               highlightedTokens={highlightedLines?.[index]}
             />
           ))
@@ -674,6 +961,7 @@ function FileIsland({ initialProps, onSaveDraft, onDeleteDraft, registerUpdater 
 
   return (
     <DiffFile
+      fileId={props.fileId}
       filePath={props.filePath}
       fileStatus={props.fileStatus}
       side={props.side}
@@ -704,6 +992,7 @@ const DiffRenderer = {
   mounted() {
     const ds = this.el.dataset
     const initialProps = {
+      fileId: ds.fileId,
       filePath: ds.filePath,
       fileStatus: ds.fileStatus,
       side: ds.side || "new",

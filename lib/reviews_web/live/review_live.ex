@@ -366,6 +366,7 @@ defmodule ReviewsWeb.ReviewLive do
                   id={"diff-#{fd.id}"}
                   phx-hook="DiffRenderer"
                   phx-update="ignore"
+                  data-file-id={fd.id}
                   data-file-path={fd.path}
                   data-file-status={fd.status}
                   data-side="new"
