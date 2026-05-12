@@ -4,16 +4,18 @@
 //!   GET  /api/v1/me
 //!   POST /api/v1/reviews
 //!   POST /api/v1/reviews/:slug/patchsets
+//!   GET  /api/v1/reviews/:slug
 
 use anyhow::{anyhow, Context, Result};
-use reqwest::blocking::{Client, Response};
+use reqwest::blocking::{Client, RequestBuilder, Response};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::time::Duration;
 
 pub struct ApiClient {
     base_url: String,
-    token: String,
+    token: Option<String>,
     http: Client,
 }
 
@@ -56,14 +58,22 @@ pub struct CreatePatchsetResponse {
 
 impl ApiClient {
     pub fn new(base_url: impl Into<String>, token: impl Into<String>) -> Result<Self> {
+        Self::build(base_url.into(), Some(token.into()))
+    }
+
+    pub fn anonymous(base_url: impl Into<String>) -> Result<Self> {
+        Self::build(base_url.into(), None)
+    }
+
+    fn build(base_url: String, token: Option<String>) -> Result<Self> {
         let http = Client::builder()
             .timeout(Duration::from_secs(60))
             .user_agent(concat!("reviews-cli/", env!("CARGO_PKG_VERSION")))
             .build()
             .context("could not build HTTP client")?;
         Ok(ApiClient {
-            base_url: base_url.into().trim_end_matches('/').to_string(),
-            token: token.into(),
+            base_url: base_url.trim_end_matches('/').to_string(),
+            token,
             http,
         })
     }
@@ -72,11 +82,23 @@ impl ApiClient {
         format!("{}{}", self.base_url, path)
     }
 
+    fn auth(&self, req: RequestBuilder) -> RequestBuilder {
+        match &self.token {
+            Some(t) => req.bearer_auth(t),
+            None => req,
+        }
+    }
+
+    fn require_token(&self, what: &str) -> Result<&str> {
+        self.token
+            .as_deref()
+            .ok_or_else(|| anyhow!("{what} requires an API token. Run `reviews login` first."))
+    }
+
     pub fn me(&self) -> Result<Me> {
+        let _ = self.require_token("GET /api/v1/me")?;
         let resp = self
-            .http
-            .get(self.url("/api/v1/me"))
-            .bearer_auth(&self.token)
+            .auth(self.http.get(self.url("/api/v1/me")))
             .send()
             .context("could not reach server for GET /api/v1/me")?;
         let resp = check_status(resp, "GET /api/v1/me")?;
@@ -85,10 +107,9 @@ impl ApiClient {
     }
 
     pub fn create_review(&self, req: &CreateReviewRequest<'_>) -> Result<CreateReviewResponse> {
+        let _ = self.require_token("POST /api/v1/reviews")?;
         let resp = self
-            .http
-            .post(self.url("/api/v1/reviews"))
-            .bearer_auth(&self.token)
+            .auth(self.http.post(self.url("/api/v1/reviews")))
             .json(req)
             .send()
             .context("could not reach server for POST /api/v1/reviews")?;
@@ -103,15 +124,28 @@ impl ApiClient {
         req: &CreatePatchsetRequest<'_>,
     ) -> Result<CreatePatchsetResponse> {
         let path = format!("/api/v1/reviews/{slug}/patchsets");
+        let _ = self.require_token(&format!("POST {path}"))?;
         let resp = self
-            .http
-            .post(self.url(&path))
-            .bearer_auth(&self.token)
+            .auth(self.http.post(self.url(&path)))
             .json(req)
             .send()
             .with_context(|| format!("could not reach server for POST {path}"))?;
         let resp = check_status(resp, &format!("POST {path}"))?;
         resp.json::<CreatePatchsetResponse>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
+    pub fn show_review(&self, slug: &str, patchset: Option<i64>) -> Result<Value> {
+        let path = format!("/api/v1/reviews/{slug}");
+        let mut req = self.auth(self.http.get(self.url(&path)));
+        if let Some(n) = patchset {
+            req = req.query(&[("patchset", n.to_string())]);
+        }
+        let resp = req
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<Value>()
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 }
@@ -251,5 +285,55 @@ mod tests {
         let msg = format!("{err:#}");
         assert!(msg.contains("404"), "msg = {msg}");
         assert!(msg.contains("slug"), "msg = {msg}");
+    }
+
+    #[test]
+    fn show_review_anonymous_returns_json() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("GET", "/api/v1/reviews/k7m2qz")
+            .match_header("authorization", mockito::Matcher::Missing)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"slug":"k7m2qz","title":"Hello","selected_patchset":{"number":1}}"#)
+            .create();
+
+        let client = ApiClient::anonymous(server.url()).unwrap();
+        let body = client.show_review("k7m2qz", None).unwrap();
+        assert_eq!(body["slug"], "k7m2qz");
+        assert_eq!(body["selected_patchset"]["number"], 1);
+        mock.assert();
+    }
+
+    #[test]
+    fn show_review_with_patchset_passes_query_string() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("GET", "/api/v1/reviews/k7m2qz")
+            .match_query(mockito::Matcher::UrlEncoded("patchset".into(), "2".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"slug":"k7m2qz","selected_patchset":{"number":2}}"#)
+            .create();
+
+        let client = ApiClient::anonymous(server.url()).unwrap();
+        let body = client.show_review("k7m2qz", Some(2)).unwrap();
+        assert_eq!(body["selected_patchset"]["number"], 2);
+        mock.assert();
+    }
+
+    #[test]
+    fn show_review_404_bubbles_up() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/api/v1/reviews/nope")
+            .with_status(404)
+            .with_body(r#"{"errors":{"detail":"Review not found"}}"#)
+            .create();
+
+        let client = ApiClient::anonymous(server.url()).unwrap();
+        let err = client.show_review("nope", None).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("404"), "msg = {msg}");
     }
 }

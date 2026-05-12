@@ -37,6 +37,12 @@ defmodule ReviewsWeb.Router do
   end
 
   scope "/api/v1", ReviewsWeb.Api do
+    pipe_through :api
+
+    get "/reviews/:slug", ReviewController, :show
+  end
+
+  scope "/api/v1", ReviewsWeb.Api do
     pipe_through [:api, :api_authenticated]
 
     post "/reviews", ReviewController, :create
@@ -47,6 +53,12 @@ defmodule ReviewsWeb.Router do
   # Enable LiveDashboard in development
   if Application.compile_env(:reviews, :dev_routes) do
     import Phoenix.LiveDashboard.Router
+
+    scope "/", ReviewsWeb do
+      pipe_through :browser
+
+      live "/design", DesignLive, :show
+    end
 
     scope "/dev" do
       pipe_through :browser
