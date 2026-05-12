@@ -231,6 +231,16 @@ button.rdr-line-number-clickable:hover {
   border-color: var(--color-primary, #4f46e5);
   background: var(--color-primary, #4f46e5);
   color: var(--color-primary-content, #fff);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rdr-composer-signin-text {
+  margin: 0 0 6px 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: var(--color-base-content, #111);
 }
 
 .rdr-composer-textarea {

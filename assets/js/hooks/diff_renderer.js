@@ -123,6 +123,24 @@ function DraftBubble({ draft, onRemove }) {
   )
 }
 
+function SignInPrompt({ onCancel }) {
+  return (
+    <div className="rdr-composer">
+      <p className="rdr-composer-signin-text">
+        Sign in with GitHub to leave a comment.
+      </p>
+      <div className="rdr-composer-actions">
+        <a href="/auth/github" className="rdr-composer-save">
+          Sign in with GitHub
+        </a>
+        <button type="button" className="rdr-composer-cancel" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function DraftComposer({ initialValue, onSave, onCancel }) {
   const [value, setValue] = useState(initialValue || "")
   const textareaRef = useRef(null)
@@ -179,6 +197,7 @@ function DiffRow({
   index,
   filePath,
   side,
+  signedIn,
   threads,
   drafts,
   composerOpenAt,
@@ -247,10 +266,14 @@ function DiffRow({
           <span className="rdr-line-number" />
           <span className="rdr-line-number" />
           <div className="rdr-annotation">
-            <DraftComposer
-              onSave={(body) => onSaveDraft(index, body)}
-              onCancel={onCloseComposer}
-            />
+            {signedIn ? (
+              <DraftComposer
+                onSave={(body) => onSaveDraft(index, body)}
+                onCancel={onCloseComposer}
+              />
+            ) : (
+              <SignInPrompt onCancel={onCloseComposer} />
+            )}
           </div>
         </div>
       ) : null}
@@ -258,7 +281,7 @@ function DiffRow({
   )
 }
 
-function DiffFile({ filePath, fileStatus, side, rawDiff, threads, drafts, onSaveDraft, onDeleteDraft }) {
+function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, drafts, onSaveDraft, onDeleteDraft }) {
   const parsed = useMemo(() => parseUnifiedDiff(rawDiff), [rawDiff])
   const [composerOpenAt, setComposerOpenAt] = useState(null)
 
@@ -307,6 +330,7 @@ function DiffFile({ filePath, fileStatus, side, rawDiff, threads, drafts, onSave
               index={index}
               filePath={filePath}
               side={side}
+              signedIn={signedIn}
               threads={threadsByRow[index] || []}
               drafts={draftsByRow[index] || []}
               composerOpenAt={composerOpenAt}
@@ -362,6 +386,7 @@ function FileIsland({ initialProps, onSaveDraft, onDeleteDraft, registerUpdater 
       filePath={props.filePath}
       fileStatus={props.fileStatus}
       side={props.side}
+      signedIn={props.signedIn}
       rawDiff={props.rawDiff}
       threads={props.threads || []}
       drafts={props.drafts || []}
@@ -391,6 +416,7 @@ const DiffRenderer = {
       filePath: ds.filePath,
       fileStatus: ds.fileStatus,
       side: ds.side || "new",
+      signedIn: ds.signedIn === "true",
       patchsetNumber: ds.patchsetNumber,
       rawDiff: ds.rawDiff || "",
       threads: safeParseJson(ds.threads, []),
