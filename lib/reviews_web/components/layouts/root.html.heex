@@ -10,6 +10,13 @@
     </script>
     <script>
       (() => {
+        const syncPressed = (theme) => {
+          document.querySelectorAll("[data-phx-theme]").forEach((btn) => {
+            btn.setAttribute("aria-pressed", btn.dataset.phxTheme === theme ? "true" : "false");
+          });
+        };
+        const currentTheme = () =>
+          localStorage.getItem("phx:theme") || "system";
         const setTheme = (theme) => {
           if (theme === "system") {
             localStorage.removeItem("phx:theme");
@@ -18,17 +25,29 @@
             localStorage.setItem("phx:theme", theme);
             document.documentElement.setAttribute("data-theme", theme);
           }
+          syncPressed(theme);
         };
         if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
+          setTheme(currentTheme());
+        } else {
+          syncPressed(currentTheme());
         }
+        document.addEventListener("DOMContentLoaded", () => syncPressed(currentTheme()));
         window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        
+
         window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
       })();
     </script>
   </head>
   <body>
-    {@inner_content}
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only fixed top-2 left-2 z-50 bg-base-100 border px-3 py-1 rounded"
+    >
+      Skip to main content
+    </a>
+    <main id="main" tabindex="-1">
+      {@inner_content}
+    </main>
   </body>
 </html>

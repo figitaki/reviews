@@ -324,7 +324,7 @@ defmodule ReviewsWeb.ReviewLive do
     <div class="px-4 py-3 sm:px-6 lg:px-8">
       <div class="space-y-4">
         <%!-- Top bar --%>
-        <header class="sticky top-0 z-10 bg-base-100 border-b py-2 flex items-center gap-3 flex-wrap">
+        <header class="sticky top-0 z-10 bg-base-100 border-b py-2 flex items-center gap-3 flex-wrap min-h-[var(--rev-header-h)]">
           <div class="flex-1 min-w-0">
             <h1 class="text-lg font-semibold truncate">{@review.title}</h1>
             <p :if={@review.description} class="text-xs text-base-content/70 truncate">
@@ -499,9 +499,9 @@ defmodule ReviewsWeb.ReviewLive do
           type="button"
           class="modal-backdrop"
           phx-click="close_publish_modal"
-          aria-label="close"
+          aria-label="Close dialog"
         >
-          close
+          <span class="sr-only">Close</span>
         </button>
       </dialog>
     </div>

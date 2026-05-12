@@ -378,12 +378,18 @@ defmodule ReviewsWeb.CoreComponents do
       </thead>
       <tbody id={@id} phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}>
         <tr :for={row <- @rows} id={@row_id && @row_id.(row)}>
-          <td
-            :for={col <- @col}
-            phx-click={@row_click && @row_click.(row)}
-            class={@row_click && "hover:cursor-pointer"}
-          >
-            {render_slot(col, @row_item.(row))}
+          <td :for={col <- @col} class={@row_click && "hover:cursor-pointer"}>
+            <%= if @row_click do %>
+              <button
+                type="button"
+                class="w-full text-left bg-transparent p-0 m-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                phx-click={@row_click.(row)}
+              >
+                {render_slot(col, @row_item.(row))}
+              </button>
+            <% else %>
+              {render_slot(col, @row_item.(row))}
+            <% end %>
           </td>
           <td :if={@action != []} class="w-0 font-semibold">
             <div class="flex gap-4">
@@ -459,7 +465,7 @@ defmodule ReviewsWeb.CoreComponents do
       to: selector,
       time: 300,
       transition:
-        {"transition-all ease-out duration-300",
+        {"transition-[opacity,transform] ease-out duration-300",
          "opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95",
          "opacity-100 translate-y-0 sm:scale-100"}
     )
@@ -470,7 +476,8 @@ defmodule ReviewsWeb.CoreComponents do
       to: selector,
       time: 200,
       transition:
-        {"transition-all ease-in duration-200", "opacity-100 translate-y-0 sm:scale-100",
+        {"transition-[opacity,transform] ease-in duration-200",
+         "opacity-100 translate-y-0 sm:scale-100",
          "opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"}
     )
   end
