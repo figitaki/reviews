@@ -386,7 +386,9 @@ defmodule ReviewsWeb.ReviewLive do
                       <span class="rev-open-thread-path" translate="no">
                         {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
                       </span>
-                      <span class="rev-open-thread-snippet">{ReviewView.first_comment_snippet(t)}</span>
+                      <span class="rev-open-thread-snippet">
+                        {ReviewView.first_comment_snippet(t)}
+                      </span>
                     </span>
                   </button>
                 </div>
