@@ -26,6 +26,7 @@ import { Thread, Draft, SaveDraftPayload } from "../schemas.js"
 import {
   threadsAndDraftsToAnnotations,
   annotationSideToSide,
+  composerToAnchor,
 } from "../lib/translate.js"
 
 // ----------------------------------------------------------------------------
@@ -613,7 +614,14 @@ function FileIsland({
 }) {
   const [threads, setThreads] = useState(initial.threads)
   const [drafts, setDrafts] = useState(initial.drafts)
-  // composerAt: null | { side: 'additions'|'deletions', lineNumber, lineText, signInOnly? }
+  // composerAt:
+  //   null
+  //   | { kind: 'line',  side, lineNumber, lineText }
+  //   | { kind: 'token', side, lineNumber, lineText,
+  //                      lineCharStart, lineCharEnd, tokenText }
+  //   | { kind: 'signin', side, lineNumber }
+  // `side` is always the library's terminology ("additions" | "deletions");
+  // translation to ("old" | "new") happens once on save.
   const [composerAt, setComposerAt] = useState(null)
 
   useEffect(() => {
@@ -642,8 +650,8 @@ function FileIsland({
         lineNumber: composerAt.lineNumber,
         metadata: {
           kind: "composer",
-          signInOnly: composerAt.signInOnly === true,
-          lineText: composerAt.lineText || "",
+          composerKind: composerAt.kind,
+          tokenText: composerAt.tokenText || "",
         },
       },
     ]
@@ -653,13 +661,9 @@ function FileIsland({
     if (!composerAt) return
     const lineText = composerAt.lineText || ""
     const side = annotationSideToSide(composerAt.side)
-    const anchor = {
-      granularity: "line",
-      line_text: lineText,
-      line_number_hint: composerAt.lineNumber,
-      context_before: [],
-      context_after: [],
-    }
+    // composerToAnchor branches on kind: token-range carries
+    // selection_text/selection_offset, line just pins to the line.
+    const anchor = composerToAnchor(composerAt)
     onSaveDraft({
       file_path: filePath,
       side,
@@ -696,7 +700,7 @@ function FileIsland({
     const meta = annotation.metadata || {}
 
     if (meta.kind === "composer") {
-      return meta.signInOnly ? (
+      return meta.composerKind === "signin" ? (
         <SignInPrompt onCancel={() => setComposerAt(null)} />
       ) : (
         <DraftComposer
@@ -737,10 +741,43 @@ function FileIsland({
     const lineText =
       (props?.lineElement && props.lineElement.textContent) || ""
     if (!signedIn) {
-      setComposerAt({ side, lineNumber, lineText: "", signInOnly: true })
+      setComposerAt({ kind: "signin", side, lineNumber })
       return
     }
-    setComposerAt({ side, lineNumber, lineText })
+    setComposerAt({ kind: "line", side, lineNumber, lineText })
+  }
+
+  function handleTokenClick(props) {
+    // DiffTokenEventBaseProps:
+    //   { type: 'token', side, lineNumber, lineCharStart, lineCharEnd,
+    //     tokenText, tokenElement }
+    // `side` is the library's AnnotationSide ('additions' | 'deletions').
+    const side = props?.side
+    const lineNumber = props?.lineNumber
+    const tokenText = props?.tokenText || ""
+    if (!side || !lineNumber) return
+    // Skip trivial tokens — whitespace-only clicks shouldn't open a composer.
+    // Library's enableTokenInteractionsOnWhitespace defaults to off, but
+    // double-check defensively so we don't anchor a thread to "   ".
+    if (tokenText.length === 0 || tokenText.trim().length === 0) return
+    if (!signedIn) {
+      setComposerAt({ kind: "signin", side, lineNumber })
+      return
+    }
+    // Harvest the surrounding line text from the token's parent line element
+    // so the anchor stores the full line as `line_text` (for relocation).
+    const lineEl =
+      (props?.tokenElement && props.tokenElement.closest("[data-line]")) || null
+    const lineText = (lineEl && lineEl.textContent) || ""
+    setComposerAt({
+      kind: "token",
+      side,
+      lineNumber,
+      lineText,
+      lineCharStart: props.lineCharStart,
+      lineCharEnd: props.lineCharEnd,
+      tokenText,
+    })
   }
 
   return (
@@ -751,6 +788,7 @@ function FileIsland({
       renderAnnotation={renderAnnotation}
       options={{
         onLineNumberClick: handleLineNumberClick,
+        onTokenClick: handleTokenClick,
       }}
       style={{ width: "100%" }}
     />
