@@ -343,67 +343,88 @@ function LineNumber({ number, side, interactive, onClick }) {
 // React components
 // ----------------------------------------------------------------------------
 
+function BubbleAnchorLink({ anchor, side, status, onScrollToAnchor }) {
+  return (
+    <button
+      type="button"
+      className="rdr-thread-anchor-link"
+      onClick={onScrollToAnchor}
+      title="Jump to source line"
+    >
+      <span className="rdr-anchor-pinpoint">{anchorPinpoint(anchor, side)}</span>
+      {status ? (
+        <span className={`rdr-status-pill rdr-status-${status}`}>{status}</span>
+      ) : null}
+    </button>
+  )
+}
+
 function ThreadBubble({ thread, onScrollToAnchor, onReply }) {
   const [replying, setReplying] = useState(false)
   const runs = useMemo(() => groupCommentsByAuthor(thread.comments), [thread.comments])
 
   return (
-    <div
-      className="rdr-thread"
-      data-thread-id={thread.id}
-      role="group"
-      aria-label={`Thread by ${thread.author?.username || "reviewer"}`}
-    >
-      <button
-        type="button"
-        className="rdr-thread-anchor-link"
-        onClick={onScrollToAnchor}
-        title="Jump to source line"
+    <>
+      <div
+        className="rdr-bubble rdr-thread"
+        data-thread-id={thread.id}
+        role="group"
+        aria-label={`Thread by ${thread.author?.username || "reviewer"}`}
       >
-        <span className="rdr-anchor-pinpoint">
-          {anchorPinpoint(thread.anchor, thread.side)}
-        </span>
-        {thread.status ? (
-          <span className={`rdr-status-pill rdr-status-${thread.status}`}>
-            {thread.status}
-          </span>
-        ) : null}
-      </button>
+        <header className="rdr-bubble-header">
+          <BubbleAnchorLink
+            anchor={thread.anchor}
+            side={thread.side}
+            status={thread.status}
+            onScrollToAnchor={onScrollToAnchor}
+          />
+        </header>
 
-      <ul className="rdr-thread-comments">
-        {runs.map((run, ri) => (
-          <li key={ri} className="rdr-thread-run">
-            <header className="rdr-thread-run-header">
-              <Avatar user={run.author} />
-              <span className="rdr-thread-author">
-                {run.author?.username || "reviewer"}
-              </span>
-            </header>
-            <ul className="rdr-thread-run-comments">
-              {run.comments.map((c) => {
-                const { relative, absolute } = formatRelative(c.inserted_at)
-                return (
+        <ul className="rdr-thread-comments">
+          {runs.map((run, ri) => (
+            <li key={ri} className="rdr-thread-run">
+              <header className="rdr-thread-run-header">
+                <Avatar user={run.author} />
+                <span className="rdr-thread-author">
+                  {run.author?.username || "reviewer"}
+                </span>
+                <span className="rdr-bubble-spacer" />
+                {run.comments[0] && formatRelative(run.comments[0].inserted_at).relative ? (
+                  <time
+                    className="rdr-bubble-time"
+                    dateTime={formatRelative(run.comments[0].inserted_at).absolute}
+                    title={formatRelative(run.comments[0].inserted_at).absolute}
+                  >
+                    {formatRelative(run.comments[0].inserted_at).relative}
+                  </time>
+                ) : null}
+              </header>
+              <ul className="rdr-thread-run-comments">
+                {run.comments.map((c) => (
                   <li key={c.id} className="rdr-thread-comment">
                     <div className="rdr-thread-comment-body">{c.body}</div>
-                    {relative ? (
-                      <time
-                        className="rdr-thread-comment-time"
-                        dateTime={absolute}
-                        title={absolute}
-                      >
-                        {relative}
-                      </time>
-                    ) : null}
                   </li>
-                )
-              })}
-            </ul>
-          </li>
-        ))}
-      </ul>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
 
-      <footer className="rdr-thread-footer">
-        {replying ? (
+        {onReply && !replying ? (
+          <footer className="rdr-bubble-footer">
+            <button
+              type="button"
+              className="rdr-thread-reply"
+              onClick={() => setReplying(true)}
+            >
+              Reply
+            </button>
+          </footer>
+        ) : null}
+      </div>
+
+      {replying ? (
+        <div className="rdr-bubble-followup">
           <DraftComposer
             initialValue=""
             autosaveOnBlur={false}
@@ -415,17 +436,9 @@ function ThreadBubble({ thread, onScrollToAnchor, onReply }) {
             }}
             onCancel={() => setReplying(false)}
           />
-        ) : onReply ? (
-          <button
-            type="button"
-            className="rdr-thread-reply"
-            onClick={() => setReplying(true)}
-          >
-            Reply
-          </button>
-        ) : null}
-      </footer>
-    </div>
+        </div>
+      ) : null}
+    </>
   )
 }
 
@@ -435,7 +448,7 @@ function DraftBubble({ draft, onRemove, onEdit, onScrollToAnchor }) {
 
   if (editing) {
     return (
-      <div className="rdr-draft" data-draft-id={draft.id}>
+      <div className="rdr-bubble rdr-draft" data-draft-id={draft.id}>
         <DraftComposer
           initialValue={draft.body}
           autosaveOnBlur={false}
@@ -451,33 +464,34 @@ function DraftBubble({ draft, onRemove, onEdit, onScrollToAnchor }) {
   }
 
   return (
-    <div className="rdr-draft" data-draft-id={draft.id}>
-      <header className="rdr-draft-header">
-        <button
-          type="button"
-          className="rdr-thread-anchor-link"
-          onClick={onScrollToAnchor}
-          title="Jump to source line"
-        >
+    <div className="rdr-bubble rdr-draft" data-draft-id={draft.id}>
+      <header className="rdr-bubble-header">
+        <BubbleAnchorLink
+          anchor={draft.anchor}
+          side={draft.side}
+          status="draft"
+          onScrollToAnchor={onScrollToAnchor}
+        />
+      </header>
+
+      <div className="rdr-thread-run">
+        <header className="rdr-thread-run-header">
           <Avatar user={draft.author} />
           <span className="rdr-thread-author">
             {draft.author?.username || "you"}
           </span>
-          <span className="rdr-draft-tag">draft</span>
-          <span className="rdr-anchor-pinpoint">
-            {anchorPinpoint(draft.anchor, draft.side)}
-          </span>
-        </button>
-        <div className="rdr-draft-actions">
+          <span className="rdr-bubble-spacer" />
           {relative ? (
-            <time
-              className="rdr-draft-time"
-              dateTime={absolute}
-              title={absolute}
-            >
-              Saved {relative}
+            <time className="rdr-bubble-time" dateTime={absolute} title={absolute}>
+              {relative}
             </time>
           ) : null}
+        </header>
+        <div className="rdr-thread-comment-body rdr-draft-body">{draft.body}</div>
+      </div>
+
+      {(onEdit || onRemove) ? (
+        <footer className="rdr-bubble-footer">
           {onEdit ? (
             <button
               type="button"
@@ -496,9 +510,8 @@ function DraftBubble({ draft, onRemove, onEdit, onScrollToAnchor }) {
               Remove
             </button>
           ) : null}
-        </div>
-      </header>
-      <div className="rdr-draft-body">{draft.body}</div>
+        </footer>
+      ) : null}
     </div>
   )
 }
@@ -647,8 +660,6 @@ function DiffRow({
 
       {threads.map((t) => (
         <div className="rdr-row rdr-row-annotation" key={`thread-${t.id}`}>
-          <span className="rdr-line-number" />
-          <span className="rdr-line-number" />
           <div className="rdr-annotation">
             <ThreadBubble
               thread={t}
@@ -661,8 +672,6 @@ function DiffRow({
 
       {drafts.map((d) => (
         <div className="rdr-row rdr-row-annotation" key={`draft-${d.id}`}>
-          <span className="rdr-line-number" />
-          <span className="rdr-line-number" />
           <div className="rdr-annotation">
             <DraftBubble
               draft={d}
@@ -676,8 +685,6 @@ function DiffRow({
 
       {composerOpen ? (
         <div className="rdr-row rdr-row-annotation">
-          <span className="rdr-line-number" />
-          <span className="rdr-line-number" />
           <div className="rdr-annotation">
             {signedIn ? (
               <DraftComposer

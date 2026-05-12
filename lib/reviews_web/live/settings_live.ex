@@ -58,11 +58,6 @@ defmodule ReviewsWeb.SettingsLive do
     <Layouts.app flash={@flash} chrome={false}>
       <main id="settings-page" class="design-page">
         <.ds_shell brand="Reviews" home={~p"/"}>
-          <:nav>
-            <.ds_nav_item navigate={~p"/"}>Home</.ds_nav_item>
-            <.ds_nav_item navigate={~p"/r/uzRiKvyr"}>Review sample</.ds_nav_item>
-            <.ds_nav_item navigate={~p"/settings"} active>Settings</.ds_nav_item>
-          </:nav>
           <:actions>
             <Layouts.theme_toggle />
           </:actions>

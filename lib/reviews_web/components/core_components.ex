@@ -63,23 +63,34 @@ defmodule ReviewsWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="toast toast-bottom toast-end z-50"
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
+        "review-toast",
+        @kind == :info && "review-toast-info",
+        @kind == :error && "review-toast-error"
       ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
-        <div>
-          <p :if={@title} class="font-semibold">{@title}</p>
-          <p>{msg}</p>
+        <.icon
+          :if={@kind == :info}
+          name="hero-information-circle"
+          class="review-toast-icon size-4 shrink-0"
+        />
+        <.icon
+          :if={@kind == :error}
+          name="hero-exclamation-circle"
+          class="review-toast-icon size-4 shrink-0"
+        />
+        <div class="review-toast-body">
+          <p :if={@title} class="review-toast-title">{@title}</p>
+          <p class="review-toast-message">{msg}</p>
         </div>
-        <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("Close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+        <button
+          type="button"
+          class="review-toast-close"
+          aria-label={gettext("Close")}
+        >
+          <.icon name="hero-x-mark" class="size-4" />
         </button>
       </div>
     </div>
