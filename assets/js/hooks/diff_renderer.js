@@ -924,6 +924,16 @@ function DiffFile({
   )
 }
 
+function findRowIndexFor(rows, side, lineNumberHint) {
+  let idx = rows.findIndex((r) => {
+    if (r.type === "hunk") return false
+    const num = side === "old" ? r.oldNumber : r.newNumber
+    return num === lineNumberHint
+  })
+  if (idx < 0) idx = rows.findIndex((r) => r.type !== "hunk")
+  return idx
+}
+
 function groupAnchorsByRow(rows, items) {
   // items: [{ id, anchor: { line_number_hint, ... }, side, ... }]
   // For each item, find the row whose new/old number matches the hint on the
@@ -931,14 +941,7 @@ function groupAnchorsByRow(rows, items) {
   // still renders (visible but obviously misanchored).
   const out = {}
   for (const item of items) {
-    const side = item.side
-    const hint = item.anchor?.line_number_hint
-    let idx = rows.findIndex((r) => {
-      if (r.type === "hunk") return false
-      const num = side === "old" ? r.oldNumber : r.newNumber
-      return num === hint
-    })
-    if (idx < 0) idx = rows.findIndex((r) => r.type !== "hunk")
+    const idx = findRowIndexFor(rows, item.side, item.anchor?.line_number_hint)
     if (idx < 0) continue
     out[idx] = out[idx] || []
     out[idx].push(item)
@@ -1028,6 +1031,8 @@ const DiffRenderer = {
 
     this._root = root
     this._update = (next) => updater(next)
+    this._fileId = initialProps.fileId
+    this._parsedRows = parseUnifiedDiff(initialProps.rawDiff).rows
 
     // Server pushes per-file updates as `thread_published:<file_path>` events
     // (file-path-scoped so multiple file islands don't all re-render on every
@@ -1041,6 +1046,17 @@ const DiffRenderer = {
         })
       }
     )
+
+    // The sidebar dispatches reviews:scroll-to-anchor on click. Each island
+    // listens; only the one whose data-file-id matches acts.
+    this._onScrollDispatch = (event) => {
+      const detail = event.detail || {}
+      if (String(detail.file_id) !== String(this._fileId)) return
+      const idx = findRowIndexFor(this._parsedRows, detail.side, detail.line_number_hint)
+      if (idx < 0) return
+      flashRow(this._fileId, idx)
+    }
+    document.addEventListener("reviews:scroll-to-anchor", this._onScrollDispatch)
   },
 
   updated() {
@@ -1051,6 +1067,10 @@ const DiffRenderer = {
   },
 
   destroyed() {
+    if (this._onScrollDispatch) {
+      document.removeEventListener("reviews:scroll-to-anchor", this._onScrollDispatch)
+      this._onScrollDispatch = null
+    }
     this._root?.unmount()
     this._root = null
   },

@@ -346,6 +346,51 @@ defmodule ReviewsWeb.ReviewLive do
                   <span class="rev-empty">No files in this patchset.</span>
                 </li>
               </ul>
+
+              <section
+                :if={@open_threads_by_op != []}
+                id="open-threads"
+                class="rev-open-threads"
+                aria-label="Open threads"
+              >
+                <h2 class="rev-open-threads-heading">Open threads</h2>
+                <div :for={{op, threads} <- @open_threads_by_op} class="rev-open-thread-group">
+                  <header class="rev-open-thread-group-header">
+                    <img
+                      :if={op && op.avatar_url}
+                      src={op.avatar_url}
+                      alt=""
+                      width="16"
+                      height="16"
+                      loading="lazy"
+                      class="rdr-avatar"
+                    />
+                    <span>{(op && op.username) || "anonymous"}</span>
+                  </header>
+                  <button
+                    :for={t <- threads}
+                    type="button"
+                    class="rev-open-thread-entry"
+                    phx-click={
+                      JS.dispatch("reviews:scroll-to-anchor",
+                        detail: %{
+                          file_id: file_id_for(@file_diffs, t.file_path),
+                          file_path: t.file_path,
+                          side: t.side,
+                          line_number_hint: anchor_line_hint(t)
+                        }
+                      )
+                    }
+                  >
+                    <span class="rev-open-thread-meta">
+                      <span class="rev-open-thread-path" translate="no">
+                        {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
+                      </span>
+                      <span class="rev-open-thread-snippet">{ReviewView.first_comment_snippet(t)}</span>
+                    </span>
+                  </button>
+                </div>
+              </section>
             </aside>
 
             <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
@@ -531,6 +576,10 @@ defmodule ReviewsWeb.ReviewLive do
   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
   defp anchor_line_hint(_), do: nil
 
+  defp file_id_for(file_diffs, file_path) do
+    Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
+  end
+
   defp threads_json(threads, file_path) do
     snapshot = %{published_threads: threads}
     Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
@@ -551,5 +600,6 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:file_diffs, snapshot.file_diffs)
     |> assign(:published_threads, snapshot.published_threads)
     |> assign(:drafts, snapshot.drafts)
+    |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
   end
 end

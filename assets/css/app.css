@@ -785,6 +785,75 @@ button.rdr-line-number-clickable:hover {
   .rdr-row-flash { animation: none; }
 }
 
+/* ---- Sidebar: Open Threads section ---- */
+
+.rev-open-threads {
+  margin-top: 16px;
+  border-top: 1px solid var(--ds-line, #242426);
+  padding-top: 12px;
+}
+.rev-open-threads-heading {
+  padding: 0 8px 6px;
+  color: var(--ds-muted, #a3a3a3);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.rev-open-thread-group {
+  margin-top: 8px;
+}
+.rev-open-thread-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  color: var(--ds-text, #f5f5f5);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rev-open-thread-entry {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--ds-text, #f5f5f5);
+  cursor: pointer;
+  font: inherit;
+}
+.rev-open-thread-entry:hover {
+  background: var(--ds-hover, #111113);
+}
+.rev-open-thread-entry:focus-visible {
+  outline: 2px solid var(--ds-text, #f5f5f5);
+  outline-offset: -2px;
+}
+.rev-open-thread-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rev-open-thread-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: var(--ds-muted, #a3a3a3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rev-open-thread-snippet {
+  font-size: 12px;
+  color: var(--ds-text, #f5f5f5);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 @media (max-width: 768px) {
   .review-topbar {
     flex-wrap: wrap;
