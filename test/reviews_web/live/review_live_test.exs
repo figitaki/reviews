@@ -89,7 +89,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       # Publish button should be enabled with 1 draft and reflect the count.
       refute has_element?(view, "#publish-review-button[disabled]")
-      assert render(view) =~ "Publish Review (1 draft"
+      assert render(view) =~ "Publish (1)"
 
       # Open the modal, then publish.
       view |> element("#publish-review-button") |> render_click()
