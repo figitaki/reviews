@@ -1,8 +1,8 @@
 # Multi-stage Dockerfile for building a Phoenix release of :reviews.
 #
-# Build stage: Elixir 1.18 / Erlang 27 on Debian Bookworm, with Node added for
-# the React-island asset bundle (esbuild needs node only to install the binary;
-# the actual JS deps live in assets/node_modules).
+# Build stage: Elixir 1.18 / Erlang 27 on Debian Bookworm, with Node + Bun added
+# for the React-island asset bundle. Node is needed to fetch/run the esbuild
+# binary; Bun is the package manager (single source of truth, matches dev).
 #
 # Runtime stage: slim Debian with only the libs the BEAM release needs.
 #
@@ -32,10 +32,18 @@ RUN apt-get update -y \
         ca-certificates \
         curl \
         git \
+        unzip \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Bun (pinned). The official install script drops the binary in
+# /root/.bun/bin; symlink to /usr/local/bin so it's on PATH for non-root steps.
+ARG BUN_VERSION=1.2.13
+RUN curl -fsSL "https://bun.sh/install" | bash -s "bun-v${BUN_VERSION}" \
+    && ln -s /root/.bun/bin/bun /usr/local/bin/bun \
+    && bun --version
 
 WORKDIR /app
 
@@ -53,10 +61,12 @@ RUN mkdir config
 COPY config/config.exs config/prod.exs config/
 RUN mix deps.compile
 
-# Asset sources + npm deps for the React island. esbuild/tailwind binaries are
-# fetched by the mix tasks during assets.deploy, so no separate `npm run build`.
+# Asset sources + JS deps for the React island. esbuild/tailwind binaries are
+# fetched by the mix tasks during assets.deploy, so no separate `bun run build`.
+# `--frozen-lockfile` fails the build if bun.lock is out of sync with
+# package.json — the CI lockfile-drift check catches this earlier, but belt + suspenders.
 COPY assets assets
-RUN cd assets && npm ci --no-audit --no-fund
+RUN cd assets && bun install --frozen-lockfile
 
 # Application source.
 COPY priv priv
