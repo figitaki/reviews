@@ -372,7 +372,7 @@ defmodule ReviewsWeb.ReviewLive do
                   data-patchset-number={@selected_patchset.number}
                   data-raw-diff={fd.raw_diff}
                   data-threads={threads_json(@published_threads, fd.path)}
-                  data-drafts={drafts_json(@drafts, fd.path)}
+                  data-drafts={drafts_json(@drafts, fd.path, @current_user)}
                   data-signed-in={if @current_user, do: "true", else: "false"}
                 >
                 </div>
@@ -535,8 +535,8 @@ defmodule ReviewsWeb.ReviewLive do
     Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
   end
 
-  defp drafts_json(drafts, file_path) do
-    snapshot = %{drafts: drafts}
+  defp drafts_json(drafts, file_path, viewer) do
+    snapshot = %{drafts: drafts, viewer: viewer}
     Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
   end
 

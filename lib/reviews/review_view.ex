@@ -19,7 +19,8 @@ defmodule Reviews.ReviewView do
           files: [File.t()],
           file_diffs: [map()],
           published_threads: [map()],
-          drafts: [map()]
+          drafts: [map()],
+          viewer: User.t() | nil
         }
 
   def get_snapshot_by_slug(slug, viewer, opts \\ []) when is_binary(slug) do
@@ -58,10 +59,38 @@ defmodule Reviews.ReviewView do
     |> Enum.map(&thread_to_payload/1)
   end
 
-  def draft_payloads_for_file(%{drafts: drafts}, file_path) do
+  def draft_payloads_for_file(%{drafts: drafts, viewer: viewer}, file_path) do
     drafts
     |> Enum.filter(&(&1.thread.file_path == file_path))
-    |> Enum.map(&draft_to_payload/1)
+    |> Enum.map(&draft_to_payload(&1, viewer))
+  end
+
+  @doc """
+  Status:"open" published threads grouped by their OP (the author of the first
+  comment), sorted by OP username. Used by the sidebar Open Threads section.
+  """
+  def open_threads_by_op(%{published_threads: threads}) do
+    threads
+    |> Enum.filter(&(&1.status == "open"))
+    |> Enum.group_by(fn t -> Map.get(List.first(t.comments) || %{}, :author) end)
+    |> Enum.sort_by(fn {op, _} -> (op && op.username) || "" end)
+  end
+
+  @doc """
+  Truncated body of the first comment on a thread, for sidebar previews.
+  """
+  def first_comment_snippet(thread, limit \\ 120) do
+    body =
+      (List.first(thread.comments) || %{})
+      |> Map.get(:body, "")
+      |> to_string()
+      |> String.trim()
+
+    if String.length(body) > limit do
+      String.slice(body, 0, limit) <> "…"
+    else
+      body
+    end
   end
 
   defp build_snapshot(review, patchsets, selected, files, viewer) do
@@ -72,7 +101,8 @@ defmodule Reviews.ReviewView do
       files: files,
       file_diffs: file_diff_meta(files, selected),
       published_threads: Threads.list_published_threads(review.id),
-      drafts: list_drafts(review, viewer)
+      drafts: list_drafts(review, viewer),
+      viewer: viewer
     }
   end
 
@@ -113,25 +143,41 @@ defmodule Reviews.ReviewView do
       side: thread.side,
       anchor: thread.anchor,
       status: thread.status,
+      inserted_at: encode_dt(thread.inserted_at),
       author: user_to_payload(thread.author),
       comments:
         Enum.map(thread.comments || [], fn c ->
-          %{id: c.id, body: c.body, author: user_to_payload(c.author)}
+          %{
+            id: c.id,
+            body: c.body,
+            author: user_to_payload(c.author),
+            inserted_at: encode_dt(c.inserted_at),
+            updated_at: encode_dt(c.updated_at)
+          }
         end)
     }
   end
 
-  defp draft_to_payload(%{thread: thread, comment: comment}) do
+  defp draft_to_payload(%{thread: thread, comment: comment}, viewer) do
     %{
       id: comment.id,
       thread_id: thread.id,
       file_path: thread.file_path,
       side: thread.side,
       anchor: thread.anchor,
-      body: comment.body
+      body: comment.body,
+      author: user_to_payload(viewer),
+      inserted_at: encode_dt(comment.inserted_at),
+      updated_at: encode_dt(comment.updated_at)
     }
   end
 
-  defp user_to_payload(%{username: username}), do: %{username: username}
+  defp user_to_payload(%{id: id, username: username} = u),
+    do: %{id: id, username: username, avatar_url: Map.get(u, :avatar_url)}
+
   defp user_to_payload(_), do: nil
+
+  defp encode_dt(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp encode_dt(%NaiveDateTime{} = dt), do: NaiveDateTime.to_iso8601(dt)
+  defp encode_dt(_), do: nil
 end

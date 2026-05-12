@@ -43,6 +43,7 @@ defmodule Reviews.Threads do
     # whose only comment was deleted before publish).
     Repo.all(query)
     |> Enum.filter(fn t -> t.comments != [] end)
+    |> Repo.preload(comments: :author)
   end
 
   @doc """
