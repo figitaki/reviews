@@ -46,3 +46,6 @@ npm-debug.log
 # macOS junk.
 .DS_Store
 
+# Claude Code per-project state (settings, worktrees, transcripts).
+/.claude/
+
