@@ -86,6 +86,7 @@ defmodule ReviewsWeb do
       import Phoenix.HTML
       # Core UI components
       import ReviewsWeb.CoreComponents
+      import ReviewsWeb.DesignSystemComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

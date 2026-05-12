@@ -137,6 +137,19 @@
   --review-add: #25d0a0;
   --review-del: #ff5f76;
   --review-focus: #fff;
+  --ds-bg: var(--review-bg);
+  --ds-panel: var(--review-panel);
+  --ds-panel-raised: var(--review-panel-raised);
+  --ds-line: var(--review-line);
+  --ds-line-strong: var(--review-line-strong);
+  --ds-text: var(--review-text);
+  --ds-muted: var(--review-muted);
+  --ds-faint: var(--review-faint);
+  --ds-hover: var(--review-hover);
+  --ds-add: var(--review-add);
+  --ds-del: var(--review-del);
+  --ds-blue: #7bb7ff;
+  --ds-warn: #ffd166;
 
   background: var(--review-bg);
   color: var(--review-text);
@@ -286,6 +299,28 @@
 
 .review-textarea::placeholder {
   color: var(--review-faint);
+}
+
+.ds-page-header.is-review-header {
+  min-height: auto;
+  padding: 40px 0 32px;
+}
+
+.ds-page-header.is-review-header h1 {
+  max-width: 920px;
+  font-size: clamp(30px, 4vw, 56px);
+  line-height: 1;
+}
+
+.ds-page-header.is-review-header .design-hero-copy {
+  max-width: 720px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.ds-page-header.is-review-header .ds-page-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .rev-shell {
@@ -585,6 +620,23 @@ button.rdr-line-number-clickable:hover {
 .rdr-selection-pill:focus-visible {
   outline: 2px solid var(--color-base-content, #fff);
   outline-offset: 2px;
+}
+
+/* Token-range anchor highlight: dotted underline + faint warning tint, so
+   it reads as a footnote ref against the Shiki-colored code. */
+.rdr-token-anchor {
+  background: color-mix(in srgb, var(--ds-warn, #ffd166) 22%, transparent);
+  text-decoration: underline dotted color-mix(in srgb, var(--ds-warn, #ffd166) 70%, transparent);
+  text-underline-offset: 2px;
+  border-radius: 2px;
+  padding: 0 1px;
+  color: inherit;
+}
+
+/* A row that owns at least one thread or draft gets a left-edge accent so
+   the visual link between source line and annotation bubble is obvious. */
+.rdr-row-anchored {
+  box-shadow: inset 2px 0 0 var(--ds-warn, #ffd166);
 }
 
 @media (max-width: 768px) {

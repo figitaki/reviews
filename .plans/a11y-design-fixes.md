@@ -2,6 +2,11 @@
 
 Findings from the design review on 2026-05-11 against `assets/js/hooks/diff_renderer.js`, `lib/reviews_web/live/review_live.ex`, `lib/reviews_web/components/layouts.ex`, `lib/reviews_web/components/core_components.ex`, `lib/reviews_web/components/layouts/root.html.heex`, and `assets/css/app.css`.
 
+Also validated with Chrome DevTools against `http://localhost:4000/r/uzRiKvyr` on 2026-05-11:
+- Lighthouse snapshot, mobile: Accessibility **88**, Best Practices **100**, SEO **80**, Agentic Browsing **100**.
+- Failed audits: color contrast, accessible-name/visible-label mismatch, missing main landmark, touch target size/spacing, missing meta description.
+- Manual responsive check: desktop is readable, but the mobile header compresses the review title to one visible character and diff rows rely on internal horizontal scrolling.
+
 Findings are grouped by **priority** (impact × cost), not by file. Land top-down; stop wherever the budget runs out.
 
 The `<PatchDiff>`/Shiki swap is **not** in this plan — see the planning-agent output in the session transcript or the comment block in `assets/js/hooks/diff_renderer.js:8-18`. Several findings in this plan target code that may be deleted by that swap (the in-file `DiffRow`, `parseUnifiedDiff`, etc.). Items that overlap are flagged `⚠ overlap` so they can be skipped if the swap lands first.
@@ -9,6 +14,11 @@ The `<PatchDiff>`/Shiki swap is **not** in this plan — see the planning-agent 
 ---
 
 ## P0 — keyboard / screen-reader breaks (do these)
+
+### 0. Review page bypasses `<Layouts.app>` and has no main landmark
+**Where:** `review_live.ex:323-324` — render starts with `<Layouts.flash_group flash={@flash} />` and a plain wrapper `<div>`.
+**Fix:** Start the template with `<Layouts.app flash={@flash}>` and put the review screen inside it. If the shared layout does not provide a `<main id="main">`, pair this with item 7 in `root.html.heex`/`layouts.ex`.
+**Why:** Project guidelines require LiveView templates to begin with `<Layouts.app flash={@flash} ...>`. Lighthouse also reports "Document does not have a main landmark."
 
 ### 1. Theme toggle buttons missing `aria-label`
 **Where:** `lib/reviews_web/components/layouts.ex:128, 136, 144` — three icon-only `<button>` elements in `theme_toggle/1`.
@@ -94,23 +104,41 @@ Pick A unless callers break.
 - `.rdr-line-number-clickable:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }`.
 **Why:** Today the only focus indicator is the UA default, which various resets nuke.
 
-### 13. Hardcoded RGB diff colors ignore theme  ⚠ overlap with PatchDiff swap
-**Where:** `app.css:131-133, 183, 203` — hardcoded greens/reds/yellows for `.rdr-row-add`, `.rdr-row-del`, `.rdr-draft`, `.rdr-draft-tag`.
+### 13. Line-number comment buttons fail label and touch-target audits  ⚠ overlap
+**Where:** `diff_renderer.js:225-240`; `app.css:125-164`.
+**Fix:**
+- Change `aria-label="Add comment"` to include the visible line number, e.g. `aria-label={row.newNumber ? \`Add comment on new line ${row.newNumber}\` : \`Add comment on old line ${row.oldNumber}\`}`.
+- Keep the visible number in the accessible name to satisfy label-in-name rules.
+- Increase touch target size/spacing on mobile. Options: make the gutter buttons at least `44px` high on coarse pointers, or show a larger comment affordance on row hover/focus while keeping line numbers readable.
+**Why:** Lighthouse reports visible-label/accessibility-name mismatch and insufficient touch targets for the line-number buttons. The current visible text is `1`, `2`, etc.; the accessible name is only "Add comment."
+**Skip if:** PatchDiff renders its own gutter/comment affordance.
+
+### 14. Hardcoded RGB diff colors and stat colors fail contrast  ⚠ overlap with PatchDiff swap
+**Where:** `app.css:131-133, 183, 203`; plus `review_live.ex:389-390, 410-411` for `text-success`/`text-error` stats.
 **Fix:** Replace `rgba(46, 160, 67, 0.12)` etc. with `oklch(from var(--color-success) l c h / 0.12)` (or fall back to `color-mix(in oklch, var(--color-success) 12%, transparent)`).
+For the tiny `+/-` stats, use higher-contrast token/classes or add a neutral text fallback like `font-semibold` plus non-color text signs.
 **Why:** Dark-mode contrast is poor; not honoring daisyUI theme.
 **Skip if:** the PatchDiff swap lands and these CSS classes are deleted.
 
-### 14. `font-variant-numeric: tabular-nums` missing on line-number gutter  ⚠ overlap
+### 15. `font-variant-numeric: tabular-nums` missing on line-number gutter  ⚠ overlap
 **Where:** `app.css:136-145` — `.rdr-line-number`.
 **Fix:** Add `font-variant-numeric: tabular-nums;`.
 **Why:** Numbers misalign in proportional digit fonts.
 **Skip if:** PatchDiff renders its own gutter.
 
+### 16. Mobile review header collapses the title
+**Where:** `review_live.ex:327-363`.
+**Fix:** Split the top bar into two responsive rows on small screens:
+- Row 1: title/description with enough width to be useful.
+- Row 2: patchset selector, sign-in/account, publish action.
+Use `min-w-0` carefully, avoid making the title compete with every control in the same flex line, and consider a compact icon+tooltip publish button only below `sm`.
+**Why:** On a 390px-wide mobile viewport, the review title `worktree-agent-a14375ff4c0d4473f` collapsed to only `w`, making the page identity nearly invisible.
+
 ---
 
 ## P2 — content / copy
 
-### 15. Title Case pass on buttons and labels
+### 17. Title Case pass on buttons and labels
 **Fixes (single grep-and-edit pass):**
 - `review_live.ex:360` `"Publish review"` → `"Publish Review"`
 - `review_live.ex:371` `"dismiss"` → `"Dismiss"`
@@ -121,19 +149,24 @@ Pick A unless callers break.
 - `diff_renderer.js:166` `"Save draft"` → `"Save Draft"`
 **Why:** Chicago-style Title Case for button/action labels.
 
-### 16. Placeholder ending
+### 18. Placeholder ending
 **Where:** `review_live.ex:476` — textarea placeholder ends with `.`.
 **Fix:** End with `…`: `"Optional summary that ships with the published drafts…"`.
 
-### 17. `translate="no"` on code/identifiers
+### 19. `translate="no"` on code/identifiers
 **Where:** Multiple — `review_live.ex:329` (review title), `:384, :406` (file paths in tree + per-file header), `:449` (file path in publish modal), `diff_renderer.js:222` (line content `<pre>`).
 **Fix:** Add `translate="no"` attribute.
 **Why:** Auto-translate garbles branch names, file paths, code.
 
-### 18. Logo `<img>` missing `height` and `alt`
+### 20. Logo `<img>` missing `height` and `alt`
 **Where:** `layouts.ex:41` — `<img src={~p"/images/logo.svg"} width="36" />`.
 **Fix:** Add `height="36"` and `alt=""` (decorative — text "v…" sits next to it).
 **Why:** CLS rule + missing alt.
+
+### 21. Development console is flooded by LiveReload server logs
+**Where:** `assets/js/app.js:56-60` — `reloader.enableServerLogs()`.
+**Fix:** Gate server-log streaming behind an explicit local flag, e.g. `localStorage.phxServerLogs === "1"`, or remove the automatic call and leave the `window.liveReloader` escape hatch.
+**Why:** Chrome DevTools showed hundreds of SQL/debug entries. That noise makes actual client warnings/errors harder to see during review and can expose implementation details in shared screen sessions.
 
 ---
 
@@ -151,9 +184,9 @@ Pick A unless callers break.
 
 ## Suggested landing order
 
-1. **One commit, P0 items 1–7.** All low-blast-radius edits to `layouts.ex`, `core_components.ex`, `review_live.ex`, `root.html.heex`, `app.css`. `mix test` + manual smoke. Push.
-2. **One commit, P1 items 8–12.** Theming metas + focus-visible. `mix test` + manual smoke. Push.
-3. **One commit, P2 items 15–18.** Content pass. Trivial; bundle with #2 if the diff stays small. Note that item 15 includes a test fixture update at `test/reviews_web/live/review_live_test.exs:92` (`"Publish review (1 draft"` → `"Publish Review (1 draft"`).
-4. **P1 items 13–14** land only if the PatchDiff swap is deferred; otherwise skip.
+1. **One commit, P0 items 0–7.** All low-blast-radius edits to `layouts.ex`, `core_components.ex`, `review_live.ex`, `root.html.heex`, `app.css`. `mix test` + manual smoke. Push.
+2. **One commit, P1 items 8–13 and 16.** Theming metas, focus-visible, line-button accessible names/touch targets, and mobile header layout. Verify with Chrome DevTools at 390px and desktop. Push.
+3. **One commit, P2 items 17–21.** Content pass and console-log gating. Trivial; bundle with #2 if the diff stays small. Note that item 17 includes a test fixture update at `test/reviews_web/live/review_live_test.exs:92` (`"Publish review (1 draft"` → `"Publish Review (1 draft"`).
+4. **P1 items 14–15** land only if the PatchDiff swap is deferred; otherwise skip.
 
-Each commit independently verifiable: `mix compile --warnings-as-errors`, `mix test`, and a curl smoke against the running dev server checking the specific aria-labels / data attributes.
+Each commit independently verifiable: `mix compile --warnings-as-errors`, `mix test`, `mix precommit`, and a Chrome DevTools/Lighthouse smoke against the running dev server checking the specific aria-labels / landmarks / responsive behavior.

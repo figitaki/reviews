@@ -321,127 +321,140 @@ defmodule ReviewsWeb.ReviewLive do
   def render(assigns) do
     ~H"""
     <Layouts.flash_group flash={@flash} />
-    <div class="px-4 py-3 sm:px-6 lg:px-8">
-      <div class="space-y-4">
-        <%!-- Top bar --%>
-        <header class="sticky top-0 z-10 bg-base-100 border-b py-2 flex items-center gap-3 flex-wrap min-h-[var(--rev-header-h)]">
-          <div class="flex-1 min-w-0">
-            <h1 class="text-lg font-semibold truncate" translate="no">{@review.title}</h1>
-            <p :if={@review.description} class="text-xs text-base-content/70 truncate">
-              {@review.description}
-            </p>
-          </div>
+    <div class="review-page min-h-screen">
+      <.ds_shell brand="Reviews" home={~p"/"}>
+        <:nav>
+          <.ds_nav_item navigate={~p"/"}>Home</.ds_nav_item>
+          <.ds_nav_item navigate={~p"/r/#{@review.slug}"} active>Review</.ds_nav_item>
+          <.ds_nav_item :if={@current_user} navigate={~p"/settings"}>Settings</.ds_nav_item>
+        </:nav>
+        <:actions>
+          <Layouts.theme_toggle />
+        </:actions>
 
-          <div class="flex items-center gap-1" id="patchset-selector">
-            <span class="text-xs text-base-content/70">Patchset:</span>
-            <button
-              :for={ps <- @patchsets}
-              id={"patchset-#{ps.number}"}
-              type="button"
-              phx-click="select_patchset"
-              phx-value-number={ps.number}
-              aria-pressed={
-                if(@selected_patchset && @selected_patchset.id == ps.id, do: "true", else: "false")
-              }
-              class={[
-                "px-2 py-1 text-xs rounded border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
-                @selected_patchset && @selected_patchset.id == ps.id &&
-                  "bg-primary text-primary-content border-primary"
-              ]}
-            >
-              v{ps.number}
+        <div class="design-main">
+          <.ds_page_header
+            class="is-review-header"
+            eyebrow="Review"
+            title={@review.title}
+            description={@review.description || review_summary(@file_diffs, @drafts)}
+          >
+            <:actions>
+              <div class="review-patchset" id="patchset-selector">
+                <span class="review-label">Patchset</span>
+                <button
+                  :for={ps <- @patchsets}
+                  id={"patchset-#{ps.number}"}
+                  type="button"
+                  phx-click="select_patchset"
+                  phx-value-number={ps.number}
+                  aria-pressed={
+                    if(@selected_patchset && @selected_patchset.id == ps.id,
+                      do: "true",
+                      else: "false"
+                    )
+                  }
+                  class={[
+                    "review-chip focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+                    @selected_patchset && @selected_patchset.id == ps.id &&
+                      "is-active"
+                  ]}
+                >
+                  v{ps.number}
+                </button>
+              </div>
+
+              <.user_menu current_user={@current_user} />
+
+              <button
+                id="publish-review-button"
+                type="button"
+                class="review-button review-button-primary"
+                phx-click="open_publish_modal"
+                disabled={@drafts == []}
+              >
+                Publish Review ({length(@drafts)} draft{if length(@drafts) != 1, do: "s"})
+              </button>
+            </:actions>
+          </.ds_page_header>
+
+          <%!-- Patchset-pushed banner --%>
+          <div
+            :if={@banner_message}
+            id="patchset-banner"
+            class="review-banner flex items-center justify-between gap-3"
+          >
+            <span>{@banner_message}</span>
+            <button type="button" phx-click="dismiss_banner" class="review-button review-button-ghost">
+              Dismiss
             </button>
           </div>
 
-          <.user_menu current_user={@current_user} />
+          <%!-- Body: sidebar + diff list --%>
+          <div class="rev-shell">
+            <aside id="file-tree" class="rev-sidebar">
+              <ul class="rev-file-list">
+                <li :for={fd <- @file_diffs}>
+                  <a href={"#file-#{fd.id}"} class="rev-file-link">
+                    <span class="flex items-center gap-2 min-w-0">
+                      <.ds_status_mark status={fd.status} />
+                      <span class="rev-file-path truncate" translate="no">{fd.path}</span>
+                    </span>
+                    <span class="rev-file-stats">
+                      <span class="rev-stat-add">+{fd.additions}</span>
+                      <span class="rev-stat-del">-{fd.deletions}</span>
+                    </span>
+                  </a>
+                </li>
+                <li :if={@file_diffs == []}>
+                  <span class="rev-empty">No files in this patchset.</span>
+                </li>
+              </ul>
+            </aside>
 
-          <button
-            id="publish-review-button"
-            type="button"
-            class="btn btn-primary btn-sm"
-            phx-click="open_publish_modal"
-            disabled={@drafts == []}
-          >
-            Publish Review ({length(@drafts)} draft{if length(@drafts) != 1, do: "s"})
-          </button>
-        </header>
-
-        <%!-- Patchset-pushed banner --%>
-        <div
-          :if={@banner_message}
-          id="patchset-banner"
-          class="alert alert-info text-sm flex items-center justify-between"
-        >
-          <span>{@banner_message}</span>
-          <button type="button" phx-click="dismiss_banner" class="btn btn-ghost btn-xs">
-            Dismiss
-          </button>
-        </div>
-
-        <%!-- Body: sidebar + diff list --%>
-        <div class="rev-shell">
-          <aside id="file-tree" class="rev-sidebar text-sm">
-            <ul class="menu menu-xs bg-base-200 rounded-box w-full">
-              <li :for={fd <- @file_diffs}>
-                <a href={"#file-#{fd.id}"} class="flex items-center justify-between gap-2">
-                  <span class="flex items-center gap-2 min-w-0">
-                    <.status_icon status={fd.status} />
-                    <span class="truncate font-mono text-xs" translate="no">{fd.path}</span>
-                  </span>
-                  <span class="shrink-0 text-xs whitespace-nowrap">
-                    <span class="text-success">+{fd.additions}</span>
-                    <span class="text-error">-{fd.deletions}</span>
-                  </span>
-                </a>
-              </li>
-              <li :if={@file_diffs == []}>
-                <span class="text-base-content/60">No files in this patchset.</span>
-              </li>
-            </ul>
-          </aside>
-
-          <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
-            <article
-              :for={fd <- @file_diffs}
-              id={"file-#{fd.id}"}
-              class="border rounded overflow-hidden"
-            >
-              <header class="px-3 py-2 border-b text-sm font-mono flex items-center gap-2 bg-base-200">
-                <.status_icon status={fd.status} />
-                <span class="truncate" translate="no">{fd.path}</span>
-                <span class="ml-auto text-xs">
-                  <span class="text-success">+{fd.additions}</span>
-                  <span class="text-error">-{fd.deletions}</span>
-                </span>
-              </header>
-              <div
-                id={"diff-#{fd.id}"}
-                phx-hook="DiffRenderer"
-                phx-update="ignore"
-                data-file-path={fd.path}
-                data-file-status={fd.status}
-                data-side="new"
-                data-patchset-number={@selected_patchset.number}
-                data-raw-diff={fd.raw_diff}
-                data-threads={threads_json(@published_threads, fd.path)}
-                data-drafts={drafts_json(@drafts, fd.path)}
-                data-signed-in={if @current_user, do: "true", else: "false"}
+            <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
+              <article
+                :for={fd <- @file_diffs}
+                id={"file-#{fd.id}"}
+                class="rev-file-card"
               >
-              </div>
-            </article>
+                <header class="rev-file-header">
+                  <.ds_status_mark status={fd.status} />
+                  <span class="rev-file-path truncate" translate="no">{fd.path}</span>
+                  <span class="rev-file-stats ml-auto">
+                    <span class="rev-stat-add">+{fd.additions}</span>
+                    <span class="rev-stat-del">-{fd.deletions}</span>
+                  </span>
+                </header>
+                <div
+                  id={"diff-#{fd.id}"}
+                  phx-hook="DiffRenderer"
+                  phx-update="ignore"
+                  data-file-path={fd.path}
+                  data-file-status={fd.status}
+                  data-side="new"
+                  data-patchset-number={@selected_patchset.number}
+                  data-raw-diff={fd.raw_diff}
+                  data-threads={threads_json(@published_threads, fd.path)}
+                  data-drafts={drafts_json(@drafts, fd.path)}
+                  data-signed-in={if @current_user, do: "true", else: "false"}
+                >
+                </div>
+              </article>
 
-            <p :if={@file_diffs == []} class="text-sm text-base-content/60">
-              No files in this patchset.
-            </p>
-          </section>
+              <p :if={@file_diffs == []} class="rev-empty">
+                No files in this patchset.
+              </p>
+            </section>
+          </div>
         </div>
-      </div>
+      </.ds_shell>
 
       <%!-- Publish modal (Daisy) --%>
       <dialog id="publish-modal" class={["modal", @show_publish_modal && "modal-open"]}>
-        <div class="modal-box max-w-2xl">
-          <h3 class="text-lg font-semibold">Publish review</h3>
-          <p class="text-sm text-base-content/70 mt-1">
+        <div class="modal-box review-modal max-w-2xl">
+          <h3 class="review-modal-title">Publish review</h3>
+          <p class="review-description mt-1">
             {length(@drafts)} draft{if length(@drafts) != 1, do: "s"} will go live for everyone with the link.
           </p>
 
@@ -449,48 +462,52 @@ defmodule ReviewsWeb.ReviewLive do
             <li
               :for={draft <- @drafts}
               id={"draft-#{draft.comment.id}"}
-              class="border rounded p-2 text-sm flex gap-2 items-start"
+              class="review-draft-item flex gap-2 items-start"
             >
               <div class="flex-1 min-w-0">
-                <p class="font-mono text-xs text-base-content/70 truncate" translate="no">
+                <p class="rev-file-path truncate" translate="no">
                   {draft.thread.file_path}<span :if={anchor_line_hint(draft.thread)}>:{anchor_line_hint(draft.thread)}</span>
                 </p>
                 <p class="mt-1 whitespace-pre-wrap">{draft.comment.body}</p>
               </div>
               <button
                 type="button"
-                class="btn btn-ghost btn-xs"
+                class="review-button review-button-ghost"
                 phx-click="delete_draft"
                 phx-value-comment_id={draft.comment.id}
               >
                 Remove
               </button>
             </li>
-            <li :if={@drafts == []} class="text-sm text-base-content/60 italic">
+            <li :if={@drafts == []} class="rev-empty">
               No drafts yet.
             </li>
           </ul>
 
           <form phx-change="update_summary">
             <label class="form-control">
-              <span class="label-text">Overall review summary (optional)</span>
+              <span class="review-label mb-2">Overall review summary (optional)</span>
               <textarea
                 id="summary-textarea"
                 name="summary"
                 rows="3"
-                class="textarea textarea-bordered w-full"
+                class="review-textarea"
                 placeholder="Optional summary that ships with the published drafts…"
               >{@summary_body}</textarea>
             </label>
           </form>
 
           <div class="modal-action">
-            <button type="button" class="btn btn-ghost" phx-click="close_publish_modal">
+            <button
+              type="button"
+              class="review-button review-button-ghost"
+              phx-click="close_publish_modal"
+            >
               Cancel
             </button>
             <button
               type="button"
-              class="btn btn-primary"
+              class="review-button review-button-primary"
               phx-click="publish_review"
               disabled={@drafts == []}
             >
@@ -515,7 +532,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp user_menu(%{current_user: nil} = assigns) do
     ~H"""
-    <a href="/auth/github" class="btn btn-sm btn-outline gap-2">
+    <a href="/auth/github" class="review-button review-button-secondary gap-2">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 16 16"
@@ -536,7 +553,7 @@ defmodule ReviewsWeb.ReviewLive do
       <button
         tabindex="0"
         type="button"
-        class="btn btn-sm btn-ghost gap-2"
+        class="review-button review-button-secondary gap-2"
         aria-label={"Account menu for #{@current_user.username}"}
       >
         <img
@@ -551,7 +568,7 @@ defmodule ReviewsWeb.ReviewLive do
       </button>
       <ul
         tabindex="0"
-        class="dropdown-content menu menu-sm bg-base-100 rounded-box z-20 mt-2 w-44 p-2 shadow border border-base-300"
+        class="dropdown-content menu menu-sm review-menu z-20 mt-2 w-44 p-2"
       >
         <li>
           <.link navigate={~p"/settings"}>Settings</.link>
@@ -564,27 +581,15 @@ defmodule ReviewsWeb.ReviewLive do
     """
   end
 
-  attr :status, :string, required: true
+  defp review_summary(file_diffs, drafts) do
+    file_count = length(file_diffs)
+    draft_count = length(drafts)
 
-  defp status_icon(assigns) do
-    ~H"""
-    <span class={[
-      "inline-flex items-center justify-center size-4 rounded-sm text-[10px] font-bold",
-      @status == "added" && "bg-success/20 text-success",
-      @status == "modified" && "bg-info/20 text-info",
-      @status == "deleted" && "bg-error/20 text-error",
-      @status == "renamed" && "bg-warning/20 text-warning"
-    ]}>
-      {status_letter(@status)}
-    </span>
-    """
+    "#{file_count} changed #{plural(file_count, "file")} · #{draft_count} #{plural(draft_count, "draft")}"
   end
 
-  defp status_letter("added"), do: "A"
-  defp status_letter("modified"), do: "M"
-  defp status_letter("deleted"), do: "D"
-  defp status_letter("renamed"), do: "R"
-  defp status_letter(_), do: "?"
+  defp plural(1, word), do: word
+  defp plural(_, word), do: word <> "s"
 
   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
   defp anchor_line_hint(_), do: nil

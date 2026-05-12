@@ -113,14 +113,133 @@ function tokenStyle(token) {
   return style
 }
 
-function HighlightedCode({ content, tokens }) {
-  if (!tokens || tokens.length === 0) return content
+// Returns an array of {start, end} half-open ranges identifying substrings
+// of `content` that some anchor (thread or draft with granularity:"token_range")
+// points to. `selection_offset` is used as a hint to disambiguate when the
+// substring repeats; falls back to the first occurrence.
+function computeAnchorRanges(content, items) {
+  const out = []
+  if (!content || !items?.length) return out
+  for (const item of items) {
+    const a = item.anchor
+    if (!a || a.granularity !== "token_range") continue
+    const sel = a.selection_text
+    if (!sel) continue
+    let start = -1
+    if (Number.isInteger(a.selection_offset)) {
+      if (content.slice(a.selection_offset, a.selection_offset + sel.length) === sel) {
+        start = a.selection_offset
+      }
+    }
+    if (start < 0) start = content.indexOf(sel)
+    if (start < 0) continue
+    out.push({ start, end: start + sel.length })
+  }
+  // Sort + merge overlapping ranges so we don't double-wrap.
+  out.sort((a, b) => a.start - b.start)
+  const merged = []
+  for (const r of out) {
+    const last = merged[merged.length - 1]
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end)
+    else merged.push({ ...r })
+  }
+  return merged
+}
 
-  return tokens.map((token, i) => (
-    <span key={i} style={tokenStyle(token)}>
-      {token.content}
-    </span>
-  ))
+// True if any portion of [offset, offset+len) overlaps any anchor range.
+function isAnchored(offset, len, anchorRanges) {
+  for (const r of anchorRanges) {
+    if (offset < r.end && offset + len > r.start) return true
+  }
+  return false
+}
+
+// Split a Shiki token at any anchor-range boundaries that fall inside it.
+// Each returned piece is { text, anchored }.
+function splitTokenAtRanges(text, offset, anchorRanges) {
+  const boundaries = new Set([0, text.length])
+  for (const r of anchorRanges) {
+    const localStart = r.start - offset
+    const localEnd = r.end - offset
+    if (localStart > 0 && localStart < text.length) boundaries.add(localStart)
+    if (localEnd > 0 && localEnd < text.length) boundaries.add(localEnd)
+  }
+  const sorted = [...boundaries].sort((a, b) => a - b)
+  const pieces = []
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const start = sorted[i]
+    const end = sorted[i + 1]
+    if (start === end) continue
+    pieces.push({
+      text: text.slice(start, end),
+      anchored: isAnchored(offset + start, end - start, anchorRanges),
+    })
+  }
+  return pieces
+}
+
+function HighlightedCode({ content, tokens, anchorRanges }) {
+  const ranges = anchorRanges || []
+  // Plain-text fallback (no Shiki tokens available for this line).
+  if (!tokens || tokens.length === 0) {
+    if (ranges.length === 0) return content
+    const pieces = splitTokenAtRanges(content, 0, ranges)
+    return pieces.map((p, i) =>
+      p.anchored ? (
+        <mark key={i} className="rdr-token-anchor">{p.text}</mark>
+      ) : (
+        <React.Fragment key={i}>{p.text}</React.Fragment>
+      )
+    )
+  }
+
+  const out = []
+  let offset = 0
+  let key = 0
+  for (const token of tokens) {
+    const style = tokenStyle(token)
+    const pieces = ranges.length
+      ? splitTokenAtRanges(token.content, offset, ranges)
+      : [{ text: token.content, anchored: false }]
+    for (const p of pieces) {
+      if (p.anchored) {
+        out.push(
+          <mark key={key++} className="rdr-token-anchor" style={style}>
+            {p.text}
+          </mark>
+        )
+      } else {
+        out.push(
+          <span key={key++} style={style}>
+            {p.text}
+          </span>
+        )
+      }
+    }
+    offset += token.content.length
+  }
+  return out
+}
+
+function LineNumber({ number, side, interactive, onClick }) {
+  if (!number) {
+    return <span className="rdr-line-number" aria-hidden="true" />
+  }
+
+  if (!interactive) {
+    return <span className="rdr-line-number">{number}</span>
+  }
+
+  return (
+    <button
+      type="button"
+      className="rdr-line-number rdr-line-number-clickable"
+      aria-label={`Add comment on ${side} line ${number}`}
+      onClick={onClick}
+    >
+      {number}
+    </button>
+  )
 }
 
 // ----------------------------------------------------------------------------
@@ -255,30 +374,36 @@ function DiffRow({
     )
   }
 
-  const lineClass = `rdr-row rdr-row-${row.type}`
+  const anchorRanges = computeAnchorRanges(row.content, [...threads, ...drafts])
+  const hasAttachments = threads.length > 0 || drafts.length > 0
+  const lineClass = `rdr-row rdr-row-${row.type}${hasAttachments ? " rdr-row-anchored" : ""}`
   const composerOpen = composerOpenAt === index
+  const activeSide =
+    row.type === "del" ? "old" : row.type === "add" ? "new" : side
+  const oldInteractive = row.oldNumber && activeSide === "old"
+  const newInteractive = row.newNumber && activeSide === "new"
 
   return (
     <>
       <div className={lineClass}>
-        <button
-          type="button"
-          className="rdr-line-number rdr-line-number-clickable"
-          aria-label="Add comment"
-          onClick={() => onOpenComposer(index)}
-        >
-          {row.oldNumber ?? ""}
-        </button>
-        <button
-          type="button"
-          className="rdr-line-number rdr-line-number-clickable"
-          aria-label="Add comment"
-          onClick={() => onOpenComposer(index)}
-        >
-          {row.newNumber ?? ""}
-        </button>
+        <LineNumber
+          number={row.oldNumber}
+          side="old"
+          interactive={oldInteractive}
+          onClick={() => onOpenComposer(index, "old")}
+        />
+        <LineNumber
+          number={row.newNumber}
+          side="new"
+          interactive={newInteractive}
+          onClick={() => onOpenComposer(index, "new")}
+        />
         <pre className="rdr-line-content" translate="no" data-row-index={index}>
-          <HighlightedCode content={row.content} tokens={highlightedTokens} />
+          <HighlightedCode
+            content={row.content}
+            tokens={highlightedTokens}
+            anchorRanges={anchorRanges}
+          />
         </pre>
       </div>
 
@@ -309,7 +434,7 @@ function DiffRow({
           <div className="rdr-annotation">
             {signedIn ? (
               <DraftComposer
-                onSave={(body) => onSaveDraft(index, body)}
+                onSave={(body) => onSaveDraft(index, body, activeSide)}
                 onCancel={onCloseComposer}
               />
             ) : (
@@ -423,11 +548,11 @@ function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, draf
     [parsed, drafts]
   )
 
-  function handleSave(rowIndex, body) {
+  function handleSave(rowIndex, body, anchorSide = side) {
     const row = parsed.rows[rowIndex]
     if (!row || row.type === "hunk") return
     const ctx = buildContextSnapshot(parsed.rows, rowIndex)
-    const lineNumberHint = side === "old" ? row.oldNumber : row.newNumber
+    const lineNumberHint = anchorSide === "old" ? row.oldNumber : row.newNumber
 
     const tokenSel =
       pendingSelection && pendingSelection.rowIndex === rowIndex ? pendingSelection : null
@@ -453,7 +578,7 @@ function DiffFile({ filePath, fileStatus, side, signedIn, rawDiff, threads, draf
     onSaveDraft(
       {
         file_path: filePath,
-        side,
+        side: anchorSide,
         line_text: row.content,
         thread_anchor: anchor,
       },

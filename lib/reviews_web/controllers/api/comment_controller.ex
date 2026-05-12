@@ -61,6 +61,9 @@ defmodule ReviewsWeb.Api.CommentController do
   defp error_message(:invalid_side), do: "side must be \"old\" or \"new\""
   defp error_message(:invalid_file_path), do: "file_path is required"
   defp error_message(:invalid_anchor), do: "thread_anchor must include a granularity"
-  defp error_message(:unknown_granularity), do: "anchor granularity must be \"line\" or \"token_range\""
+
+  defp error_message(:unknown_granularity),
+    do: "anchor granularity must be \"line\" or \"token_range\""
+
   defp error_message(other), do: "could not publish: #{inspect(other)}"
 end

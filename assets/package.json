@@ -6,6 +6,7 @@
   "dependencies": {
     "@pierre/diffs": "*",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "shiki": "^3.23.0"
   }
 }
