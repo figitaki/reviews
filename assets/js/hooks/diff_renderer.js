@@ -1,185 +1,264 @@
 // DiffRenderer — Phoenix LiveView hook that mounts a React island per file.
 //
-// Each per-file <div phx-hook="DiffRenderer" phx-update="ignore"> carries
-// `data-*` props (see docs/CONTRACTS.md). The hook reads those, mounts a
-// React tree inside `this.el`, and bridges UI events back to LiveView via
-// pushEvent.
+// The diff body is rendered by `<PatchDiff>` from `@pierre/diffs/react`.
+// We wrap it with our own thread/draft/composer UX via:
 //
-// The island keeps diff rendering local so thread anchors and draft composers
-// stay simple. Syntax highlighting is applied per rendered row with Shiki.
+//   * `lineAnnotations`     — fed from server-pushed thread + draft payloads
+//                             via `threadsAndDraftsToAnnotations`, grouped by
+//                             (side, lineNumber).
+//   * `renderAnnotation`    — returns a React node rendered into PatchDiff's
+//                             shadow DOM. Bubbles inline their own styles
+//                             because our `.rdr-*` CSS can't reach in there.
+//   * `onLineNumberClick`   — opens a draft composer attached as a one-off
+//                             annotation at that line.
+//
+// LiveView contract is unchanged from before the spike:
+//   * Each per-file `<div phx-hook="DiffRenderer" phx-update="ignore">` carries
+//     `data-raw-diff`, `data-threads`, `data-drafts`, etc.
+//   * We mount a React root inside `this.el` and stream updates via the
+//     `threads_updated:<file_path>` push event.
 
-import React, { useState, useRef, useEffect, useMemo } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { createRoot } from "react-dom/client"
-import { codeToTokens } from "shiki"
+import { PatchDiff } from "@pierre/diffs/react"
 
-const SHIKI_THEME = "github-dark-default"
-
-// ----------------------------------------------------------------------------
-// Parsing — split a single file's unified diff into rows we can render.
-// We do this in plain JS to avoid the @pierre/diffs worker dance for v1.
-// Each row is `{ type, oldNumber, newNumber, content }`.
-// ----------------------------------------------------------------------------
-
-function parseUnifiedDiff(rawDiff) {
-  if (!rawDiff) return { rows: [], language: "text" }
-
-  const lines = rawDiff.split("\n")
-  const rows = []
-  let oldNum = 0
-  let newNum = 0
-  let inHunk = false
-
-  for (const line of lines) {
-    if (line.startsWith("@@")) {
-      const m = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
-      if (m) {
-        oldNum = parseInt(m[1], 10)
-        newNum = parseInt(m[2], 10)
-        inHunk = true
-        rows.push({ type: "hunk", oldNumber: null, newNumber: null, content: line })
-      }
-      continue
-    }
-    if (!inHunk) continue
-    if (line.startsWith("+++") || line.startsWith("---")) continue
-
-    if (line.startsWith("+")) {
-      rows.push({ type: "add", oldNumber: null, newNumber: newNum, content: line.slice(1) })
-      newNum += 1
-    } else if (line.startsWith("-")) {
-      rows.push({ type: "del", oldNumber: oldNum, newNumber: null, content: line.slice(1) })
-      oldNum += 1
-    } else if (line.startsWith(" ") || line === "") {
-      rows.push({
-        type: "ctx",
-        oldNumber: oldNum,
-        newNumber: newNum,
-        content: line.startsWith(" ") ? line.slice(1) : line,
-      })
-      oldNum += 1
-      newNum += 1
-    }
-    // `\ No newline at end of file` and similar are skipped.
-  }
-
-  return { rows }
-}
-
-function buildContextSnapshot(rows, anchorIndex, n = 2) {
-  const before = []
-  for (let i = anchorIndex - 1; i >= 0 && before.length < n; i--) {
-    if (rows[i].type === "hunk") break
-    before.unshift(rows[i].content)
-  }
-  const after = []
-  for (let i = anchorIndex + 1; i < rows.length && after.length < n; i++) {
-    if (rows[i].type === "hunk") break
-    after.push(rows[i].content)
-  }
-  return { before, after }
-}
-
-function languageForFile(path) {
-  const lower = (path || "").toLowerCase()
-  const name = lower.split("/").pop() || ""
-
-  if (name === ".env" || name.startsWith(".env.")) return "dotenv"
-  if (name === "mix.exs") return "elixir"
-  if (name === "mix.lock") return "elixir"
-  if (name.endsWith(".ex") || name.endsWith(".exs")) return "elixir"
-  if (name.endsWith(".heex") || name.endsWith(".html.heex")) return "html"
-  if (name.endsWith(".js") || name.endsWith(".mjs") || name.endsWith(".cjs")) return "javascript"
-  if (name.endsWith(".jsx")) return "jsx"
-  if (name.endsWith(".ts")) return "typescript"
-  if (name.endsWith(".tsx")) return "tsx"
-  if (name.endsWith(".css")) return "css"
-  if (name.endsWith(".json")) return "json"
-  if (name.endsWith(".md") || name.endsWith(".markdown")) return "markdown"
-  if (name.endsWith(".yml") || name.endsWith(".yaml")) return "yaml"
-  if (name.endsWith(".toml")) return "toml"
-  if (name.endsWith(".sh") || name.endsWith(".bash") || name.endsWith(".zsh")) return "bash"
-
-  return null
-}
-
-function tokenStyle(token) {
-  const style = {}
-  if (token.color) style.color = token.color
-  if (token.fontStyle) {
-    if (token.fontStyle & 1) style.fontStyle = "italic"
-    if (token.fontStyle & 2) style.fontWeight = 700
-    if (token.fontStyle & 4) style.textDecoration = "underline"
-  }
-  return style
-}
-
-// Returns an array of {start, end} half-open ranges identifying substrings
-// of `content` that some anchor (thread or draft with granularity:"token_range")
-// points to. `selection_offset` is used as a hint to disambiguate when the
-// substring repeats; falls back to the first occurrence.
-function computeAnchorRanges(content, items) {
-  const out = []
-  if (!content || !items?.length) return out
-  for (const item of items) {
-    const a = item.anchor
-    if (!a || a.granularity !== "token_range") continue
-    const sel = a.selection_text
-    if (!sel) continue
-    let start = -1
-    if (Number.isInteger(a.selection_offset)) {
-      if (content.slice(a.selection_offset, a.selection_offset + sel.length) === sel) {
-        start = a.selection_offset
-      }
-    }
-    if (start < 0) start = content.indexOf(sel)
-    if (start < 0) continue
-    out.push({ start, end: start + sel.length })
-  }
-  // Sort + merge overlapping ranges so we don't double-wrap.
-  out.sort((a, b) => a.start - b.start)
-  const merged = []
-  for (const r of out) {
-    const last = merged[merged.length - 1]
-    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end)
-    else merged.push({ ...r })
-  }
-  return merged
-}
-
-// True if any portion of [offset, offset+len) overlaps any anchor range.
-function isAnchored(offset, len, anchorRanges) {
-  for (const r of anchorRanges) {
-    if (offset < r.end && offset + len > r.start) return true
-  }
-  return false
-}
-
-// Split a Shiki token at any anchor-range boundaries that fall inside it.
-// Each returned piece is { text, anchored }.
-function splitTokenAtRanges(text, offset, anchorRanges) {
-  const boundaries = new Set([0, text.length])
-  for (const r of anchorRanges) {
-    const localStart = r.start - offset
-    const localEnd = r.end - offset
-    if (localStart > 0 && localStart < text.length) boundaries.add(localStart)
-    if (localEnd > 0 && localEnd < text.length) boundaries.add(localEnd)
-  }
-  const sorted = [...boundaries].sort((a, b) => a - b)
-  const pieces = []
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const start = sorted[i]
-    const end = sorted[i + 1]
-    if (start === end) continue
-    pieces.push({
-      text: text.slice(start, end),
-      anchored: isAnchored(offset + start, end - start, anchorRanges),
-    })
-  }
-  return pieces
-}
+import { Thread, Draft, SaveDraftPayload } from "../schemas.js"
+import {
+  threadsAndDraftsToAnnotations,
+  annotationSideToSide,
+  composerToAnchor,
+} from "../lib/translate.js"
 
 // ----------------------------------------------------------------------------
-// Bubble helpers: relative time, anchor pinpoint, comment grouping, avatar
+// Inline style maps for bubbles.
+//
+// The diff body is rendered into shadow DOM, so global `.rdr-*` CSS rules in
+// `assets/css/app.css` cannot reach `renderAnnotation` output. Bubbles ship
+// their styles inline. The CSS-variable colors fall through to the library's
+// theme variables, which keeps everything cohesive with the diff body.
+// ----------------------------------------------------------------------------
+
+const colors = {
+  panel: "var(--ds-panel, #050505)",
+  raised: "var(--ds-panel-raised, #0b0b0c)",
+  text: "var(--ds-text, #f5f5f5)",
+  muted: "var(--ds-muted, #a3a3a3)",
+  faint: "var(--ds-faint, #707073)",
+  line: "var(--ds-line, #242426)",
+  lineStrong: "var(--ds-line-strong, #3a3a3d)",
+  hover: "var(--ds-hover, #111113)",
+  warn: "var(--ds-warn, #ffd166)",
+  add: "var(--ds-add, #25d0a0)",
+}
+
+const fontStack =
+  'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+const monoStack =
+  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+
+const bubbleBaseStyle = {
+  border: `1px solid ${colors.line}`,
+  borderRadius: 8,
+  background: colors.panel,
+  color: colors.text,
+  fontFamily: fontStack,
+  fontSize: 13,
+  padding: "10px 12px",
+  marginBottom: 8,
+}
+
+const draftBubbleStyle = {
+  ...bubbleBaseStyle,
+  borderStyle: "dashed",
+}
+
+const composerStyle = {
+  ...bubbleBaseStyle,
+  padding: 10,
+}
+
+const buttonStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 30,
+  cursor: "pointer",
+  border: `1px solid ${colors.lineStrong}`,
+  borderRadius: 6,
+  background: "transparent",
+  color: colors.text,
+  font: "inherit",
+  fontFamily: fontStack,
+  fontSize: 12,
+  padding: "0 10px",
+  textDecoration: "none",
+}
+
+const primaryButtonStyle = {
+  ...buttonStyle,
+  background: colors.text,
+  borderColor: colors.text,
+  color: "#050505",
+}
+
+const textareaStyle = {
+  minHeight: 72,
+  width: "100%",
+  resize: "vertical",
+  border: `1px solid ${colors.lineStrong}`,
+  borderRadius: 6,
+  background: "#000",
+  color: "inherit",
+  font: "inherit",
+  fontFamily: fontStack,
+  padding: "8px 10px",
+  boxSizing: "border-box",
+}
+
+const anchorLinkStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  background: "transparent",
+  border: "none",
+  padding: 0,
+  color: "inherit",
+  font: "inherit",
+  cursor: "pointer",
+}
+
+const anchorPinpointStyle = {
+  color: colors.muted,
+  fontSize: 11,
+  fontFamily: monoStack,
+}
+
+const statusPillBaseStyle = {
+  marginLeft: 6,
+  padding: "1px 6px",
+  borderRadius: 999,
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  border: `1px solid ${colors.lineStrong}`,
+  background: colors.raised,
+  color: colors.muted,
+}
+
+const statusPillStyle = {
+  open: {
+    ...statusPillBaseStyle,
+    color: colors.warn,
+    borderColor: `color-mix(in srgb, ${colors.warn} 50%, transparent)`,
+  },
+  resolved: {
+    ...statusPillBaseStyle,
+    color: colors.add,
+    borderColor: `color-mix(in srgb, ${colors.add} 50%, transparent)`,
+  },
+  outdated: { ...statusPillBaseStyle, color: colors.faint },
+}
+
+const tokenQuoteStyle = {
+  fontFamily: monoStack,
+  fontSize: 11,
+  padding: "1px 4px",
+  borderRadius: 4,
+  background: `color-mix(in srgb, ${colors.warn} 14%, transparent)`,
+  color: colors.text,
+  border: `1px solid color-mix(in srgb, ${colors.warn} 40%, transparent)`,
+  whiteSpace: "pre",
+}
+
+const avatarStyle = (size) => ({
+  display: "inline-block",
+  width: size,
+  height: size,
+  borderRadius: "50%",
+  verticalAlign: "middle",
+  background: colors.raised,
+  flex: "0 0 auto",
+})
+
+const avatarFallbackStyle = (size) => ({
+  ...avatarStyle(size),
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 11,
+  fontWeight: 700,
+  color: colors.muted,
+  border: `1px solid ${colors.line}`,
+})
+
+const threadCommentsStyle = { listStyle: "none", margin: 0, padding: 0 }
+const threadRunStyle = { marginTop: 8 }
+const threadRunHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  marginTop: 4,
+  fontWeight: 600,
+}
+const threadRunCommentsStyle = {
+  margin: "4px 0 0 0",
+  padding: "0 0 0 26px",
+  listStyle: "none",
+}
+const threadCommentStyle = { padding: "2px 0" }
+const threadCommentBodyStyle = { whiteSpace: "pre-wrap" }
+const threadCommentTimeStyle = {
+  display: "inline-block",
+  marginLeft: 6,
+  color: colors.faint,
+  fontSize: 11,
+}
+const threadFooterStyle = {
+  marginTop: 8,
+  borderTop: `1px solid ${colors.line}`,
+  paddingTop: 8,
+}
+
+const draftHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  marginBottom: 6,
+  fontWeight: 600,
+}
+
+const draftActionsStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+}
+
+const draftTagStyle = {
+  color: colors.muted,
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: "uppercase",
+}
+
+const draftBodyStyle = { whiteSpace: "pre-wrap" }
+
+const composerActionsStyle = {
+  display: "flex",
+  gap: 8,
+  marginTop: 8,
+}
+
+const signInTextStyle = {
+  margin: "0 0 8px 0",
+  color: colors.muted,
+  fontFamily: fontStack,
+  fontSize: 13,
+}
+
+// ----------------------------------------------------------------------------
+// Bubble helpers — small pure functions reused across thread + draft bubbles.
 // ----------------------------------------------------------------------------
 
 // @example formatRelative("2025-11-08T12:00:00Z", Date.parse("2025-11-08T14:00:00Z"))
@@ -240,191 +319,117 @@ export function groupCommentsByAuthor(comments) {
   return out
 }
 
+// ----------------------------------------------------------------------------
+// React components — all styles inline because we render into shadow DOM.
+// ----------------------------------------------------------------------------
+
 function Avatar({ user, size = 20 }) {
   if (!user) return null
   if (user.avatar_url) {
     return (
       <img
-        className="rdr-avatar"
         src={user.avatar_url}
         alt=""
         width={size}
         height={size}
         loading="lazy"
         decoding="async"
+        style={avatarStyle(size)}
       />
     )
   }
   const initial = (user.username || "?").slice(0, 1).toUpperCase()
   return (
-    <span
-      className="rdr-avatar rdr-avatar-fallback"
-      style={{ width: size, height: size }}
-      aria-hidden="true"
-    >
+    <span style={avatarFallbackStyle(size)} aria-hidden="true">
       {initial}
     </span>
   )
 }
 
-function flashRow(fileId, rowIndex) {
-  const el = document.getElementById(`file-${fileId}-row-${rowIndex}`)
-  if (!el) return
-  el.scrollIntoView({ behavior: "smooth", block: "center" })
-  el.classList.add("rdr-row-flash")
-  window.setTimeout(() => el.classList.remove("rdr-row-flash"), 1200)
-}
-
-function HighlightedCode({ content, tokens, anchorRanges }) {
-  const ranges = anchorRanges || []
-  // Plain-text fallback (no Shiki tokens available for this line).
-  if (!tokens || tokens.length === 0) {
-    if (ranges.length === 0) return content
-    const pieces = splitTokenAtRanges(content, 0, ranges)
-    return pieces.map((p, i) =>
-      p.anchored ? (
-        <mark key={i} className="rdr-token-anchor">{p.text}</mark>
-      ) : (
-        <React.Fragment key={i}>{p.text}</React.Fragment>
-      )
-    )
-  }
-
-  const out = []
-  let offset = 0
-  let key = 0
-  for (const token of tokens) {
-    const style = tokenStyle(token)
-    const pieces = ranges.length
-      ? splitTokenAtRanges(token.content, offset, ranges)
-      : [{ text: token.content, anchored: false }]
-    for (const p of pieces) {
-      if (p.anchored) {
-        out.push(
-          <mark key={key++} className="rdr-token-anchor" style={style}>
-            {p.text}
-          </mark>
-        )
-      } else {
-        out.push(
-          <span key={key++} style={style}>
-            {p.text}
-          </span>
-        )
-      }
-    }
-    offset += token.content.length
-  }
-  return out
-}
-
-function LineNumber({ number, side, interactive, onClick }) {
-  if (!number) {
-    return <span className="rdr-line-number" aria-hidden="true" />
-  }
-
-  if (!interactive) {
-    return <span className="rdr-line-number">{number}</span>
-  }
-
+function BubbleAnchorLink({ anchor, side, status, onClick, children }) {
   return (
     <button
       type="button"
-      className="rdr-line-number rdr-line-number-clickable"
-      aria-label={`Add comment on ${side} line ${number}`}
+      style={anchorLinkStyle}
       onClick={onClick}
-    >
-      {number}
-    </button>
-  )
-}
-
-// ----------------------------------------------------------------------------
-// React components
-// ----------------------------------------------------------------------------
-
-function BubbleAnchorLink({ anchor, side, status, onScrollToAnchor }) {
-  return (
-    <button
-      type="button"
-      className="rdr-thread-anchor-link"
-      onClick={onScrollToAnchor}
       title="Jump to source line"
     >
-      <span className="rdr-anchor-pinpoint">{anchorPinpoint(anchor, side)}</span>
+      {children}
+      <span style={anchorPinpointStyle}>{anchorPinpoint(anchor, side)}</span>
       {status ? (
-        <span className={`rdr-status-pill rdr-status-${status}`}>{status}</span>
+        <span style={statusPillStyle[status] || statusPillBaseStyle}>
+          {status}
+        </span>
       ) : null}
     </button>
   )
 }
 
-function ThreadBubble({ thread, onScrollToAnchor, onReply }) {
+function ThreadBubble({ thread, onReply }) {
   const [replying, setReplying] = useState(false)
-  const runs = useMemo(() => groupCommentsByAuthor(thread.comments), [thread.comments])
+  const runs = useMemo(
+    () => groupCommentsByAuthor(thread.comments),
+    [thread.comments]
+  )
 
   return (
-    <>
-      <div
-        className="rdr-bubble rdr-thread"
-        data-thread-id={thread.id}
-        role="group"
-        aria-label={`Thread by ${thread.author?.username || "reviewer"}`}
+    <div
+      style={bubbleBaseStyle}
+      data-thread-id={thread.id}
+      role="group"
+      aria-label={`Thread by ${thread.author?.username || "reviewer"}`}
+    >
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
+        }}
       >
-        <header className="rdr-bubble-header">
-          <BubbleAnchorLink
-            anchor={thread.anchor}
-            side={thread.side}
-            status={thread.status}
-            onScrollToAnchor={onScrollToAnchor}
-          />
-        </header>
-
-        <ul className="rdr-thread-comments">
-          {runs.map((run, ri) => (
-            <li key={ri} className="rdr-thread-run">
-              <header className="rdr-thread-run-header">
-                <Avatar user={run.author} />
-                <span className="rdr-thread-author">
-                  {run.author?.username || "reviewer"}
-                </span>
-                <span className="rdr-bubble-spacer" />
-                {run.comments[0] && formatRelative(run.comments[0].inserted_at).relative ? (
-                  <time
-                    className="rdr-bubble-time"
-                    dateTime={formatRelative(run.comments[0].inserted_at).absolute}
-                    title={formatRelative(run.comments[0].inserted_at).absolute}
-                  >
-                    {formatRelative(run.comments[0].inserted_at).relative}
-                  </time>
-                ) : null}
-              </header>
-              <ul className="rdr-thread-run-comments">
-                {run.comments.map((c) => (
-                  <li key={c.id} className="rdr-thread-comment">
-                    <div className="rdr-thread-comment-body">{c.body}</div>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-
-        {onReply && !replying ? (
-          <footer className="rdr-bubble-footer">
-            <button
-              type="button"
-              className="rdr-thread-reply"
-              onClick={() => setReplying(true)}
-            >
-              Reply
-            </button>
-          </footer>
+        <BubbleAnchorLink
+          anchor={thread.anchor}
+          side={thread.side}
+          status={thread.status}
+        />
+        {thread.anchor?.granularity === "token_range" &&
+        thread.anchor.selection_text ? (
+          <code style={tokenQuoteStyle}>{thread.anchor.selection_text}</code>
         ) : null}
-      </div>
+      </header>
 
-      {replying ? (
-        <div className="rdr-bubble-followup">
+      <ul style={threadCommentsStyle}>
+        {runs.map((run, ri) => (
+          <li key={ri} style={threadRunStyle}>
+            <header style={threadRunHeaderStyle}>
+              <Avatar user={run.author} />
+              <span>{run.author?.username || "reviewer"}</span>
+            </header>
+            <ul style={threadRunCommentsStyle}>
+              {run.comments.map((c) => {
+                const { relative, absolute } = formatRelative(c.inserted_at)
+                return (
+                  <li key={c.id} style={threadCommentStyle}>
+                    <div style={threadCommentBodyStyle}>{c.body}</div>
+                    {relative ? (
+                      <time
+                        style={threadCommentTimeStyle}
+                        dateTime={absolute}
+                        title={absolute}
+                      >
+                        {relative}
+                      </time>
+                    ) : null}
+                  </li>
+                )
+              })}
+            </ul>
+          </li>
+        ))}
+      </ul>
+
+      <footer style={threadFooterStyle}>
+        {replying ? (
           <DraftComposer
             initialValue=""
             autosaveOnBlur={false}
@@ -436,19 +441,29 @@ function ThreadBubble({ thread, onScrollToAnchor, onReply }) {
             }}
             onCancel={() => setReplying(false)}
           />
-        </div>
-      ) : null}
-    </>
+        ) : onReply ? (
+          <button
+            type="button"
+            style={buttonStyle}
+            onClick={() => setReplying(true)}
+          >
+            Reply
+          </button>
+        ) : null}
+      </footer>
+    </div>
   )
 }
 
-function DraftBubble({ draft, onRemove, onEdit, onScrollToAnchor }) {
+function DraftBubble({ draft, onRemove, onEdit }) {
   const [editing, setEditing] = useState(false)
-  const { relative, absolute } = formatRelative(draft.updated_at || draft.inserted_at)
+  const { relative, absolute } = formatRelative(
+    draft.updated_at || draft.inserted_at
+  )
 
   if (editing) {
     return (
-      <div className="rdr-bubble rdr-draft" data-draft-id={draft.id}>
+      <div style={draftBubbleStyle} data-draft-id={draft.id}>
         <DraftComposer
           initialValue={draft.body}
           autosaveOnBlur={false}
@@ -464,69 +479,59 @@ function DraftBubble({ draft, onRemove, onEdit, onScrollToAnchor }) {
   }
 
   return (
-    <div className="rdr-bubble rdr-draft" data-draft-id={draft.id}>
-      <header className="rdr-bubble-header">
-        <BubbleAnchorLink
-          anchor={draft.anchor}
-          side={draft.side}
-          status="draft"
-          onScrollToAnchor={onScrollToAnchor}
-        />
-      </header>
-
-      <div className="rdr-thread-run">
-        <header className="rdr-thread-run-header">
+    <div style={draftBubbleStyle} data-draft-id={draft.id}>
+      <header style={draftHeaderStyle}>
+        <BubbleAnchorLink anchor={draft.anchor} side={draft.side}>
           <Avatar user={draft.author} />
-          <span className="rdr-thread-author">
-            {draft.author?.username || "you"}
-          </span>
-          <span className="rdr-bubble-spacer" />
+          <span>{draft.author?.username || "you"}</span>
+          <span style={draftTagStyle}>draft</span>
+        </BubbleAnchorLink>
+        <div style={draftActionsStyle}>
           {relative ? (
-            <time className="rdr-bubble-time" dateTime={absolute} title={absolute}>
-              {relative}
+            <time
+              style={threadCommentTimeStyle}
+              dateTime={absolute}
+              title={absolute}
+            >
+              Saved {relative}
             </time>
           ) : null}
-        </header>
-        <div className="rdr-thread-comment-body rdr-draft-body">{draft.body}</div>
-      </div>
-
-      {(onEdit || onRemove) ? (
-        <footer className="rdr-bubble-footer">
           {onEdit ? (
             <button
               type="button"
-              className="rdr-draft-edit"
+              style={buttonStyle}
               onClick={() => setEditing(true)}
             >
               Edit
             </button>
           ) : null}
           {onRemove ? (
-            <button
-              type="button"
-              className="rdr-draft-remove"
-              onClick={onRemove}
-            >
+            <button type="button" style={buttonStyle} onClick={onRemove}>
               Remove
             </button>
           ) : null}
-        </footer>
+        </div>
+      </header>
+      {draft.anchor?.granularity === "token_range" &&
+      draft.anchor.selection_text ? (
+        <div style={{ marginBottom: 6 }}>
+          <code style={tokenQuoteStyle}>{draft.anchor.selection_text}</code>
+        </div>
       ) : null}
+      <div style={draftBodyStyle}>{draft.body}</div>
     </div>
   )
 }
 
 function SignInPrompt({ onCancel }) {
   return (
-    <div className="rdr-composer">
-      <p className="rdr-composer-signin-text">
-        Sign in with GitHub to leave a comment.
-      </p>
-      <div className="rdr-composer-actions">
-        <a href="/auth/github" className="rdr-composer-save">
+    <div style={composerStyle}>
+      <p style={signInTextStyle}>Sign in with GitHub to leave a comment.</p>
+      <div style={composerActionsStyle}>
+        <a href="/auth/github" style={primaryButtonStyle}>
           Sign in with GitHub
         </a>
-        <button type="button" className="rdr-composer-cancel" onClick={onCancel}>
+        <button type="button" style={buttonStyle} onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -543,7 +548,7 @@ function DraftComposer({
   placeholder = "Leave a comment… (⌘+Enter to save, Esc to cancel)",
 }) {
   const [value, setValue] = useState(initialValue || "")
-  const textareaRef = useRef(null)
+  const textareaRef = React.useRef(null)
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -569,10 +574,10 @@ function DraftComposer({
   }
 
   return (
-    <div className="rdr-composer">
+    <div style={composerStyle}>
       <textarea
         ref={textareaRef}
-        className="rdr-composer-textarea"
+        style={textareaStyle}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={autosaveOnBlur ? submit : undefined}
@@ -580,11 +585,11 @@ function DraftComposer({
         placeholder={placeholder}
         rows={3}
       />
-      <div className="rdr-composer-actions">
-        <button type="button" className="rdr-composer-save" onClick={submit}>
+      <div style={composerActionsStyle}>
+        <button type="button" style={primaryButtonStyle} onClick={submit}>
           {saveLabel}
         </button>
-        <button type="button" className="rdr-composer-cancel" onClick={onCancel}>
+        <button type="button" style={buttonStyle} onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -592,395 +597,200 @@ function DraftComposer({
   )
 }
 
-function DiffRow({
-  row,
-  index,
-  fileId,
+// ----------------------------------------------------------------------------
+// The container component owned by the LiveView hook. Holds threads/drafts
+// state (refreshed via `threads_updated:<file>` push events), composer state,
+// and renders <PatchDiff> with the wired lineAnnotations + renderAnnotation.
+// ----------------------------------------------------------------------------
+
+function FileIsland({
   filePath,
-  side,
-  signedIn,
-  threads,
-  drafts,
-  composerOpenAt,
-  onOpenComposer,
-  onCloseComposer,
-  onSaveDraft,
-  onDeleteDraft,
-  onReply,
-  onEdit,
-  highlightedTokens,
-}) {
-  if (row.type === "hunk") {
-    return (
-      <div className="rdr-row rdr-row-hunk">
-        <span className="rdr-line-number" />
-        <span className="rdr-line-number" />
-        <span className="rdr-line-content">{row.content}</span>
-      </div>
-    )
-  }
-
-  const anchorRanges = computeAnchorRanges(row.content, [...threads, ...drafts])
-  const hasAttachments = threads.length > 0 || drafts.length > 0
-  const lineClass = `rdr-row rdr-row-${row.type}${hasAttachments ? " rdr-row-anchored" : ""}`
-  const composerOpen = composerOpenAt === index
-  const activeSide =
-    row.type === "del" ? "old" : row.type === "add" ? "new" : side
-  const oldInteractive = row.oldNumber && activeSide === "old"
-  const newInteractive = row.newNumber && activeSide === "new"
-  const rowDomId = fileId ? `file-${fileId}-row-${index}` : undefined
-
-  const scrollToThisRow = () => {
-    if (fileId) flashRow(fileId, index)
-  }
-
-  return (
-    <>
-      <div className={lineClass} id={rowDomId}>
-        <LineNumber
-          number={row.oldNumber}
-          side="old"
-          interactive={oldInteractive}
-          onClick={() => onOpenComposer(index, "old")}
-        />
-        <LineNumber
-          number={row.newNumber}
-          side="new"
-          interactive={newInteractive}
-          onClick={() => onOpenComposer(index, "new")}
-        />
-        <pre className="rdr-line-content" translate="no" data-row-index={index}>
-          <HighlightedCode
-            content={row.content}
-            tokens={highlightedTokens}
-            anchorRanges={anchorRanges}
-          />
-        </pre>
-      </div>
-
-      {threads.map((t) => (
-        <div className="rdr-row rdr-row-annotation" key={`thread-${t.id}`}>
-          <div className="rdr-annotation">
-            <ThreadBubble
-              thread={t}
-              onScrollToAnchor={scrollToThisRow}
-              onReply={onReply}
-            />
-          </div>
-        </div>
-      ))}
-
-      {drafts.map((d) => (
-        <div className="rdr-row rdr-row-annotation" key={`draft-${d.id}`}>
-          <div className="rdr-annotation">
-            <DraftBubble
-              draft={d}
-              onRemove={() => onDeleteDraft(d.id)}
-              onEdit={onEdit}
-              onScrollToAnchor={scrollToThisRow}
-            />
-          </div>
-        </div>
-      ))}
-
-      {composerOpen ? (
-        <div className="rdr-row rdr-row-annotation">
-          <div className="rdr-annotation">
-            {signedIn ? (
-              <DraftComposer
-                onSave={(body) => onSaveDraft(index, body, activeSide)}
-                onCancel={onCloseComposer}
-              />
-            ) : (
-              <SignInPrompt onCancel={onCloseComposer} />
-            )}
-          </div>
-        </div>
-      ) : null}
-    </>
-  )
-}
-
-function DiffFile({
-  fileId,
-  filePath,
-  fileStatus,
-  side,
-  signedIn,
   rawDiff,
-  threads,
-  drafts,
+  signedIn,
+  initial,
+  registerUpdater,
   onSaveDraft,
   onDeleteDraft,
 }) {
-  const parsed = useMemo(() => parseUnifiedDiff(rawDiff), [rawDiff])
-  const [highlightedLines, setHighlightedLines] = useState(null)
-  const [composerOpenAt, setComposerOpenAt] = useState(null)
-  const [pendingSelection, setPendingSelection] = useState(null)
-  const [selectionPill, setSelectionPill] = useState(null)
-  const fileBodyRef = useRef(null)
+  const [threads, setThreads] = useState(initial.threads)
+  const [drafts, setDrafts] = useState(initial.drafts)
+  // composerAt:
+  //   null
+  //   | { kind: 'line',  side, lineNumber, lineText }
+  //   | { kind: 'token', side, lineNumber, lineText,
+  //                      lineCharStart, lineCharEnd, tokenText }
+  //   | { kind: 'signin', side, lineNumber }
+  // `side` is always the library's terminology ("additions" | "deletions");
+  // translation to ("old" | "new") happens once on save.
+  const [composerAt, setComposerAt] = useState(null)
 
   useEffect(() => {
-    const lang = languageForFile(filePath)
-    if (!lang || parsed.rows.length === 0) {
-      setHighlightedLines(null)
-      return
-    }
+    registerUpdater((next) => {
+      if (next.threads) setThreads(next.threads)
+      if (next.drafts) setDrafts(next.drafts)
+    })
+  }, [registerUpdater])
 
-    let cancelled = false
-    const code = parsed.rows.map((row) => (row.type === "hunk" ? "" : row.content)).join("\n")
-
-    codeToTokens(code, { lang, theme: SHIKI_THEME })
-      .then(({ tokens }) => {
-        if (!cancelled) setHighlightedLines(tokens)
-      })
-      .catch(() => {
-        if (!cancelled) setHighlightedLines(null)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [filePath, parsed.rows])
-
-  useEffect(() => {
-    function onSelectionChange() {
-      if (!fileBodyRef.current) return
-      const sel = window.getSelection?.()
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-        setSelectionPill(null)
-        return
-      }
-      const range = sel.getRangeAt(0)
-      const root = fileBodyRef.current
-      if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
-        setSelectionPill(null)
-        return
-      }
-      const startLine = range.startContainer.parentElement?.closest("[data-row-index]")
-      const endLine = range.endContainer.parentElement?.closest("[data-row-index]")
-      if (!startLine || startLine !== endLine) {
-        // Multi-line / cross-row selection: ignore for token anchoring.
-        setSelectionPill(null)
-        return
-      }
-      const rowIndex = Number(startLine.dataset.rowIndex)
-      const selectionText = sel.toString()
-      if (!selectionText.trim()) {
-        setSelectionPill(null)
-        return
-      }
-      const lineText = startLine.textContent || ""
-      // Compute the start offset of the selection within the line's textContent.
-      const lineRange = document.createRange()
-      lineRange.selectNodeContents(startLine)
-      lineRange.setEnd(range.startContainer, range.startOffset)
-      const selectionStart = lineRange.toString().length
-
-      const rect = range.getBoundingClientRect()
-      const rootRect = root.getBoundingClientRect()
-      setSelectionPill({
-        top: rect.top - rootRect.top + root.scrollTop - 30,
-        left: rect.left - rootRect.left + root.scrollLeft,
-      })
-      setPendingSelection({
-        rowIndex,
-        selectionText,
-        selectionStart,
-        lineText,
-      })
-    }
-
-    document.addEventListener("selectionchange", onSelectionChange)
-    return () => document.removeEventListener("selectionchange", onSelectionChange)
-  }, [])
-
-  function openComposerForSelection() {
-    if (!pendingSelection) return
-    setComposerOpenAt(pendingSelection.rowIndex)
-    setSelectionPill(null)
-  }
-
-  // Index threads/drafts by row index so we can render them inline. We match
-  // by `line_number_hint` + `side`; a real anchoring pass happens server-side
-  // later and would refine this.
-  const threadsByRow = useMemo(
-    () => groupAnchorsByRow(parsed.rows, threads),
-    [parsed, threads]
-  )
-  const draftsByRow = useMemo(
-    () => groupAnchorsByRow(parsed.rows, drafts),
-    [parsed, drafts]
+  const annotations = useMemo(
+    () => threadsAndDraftsToAnnotations(threads, drafts),
+    [threads, drafts]
   )
 
-  function handleSave(rowIndex, body, anchorSide = side) {
-    const row = parsed.rows[rowIndex]
-    if (!row || row.type === "hunk") return
-    const ctx = buildContextSnapshot(parsed.rows, rowIndex)
-    const lineNumberHint = anchorSide === "old" ? row.oldNumber : row.newNumber
-
-    const tokenSel =
-      pendingSelection && pendingSelection.rowIndex === rowIndex ? pendingSelection : null
-
-    const anchor = tokenSel
-      ? {
-          granularity: "token_range",
-          line_text: row.content,
-          line_number_hint: lineNumberHint,
-          context_before: ctx.before,
-          context_after: ctx.after,
-          selection_text: tokenSel.selectionText,
-          selection_offset: tokenSel.selectionStart,
-        }
-      : {
-          granularity: "line",
-          line_text: row.content,
-          context_before: ctx.before,
-          context_after: ctx.after,
-          line_number_hint: lineNumberHint,
-        }
-
-    onSaveDraft(
+  // Merge in a one-off composer annotation, if open.
+  const lineAnnotations = useMemo(() => {
+    const real = annotations.map((a) => ({ ...a, metadata: { kind: "real", ...a.metadata } }))
+    if (!composerAt) return real
+    // If a real annotation already exists at (side, lineNumber) we still add a
+    // separate composer entry — PatchDiff supports multiple annotations per
+    // (side, lineNumber); they render stacked.
+    return [
+      ...real,
       {
-        file_path: filePath,
-        side: anchorSide,
-        line_text: row.content,
-        thread_anchor: anchor,
+        side: composerAt.side,
+        lineNumber: composerAt.lineNumber,
+        metadata: {
+          kind: "composer",
+          composerKind: composerAt.kind,
+          tokenText: composerAt.tokenText || "",
+        },
       },
-      body
-    )
-    setComposerOpenAt(null)
-    setPendingSelection(null)
+    ]
+  }, [annotations, composerAt])
+
+  function handleSaveNewDraft(body) {
+    if (!composerAt) return
+    const lineText = composerAt.lineText || ""
+    const side = annotationSideToSide(composerAt.side)
+    // composerToAnchor branches on kind: token-range carries
+    // selection_text/selection_offset, line just pins to the line.
+    const anchor = composerToAnchor(composerAt)
+    onSaveDraft({
+      file_path: filePath,
+      side,
+      body,
+      thread_anchor: anchor,
+      line_text: lineText,
+    })
+    setComposerAt(null)
   }
 
   function handleReply(thread, body) {
     if (!signedIn) return
-    onSaveDraft(
-      {
-        file_path: thread.file_path,
-        side: thread.side,
-        thread_id: thread.id,
-        thread_anchor: thread.anchor,
-      },
-      body
-    )
+    onSaveDraft({
+      file_path: thread.file_path,
+      side: thread.side,
+      body,
+      thread_id: thread.id,
+      thread_anchor: thread.anchor,
+    })
   }
 
-  function handleEdit(draft, body) {
+  function handleEditDraft(draft, body) {
     if (!signedIn) return
-    onSaveDraft(
-      {
-        file_path: draft.file_path,
-        side: draft.side,
-        thread_id: draft.thread_id,
-        thread_anchor: draft.anchor,
-      },
-      body
+    onSaveDraft({
+      file_path: draft.file_path,
+      side: draft.side,
+      body,
+      thread_id: draft.thread_id,
+      thread_anchor: draft.anchor,
+    })
+  }
+
+  function renderAnnotation(annotation) {
+    const meta = annotation.metadata || {}
+
+    if (meta.kind === "composer") {
+      return meta.composerKind === "signin" ? (
+        <SignInPrompt onCancel={() => setComposerAt(null)} />
+      ) : (
+        <DraftComposer
+          onSave={handleSaveNewDraft}
+          onCancel={() => setComposerAt(null)}
+        />
+      )
+    }
+
+    const threadList = meta.threads || []
+    const draftList = meta.drafts || []
+    return (
+      <div>
+        {threadList.map((t) => (
+          <ThreadBubble
+            key={`thread-${t.id}`}
+            thread={t}
+            onReply={signedIn ? handleReply : null}
+          />
+        ))}
+        {draftList.map((d) => (
+          <DraftBubble
+            key={`draft-${d.id}`}
+            draft={d}
+            onRemove={() => onDeleteDraft(d.id)}
+            onEdit={signedIn ? handleEditDraft : null}
+          />
+        ))}
+      </div>
     )
   }
 
-  return (
-    <div className="rdr-file">
-      <div className="rdr-file-body" ref={fileBodyRef} style={{ position: "relative" }}>
-        {parsed.rows.length === 0 ? (
-          <p className="rdr-empty">No hunks in this file.</p>
-        ) : (
-          parsed.rows.map((row, index) => (
-            <DiffRow
-              key={index}
-              row={row}
-              index={index}
-              fileId={fileId}
-              filePath={filePath}
-              side={side}
-              signedIn={signedIn}
-              threads={threadsByRow[index] || []}
-              drafts={draftsByRow[index] || []}
-              composerOpenAt={composerOpenAt}
-              onOpenComposer={(i) => {
-                setPendingSelection(null)
-                setSelectionPill(null)
-                setComposerOpenAt(i)
-              }}
-              onCloseComposer={() => setComposerOpenAt(null)}
-              onSaveDraft={handleSave}
-              onDeleteDraft={onDeleteDraft}
-              onReply={signedIn ? handleReply : null}
-              onEdit={signedIn ? handleEdit : null}
-              highlightedTokens={highlightedLines?.[index]}
-            />
-          ))
-        )}
-        {selectionPill ? (
-          <button
-            type="button"
-            className="rdr-selection-pill"
-            style={{ top: selectionPill.top, left: selectionPill.left }}
-            // mousedown fires before selectionchange clears, so use it to
-            // preserve the selection up to the click.
-            onMouseDown={(e) => {
-              e.preventDefault()
-              openComposerForSelection()
-            }}
-          >
-            Comment on selection
-          </button>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-function findRowIndexFor(rows, side, lineNumberHint) {
-  let idx = rows.findIndex((r) => {
-    if (r.type === "hunk") return false
-    const num = side === "old" ? r.oldNumber : r.newNumber
-    return num === lineNumberHint
-  })
-  if (idx < 0) idx = rows.findIndex((r) => r.type !== "hunk")
-  return idx
-}
-
-function groupAnchorsByRow(rows, items) {
-  // items: [{ id, anchor: { line_number_hint, ... }, side, ... }]
-  // For each item, find the row whose new/old number matches the hint on the
-  // matching side. If we can't find one, drop it on the first hunk row so it
-  // still renders (visible but obviously misanchored).
-  const out = {}
-  for (const item of items) {
-    const idx = findRowIndexFor(rows, item.side, item.anchor?.line_number_hint)
-    if (idx < 0) continue
-    out[idx] = out[idx] || []
-    out[idx].push(item)
+  function handleLineNumberClick(props) {
+    // OnDiffLineClickProps: { annotationSide, lineNumber, lineElement, ... }
+    const side = props?.annotationSide
+    const lineNumber = props?.lineNumber
+    if (!side || !lineNumber) return
+    const lineText =
+      (props?.lineElement && props.lineElement.textContent) || ""
+    if (!signedIn) {
+      setComposerAt({ kind: "signin", side, lineNumber })
+      return
+    }
+    setComposerAt({ kind: "line", side, lineNumber, lineText })
   }
-  return out
-}
 
-// ----------------------------------------------------------------------------
-// Container component that owns the per-file state mounted by the LiveView
-// hook. It receives initial props on mount and then `setState` calls via the
-// imperative handle (`updateProps`) wired up in `mounted`/`handleEvent`.
-// ----------------------------------------------------------------------------
-
-function FileIsland({ initialProps, onSaveDraft, onDeleteDraft, registerUpdater }) {
-  const [props, setProps] = useState(initialProps)
-
-  useEffect(() => {
-    registerUpdater((next) => setProps((prev) => ({ ...prev, ...next })))
-  }, [registerUpdater])
+  function handleTokenClick(props) {
+    // DiffTokenEventBaseProps:
+    //   { type: 'token', side, lineNumber, lineCharStart, lineCharEnd,
+    //     tokenText, tokenElement }
+    // `side` is the library's AnnotationSide ('additions' | 'deletions').
+    const side = props?.side
+    const lineNumber = props?.lineNumber
+    const tokenText = props?.tokenText || ""
+    if (!side || !lineNumber) return
+    // Skip trivial tokens — whitespace-only clicks shouldn't open a composer.
+    // Library's enableTokenInteractionsOnWhitespace defaults to off, but
+    // double-check defensively so we don't anchor a thread to "   ".
+    if (tokenText.length === 0 || tokenText.trim().length === 0) return
+    if (!signedIn) {
+      setComposerAt({ kind: "signin", side, lineNumber })
+      return
+    }
+    // Harvest the surrounding line text from the token's parent line element
+    // so the anchor stores the full line as `line_text` (for relocation).
+    const lineEl =
+      (props?.tokenElement && props.tokenElement.closest("[data-line]")) || null
+    const lineText = (lineEl && lineEl.textContent) || ""
+    setComposerAt({
+      kind: "token",
+      side,
+      lineNumber,
+      lineText,
+      lineCharStart: props.lineCharStart,
+      lineCharEnd: props.lineCharEnd,
+      tokenText,
+    })
+  }
 
   return (
-    <DiffFile
-      fileId={props.fileId}
-      filePath={props.filePath}
-      fileStatus={props.fileStatus}
-      side={props.side}
-      signedIn={props.signedIn}
-      rawDiff={props.rawDiff}
-      threads={props.threads || []}
-      drafts={props.drafts || []}
-      onSaveDraft={onSaveDraft}
-      onDeleteDraft={onDeleteDraft}
+    <PatchDiff
+      patch={rawDiff}
+      disableWorkerPool
+      lineAnnotations={lineAnnotations}
+      renderAnnotation={renderAnnotation}
+      options={{
+        onLineNumberClick: handleLineNumberClick,
+        onTokenClick: handleTokenClick,
+      }}
+      style={{ width: "100%" }}
     />
   )
 }
@@ -989,37 +799,43 @@ function FileIsland({ initialProps, onSaveDraft, onDeleteDraft, registerUpdater 
 // LiveView hook
 // ----------------------------------------------------------------------------
 
-function safeParseJson(text, fallback) {
-  if (!text) return fallback
+function parseInitial(text, schema) {
+  // Parse a JSON `data-*` payload through a zod array schema. Wire-format
+  // drift fails loudly here. We surface to the console so the renderer at
+  // least keeps mounting with an empty list rather than blanking the page.
   try {
-    return JSON.parse(text)
-  } catch (_e) {
-    return fallback
+    const json = JSON.parse(text || "[]")
+    return schema.array().parse(json)
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[DiffRenderer] failed to parse payload:", err)
+    return []
   }
 }
 
 const DiffRenderer = {
   mounted() {
     const ds = this.el.dataset
-    const initialProps = {
-      fileId: ds.fileId,
-      filePath: ds.filePath,
-      fileStatus: ds.fileStatus,
-      side: ds.side || "new",
-      signedIn: ds.signedIn === "true",
-      patchsetNumber: ds.patchsetNumber,
-      rawDiff: ds.rawDiff || "",
-      threads: safeParseJson(ds.threads, []),
-      drafts: safeParseJson(ds.drafts, []),
-    }
+    const filePath = ds.filePath
+    const signedIn = ds.signedIn === "true"
+    const rawDiff = ds.rawDiff || ""
+
+    const initialThreads = parseInitial(ds.threads, Thread)
+    const initialDrafts = parseInitial(ds.drafts, Draft)
 
     let updater = () => {}
     const registerUpdater = (fn) => {
       updater = fn
     }
 
-    const onSaveDraft = (payload, body) => {
-      this.pushEvent("save_draft", { ...payload, body })
+    const onSaveDraft = (payload) => {
+      try {
+        const parsed = SaveDraftPayload.parse(payload)
+        this.pushEvent("save_draft", parsed)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[DiffRenderer] invalid save_draft payload:", err, payload)
+      }
     }
 
     const onDeleteDraft = (commentId) => {
@@ -1029,55 +845,47 @@ const DiffRenderer = {
     const root = createRoot(this.el)
     root.render(
       <FileIsland
-        initialProps={initialProps}
+        filePath={filePath}
+        rawDiff={rawDiff}
+        signedIn={signedIn}
+        initial={{ threads: initialThreads, drafts: initialDrafts }}
+        registerUpdater={registerUpdater}
         onSaveDraft={onSaveDraft}
         onDeleteDraft={onDeleteDraft}
-        registerUpdater={registerUpdater}
       />
     )
 
     this._root = root
-    this._update = (next) => updater(next)
-    this._fileId = initialProps.fileId
-    this._parsedRows = parseUnifiedDiff(initialProps.rawDiff).rows
 
-    // Server pushes per-file updates as `thread_published:<file_path>` events
-    // (file-path-scoped so multiple file islands don't all re-render on every
-    // publish across the review).
-    this._unsubscribeThreadPublished = this.handleEvent(
-      `threads_updated:${initialProps.filePath}`,
-      ({ threads, drafts }) => {
-        this._update({
-          threads: threads || [],
-          drafts: drafts || [],
-        })
+    // Server pushes per-file refreshes after a save/delete/publish.
+    this.handleEvent(`threads_updated:${filePath}`, (raw) => {
+      try {
+        const threads = Thread.array().parse(raw?.threads ?? [])
+        const drafts = Draft.array().parse(raw?.drafts ?? [])
+        updater({ threads, drafts })
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[DiffRenderer] invalid threads_updated payload:",
+          err,
+          raw
+        )
       }
-    )
+    })
 
-    // The sidebar dispatches reviews:scroll-to-anchor on click. Each island
-    // listens; only the one whose data-file-id matches acts.
-    this._onScrollDispatch = (event) => {
-      const detail = event.detail || {}
-      if (String(detail.file_id) !== String(this._fileId)) return
-      const idx = findRowIndexFor(this._parsedRows, detail.side, detail.line_number_hint)
-      if (idx < 0) return
-      flashRow(this._fileId, idx)
-    }
-    document.addEventListener("reviews:scroll-to-anchor", this._onScrollDispatch)
+    // The "Open Threads" sidebar dispatches reviews:scroll-to-anchor on click.
+    // Pre-spike this scrolled into the rendered diff and flashed the row. With
+    // <PatchDiff> the row lives inside a shadow DOM the sidebar can't reach
+    // via `document.getElementById`, so this is intentionally a no-op for v1
+    // and will be revisited once the library exposes a scroll-to-line API.
   },
 
   updated() {
-    // We own the DOM (phx-update="ignore"), so updates to the wrapper element
-    // don't unmount us. We could re-read data-* attributes here to pick up
-    // changes, but the server-pushed `threads_updated:<file>` event is the
-    // canonical refresh path.
+    // The wrapper `<div>` is phx-update="ignore"; we don't react to LiveView
+    // diff updates here. State refreshes flow through `threads_updated:*`.
   },
 
   destroyed() {
-    if (this._onScrollDispatch) {
-      document.removeEventListener("reviews:scroll-to-anchor", this._onScrollDispatch)
-      this._onScrollDispatch = null
-    }
     this._root?.unmount()
     this._root = null
   },
