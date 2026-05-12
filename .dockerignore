@@ -1,0 +1,49 @@
+# Mirror .gitignore plus a few build/secret bits we never want shipped into
+# the Docker build context.
+
+# Mix / build artifacts
+/_build
+/cover
+/deps
+/doc
+/.fetch
+erl_crash.dump
+*.ez
+
+# Phoenix-built static assets — regenerated in the build stage
+/priv/static/assets
+/priv/static/cache_manifest.json
+
+# Local node_modules — reinstalled in the build stage with `npm ci`
+/assets/node_modules
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+
+# Rust CLI — not part of the server image
+/cli/target
+/cli
+
+# Editor / OS junk
+.DS_Store
+.elixir_ls
+.formatter.exs
+
+# Claude Code / agent state
+/.claude
+/.plans
+
+# Tests aren't needed in the prod image
+/test
+
+# Git metadata — not needed inside the image
+.git
+.gitignore
+
+# Docs / readmes (image stays slim)
+README.md
+AGENTS.md
+CLAUDE.md
+/docs
