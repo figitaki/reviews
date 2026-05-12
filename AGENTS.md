@@ -1,4 +1,59 @@
-This is a web application written using the Phoenix web framework.
+This is **Reviews** — a code-review tool for arbitrary diffs (not just GitHub PRs). Stack: Phoenix 1.8 + LiveView (web), Rust CLI (`cli/`), Postgres, `@pierre/diffs` React island for diff rendering.
+
+## Working in this repo
+
+### Dev server
+Use `./bin/server` — it sources `.env.local` (your `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`) then `exec`s `mix phx.server` on `:4000`. Don't run `mix phx.server` directly unless you're certain you don't need OAuth.
+
+Don't start a second Phoenix server while one is already running on `:4000` — bind clash. Check first: `lsof -iTCP:4000 -sTCP:LISTEN`.
+
+### Tests
+- `mix test` — full suite (currently 27 tests, all should pass).
+- `mix compile --warnings-as-errors` before committing.
+- `mix format --check-formatted`.
+- Postgres test DB is at `reviews_test`; `pg_isready` to check before running.
+
+### Pushing diffs to view as reviews
+The Rust CLI at `cli/target/release/reviews` is how you preview your own changes: `cd <any-git-checkout> && reviews push` posts the current branch's diff to the local Phoenix server and prints a `http://localhost:4000/r/<slug>` URL. `reviews push --update <slug>` adds a patchset to an existing review.
+
+### Git remote
+Origin is a private soft-serve server: `ssh://git.internal/reviews.git` (the SSH config alias maps `git.internal` → `tinycube-server:23231`). Don't add other remotes without checking; don't `git push` to anything but `origin`.
+
+### Plans and memory
+- `.plans/` — project-scoped design plans, **tracked in git**. Start here when picking up work: read any plan that references the area you're touching. `.plans/a11y-design-fixes.md` is the current open plan (P0/P1/P2 a11y items, two flagged `⚠ overlap` with the deferred Shiki swap).
+- `.claude/` — per-checkout Claude Code state (settings, worktrees, transcripts). **Gitignored.** Don't put anything here you want shared.
+- Auto-memory at `~/.claude/projects/-Users-warbler-src-reviews/memory/` captures user-level feedback (e.g. "brainstorm UX before plans," "don't self-grant permissions"). Read `MEMORY.md` first if you have access.
+
+### Architectural decisions already made — don't relitigate
+- **Stack:** Elixir/Phoenix 1.8 + LiveView (web) + Rust (CLI) + Postgres.
+- **Diff renderer:** `@pierre/diffs` (React, npm) mounted as a React island via `phx-hook="DiffRenderer"` in `assets/js/hooks/diff_renderer.js`.
+- **Input:** Rust CLI (`reviews push`) only — no web paste in v1.
+- **Sharing:** link-based; anyone with URL can view anonymously. Commenting requires GitHub OAuth.
+- **Threads:** Gerrit-style — drafts per-viewer, private, until "Publish review" sends the batch.
+- **Revisions:** `reviews push --update <slug>` adds patchsets; threads carry across via content-hash anchoring (line text + surrounding context), not line numbers.
+- **Config path** for the CLI: `~/.config/reviews/` (cross-platform; matches `gh`, `kubectl`).
+- **Token-level commenting** is deferred to v1.5; schema has the discriminator (`Thread.anchor.granularity`), `Anchoring.relocate/3` has a stubbed `"token_range"` branch returning `{:error, :not_implemented}`. Don't remove the stub.
+
+### What's currently deferred / known-not-done
+- **Syntax highlighting** is rendered as plain text. The diff renderer's top comment explains why — the plan to wire `<PatchDiff>` + Shiki via `lineAnnotations` exists in the session transcript / planning agent output. Reach for that plan before starting; don't roll a new design.
+- A11y items in `.plans/a11y-design-fixes.md` are real and prioritized. P0 items are keyboard/screen-reader breaks; P1 are visual/theming; P2 are content/copy.
+- Worker pool for Shiki: intentionally not wired. Single-threaded sync highlighter is the v1 target.
+- CSP headers: none currently. Future work.
+
+### Permissions (Claude Code)
+The repo's `.claude/settings.local.json` allows broad `mix`/`cargo`/`npm`/`bun`/`git add`/`git commit`/`reviews push` but denies destructive git operations (`push` is allowed to `origin` but the deny list blocks `reset`, `checkout`, `restore`, `clean`, `rebase`, `merge`, `pull`, `fetch`, `rm -rf`, `sudo`). If you're a subagent and find `Edit`/`Write` denied, surface it to the user — don't try to self-grant by editing `settings.local.json` (the classifier will block you, correctly).
+
+### Worktrees for parallel agent work
+Use `isolation: "worktree"` when spawning subagents that will edit files. They land in `.claude/worktrees/agent-<id>/` on a branch `worktree-agent-<id>`. Force-removal (`git worktree remove -f -f`) is OK after merging — the lock is the harness's, not a real concern once the agent is done. Before spawning, brief the agent that it needs `git add` + `git commit` permissions and that `Edit`/`Write` should be in its allow list.
+
+### Conventions specific to this repo
+- LiveView review screen at `lib/reviews_web/live/review_live.ex`. Server-side `current_user` flows from the session via `ReviewsWeb.Plugs.FetchCurrentUser`; the LiveView re-derives it from the session in `mount/3` (`load_current_user/1`) because `Plug` assigns don't survive into LiveView.
+- React island is **not** managed by Webpack/Vite — Phoenix's esbuild handles `assets/js/app.js` and its imports. JSX is enabled via the project's esbuild config. If you change build settings, look at `config/config.exs`.
+- daisyUI is the design system; theme toggles between `light` / `dark` / `system` via `data-theme` on `<html>`. Custom diff CSS lives in `assets/css/app.css` with the `.rdr-*` prefix.
+
+## Phoenix framework guidelines (generic)
+
+What follows is standard Phoenix/Elixir guidance from `phx.new`. Project-specific rules above take precedence on conflict.
 
 ## Project guidelines
 
