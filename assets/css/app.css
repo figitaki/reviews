@@ -183,7 +183,8 @@
   font-weight: 500;
 }
 
-.review-patchset {
+.review-patchset,
+.review-diff-style {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -369,16 +370,6 @@
   background: var(--review-panel);
 }
 
-.rev-file-header {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 40px;
-  border-bottom: 1px solid var(--review-line-strong);
-  background: #09090a;
-  padding: 0 12px;
-}
-
 .rev-file-path {
   min-width: 0;
   color: var(--review-text);
@@ -559,6 +550,7 @@
 .design-main {
   width: min(1440px, calc(100vw - 48px));
   margin: 0 auto;
+  padding-top: 20px;
   padding-bottom: 112px;
 }
 

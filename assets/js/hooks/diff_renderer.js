@@ -609,11 +609,13 @@ function FileIsland({
   signedIn,
   initial,
   registerUpdater,
+  registerStyleUpdater,
   onSaveDraft,
   onDeleteDraft,
 }) {
   const [threads, setThreads] = useState(initial.threads)
   const [drafts, setDrafts] = useState(initial.drafts)
+  const [diffStyle, setDiffStyle] = useState(initial.diffStyle)
   // composerAt:
   //   null
   //   | { kind: 'line',  side, lineNumber, lineText }
@@ -630,6 +632,10 @@ function FileIsland({
       if (next.drafts) setDrafts(next.drafts)
     })
   }, [registerUpdater])
+
+  useEffect(() => {
+    registerStyleUpdater((style) => setDiffStyle(style))
+  }, [registerStyleUpdater])
 
   const annotations = useMemo(
     () => threadsAndDraftsToAnnotations(threads, drafts),
@@ -787,6 +793,7 @@ function FileIsland({
       lineAnnotations={lineAnnotations}
       renderAnnotation={renderAnnotation}
       options={{
+        diffStyle,
         onLineNumberClick: handleLineNumberClick,
         onTokenClick: handleTokenClick,
       }}
@@ -819,6 +826,7 @@ const DiffRenderer = {
     const filePath = ds.filePath
     const signedIn = ds.signedIn === "true"
     const rawDiff = ds.rawDiff || ""
+    const initialDiffStyle = ds.diffStyle === "unified" ? "unified" : "split"
 
     const initialThreads = parseInitial(ds.threads, Thread)
     const initialDrafts = parseInitial(ds.drafts, Draft)
@@ -826,6 +834,11 @@ const DiffRenderer = {
     let updater = () => {}
     const registerUpdater = (fn) => {
       updater = fn
+    }
+
+    let styleUpdater = () => {}
+    const registerStyleUpdater = (fn) => {
+      styleUpdater = fn
     }
 
     const onSaveDraft = (payload) => {
@@ -848,8 +861,13 @@ const DiffRenderer = {
         filePath={filePath}
         rawDiff={rawDiff}
         signedIn={signedIn}
-        initial={{ threads: initialThreads, drafts: initialDrafts }}
+        initial={{
+          threads: initialThreads,
+          drafts: initialDrafts,
+          diffStyle: initialDiffStyle,
+        }}
         registerUpdater={registerUpdater}
+        registerStyleUpdater={registerStyleUpdater}
         onSaveDraft={onSaveDraft}
         onDeleteDraft={onDeleteDraft}
       />
@@ -871,6 +889,12 @@ const DiffRenderer = {
           raw
         )
       }
+    })
+
+    // Server pushes when the user flips the split/unified toggle.
+    this.handleEvent(`diff_style_updated:${filePath}`, (raw) => {
+      const style = raw?.style === "unified" ? "unified" : "split"
+      styleUpdater(style)
     })
 
     // The "Open Threads" sidebar dispatches reviews:scroll-to-anchor on click.
