@@ -289,9 +289,11 @@ defmodule ReviewsWeb.ReviewLive do
               phx-click="select_diff_style"
               phx-value-style="split"
               aria-pressed={if @diff_style == "split", do: "true", else: "false"}
+              aria-label="Split view"
+              title="Split view"
               class={["review-chip", @diff_style == "split" && "is-active"]}
             >
-              Split
+              <.icon name="hero-table-cells" class="w-4 h-4" />
             </button>
             <button
               id="diff-style-unified"
@@ -299,9 +301,11 @@ defmodule ReviewsWeb.ReviewLive do
               phx-click="select_diff_style"
               phx-value-style="unified"
               aria-pressed={if @diff_style == "unified", do: "true", else: "false"}
+              aria-label="Unified view"
+              title="Unified view"
               class={["review-chip", @diff_style == "unified" && "is-active"]}
             >
-              Unified
+              <.icon name="hero-queue-list" class="w-4 h-4" />
             </button>
             <script :type={Phoenix.LiveView.ColocatedHook} name=".DiffStylePref">
               export default {
