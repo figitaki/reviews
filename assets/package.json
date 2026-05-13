@@ -4,6 +4,7 @@
   "private": true,
   "description": "Front-end assets for the Reviews app. React island for @pierre/diffs is mounted via the DiffRenderer Phoenix LiveView hook.",
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@pierre/diffs": "*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

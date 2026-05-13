@@ -44,6 +44,7 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:show_publish_modal, false)
               |> assign(:summary_body, "")
               |> assign(:banner_message, nil)
+              |> assign(:diff_style, "split")
               |> assign_snapshot(snapshot)
 
             {:ok, socket}
@@ -93,6 +94,21 @@ defmodule ReviewsWeb.ReviewLive do
   def handle_event("dismiss_banner", _params, socket) do
     {:noreply, assign(socket, :banner_message, nil)}
   end
+
+  @impl true
+  def handle_event("select_diff_style", %{"style" => style}, socket)
+      when style in ["split", "unified"] do
+    socket = assign(socket, :diff_style, style)
+
+    socket =
+      Enum.reduce(socket.assigns.files, socket, fn file, acc ->
+        push_event(acc, "diff_style_updated:#{file.path}", %{style: style})
+      end)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("select_diff_style", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("save_draft", params, socket) do
@@ -260,6 +276,62 @@ defmodule ReviewsWeb.ReviewLive do
     <div class="review-page min-h-screen">
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
+          <div
+            class="review-diff-style"
+            id="diff-style-toggle"
+            role="group"
+            aria-label="Diff layout"
+            phx-hook=".DiffStylePref"
+          >
+            <button
+              id="diff-style-split"
+              type="button"
+              phx-click="select_diff_style"
+              phx-value-style="split"
+              aria-pressed={if @diff_style == "split", do: "true", else: "false"}
+              aria-label="Split view"
+              title="Split view"
+              class={["review-chip", @diff_style == "split" && "is-active"]}
+            >
+              <.icon name="hero-table-cells" class="w-4 h-4" />
+            </button>
+            <button
+              id="diff-style-unified"
+              type="button"
+              phx-click="select_diff_style"
+              phx-value-style="unified"
+              aria-pressed={if @diff_style == "unified", do: "true", else: "false"}
+              aria-label="Unified view"
+              title="Unified view"
+              class={["review-chip", @diff_style == "unified" && "is-active"]}
+            >
+              <.icon name="hero-queue-list" class="w-4 h-4" />
+            </button>
+            <script :type={Phoenix.LiveView.ColocatedHook} name=".DiffStylePref">
+              export default {
+                mounted() {
+                  const KEY = "reviews:diffStyle"
+                  const saved = localStorage.getItem(KEY)
+                  if (saved === "split" || saved === "unified") {
+                    const currentBtn = this.el.querySelector('[aria-pressed="true"]')
+                    const currentStyle = currentBtn?.id === "diff-style-unified" ? "unified" : "split"
+                    if (saved !== currentStyle) {
+                      this.pushEvent("select_diff_style", { style: saved })
+                    }
+                  }
+                  this.el.addEventListener("click", (e) => {
+                    const btn = e.target.closest("[phx-value-style]")
+                    if (!btn) return
+                    const style = btn.getAttribute("phx-value-style")
+                    if (style === "split" || style === "unified") {
+                      localStorage.setItem(KEY, style)
+                    }
+                  })
+                }
+              }
+            </script>
+          </div>
+
           <div class="review-patchset" id="patchset-selector" aria-label="Patchset">
             <button
               :for={ps <- @patchsets}
@@ -395,14 +467,6 @@ defmodule ReviewsWeb.ReviewLive do
                 id={"file-#{fd.id}"}
                 class="rev-file-card"
               >
-                <header class="rev-file-header">
-                  <.ds_status_mark status={fd.status} />
-                  <span class="rev-file-path truncate" translate="no">{fd.path}</span>
-                  <span class="rev-file-stats ml-auto">
-                    <span class="rev-stat-add">+{fd.additions}</span>
-                    <span class="rev-stat-del">-{fd.deletions}</span>
-                  </span>
-                </header>
                 <div
                   id={"diff-#{fd.id}"}
                   phx-hook="DiffRenderer"
@@ -416,6 +480,7 @@ defmodule ReviewsWeb.ReviewLive do
                   data-threads={threads_json(@published_threads, fd.path)}
                   data-drafts={drafts_json(@drafts, fd.path, @current_user)}
                   data-signed-in={if @current_user, do: "true", else: "false"}
+                  data-diff-style={@diff_style}
                 >
                 </div>
               </article>

@@ -21,6 +21,12 @@
 import React, { useState, useEffect, useMemo } from "react"
 import { createRoot } from "react-dom/client"
 import { PatchDiff } from "@pierre/diffs/react"
+import {
+  PencilSquareIcon,
+  TrashIcon,
+  ArrowUturnLeftIcon,
+  PaperAirplaneIcon,
+} from "@heroicons/react/24/outline"
 
 import { Thread, Draft, SaveDraftPayload } from "../schemas.js"
 import {
@@ -28,6 +34,8 @@ import {
   annotationSideToSide,
   composerToAnchor,
 } from "../lib/translate.js"
+
+const iconStyle = { width: 14, height: 14, flex: "0 0 auto" }
 
 // ----------------------------------------------------------------------------
 // Inline style maps for bubbles.
@@ -81,6 +89,7 @@ const buttonStyle = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
+  gap: 6,
   minHeight: 30,
   cursor: "pointer",
   border: `1px solid ${colors.lineStrong}`,
@@ -90,7 +99,7 @@ const buttonStyle = {
   font: "inherit",
   fontFamily: fontStack,
   fontSize: 12,
-  padding: "0 10px",
+  padding: "0 12px",
   textDecoration: "none",
 }
 
@@ -122,15 +131,17 @@ const anchorLinkStyle = {
   background: "transparent",
   border: "none",
   padding: 0,
-  color: "inherit",
+  color: colors.text,
   font: "inherit",
+  fontWeight: 600,
   cursor: "pointer",
 }
 
 const anchorPinpointStyle = {
-  color: colors.muted,
-  fontSize: 11,
+  color: colors.text,
+  fontSize: 12,
   fontFamily: monoStack,
+  fontWeight: 600,
 }
 
 const statusPillBaseStyle = {
@@ -206,11 +217,19 @@ const threadRunCommentsStyle = {
   padding: "0 0 0 26px",
   listStyle: "none",
 }
-const threadCommentStyle = { padding: "2px 0" }
-const threadCommentBodyStyle = { whiteSpace: "pre-wrap" }
+const threadCommentStyle = {
+  display: "flex",
+  alignItems: "baseline",
+  gap: 12,
+  padding: "2px 0",
+}
+const threadCommentBodyStyle = {
+  flex: "1 1 auto",
+  minWidth: 0,
+  whiteSpace: "pre-wrap",
+}
 const threadCommentTimeStyle = {
-  display: "inline-block",
-  marginLeft: 6,
+  flex: "0 0 auto",
   color: colors.faint,
   fontSize: 11,
 }
@@ -240,6 +259,18 @@ const draftTagStyle = {
   fontSize: 11,
   fontWeight: 600,
   textTransform: "uppercase",
+}
+
+const draftPillStyle = {
+  padding: "1px 6px",
+  borderRadius: 999,
+  fontSize: 10,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  border: `1px dashed ${colors.lineStrong}`,
+  background: "transparent",
+  color: colors.muted,
 }
 
 const draftBodyStyle = { whiteSpace: "pre-wrap" }
@@ -292,15 +323,13 @@ export function formatRelative(iso, now = Date.now()) {
   return { relative: "", absolute: "" }
 }
 
-// @example anchorPinpoint({granularity:"line",line_number_hint:3}, "old") => "line 3 · old"
-// @example anchorPinpoint({granularity:"token_range",line_number_hint:3,selection_text:"FOO"}, "new") => "line 3 · FOO"
+// @example anchorPinpoint({line_number_hint:12}, "new") => "+12"
+// @example anchorPinpoint({line_number_hint:13}, "old") => "-13"
 export function anchorPinpoint(anchor, side) {
   if (!anchor) return null
   const line = anchor.line_number_hint
-  if (anchor.granularity === "token_range" && anchor.selection_text) {
-    return `line ${line} · ${anchor.selection_text}`
-  }
-  return `line ${line} · ${side === "old" ? "old" : "new"}`
+  const sign = side === "old" ? "-" : "+"
+  return `${sign}${line}`
 }
 
 // @example groupCommentsByAuthor([{author:{id:1}},{author:{id:1}},{author:{id:2}}])
@@ -346,7 +375,9 @@ function Avatar({ user, size = 20 }) {
   )
 }
 
-function BubbleAnchorLink({ anchor, side, status, onClick, children }) {
+function BubbleAnchorLink({ anchor, side, status, commentCount, onClick }) {
+  const label = commentCount > 1 ? "Comments" : "Comment"
+  const showStatus = status && status !== "open"
   return (
     <button
       type="button"
@@ -354,9 +385,10 @@ function BubbleAnchorLink({ anchor, side, status, onClick, children }) {
       onClick={onClick}
       title="Jump to source line"
     >
-      {children}
-      <span style={anchorPinpointStyle}>{anchorPinpoint(anchor, side)}</span>
-      {status ? (
+      <span>
+        {label} on line <span style={anchorPinpointStyle}>{anchorPinpoint(anchor, side)}</span>
+      </span>
+      {showStatus ? (
         <span style={statusPillStyle[status] || statusPillBaseStyle}>
           {status}
         </span>
@@ -365,7 +397,7 @@ function BubbleAnchorLink({ anchor, side, status, onClick, children }) {
   )
 }
 
-function ThreadBubble({ thread, onReply }) {
+function ThreadBubble({ thread, draftReplies = [], onReply, onEditDraft, onDeleteDraft }) {
   const [replying, setReplying] = useState(false)
   const runs = useMemo(
     () => groupCommentsByAuthor(thread.comments),
@@ -391,11 +423,8 @@ function ThreadBubble({ thread, onReply }) {
           anchor={thread.anchor}
           side={thread.side}
           status={thread.status}
+          commentCount={thread.comments?.length || 0}
         />
-        {thread.anchor?.granularity === "token_range" &&
-        thread.anchor.selection_text ? (
-          <code style={tokenQuoteStyle}>{thread.anchor.selection_text}</code>
-        ) : null}
       </header>
 
       <ul style={threadCommentsStyle}>
@@ -426,6 +455,14 @@ function ThreadBubble({ thread, onReply }) {
             </ul>
           </li>
         ))}
+        {draftReplies.map((d) => (
+          <DraftReplyRow
+            key={`draft-reply-${d.id}`}
+            draft={d}
+            onEdit={onEditDraft}
+            onRemove={onDeleteDraft ? () => onDeleteDraft(d.id) : null}
+          />
+        ))}
       </ul>
 
       <footer style={threadFooterStyle}>
@@ -434,6 +471,7 @@ function ThreadBubble({ thread, onReply }) {
             initialValue=""
             autosaveOnBlur={false}
             saveLabel="Reply"
+            saveIcon={<PaperAirplaneIcon style={iconStyle} aria-hidden="true" />}
             placeholder="Reply… (⌘+Enter to save, Esc to cancel)"
             onSave={(body) => {
               onReply?.(thread, body)
@@ -447,11 +485,85 @@ function ThreadBubble({ thread, onReply }) {
             style={buttonStyle}
             onClick={() => setReplying(true)}
           >
+            <ArrowUturnLeftIcon style={iconStyle} aria-hidden="true" />
             Reply
           </button>
         ) : null}
       </footer>
     </div>
+  )
+}
+
+function DraftReplyRow({ draft, onEdit, onRemove }) {
+  const [editing, setEditing] = useState(false)
+  const { relative, absolute } = formatRelative(
+    draft.updated_at || draft.inserted_at
+  )
+
+  if (editing) {
+    return (
+      <li style={threadRunStyle}>
+        <DraftComposer
+          initialValue={draft.body}
+          autosaveOnBlur={false}
+          saveLabel="Save Draft"
+          onSave={(body) => {
+            onEdit?.(draft, body)
+            setEditing(false)
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      </li>
+    )
+  }
+
+  return (
+    <li style={threadRunStyle} data-draft-id={draft.id}>
+      <header style={threadRunHeaderStyle}>
+        <Avatar user={draft.author} />
+        <span>{draft.author?.username || "you"}</span>
+        <span style={draftPillStyle}>draft</span>
+        <span style={{ flex: "1 1 auto" }} />
+        {onEdit ? (
+          <button
+            type="button"
+            style={{ ...buttonStyle, minHeight: 24, padding: "0 8px" }}
+            onClick={() => setEditing(true)}
+            aria-label="Edit draft"
+            title="Edit draft"
+          >
+            <PencilSquareIcon style={iconStyle} aria-hidden="true" />
+            Edit
+          </button>
+        ) : null}
+        {onRemove ? (
+          <button
+            type="button"
+            style={{ ...buttonStyle, minHeight: 24, padding: "0 8px" }}
+            onClick={onRemove}
+            aria-label="Remove draft"
+            title="Remove draft"
+          >
+            <TrashIcon style={iconStyle} aria-hidden="true" />
+            Remove
+          </button>
+        ) : null}
+      </header>
+      <ul style={threadRunCommentsStyle}>
+        <li style={threadCommentStyle}>
+          <div style={threadCommentBodyStyle}>{draft.body}</div>
+          {relative ? (
+            <time
+              style={threadCommentTimeStyle}
+              dateTime={absolute}
+              title={absolute}
+            >
+              Saved {relative}
+            </time>
+          ) : null}
+        </li>
+      </ul>
+    </li>
   )
 }
 
@@ -501,12 +613,22 @@ function DraftBubble({ draft, onRemove, onEdit }) {
               type="button"
               style={buttonStyle}
               onClick={() => setEditing(true)}
+              aria-label="Edit draft"
+              title="Edit draft"
             >
+              <PencilSquareIcon style={iconStyle} aria-hidden="true" />
               Edit
             </button>
           ) : null}
           {onRemove ? (
-            <button type="button" style={buttonStyle} onClick={onRemove}>
+            <button
+              type="button"
+              style={buttonStyle}
+              onClick={onRemove}
+              aria-label="Remove draft"
+              title="Remove draft"
+            >
+              <TrashIcon style={iconStyle} aria-hidden="true" />
               Remove
             </button>
           ) : null}
@@ -545,6 +667,7 @@ function DraftComposer({
   onCancel,
   autosaveOnBlur = true,
   saveLabel = "Save Draft",
+  saveIcon = null,
   placeholder = "Leave a comment… (⌘+Enter to save, Esc to cancel)",
 }) {
   const [value, setValue] = useState(initialValue || "")
@@ -587,6 +710,7 @@ function DraftComposer({
       />
       <div style={composerActionsStyle}>
         <button type="button" style={primaryButtonStyle} onClick={submit}>
+          {saveIcon}
           {saveLabel}
         </button>
         <button type="button" style={buttonStyle} onClick={onCancel}>
@@ -609,11 +733,13 @@ function FileIsland({
   signedIn,
   initial,
   registerUpdater,
+  registerStyleUpdater,
   onSaveDraft,
   onDeleteDraft,
 }) {
   const [threads, setThreads] = useState(initial.threads)
   const [drafts, setDrafts] = useState(initial.drafts)
+  const [diffStyle, setDiffStyle] = useState(initial.diffStyle)
   // composerAt:
   //   null
   //   | { kind: 'line',  side, lineNumber, lineText }
@@ -630,6 +756,10 @@ function FileIsland({
       if (next.drafts) setDrafts(next.drafts)
     })
   }, [registerUpdater])
+
+  useEffect(() => {
+    registerStyleUpdater((style) => setDiffStyle(style))
+  }, [registerStyleUpdater])
 
   const annotations = useMemo(
     () => threadsAndDraftsToAnnotations(threads, drafts),
@@ -712,16 +842,31 @@ function FileIsland({
 
     const threadList = meta.threads || []
     const draftList = meta.drafts || []
+    const threadIds = new Set(threadList.map((t) => t.id))
+    const repliesByThread = new Map()
+    const newDrafts = []
+    for (const d of draftList) {
+      if (d.thread_id != null && threadIds.has(d.thread_id)) {
+        const arr = repliesByThread.get(d.thread_id) || []
+        arr.push(d)
+        repliesByThread.set(d.thread_id, arr)
+      } else {
+        newDrafts.push(d)
+      }
+    }
     return (
       <div>
         {threadList.map((t) => (
           <ThreadBubble
             key={`thread-${t.id}`}
             thread={t}
+            draftReplies={repliesByThread.get(t.id) || []}
             onReply={signedIn ? handleReply : null}
+            onEditDraft={signedIn ? handleEditDraft : null}
+            onDeleteDraft={onDeleteDraft}
           />
         ))}
-        {draftList.map((d) => (
+        {newDrafts.map((d) => (
           <DraftBubble
             key={`draft-${d.id}`}
             draft={d}
@@ -787,6 +932,7 @@ function FileIsland({
       lineAnnotations={lineAnnotations}
       renderAnnotation={renderAnnotation}
       options={{
+        diffStyle,
         onLineNumberClick: handleLineNumberClick,
         onTokenClick: handleTokenClick,
       }}
@@ -819,6 +965,7 @@ const DiffRenderer = {
     const filePath = ds.filePath
     const signedIn = ds.signedIn === "true"
     const rawDiff = ds.rawDiff || ""
+    const initialDiffStyle = ds.diffStyle === "unified" ? "unified" : "split"
 
     const initialThreads = parseInitial(ds.threads, Thread)
     const initialDrafts = parseInitial(ds.drafts, Draft)
@@ -826,6 +973,11 @@ const DiffRenderer = {
     let updater = () => {}
     const registerUpdater = (fn) => {
       updater = fn
+    }
+
+    let styleUpdater = () => {}
+    const registerStyleUpdater = (fn) => {
+      styleUpdater = fn
     }
 
     const onSaveDraft = (payload) => {
@@ -848,8 +1000,13 @@ const DiffRenderer = {
         filePath={filePath}
         rawDiff={rawDiff}
         signedIn={signedIn}
-        initial={{ threads: initialThreads, drafts: initialDrafts }}
+        initial={{
+          threads: initialThreads,
+          drafts: initialDrafts,
+          diffStyle: initialDiffStyle,
+        }}
         registerUpdater={registerUpdater}
+        registerStyleUpdater={registerStyleUpdater}
         onSaveDraft={onSaveDraft}
         onDeleteDraft={onDeleteDraft}
       />
@@ -871,6 +1028,12 @@ const DiffRenderer = {
           raw
         )
       }
+    })
+
+    // Server pushes when the user flips the split/unified toggle.
+    this.handleEvent(`diff_style_updated:${filePath}`, (raw) => {
+      const style = raw?.style === "unified" ? "unified" : "split"
+      styleUpdater(style)
     })
 
     // The "Open Threads" sidebar dispatches reviews:scroll-to-anchor on click.
