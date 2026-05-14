@@ -318,8 +318,8 @@ When a new patchset lands, the server computes a delta between it and the prior 
 
 ```elixir
 %{
-  open_questions_addressed: [thread_id, ...],
-  open_questions_resolved:  [thread_id, ...],
+  open_questions_addressed: [oq_key, ...],
+  open_questions_resolved:  [oq_key, ...],
   tour_sections_changed: [
     # sections derived from markdown headings inside the tour
     %{heading: "Add invalidate/1 call", kind: :hunks_modified},
@@ -486,14 +486,14 @@ Agents author plain markdown links — `[LIN-4892](https://linear.app/...)`. The
 
 ### 11.2 Hunk anchor links
 
-The renderer assigns each hunk a stable anchor id derived from the hunk anchor hash: `#h-<anchor-prefix>`, where `<anchor-prefix>` is the shortest unique prefix of the canonical anchor hash within the rendered packet, with a minimum of 12 hex characters. Markdown can link to anchors normally:
+The renderer assigns each hunk a stable anchor id derived from the hunk anchor hash: `#ha-<anchor-prefix>`, where `<anchor-prefix>` is the shortest unique prefix of the canonical anchor hash within the rendered packet, with a minimum of 12 hex characters. Markdown can link to anchors normally:
 
 ```markdown
-The cache invalidation lands in [Documents.delete/1](#h-8f3a91c0b772); the
-regression test is at [search_cache_invalidation_test.exs](#h-14d9ab35f00e).
+The cache invalidation lands in [Documents.delete/1](#ha-8f3a91c0b772); the
+regression test is at [search_cache_invalidation_test.exs](#ha-14d9ab35f00e).
 ```
 
-For cross-packet references, full URLs work: `https://reviews.../r/<slug>#h-8f3a91c0b772`.
+For cross-packet references, full URLs work: `https://reviews.../r/<slug>#ha-8f3a91c0b772`.
 
 No special component. Standard CommonMark anchor links. Agents that don't link hunks at all (the typical case) don't need to know the convention exists. Because the id comes from the content anchor rather than packet order, reordering tour sections does not break existing hunk links.
 
