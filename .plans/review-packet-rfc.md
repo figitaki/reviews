@@ -29,7 +29,7 @@ A **review packet** is structured metadata the author attaches to each patchset.
 
 | Section | Reviewer question |
 |---|---|
-| Summary | What is this, in one line? |
+| Title | What is this? |
 | Invariants | What must I trust? |
 | Tour | What changed and why? |
 | Testing | What should I verify by hand? |

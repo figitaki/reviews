@@ -90,7 +90,7 @@ Three stories, increasing in complexity. Each illustrates a different valued beh
 
 ### Story A: typo fix
 
-Zero feedback rounds. The packet collapses to almost nothing: summary, a single tour section wrapping the one-line hunk, optionally one testing task pointing at the preview URL. Invariants, deploy, and open questions are all empty and suppress from the render.
+Zero feedback rounds. The packet collapses to almost nothing: title, a single tour section wrapping the one-line hunk, optionally one testing task pointing at the preview URL. Summary, invariants, deploy, and open questions are all empty and suppress from the render.
 
 ```mermaid
 sequenceDiagram
@@ -98,7 +98,7 @@ sequenceDiagram
     participant Server
     actor Reviewer
 
-    Author->>Server: publish (summary + 1 tour section + 1 preview-URL task)
+    Author->>Server: publish (title + 1 tour section + 1 preview-URL task)
     Server->>Reviewer: notify
     Reviewer->>Server: visit preview URL, confirm fix, approve
     Server->>Server: transition :in_review → :approved
@@ -193,7 +193,7 @@ A new hire is trying to understand why a system behaves a certain way. They git-
 
 What they see:
 
-- **Summary + invariants first.** They learn what the change claimed to do and what it claimed to preserve.
+- **Title + invariants first.** They learn what the change claimed to do and what it claimed to preserve.
 - **Tour.** Walks them through the diff in narrative order, which is much easier than reading the raw diff.
 - **Open questions, all resolved.** Reads as a Q&A about why specific decisions were made. For historical readers this is often the most useful section; it captures the alternative paths considered and rejected.
 - **Testing block + coverage map.** Shows what was verified, by whom, including the reviewer's notes if any.

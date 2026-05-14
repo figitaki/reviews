@@ -120,7 +120,8 @@ MVP does not preserve intra-draft snapshots. If "agent process telemetry" turns 
 schema "packets" do
   belongs_to :patchset, Patchset
 
-  field :summary, :string
+  field :title, :string                 # short headline, required (~80 chars)
+  field :summary, :string               # optional markdown blob, 1-2 sentences; suppresses when empty
   field :invariants, {:array, :map}     # [Row]; optional, suppresses when empty
   field :tour, {:array, :map}           # [Row]; flat, headings ## / ### come from markdown
   field :testing_instructions, :string  # markdown blob, optional
@@ -382,15 +383,16 @@ $ reviews publish <slug>              # finalizes → patchset v2, computes delt
 ```jsonc
 {
   "format_version": 1,
-  "summary": "Invalidate search cache on document delete",
+  "title": "Invalidate search cache on document delete",
+  "summary": "Closes [LIN-4892](https://linear.app/.../LIN-4892). Reviewer thread: [#search-on-call](https://acme.slack.com/archives/C123/p456).",
   "invariants": [
     { "kind": "markdown", "body": "Cache is invalidated whenever a document is deleted." },
     { "kind": "hunk", "path": "test/search_cache_invalidation_test.exs", "anchor": "..." }
   ],
   "tour": [
-    { "kind": "markdown", "body": "## Add invalidate/1 call to Documents.delete/1\n\nHooks into the existing delete transaction so the cache clear is atomic. <Pill kind=\"linear\" href=\"https://linear.app/...\">LIN-4892</Pill>" },
+    { "kind": "markdown", "body": "## Add invalidate/1 call to Documents.delete/1\n\nHooks into the existing delete transaction so the cache clear is atomic. Per [LIN-4892](https://linear.app/.../LIN-4892)." },
     { "kind": "hunk", "path": "lib/documents.ex", "anchor": "..." },
-    { "kind": "markdown", "body": "## Regression test\n\nReproduces the bug from <Pill kind=\"linear\" href=\"https://linear.app/...\">LIN-4892</Pill>." },
+    { "kind": "markdown", "body": "## Regression test\n\nReproduces the bug from [LIN-4892](https://linear.app/.../LIN-4892)." },
     { "kind": "hunk", "path": "test/search_cache_invalidation_test.exs", "anchor": "..." }
   ],
   "testing_instructions": "Open a search session, delete a doc, confirm the result list refreshes.",
@@ -408,7 +410,7 @@ $ reviews publish <slug>              # finalizes → patchset v2, computes delt
 }
 ```
 
-The tour example above uses two flat `markdown` rows with `## ` headings, interleaved with `hunk` rows. The renderer derives section boundaries from those headings.
+The tour example uses two flat `markdown` rows with `## ` headings, interleaved with `hunk` rows. The renderer derives section boundaries from those headings, and the Linear/Slack links are auto-tagged at render time per §10.1.
 
 ### 9.4 Local state — SQLite schema
 
@@ -498,47 +500,60 @@ The agent doesn't have hunk *ids* (those are assigned server-side after diff par
 Server rejects packets with:
 
 - malformed rows
+- missing `title`
 - hunk references that don't resolve in the uploaded diff
 - duplicate OQ anchors
-- unknown MDX components in markdown rows
+- markdown that fails CommonMark parsing
 
 `reviews validate` runs the same checks client-side (modulo server-side hunk parsing, which it approximates by parsing the local diff). Designed to be called by agents in a generate-validate loop before the network round-trip.
 
-## 10. MDX prose fields
+## 10. Markdown and URL auto-tagging
 
-Markdown rows accept MDX with a fixed component palette. No arbitrary JSX; the renderer parses with an allowlist.
+Markdown rows are plain CommonMark. No MDX, no custom components, no allowlist to maintain. Two pieces of render-time magic dress the output up:
 
-| Component | Purpose | Example |
-| --- | --- | --- |
-| `<Pill kind="..." href="..." />` | External reference chip (Linear, Slack, Figma, Notion, docs) | `<Pill kind="linear" href="...">LIN-4892</Pill>` |
-| `<HunkLink anchor="..." />` | Cross-reference to a hunk in this patchset | "see <HunkLink anchor="..."/> for the audit" |
-| `<StepLink ordinal={3} />` | Cross-reference to a tour step | "fixed in <StepLink ordinal={3}/>" |
-| `<Evidence href="..." />` | Pointer at a test, lint, or external check | `<Evidence href="test/foo.exs:42"/>` |
-| `<Note kind="warn" />` | Inline callout (warn / info / risk) | `<Note kind="warn">Migration is non-reversible</Note>` |
+### 10.1 URL auto-tagging
 
-**Crucially, `<PatchDiff>` is not in the palette.** Hunks live as their own `Row` kind, not embedded in MDX. This keeps the React island scoped (the diff renderer doesn't need to be invoked from inside parsed prose) and keeps the schema queryable (hunk references aren't hidden inside markdown text).
+At render time, the server walks the compiled markdown for `<a href>` links and matches each against a small pattern table. Matches become styled "pills" in the rendered output; non-matches stay plain links.
 
-**Rendering.** Server-side: MDX compiled to HTML via a sandboxed pipeline (likely Rust-side `markdown-rs` plus an allowlist pass; details deferred). The result is injected into the LiveView template. The five components above are either:
+| Pattern | Renders as |
+| --- | --- |
+| `https://github.com/<org>/<repo>/issues/<n>` | GitHub issue pill |
+| `https://github.com/<org>/<repo>/pull/<n>` | GitHub PR pill |
+| `https://linear.app/<workspace>/issue/<id>/...` | Linear ticket pill (extracts `LIN-N` from URL) |
+| `https://<workspace>.slack.com/archives/...` | Slack thread pill |
+| `https://*.figma.com/...` | Figma frame pill |
+| `https://*.notion.so/...` | Notion page pill |
+| anything else | plain `<a>` |
 
-- pure presentation (`<Pill>`, `<Note>`, `<Evidence>`) → rendered as HEEx components, or
-- interactive (`<HunkLink>`, `<StepLink>`) → rendered as `<.link>` elements that scroll/highlight via a tiny inline colocated hook.
+Agents author plain markdown links — `[LIN-4892](https://linear.app/...)`. The renderer makes them pretty. Adding a new platform later is a pattern entry, not a packet-format change.
 
-No new React island.
+### 10.2 Hunk anchor links
+
+The renderer assigns each hunk a stable anchor id of the form `#h-<index>` where index is the hunk's position in the packet (0-based across all sections). Markdown can link to anchors normally:
+
+```markdown
+The cache invalidation lands in [Documents.delete/1](#h-3); the
+regression test is at [search_cache_invalidation_test.exs](#h-5).
+```
+
+For cross-packet references, full URLs work: `https://reviews.../r/<slug>#h-3`.
+
+No special component. Standard CommonMark anchor links. Agents that don't link hunks at all (the typical case) don't need to know the convention exists.
 
 ## 11. LiveView / React boundary
 
 | Layer | Responsibility |
 | --- | --- |
-| HEEx (LiveView) | Page chrome, summary, invariants list, tour outline & headings, testing panel, rollout block, OQ sidebar, all stateful interactions (tick, approve, reply) |
-| Colocated JS hooks | Small affordances: `HunkLink` scroll behavior, copy-to-clipboard, anchor highlighting |
+| HEEx (LiveView) | Page chrome, title, summary, invariants list, tour outline, testing panel, rollout block, OQ sidebar, all stateful interactions (tick, approve, reply) |
+| Colocated JS hooks | Small affordances: anchor scroll, copy-to-clipboard, highlighting |
 | `phx-hook="DiffRenderer"` React island | Diff rendering only (`@pierre/diffs` `PatchDiff`) |
-| Server-side MDX compile | Markdown rows → HTML with allowlisted components inlined as HEEx |
+| Server-side markdown compile | CommonMark → HTML + URL auto-tagging pass (§10.1) |
 
-The diff renderer needs one capability it may not already have: **accepting an arbitrary hunk order** and/or **rendering a subset of hunks** for a tour step. If `<PatchDiff>` is strictly file-grouped, the tour can either (a) render a custom hunk component for tour steps and use `<PatchDiff>` only for the "Other" / flat view, or (b) we contribute upstream support for hunk-ordered rendering. Decision deferred until the React side is inspected.
+The diff renderer needs one capability it may not already have: **accepting an arbitrary hunk order** and/or **rendering a subset of hunks** for a tour section. If `<PatchDiff>` is strictly file-grouped, the tour can either (a) render a custom hunk component for tour sections and use `<PatchDiff>` only for the "Other" / flat view, or (b) we contribute upstream support for hunk-ordered rendering. Decision deferred until the React side is inspected.
 
 ## 12. Validation, errors, edge cases
 
-- **Empty sections suppress.** Only `summary` is required. Invariants, tour, testing (instructions + tasks), deploy, and open questions all disappear from the rendered packet when empty. **Invariants in particular is optional** — small changes don't need them, and a missing block is just a missing block, not a quality signal.
+- **Empty sections suppress.** Only `title` is required. Summary, invariants, tour, testing (instructions + tasks), deploy, and open questions all disappear from the rendered packet when empty. **Invariants in particular is optional** — small changes don't need them, and a missing block is just a missing block, not a quality signal.
 - **Hunks not referenced by any tour markdown.** Land in an "Other" bucket at the end of the tour with no surrounding prose. The agent should be nudged to keep this small via prompt design, not enforced server-side.
 - **OQ anchor lost across patchsets.** Surfaces in a sidebar bucket "orphaned threads"; reviewer can manually re-anchor or dismiss. Same behavior as inline comments today.
 - **Reviewer leaves a thread reply on an OQ then it's deleted by the agent in v2.** The thread isn't deleted; the OQ row's anchor is just gone from v2's hunks → moved to orphan bucket.
