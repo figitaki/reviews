@@ -158,6 +158,10 @@ Notes:
 - `Check.hunk_anchors` are content-hashed, not patchset-local ids. This is what makes check progress survive updates (see §6).
 - Open questions are *not* a separate table; they piggyback on the existing threads infrastructure with a `kind` discriminator.
 
+**Dedup and carry-forward.** Each `Patchset` row points at one `Packet`, but two patchsets can point at the *same* packet row when the agent's submission is byte-for-byte identical to the prior published one. The server hashes the canonicalized packet on ingest and reuses the prior row when the hash matches; "no packet changes between v1 and v2" then falls out of an `INNER JOIN` and the update delta surfaces it explicitly.
+
+A `reviews publish` may also omit the packet entirely. In that case the server attaches the prior published packet to the new patchset (carry-forward). Useful for small follow-up patchsets that don't move the narrative.
+
 ### 4.3 Schema versioning
 
 `format_version` on `packets` exists to absorb evolution of the packet shape without breaking older renders. Strategy:
@@ -317,32 +321,63 @@ The delta is computed once at ingest and persisted. The LiveView reads it as a s
 
 ## 9. CLI integration
 
+### 9.1 File layout
+
+`.reviews/` is the per-checkout working directory. It is gitignored; the packet is a source artifact uploaded to the server, not a committed file. Per-branch subdirectories let one checkout (or one worktree) juggle multiple reviews without clobbering.
+
 ```
-$ tree -L 2 myrepo/
+$ tree -L 3 myrepo/
 myrepo/
-├── .reviews/
-│   └── packet.json
+├── .reviews/                          # gitignored
+│   ├── <branch-sanitized>/            # one dir per branch
+│   │   ├── packet.json                # the packet the agent authors
+│   │   ├── threads.json               # cached server state (OQs, inline comments)
+│   │   └── .meta                      # { slug, last_pushed_at, last_synced_at }
+│   └── _drafts/                       # pre-push, slug not yet assigned
+│       └── <branch-sanitized>.json
 ├── src/
 └── ...
+```
+
+The CLI resolves the active directory from the current branch. Worktrees naturally get their own dir because they're on their own branches. Branch names are sanitized to filesystem-safe characters (slashes → `__`, etc.).
+
+### 9.2 Commands
+
+```
+# Author a packet, validate before pushing:
+$ reviews validate                    # parses .reviews/<branch>/packet.json, checks schema,
+                                      # resolves hunk references against current diff,
+                                      # exits non-zero with line-pointed errors
+
+$ reviews push --dry-run              # validate + print what would be sent (slug, truncated
+                                      # diff, packet shape); no network call
 
 # First push to a fresh review (creates a draft patchset):
-$ reviews push --draft           # picks up .reviews/packet.json if present
+$ reviews push --draft                # picks up .reviews/<branch>/packet.json,
+                                      # or .reviews/_drafts/<branch>.json on the first push
 
-# Iterating on the in-flight draft (overwrites server-side):
-$ reviews push --draft           # same command; server identifies the draft
+# Iterate on the in-flight draft (overwrites server-side):
+$ reviews push --draft                # same command; server identifies the draft
 $ reviews push --draft --packet foo.json
 
 # Hand off to reviewers:
-$ reviews publish <slug>         # finalizes the draft → patchset v1, notifies
+$ reviews publish <slug>              # finalizes the draft → patchset v1, notifies
+
+# Sync reviewer state into the local cache:
+$ reviews sync                        # fetches OQs, inline comments, check progress
+                                      # into .reviews/<branch>/threads.json
+$ reviews threads                     # print a summary of open threads from local cache
 
 # After feedback, prepare the next revision:
-$ reviews push --draft           # creates a new in-flight draft patchset
-$ reviews publish <slug>         # finalizes → patchset v2, computes delta
+$ reviews push --draft                # creates a new in-flight draft patchset
+$ reviews publish <slug>              # finalizes → patchset v2, computes delta
 ```
+
+`reviews sync` is also called implicitly after `reviews publish` so the agent has fresh thread state by the time the next iteration starts.
 
 **Note on `--update`.** The previous `reviews push --update <slug>` invocation is deprecated in favor of the explicit draft-then-publish flow. The CLI still accepts it as a compatibility alias that maps to `push --draft && publish` for human authors who don't want the two-step affordance.
 
-**Packet file format:**
+### 9.3 Packet file format
 
 ```jsonc
 {
@@ -383,14 +418,43 @@ $ reviews publish <slug>         # finalizes → patchset v2, computes delta
 }
 ```
 
-**Hunk identification on the author side.** The agent doesn't have hunk *ids* (those are assigned server-side after diff parsing). It identifies hunks by `(path, anchor)` where anchor is a content hash computed by the CLI from the local diff. The server matches these against the parsed patchset.
+### 9.4 Threads cache format
 
-**Validation.** Server rejects packets with:
+`threads.json` mirrors the server's view of the review's threads at last sync. Read-only from the agent's perspective; the CLI rewrites it on `sync`.
+
+```jsonc
+{
+  "synced_at": "2026-05-14T10:23:00Z",
+  "patchset_number": 2,
+  "threads": [
+    {
+      "id": 142,
+      "kind": "open_question",
+      "state": "answered",
+      "anchor": { "path": "lib/documents.ex", "hash": "...", "context": "..." },
+      "body": "Should we backfill: clear the cache for docs deleted in the last 24h?",
+      "messages": [
+        { "author": "alice", "at": "...", "body": "Skip backfill, file a follow-up." }
+      ]
+    }
+  ]
+}
+```
+
+### 9.5 Hunk identification on the author side
+
+The agent doesn't have hunk *ids* (those are assigned server-side after diff parsing). It identifies hunks by `(path, anchor)` where anchor is a content hash computed by the CLI from the local diff. The server matches these against the parsed patchset.
+
+### 9.6 Validation
+
+Server rejects packets with:
 
 - malformed rows
 - hunk references that don't resolve in the uploaded diff
 - duplicate OQ anchors
 - unknown MDX components in markdown rows
+
+`reviews validate` runs the same checks client-side (modulo server-side hunk parsing, which it approximates by parsing the local diff). Designed to be called by agents in a generate-validate loop before the network round-trip.
 
 ## 10. MDX prose fields
 
@@ -440,6 +504,7 @@ The diff renderer needs one capability it may not already have: **accepting an a
 - **Reference integrations.** Linear / Slack / Figma / Notion APIs to render rich previews on `<Pill>` hover.
 - **Editable packet post-push.** A reviewer-friendly correction mode that doesn't require a new patchset.
 - **Reviewer-facing reordering.** Sort by reviewed-first, by file kind, by hunk size. Orthogonal to the tour-driven ordering.
+- **Sparse packet updates.** Today the agent submits the full packet (or omits it entirely for carry-forward). A middle ground would let the agent submit only changed sections, with omitted sections inherited from the prior published packet. Useful when only the tour changes but invariants and testing are stable. Adds submission complexity and prompt complexity; not load-bearing for MVP.
 
 ## 14. Test plan sketch
 
