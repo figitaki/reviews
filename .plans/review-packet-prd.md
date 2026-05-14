@@ -17,9 +17,9 @@ Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-p
 ```mermaid
 stateDiagram-v2
     [*] --> Draft: reviews push --draft
-    Draft --> Draft: reviews push --update --draft
-    Draft --> InReview: reviews publish
-    InReview --> InReview: reviews push --update
+    Draft --> Draft: reviews push --draft (overwrites in place)
+    Draft --> InReview: reviews publish (creates v1)
+    InReview --> InReview: reviews publish (creates vN+1, after a draft cycle)
     InReview --> Draft: reviews unpublish
     InReview --> Approved: all required sign-offs
     Approved --> InReview: reviews reopen
@@ -28,8 +28,8 @@ stateDiagram-v2
 
 | State | Who can see it | Notifications | Mutable? |
 | --- | --- | --- | --- |
-| **Draft** | Author(s) only | None | Yes — author iterates freely |
-| **In Review** | Author + invited reviewers (or public via link, per existing model) | Reviewers notified on publish + each new patchset | Author pushes patchsets; reviewers add state |
+| **Draft** | Author(s) only | None | Yes — each draft push overwrites the in-flight patchset; intra-draft churn is not preserved as separate revisions |
+| **In Review** | Author + invited reviewers (or public via link, per existing model) | Reviewers notified on each *publish* event | Author can push new drafts that supersede the current one; only `reviews publish` produces a new visible patchset |
 | **Approved** | Anyone with the link | None | Frozen; threads and coverage are archival |
 
 `Approved` is a terminal review-lifecycle state. The review tool doesn't manage merges — what the author does with the branch afterward is their business. "Approved" means *the reviewer has signed off on this packet*; deployment is downstream.
@@ -57,7 +57,7 @@ sequenceDiagram
     Author->>Author: produce diff
     Author->>Author: generate packet.json
     Author->>CLI: reviews push --draft
-    CLI->>Server: upload diff + packet (state = :draft)
+    CLI->>Server: upload diff + packet (state = :draft, number = null)
     Server-->>Author: slug + draft URL
     Note over Reviewer: not notified
 
@@ -67,18 +67,20 @@ sequenceDiagram
       Author->>Author: run tests, walk tour, validate invariants
       opt revisions
         Author->>Author: amend code + packet
-        Author->>CLI: reviews push --update <slug> --draft
-        CLI->>Server: new patchset (still :draft)
+        Author->>CLI: reviews push --draft
+        CLI->>Server: overwrite in-flight :draft patchset
       end
     end
     end
 
     Author->>CLI: reviews publish <slug>
-    CLI->>Server: transition :draft → :in_review
+    Server->>Server: assign number = 1, state = :published
+    Server->>Server: anchor rehydration + delta computation
+    CLI->>Server: transition review to :in_review
     Server->>Reviewer: notify
 ```
 
-**Notable:** the draft state explicitly supports the agent pushing multiple patchsets before publishing. The reviewer doesn't see five draft patchsets — they see whatever the agent finally publishes. Patchset history is preserved server-side regardless (useful for postmortem of the agent's process), just not surfaced in the default review view.
+**Notable:** draft pushes overwrite the in-flight patchset in place — they don't accumulate as separate revisions. The reviewer eventually sees a clean v1, v2, v3 sequence corresponding 1-to-1 with publish events; intra-draft churn is invisible in the review view. Anchoring and delta computation only fire on publish, so the cost of draft iteration is just an upload (no rehydration). MVP doesn't preserve intra-draft snapshots; if "agent process telemetry" turns out to be useful for postmortem, a side table can be added later without affecting the user-facing model.
 
 ---
 
@@ -227,7 +229,8 @@ The packet becomes evidence in a postmortem: claimed invariants vs. actual behav
 | `In Review → Draft` | `reviews unpublish` | Author pulls the review back; reviewers notified once. Prior reviewer state preserved but hidden. Re-publishing restores state. |
 | `Approved → In Review` | `reviews reopen` | Rare. Used post-approval if a critical issue surfaces before merge. Approval signatures preserved but marked stale until re-confirmed. |
 | Multi-reviewer in progress | n/a | Approvals accumulate per reviewer. Transition to `:approved` requires all *required* reviewers to have signed off — others are advisory. Required vs. advisory is configured per review or per `required_role` check. |
-| Author pushes new patchset after approval | `reviews push --update` on approved review | Rejected by default; author must `reviews reopen` first. Prevents silent post-approval drift. |
+| In-review draft cycle | `reviews push --draft` on an in-review review | Creates a new in-flight `:draft` patchset that supersedes the next publish slot. Overwrites on subsequent draft pushes. Reviewers don't see it until `reviews publish`. |
+| Author pushes draft after approval | `reviews push --draft` on approved review | Rejected by default; author must `reviews reopen` first. Prevents silent post-approval drift. |
 
 ---
 

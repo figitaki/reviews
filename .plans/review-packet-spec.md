@@ -91,6 +91,31 @@ end
 
 ## 4. Packet schema
 
+### 4.1 Patchset state
+
+`Patchset` (existing schema in `lib/reviews/reviews/patchset.ex`) gains a state field. Draft pushes overwrite the in-flight `:draft` patchset rather than creating a new visible revision. Numbering is assigned at publish time, not at push time.
+
+```elixir
+# Additions to existing Patchset schema:
+field :state, Ecto.Enum, values: [:draft, :published], default: :draft
+field :published_at, :utc_datetime
+# field :number stays, but becomes nullable while :draft
+
+# Unique constraint moves from (review_id, number) to:
+# (review_id, number) WHERE state = :published
+# plus (review_id) WHERE state = :draft  -- at most one in-flight draft per review
+```
+
+Lifecycle:
+
+- `reviews push --draft` upserts the single in-flight `:draft` patchset for the review (overwrites `raw_diff`, `parsed_diff`, attached packet).
+- `reviews publish` flips state to `:published`, assigns `number = max(number) + 1`, sets `published_at`. **This is the only event that triggers anchor rehydration and update-delta computation.**
+- Subsequent post-publish work starts a new `:draft` patchset; same overwrite semantics until it too is published.
+
+MVP does not preserve intra-draft snapshots. If "agent process telemetry" turns out useful for postmortem, a side table can be added without affecting the user-facing model.
+
+### 4.2 Packet
+
 ```elixir
 schema "packets" do
   belongs_to :patchset, Patchset
@@ -98,7 +123,7 @@ schema "packets" do
   field :summary, :string
   field :invariants, {:array, :map}     # [Row]
   field :rollout, {:array, :map}        # [Row], nullable / empty when N/A
-  field :format_version, :integer       # for forward compat
+  field :format_version, :integer       # for forward compat (see §13)
 
   has_many :steps, Step                 # tour steps, ordered
   has_many :checks, Check               # testing checks, ordered
@@ -132,6 +157,17 @@ Notes:
 - `Step.hunk_ids` references hunks in *this patchset*. The anchoring layer is responsible for tracking the same step across patchsets if needed for delta computation; the persisted hunk ids are patchset-local.
 - `Check.hunk_anchors` are content-hashed, not patchset-local ids. This is what makes check progress survive updates (see §6).
 - Open questions are *not* a separate table — they piggyback on the existing threads infrastructure with a `kind` discriminator.
+
+### 4.3 Schema versioning
+
+`format_version` on `packets` exists to absorb evolution of the packet shape without breaking older renders. Strategy:
+
+- **Additive changes** (new optional row kind, new section, new MDX component) — no version bump. Renderers must tolerate unknown row/component kinds by rendering a graceful placeholder ("unknown row kind: X — upgrade your renderer").
+- **Breaking changes** (renamed field, removed section, semantics shift) — bump `format_version`. Renderer dispatches on version; old packets render against the old code path indefinitely.
+- **Server validation** rejects packets whose `format_version` is newer than what the server understands. Older packets always parse.
+- We don't migrate stored packets between versions. Packet content is immutable once published; the schema evolves around them, not over them.
+
+This is a forward problem — MVP ships at `format_version: 1` and the policy doesn't bind until v2. Worth establishing now so the hooks are in place.
 
 ## 5. Threads — open questions vs inline comments
 
@@ -198,6 +234,10 @@ flowchart TB
 1. If `A.hash` matches a hunk in the new patchset → state carries forward unchanged.
 2. If no match → state is **invalidated, not deleted**. It's surfaced to the reviewer as "needs re-verification" (for checks/approvals) or as "anchor lost" (for threads, which then float in a sidebar bucket).
 
+**When this runs.** Anchor rehydration only fires at publish time. Draft pushes overwrite the in-flight patchset's hunks but don't trigger rehydration — there's no published predecessor to carry state forward from yet. This keeps draft iteration cheap (just an upload) and means reviewer-visible state is only ever computed against published patchsets.
+
+**Prior-patchset coverage map.** When a reviewer approved hunks in v1 and v2 publishes with some hunks unchanged: the carry-forward leaves their prior approval anchors intact. The coverage map at v2 reflects those carried approvals plus any new approvals on v2's new hunks. A reviewer who approved every hunk in v1 will see a partial coverage on v2 if v2 introduced new hunks they haven't approved — by design, since "still approved" is a claim about specific code, not about a revision.
+
 This is the **only** drift mechanism. The MVP does not attempt fuzzy matching beyond the existing thread anchoring code (`Anchoring.relocate/3`). The token-range branch already in the codebase remains stubbed.
 
 ## 7. Per-reviewer state
@@ -232,7 +272,7 @@ Notes:
 
 ## 8. Update delta
 
-When a new patchset lands, the server computes a delta between it and the prior packet:
+When a patchset is **published** (not on draft pushes), the server computes a delta between the newly-published patchset and the prior published one:
 
 ```elixir
 %{
@@ -257,8 +297,12 @@ sequenceDiagram
     participant Server
     participant DB
 
-    Agent->>Server: PUT patchset v2 (diff + packet v2)
-    Server->>DB: persist patchset v2 + packet v2
+    Agent->>Server: reviews push --draft (one or more times)
+    Server->>DB: upsert in-flight :draft patchset
+    Note over Server,DB: no rehydration, no delta — draft pushes are cheap
+
+    Agent->>Server: reviews publish
+    Server->>DB: assign number=2, state=:published, persist packet v2
 
     Server->>Server: compute anchor set Av2
     Server->>DB: carry forward matching anchors, invalidate lost ones
@@ -281,10 +325,22 @@ myrepo/
 ├── src/
 └── ...
 
-$ reviews push                  # picks up .reviews/packet.json if present
-$ reviews push --packet foo.json
-$ reviews push --update <slug>  # treats as patchset update; computes delta server-side
+# First push to a fresh review — creates a draft patchset:
+$ reviews push --draft           # picks up .reviews/packet.json if present
+
+# Iterating on the in-flight draft — overwrites server-side:
+$ reviews push --draft           # same command; server identifies the draft
+$ reviews push --draft --packet foo.json
+
+# Hand off to reviewers:
+$ reviews publish <slug>         # finalizes the draft → patchset v1, notifies
+
+# After feedback, prepare the next revision:
+$ reviews push --draft           # creates a new in-flight draft patchset
+$ reviews publish <slug>         # finalizes → patchset v2, computes delta
 ```
+
+**Note on `--update`.** The previous `reviews push --update <slug>` invocation is deprecated in favor of the explicit draft-then-publish flow. The CLI still accepts it as a compatibility alias that maps to `push --draft && publish` for human authors who don't want the two-step affordance.
 
 **Packet file format:**
 
