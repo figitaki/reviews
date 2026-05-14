@@ -116,6 +116,8 @@ sequenceDiagram
 What this story exercises:
 
 - Approvals on unchanged sections survived the patchset update; the reviewer didn't have to re-approve the whole thing.
+- Testing progress survived by stable task key. If the agent keeps the same key and only tightens the task wording, the prior check remains visible but the delta asks the reviewer to re-verify.
+- Open questions survived by stable OQ key. Keeping the key preserves the backing thread; removing the key drops it from the active packet without deleting the discussion.
 - The delta banner is the load-bearing UX. Without it, the reviewer reads v2 cold and burns the time savings.
 - The "needs re-verification" affordance on section 2 directs attention precisely to the hunks that changed.
 

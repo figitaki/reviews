@@ -125,7 +125,7 @@ erDiagram
     HUNK_ANCHOR ||--o{ HUNK_APPROVAL : "approval target"
 ```
 
-The packet is a child of `Patchset`. Threads (including open questions) are scoped to `Review` and anchored to hunks via content hashes (see §2.2). Per-reviewer state lives in separate tables keyed by reviewer + anchor (for hunk approvals) or reviewer + task id (for task progress), so it survives patchset updates.
+The packet is a child of `Patchset`. Threads (including open questions) are scoped to `Review` and anchored to hunks via content hashes (see §2.2). Per-reviewer state lives in separate tables keyed by reviewer + anchor (for hunk approvals) or reviewer + stable task key (for task progress), so it survives patchset updates.
 
 ## 4. The Row primitive
 
@@ -175,6 +175,7 @@ end
 
 schema "packet_tasks" do
   belongs_to :packet, Packet
+  field :key, :string                  # stable author-supplied id, unique within packet
   field :ordinal, :integer
   field :description, :string           # markdown string (not [Row])
   field :required_role, :string         # optional: "ops", "design", etc.
@@ -185,8 +186,8 @@ Notes:
 
 - `Row` lists are stored as JSONB arrays. Each row is `%{"kind" => "markdown" | "hunk", ...}`.
 - **Tour is flat.** Section boundaries inside the tour come from markdown headings (`##`, `###`) in markdown rows, not from a separate `Step` entity. The renderer and the update-delta computation walk the tour rows and group by heading at render/diff time. Refs like Linear/Slack/Figma chips are plain markdown links; the renderer auto-tags them at render time (§11.1).
-- **Tasks carry no hunk anchors.** A task is just a markdown description. Per-reviewer status (see §8) survives patchset updates by task id; the reviewer manually decides which tasks to re-run based on the delta banner. Tasks that genuinely tie to a hunk can mention it in their description.
-- Open questions are *not* a separate table; they piggyback on the existing threads infrastructure with a `kind` discriminator.
+- **Tasks carry stable keys, not hunk anchors.** A task is a stable `key` plus a markdown description. Per-reviewer status (see §8) survives patchset updates by key; the reviewer manually decides which tasks to re-run based on the delta banner. Tasks that genuinely tie to a hunk can mention it in their description.
+- Open questions are *not* a separate table; they piggyback on the existing threads infrastructure with a `kind` discriminator. Each submitted open question carries a stable `key`; the server maps that key to the backing thread across packet updates.
 
 **Dedup and carry-forward.** Each `Patchset` row points at one `Packet`, but two patchsets can point at the *same* packet row when the agent's submission is byte-for-byte identical to the prior one. The server hashes the canonicalized packet on ingest and reuses the prior row when the hash matches; "no packet changes between v1 and v2" then falls out of an `INNER JOIN` and the update delta surfaces it explicitly.
 
@@ -211,6 +212,7 @@ schema "threads" do
 
   field :kind, Ecto.Enum, values: [:inline_comment, :open_question]
   field :state, Ecto.Enum, values: [:open, :answered, :resolved]
+  field :key, :string                  # required for open_question; stable within review
 
   field :anchor, :map  # %{granularity: "hunk" | "token_range", hash: ..., context: ...}
   field :author_kind, Ecto.Enum, values: [:human, :agent]
@@ -224,13 +226,14 @@ Open questions are threads where:
 
 - `kind = :open_question`
 - `author_kind = :agent` (on creation)
+- `key` is the agent-supplied stable id for the question
 - `state` transitions: `:open` → `:answered` (reviewer replied) → `:resolved` (agent accepted or addressed in next patchset)
 
-This reuses anchoring (already content-hashed) and cross-patchset carry-over (already supported per CLAUDE.md). Don't introduce a parallel data model for OQs.
+This reuses anchoring (already content-hashed) and cross-patchset carry-over (already supported per CLAUDE.md). Don't introduce a parallel data model for OQs. If the same OQ `key` appears in the next packet, the server attaches it to the same backing thread and updates the latest body/anchor metadata. If an OQ key is removed, the thread is not deleted; it becomes omitted from the active packet view and remains visible in review history or unresolved-thread views until answered/resolved.
 
 ## 7. Anchoring & drift
 
-Hunks have stable identity *within a patchset only*. Between patchsets, hunks may be added, removed, or modified. State that needs to survive (hunk approvals, threads) anchors via the content hash defined in §2.2. Tasks don't anchor to hunks; their per-reviewer state carries forward by task id (see §8).
+Hunks have stable identity *within a patchset only*. Between patchsets, hunks may be added, removed, or modified. State that needs to survive (hunk approvals, threads) anchors via the content hash defined in §2.2. Tasks don't anchor to hunks; their per-reviewer state carries forward by task key (see §8).
 
 ```mermaid
 flowchart TB
@@ -278,9 +281,10 @@ This is the **only** drift mechanism. The MVP does not attempt fuzzy matching be
 
 ```elixir
 schema "reviewer_task_progress" do
-  belongs_to :task, PacketTask
+  belongs_to :review, Review
   belongs_to :reviewer, User
 
+  field :task_key, :string
   field :state, Ecto.Enum,
     values: [:unchecked, :verified, :failed, :skipped]
 
@@ -300,7 +304,10 @@ end
 
 Notes:
 
-- `reviewer_task_progress` is keyed by `(task_id, reviewer_id)`. Tasks don't anchor to hunks (see §5.2 / §7), so a task's progress simply carries forward by id; the reviewer manually decides to re-run if the delta banner suggests the task is affected.
+- `reviewer_task_progress` is keyed by `(review_id, task_key, reviewer_id)`. Tasks don't anchor to hunks (see §5.2 / §7), so task progress carries forward when the same key appears in the next packet.
+- If a task key is unchanged and the description is unchanged, progress carries forward unchanged.
+- If a task key is unchanged but the description changes, progress is preserved and the delta suggests re-verification for that task. The key means "same reviewer obligation, revised wording", not "wipe the check."
+- If a task key is removed, progress is retained in history but no longer appears in the active checklist. It can still be shown in the update delta as a removed task.
 - `hunk_approvals` are keyed by anchor hash, not hunk id. Carry-forward via the §7 anchoring rule.
 - Multiple reviewers' rows coexist. The coverage map is a left-join over the current patchset's tour hunks (resolved to anchors) grouped by reviewer. Section boundaries for the map UX come from markdown headings inside the tour.
 - For MVP, no merge gating. These tables are read-only signals for the UI.
@@ -320,11 +327,13 @@ When a new patchset lands, the server computes a delta between it and the prior 
   ],
   invariants_added: [row_index, ...],
   invariants_removed: [...],
-  tasks_added:   [task_id, ...],
-  tasks_removed: [task_id, ...],
+  tasks_added:   [task_key, ...],
+  tasks_removed: [task_key, ...],
+  open_questions_added:   [oq_key, ...],
+  open_questions_removed: [oq_key, ...],
   reverification_suggested: %{
     # advisory only — reviewer decides; tasks don't auto-invalidate (§8)
-    tasks:     [task_id, ...],
+    tasks:     [task_key, ...],
     approvals: [anchor_hash, ...]
   }
 }
@@ -422,12 +431,13 @@ Draft-state semantics (author iterates privately before reviewers are notified, 
   ],
   "testing_instructions": "Open a search session, delete a doc, confirm the result list refreshes.",
   "tasks": [
-    { "description": "Delete a document via the UI; confirm it disappears from search results within 2s." },
-    { "description": "Visit the preview URL and verify the new test passes in CI." }
+    { "key": "ui-delete-refresh", "description": "Delete a document via the UI; confirm it disappears from search results within 2s." },
+    { "key": "ci-preview-test", "description": "Visit the preview URL and verify the new test passes in CI." }
   ],
   "rollout": null,
   "open_questions": [
     {
+      "key": "cache-backfill-window",
       "anchor": { "path": "lib/documents.ex", "hash": "...", "context": "..." },
       "body": "Should we backfill: clear the cache for docs deleted in the last 24h?"
     }
@@ -448,7 +458,8 @@ Server rejects packets with:
 - malformed rows
 - missing `title`
 - hunk references that don't resolve in the uploaded diff
-- duplicate OQ anchors
+- duplicate task keys or OQ keys within a packet
+- duplicate OQ anchors with different keys
 - markdown that fails CommonMark parsing
 
 `reviews validate` runs the same checks client-side (modulo server-side hunk parsing, which it approximates by parsing the local diff). Designed to be called by agents in a generate-validate loop before the network round-trip.
@@ -475,16 +486,16 @@ Agents author plain markdown links — `[LIN-4892](https://linear.app/...)`. The
 
 ### 11.2 Hunk anchor links
 
-The renderer assigns each hunk a stable anchor id of the form `#h-<index>` where index is the hunk's position in the packet (0-based across all sections). Markdown can link to anchors normally:
+The renderer assigns each hunk a stable anchor id derived from the hunk anchor hash: `#h-<anchor-prefix>`, where `<anchor-prefix>` is the shortest unique prefix of the canonical anchor hash within the rendered packet, with a minimum of 12 hex characters. Markdown can link to anchors normally:
 
 ```markdown
-The cache invalidation lands in [Documents.delete/1](#h-3); the
-regression test is at [search_cache_invalidation_test.exs](#h-5).
+The cache invalidation lands in [Documents.delete/1](#h-8f3a91c0b772); the
+regression test is at [search_cache_invalidation_test.exs](#h-14d9ab35f00e).
 ```
 
-For cross-packet references, full URLs work: `https://reviews.../r/<slug>#h-3`.
+For cross-packet references, full URLs work: `https://reviews.../r/<slug>#h-8f3a91c0b772`.
 
-No special component. Standard CommonMark anchor links. Agents that don't link hunks at all (the typical case) don't need to know the convention exists.
+No special component. Standard CommonMark anchor links. Agents that don't link hunks at all (the typical case) don't need to know the convention exists. Because the id comes from the content anchor rather than packet order, reordering tour sections does not break existing hunk links.
 
 ## 12. LiveView / React boundary
 
@@ -502,7 +513,7 @@ The diff renderer needs one capability it may not already have: **accepting an a
 - **Empty sections suppress.** Only `title` is required. Summary, invariants, tour, testing (instructions + tasks), deploy, and open questions all disappear from the rendered packet when empty. **Invariants in particular is optional** — small changes don't need them, and a missing block is just a missing block, not a quality signal.
 - **Hunks not referenced by any tour markdown.** Land in an "Other" bucket at the end of the tour with no surrounding prose. The agent should be nudged to keep this small via prompt design, not enforced server-side.
 - **OQ anchor lost across patchsets.** Surfaces in a sidebar bucket "orphaned threads"; reviewer can manually re-anchor or dismiss. Same behavior as inline comments today.
-- **Reviewer leaves a thread reply on an OQ then it's deleted by the agent in v2.** The thread isn't deleted; the OQ row's anchor is just gone from v2's hunks → moved to orphan bucket.
+- **Reviewer leaves a thread reply on an OQ then its key is omitted by the agent in v2.** The thread isn't deleted; it leaves the active packet view and remains available in review history / unresolved-thread views. If the hunk anchor is also gone, it moves to the orphan bucket.
 
 ## 14. Future work (out of MVP)
 
@@ -523,9 +534,10 @@ For the MVP we need test coverage on:
 1. **Packet parse / validate.** Well-formed and malformed packets, unknown row kinds, missing required fields (title).
 2. **Anchor rehydration.** Pat v1 hunks H1/H2/H3 with attached state, Pat v2 with H1 unchanged, H2 modified, H3 deleted, H4 new. Assert state on H1 carries, state on H2/H3 invalidated and surfaced, no spurious state on H4.
 3. **Update delta computation.** Known prior packet + new packet, assert delta record fields.
-4. **Per-reviewer task progress.** Alice ticks task X, Bob sees Alice's tick but his own is independent. Carries forward by task id across patchsets.
-5. **Hunk approval coverage map.** Query groups by tour-section (derived from markdown headings) and returns per-reviewer approval state.
-6. **OQ lifecycle.** Agent opens, reviewer replies (transitions to `:answered`), agent's next patchset includes resolution (transitions to `:resolved`).
-7. **Rendering.** Golden tests for the rendered LiveView with each section populated / empty.
+4. **Per-reviewer task progress.** Alice ticks task key X, Bob sees Alice's tick but his own is independent. Carries forward by task key across patchsets; changed description with the same key preserves progress and suggests re-verification; removed keys leave historical progress but disappear from the active checklist.
+5. **Open question identity.** OQ key X maps to the same backing thread across patchsets; removed keys do not delete threads.
+6. **Hunk approval coverage map.** Query groups by tour-section (derived from markdown headings) and returns per-reviewer approval state.
+7. **OQ lifecycle.** Agent opens, reviewer replies (transitions to `:answered`), agent's next patchset includes resolution (transitions to `:resolved`).
+8. **Rendering.** Golden tests for the rendered LiveView with each section populated / empty, including anchor-hash-derived hunk ids.
 
 Existing test suite is 27 tests; this proposal adds roughly 20–30 tests at the unit + integration level.

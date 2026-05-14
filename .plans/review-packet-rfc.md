@@ -36,7 +36,7 @@ A **review packet** is structured metadata the author attaches to each patchset.
 | Deploy | What happens at deploy? |
 | Open questions | What decisions need me? |
 
-The packet has a lifecycle — in review, then approved — that matches the agent loop. Per-reviewer progress (which hunks they have covered, which testing tasks they have run) carries across patchset updates via content-hash anchoring. Push a new patchset, and partial review work survives. (A private draft state where the author iterates before reviewers are notified is sketched as future work but not in MVP.)
+The packet has a lifecycle — in review, then approved — that matches the agent loop. Per-reviewer progress carries across patchset updates by stable identity: hunk approvals use content-hash anchors, testing tasks use explicit task keys, and open questions use explicit OQ keys backed by the same thread. Push a new patchset, and partial review work survives. (A private draft state where the author iterates before reviewers are notified is sketched as future work but not in MVP.)
 
 No packet means the PR renders exactly as it does today. This is optional metadata.
 
