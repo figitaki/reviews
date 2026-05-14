@@ -25,20 +25,13 @@ Reviewers end up deciding where to start rather than actually reviewing.
 
 ## What we are proposing
 
-A **review packet** is structured metadata the author attaches to each patchset. Six sections, each answering a specific question:
+The core insight is that a review packet is **interleaved commentary on the diff**. Rather than asking reviewers to read a PR description and then mentally map it back to the code, the packet meets them where they already are — in the diff itself. Commentary, context, and decisions are surfaced at the exact hunks they apply to, in the order a reviewer should encounter them.
 
-| Section | Reviewer question |
-|---|---|
-| Title | What is this? |
-| Invariants | What must I trust? |
-| Tour | What changed and why? |
-| Testing | What should I verify by hand? |
-| Deploy | What happens at deploy? |
-| Open questions | What decisions need me? |
+This changes the workflow mental model. Today, a reviewer opens a PR and has to decide where to start: read the description first, skim the files, look at the biggest change, or just start from the top. That decision-making is friction before any review has happened. With a packet, the diff has a walk order. The reviewer reads, follows, and marks off as they go. The packet is a guide, not a document to read separately.
 
-The packet has a lifecycle — in review, then approved — that matches the agent loop. Per-reviewer progress carries across patchset updates by stable identity: hunk approvals use content-hash anchors, testing tasks use explicit task keys, and open questions use explicit OQ keys backed by the same thread. Push a new patchset, and partial review work survives. (A private draft state where the author iterates before reviewers are notified is sketched as future work but not in MVP.)
+What the packet provides is structured attention direction: where to look, what to trust without reading deeply, and what needs an explicit decision from the reviewer. Some hunks need scrutiny; others are mechanical changes a reviewer can accept on the author's word. Some changes have deploy implications the reviewer should know before approving; others don't. Some PRs have open questions that require a human call. The packet makes all of this explicit and locates it at the relevant diff position rather than leaving it buried in a PR description or a comment thread.
 
-No packet means the PR renders exactly as it does today. This is optional metadata.
+Per-reviewer progress persists across patchset updates. Push a new patchset, and review work already done is not lost — stable identifiers on hunks, tasks, and open questions keep prior approvals anchored to the right content. A reviewer who was halfway through a large diff can pick up where they left off. No packet means the PR renders exactly as it does today. This is optional metadata.
 
 ## Why now
 
