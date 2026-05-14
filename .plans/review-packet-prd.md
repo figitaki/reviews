@@ -17,12 +17,12 @@ Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-p
 ```mermaid
 stateDiagram-v2
     [*] --> Draft: reviews push --draft
-    Draft --> Draft: reviews push --update --draft<br/>(author iteration)
+    Draft --> Draft: reviews push --update --draft
     Draft --> InReview: reviews publish
-    InReview --> InReview: reviews push --update<br/>(patchset N+1)
-    InReview --> Draft: reviews unpublish<br/>(author pulled back)
+    InReview --> InReview: reviews push --update
+    InReview --> Draft: reviews unpublish
     InReview --> Approved: all required sign-offs
-    Approved --> InReview: reviews reopen<br/>(rare; post-approval correction)
+    Approved --> InReview: reviews reopen
     Approved --> [*]
 ```
 
@@ -49,7 +49,7 @@ The agent finishes coding a feature, generates the packet, and wants to walk thr
 
 ```mermaid
 sequenceDiagram
-    actor Author as Author<br/>(agent + optionally human)
+    actor Author as Author
     participant CLI as reviews CLI
     participant Server
     actor Reviewer
@@ -61,10 +61,10 @@ sequenceDiagram
     Server-->>Author: slug + draft URL
     Note over Reviewer: not notified
 
-    rect rgba(150, 150, 180, 0.15)
+    rect rgb(150, 150, 180)
     Note over Author,Server: Self-verification loop
     loop until ready
-      Author->>Author: run tests, walk tour,<br/>validate invariants
+      Author->>Author: run tests, walk tour, validate invariants
       opt revisions
         Author->>Author: amend code + packet
         Author->>CLI: reviews push --update <slug> --draft
@@ -75,7 +75,7 @@ sequenceDiagram
 
     Author->>CLI: reviews publish <slug>
     CLI->>Server: transition :draft → :in_review
-    Server->>Reviewer: notify (in-app + however<br/>the org wires it)
+    Server->>Reviewer: notify
 ```
 
 **Notable:** the draft state explicitly supports the agent pushing multiple patchsets before publishing. The reviewer doesn't see five draft patchsets — they see whatever the agent finally publishes. Patchset history is preserved server-side regardless (useful for postmortem of the agent's process), just not surfaced in the default review view.
@@ -96,7 +96,7 @@ sequenceDiagram
     participant Server
     actor Reviewer
 
-    Author->>Server: publish (1-line summary,<br/>2 invariants, 1 tour step, 0 OQs)
+    Author->>Server: publish (1-line summary, 2 invariants, 1 tour step, 0 OQs)
     Server->>Reviewer: notify
     Reviewer->>Server: glance, approve all
     Server->>Server: transition :in_review → :approved
@@ -114,13 +114,13 @@ sequenceDiagram
     participant Server
     actor Reviewer
 
-    Author->>Server: publish (cache invalidation fix,<br/>1 OQ: backfill old deletes?)
+    Author->>Server: publish (cache invalidation fix, 1 OQ: backfill old deletes?)
     Server->>Reviewer: notify
     Reviewer->>Reviewer: read packet (~30s)
-    Reviewer->>Server: reply on OQ:<br/>"skip backfill, file follow-up"
+    Reviewer->>Server: reply on OQ: skip backfill, file follow-up
     Server->>Author: notify of OQ reply
     Author->>Author: file LIN-4923 follow-up
-    Author->>Server: mark OQ :answered → :resolved<br/>(no patchset needed)
+    Author->>Server: mark OQ :answered → :resolved
     Reviewer->>Server: approve
     Server->>Server: transition → :approved
 ```
@@ -137,25 +137,25 @@ sequenceDiagram
     participant Server
     actor Reviewer
 
-    Author->>Server: publish v1 (CSV export,<br/>4 steps, 2 OQs:<br/>filename + row cap)
+    Author->>Server: publish v1 (CSV export, 4 steps, 2 OQs: filename + row cap)
     Server->>Reviewer: notify
 
     Reviewer->>Server: tick checks, approve steps 1+3
-    Reviewer->>Server: reply OQ#1 ("keep yours")
-    Reviewer->>Server: reply OQ#2 ("hard cap at 1M")
+    Reviewer->>Server: reply OQ#1 (keep yours)
+    Reviewer->>Server: reply OQ#2 (hard cap at 1M)
     Reviewer->>Server: inline comment on step 2
 
     Server->>Author: notify of replies + comment
 
-    Author->>Author: address comment,<br/>implement row cap,<br/>update packet
+    Author->>Author: address comment, implement row cap, update packet
     Author->>Server: reviews push --update (v2)
 
-    Server->>Server: anchor rehydration:<br/>steps 1, 3, 4 carry approvals<br/>step 2 hunks modified → re-verify
-    Server->>Server: compute update delta:<br/>1 OQ resolved, 1 OQ addressed,<br/>1 inline thread addressed,<br/>1 new invariant (row cap)
+    Server->>Server: anchor rehydration, step 2 needs re-verify
+    Server->>Server: compute update delta
     Server->>Reviewer: notify; delta banner
 
     Reviewer->>Reviewer: read delta only (~20s)
-    Reviewer->>Server: re-verify step 2,<br/>approve step 5 (new)
+    Reviewer->>Server: re-verify step 2, approve step 5
     Reviewer->>Server: approve review
 
     Server->>Server: transition → :approved

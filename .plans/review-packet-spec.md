@@ -261,9 +261,9 @@ sequenceDiagram
     Server->>DB: persist patchset v2 + packet v2
 
     Server->>Server: compute anchor set Av2
-    Server->>DB: for each prior anchor A in Av1:<br/>if A in Av2: carry state<br/>else: mark invalidated
+    Server->>DB: carry forward matching anchors, invalidate lost ones
 
-    Server->>Server: diff packet v1 ↔ packet v2:<br/>OQ state transitions,<br/>step add/remove/modify,<br/>invariant add/remove
+    Server->>Server: diff packet v1 vs packet v2 (OQ state, steps, invariants)
     Server->>DB: persist delta blob
 
     Server-->>Agent: 200 OK { delta }
