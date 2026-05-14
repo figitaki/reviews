@@ -1,71 +1,25 @@
 # RFC — Review Packets for Agentic Reviews
 
-**Status:** Draft
-**Branch:** `claude/review-packet-design-6iw4V`
-**Detailed spec:** [`./review-packet-spec.md`](./review-packet-spec.md)
+**Status:** Draft v2
+**Owner:** _TBD_
+**Date:** 2026-05-14
+**Decision needed by:** _TBD_
+
+**TL;DR.** Attach a structured packet to each pushed patchset that directs reviewer attention — invariants, a grouped tour of the diff, manual testing checks, and open questions. Validate by measuring whether reviews reach approval faster than comparable GitHub PRs without an increase in post-merge bug rate.
+
+**Companion docs:**
+- PRD — lifecycle, user stories, flow diagrams: [`./review-packet-prd.md`](./review-packet-prd.md)
+- Spec — schemas, anchoring, CLI format, rendering boundary: [`./review-packet-spec.md`](./review-packet-spec.md)
 
 ---
 
-## Summary
+## 1. Problem
 
-A **review packet** is a structured artifact the author (typically an agent) attaches to each pushed patchset. It tells the reviewer what to trust, what to read, what to verify, what to coordinate at deploy, and what decisions still need a human. The packet is rendered above the existing diff and is regenerated per patchset; reviewer state (checklist progress, hunk approvals) is tracked separately so it survives updates via content-hash anchoring.
+The shift to agent-authored diffs changes the reviewer's job. Changes are larger, the shared context is gone (no Slack thread the reviewer was on, no in-person whiteboarding), and the author can't be poked for clarification mid-review. The current diff-plus-free-form-description surface assumes a human author available to answer questions inline. As a result reviewers spend their time *deciding where to look* rather than reading code — and our tooling doesn't help with that. The bottleneck has shifted and our review surface has not.
 
-Same URL, same review surface, same threads model. A packet is metadata on a patchset that may or may not be present — agent pushes always include one, manual pushes usually don't.
+## 2. Proposed solution
 
-## Motivation
-
-Reviews today are oriented around humans authoring a diff and another human reading it line by line. When the author is an agent, two things change:
-
-1. **Volume goes up.** A turn of agent work can plausibly produce 800 LOC across 20 files.
-2. **The "why" leaves the author's head, not the reviewer's.** The reviewer has no shared context, no Slack thread they were copied on, no sense of which decisions were made deliberately versus drifted into.
-
-The reviewer's bottleneck shifts from *reading code* to *deciding where to look*. A raw diff plus a free-form PR description doesn't direct attention well. The packet is a structured handoff that does.
-
-## Goals
-
-- **Direct reviewer attention** rather than describe what happened.
-- **Survive patchset updates** so prior review state (approvals, completed checks, resolved threads) carries forward via hunk-anchoring instead of being thrown out.
-- **Separate author claims from reviewer verification state** cleanly. The agent says what's true; the reviewer says what they checked.
-- **Scale across change sizes** without shape change — same packet model for a one-line typo fix and a multi-step feature.
-- **Stay queryable.** Sections like invariants and open questions are first-class records, not embedded in prose.
-
-## Non-goals (for this RFC)
-
-- Automatic verification of invariants.
-- Cross-packet linking for multi-service changes. The single-packet hypothesis is tested first.
-- Agent autonomy (branch spinning, auto-push). The packet is what the agent produces, not how.
-- Deploy-pipeline consumption of rollout plans.
-- Token-level commenting (already deferred to v1.5; see CLAUDE.md).
-
-## Flow
-
-```mermaid
-sequenceDiagram
-    actor Agent
-    participant CLI as reviews CLI
-    participant Server as Phoenix
-    actor Reviewer
-
-    Agent->>Agent: produce code + .reviews/packet.json
-    Agent->>CLI: reviews push
-    CLI->>Server: diff + packet
-    Server-->>Reviewer: /r/<slug> renders packet above diff
-
-    Reviewer->>Server: tick checks, approve steps, reply to OQs
-    Server-->>Agent: open question replies (via thread API)
-
-    Agent->>Agent: address replies, edit code + packet
-    Agent->>CLI: reviews push --update <slug>
-    CLI->>Server: new patchset + new packet
-    Server->>Server: rehydrate anchors; carry forward unchanged state
-    Server-->>Reviewer: update delta highlighted
-```
-
-The author-side loop is: write code, write the packet, push. The reviewer-side loop is: read the packet, react to it (check, approve, reply), wait for the next push. Iteration is driven by replies to open questions — the agent reads them between pushes and adjusts.
-
-## Packet shape
-
-Six sections, each answering a distinct reviewer question:
+A **review packet** is structured metadata the author (typically an agent) attaches to each patchset. Six sections, each answering a distinct reviewer question:
 
 | Section | Reviewer question |
 | --- | --- |
@@ -76,79 +30,55 @@ Six sections, each answering a distinct reviewer question:
 | **Rollout** | What happens at deploy? |
 | **Open questions** | What decisions need me? |
 
-Internally, every section is a sequence of **rows**, where a row is either a prose block (markdown with a small inline-component palette) or a diff hunk. This lets evidence sit next to claims — an invariant can include the hunk that proves it; a testing step can show the error string it should produce. Tour is the one section that retains additional structure: it's a list of *steps*, each with a heading, a body of rows, and the hunks it owns, so steps remain addressable for cross-references and update deltas.
+Per-reviewer state (testing-check progress, hunk approvals) carries across patchset updates via the content-hash anchoring already used for comment threads, so partial review work isn't thrown out when the agent pushes again. The packet has a lifecycle — **Draft → In Review → Approved** — that mirrors the agent's loop: prepare in private, hand off, iterate on feedback, freeze as a historical record. The PRD walks the lifecycle and the stories in detail.
 
-The packet is **optional**. Reviews without a packet render exactly as they do today.
+The packet is optional metadata. Reviews without one render exactly as they do today.
 
-## Reviewer interaction model
+## 3. Why now
 
-Two things in a packet are *interactive* and accumulate state per reviewer:
+- **Agent-authored PRs are climbing** across the org; review is becoming the binding constraint on agentic workflows.
+- **The platform pieces are already in place** — `@pierre/diffs` for rendering, thread anchoring for survival across patchsets, the patchset model. We're extending, not building from scratch.
+- **The existing review surface absorbs the change.** No fork, no migration, no new product surface to staff.
 
-**Testing checks.** Each check has independent state per reviewer: unchecked, verified, failed, skipped. Bob can see that Alice already verified a step — that's part of the value, so they don't redo each other's work. Checks anchor to hunks; if a patchset update changes the anchor hunks, the check is flagged "needs re-verification." Otherwise the prior ✓ stands.
+## 4. What we'd measure
 
-**Hunk approvals.** Approval is per-hunk in the data model, but exposed at **tour-step granularity** in the UX — approving "step 3: CSV generator using Repo.stream" marks each of its hunks approved by that reviewer. This matches the conceptual unit of change without forcing reviewers to make 50 decisions per patchset. Hunks not in any step (the "Other" bucket) get bucket-level approval.
+**Hypothesis.** PRs pushed through the new tooling reach approval faster than comparable GitHub PRs, *without* a corresponding rise in post-merge bug rate.
 
-For MVP, hunk approvals are **purely informational** — a coverage map showing which steps each reviewer has signed off on. They do not gate merge. Existing review-level approval still drives the merge button. Gating policy can be layered on once there's real data on usage patterns.
+**Primary metric.** Time-to-approval (not time-to-merge — merge timing is dominated by CI, deploy windows, and batching, none of which are about review quality).
 
-## Patchset iteration
+**Guardrail metric.** Post-merge revert / bug rate. Faster is a degenerate win if reviewers are rubber-stamping; the guardrail catches that.
 
-Each push is a new patchset; each patchset gets its own packet. The page shows the **current** patchset by default, with an **update delta** block summarizing what changed since the previous one:
+**Secondary signals.** Patchset count per review, number of feedback rounds, reviewer-reported time, open-question answered rate.
 
-- which open questions this patchset addressed,
-- which tour steps changed (added / removed / hunks differ),
-- which invariants are new.
+**Cohorts.** Match by change-size bucket (LOC + files), author type (human vs. agent), and repo. A naive packet-vs-GitHub aggregate would drown in variance — most of the time-to-approval signal is in change size and author.
 
-Existing review state (comment threads, completed checks, hunk approvals) carries forward by content-hash anchoring. Anchors that no longer match invalidate their dependent state, surfacing it as "needs re-verification" rather than silently losing it.
+**Window.** 4–8 weeks of parallel dogfooding for quantitative signal; two weeks of qualitative use earlier to debug the surface.
 
-## User stories
+**Falsifier.** If time-to-approval doesn't move, or it moves and the guardrail bug rate rises, the hypothesis is wrong and we don't invest beyond MVP.
 
-### 1. Trivial: typo fix
-Packet has a one-line summary, two invariants ("only copy changed," "tests green"), and a single tour step with the one-line diff inline. No testing checks beyond "no manual verification needed." No rollout. No open questions. Reviewer glances, merges. The packet doesn't get in the way.
+## 5. Scope
 
-### 2. Scoped bug fix with a judgment call
-The agent fixes a stale-cache bug. Invariants name the property restored (cache invalidated on delete) with pointers at the regression test. The tour is two steps. Testing checklist has two manual repros tied to the original repro video. One open question: *"Should we backfill old deleted docs? I treated it as out of scope."* The reviewer answers, the agent files a follow-up ticket, marks the OQ resolved, no code change. The packet's value lives in the OQ.
+**In MVP:** packet schema; render surface above the existing diff; CLI delivery via `.reviews/packet.json`; per-reviewer check progress and hunk approval (informational coverage map, no gating); update delta between patchsets.
 
-### 3. Simple feature with iteration
-CSV export across route + generator + LiveView. Four-step tour, four invariants with evidence (filter respected, admin-only, streams, no new deps), three testing checks, two open questions (filename format, row cap policy). Reviewer answers both, leaves one inline comment. Agent updates; the update delta is "addressed 2 OQs, addressed 1 inline thread, added one new invariant (1M row cap)." Reviewer reads the delta only, approves, merges. This is where the patchset model earns its keep.
+**Out for MVP:** multi-service / cross-packet linking, third-party integrations (Linear / Slack / Figma / Notion APIs), merge gating on per-hunk coverage, automated invariant verification.
 
-### 4. Multi-service change
-*Out of scope for MVP.* The single-packet hypothesis is validated first. Multi-service is sketched in the spec under "Future work" with cross-packet sibling references and dependency hints, but the MVP ships only single-packet flows.
+**Cost estimate.** ~2 weeks of single-engineer focused work. Most of the surface is the LiveView render and anchoring glue; the existing thread infrastructure does the heavy lifting. Spec breaks the surface down by component.
 
-## MVP scope
+## 6. Risks & tradeoffs
 
-**In:**
-- Packet structure: summary, invariants, tour (with steps), testing, rollout (optional), open questions.
-- `Row = Markdown | Hunk` primitive uniformly across sections; tour steps additionally carry heading + hunk list.
-- Per-reviewer check progress, anchored to hunks.
-- Per-reviewer hunk approvals (informational coverage map, no gating).
-- Update delta between patchsets.
-- CLI delivery: `.reviews/packet.json` (or `--packet path`) picked up by `reviews push`.
-- Render above the existing diff in the LiveView; reuse the existing React island for diff rendering, HEEx for new chrome.
+- **Agent self-flagging accuracy.** Packets only help if the agent reliably surfaces real risks, real invariants, and real open questions. A poorly-written packet is worse than no packet — it directs attention away from real issues. Mitigation: pair MVP rollout with prompt iteration and a small qualitative review of the first ~20 packets generated.
+- **Section sprawl.** Six sections is the upper cognitive bound for a single artifact. We expect requests for "performance impact," "security review," "API compatibility," etc. The bar for new sections is the same one we used here: it has to answer a distinct reviewer question.
+- **Cargo-culting (especially rollout plans).** Agents will reach for "feature flag this" reflexively on changes that don't need it. Empty sections are better than performative ones; the prompt and the schema both treat optional sections as suppressable.
 
-**Out:**
-- Automated invariant verification.
-- Multi-service / cross-packet linking, sibling chips, dependency hints.
-- Linear / Slack / Figma / Notion API integrations (references are free-form `{label, url}` chips).
-- Merge-gating semantics tied to per-hunk approvals or check completion.
-- Agent autonomy.
+## 7. How to contribute
 
-See the spec for what each "in" item entails technically.
+- **Team leads** — nominate one bug or small feature your team will dogfood the tool on. Aim for variety across change size. Coordinate with the owner.
+- **Designers** — the coverage-map UX (per-step approval visualization) is open. See PRD §"Approved — historical / archival view" and open question 4.
+- **Platform engineers** — anchoring drift edge cases need someone who knows that code. See spec §6 (anchoring & drift) and §12 (validation / edge cases).
+- **Leadership** — sign off on the scope cuts in §5, and weigh in on whether merge gating on coverage belongs in MVP or stays out.
 
-## Open questions
+## 8. Reference
 
-1. **Should the packet ever be editable post-push?** Today: no. The agent re-pushes a patchset to amend. But a reviewer noticing a typo in the agent's prose might want to fix it without forcing a new patchset. Punt to post-MVP.
-2. **Does "no open questions" need a placeholder, or do empty sections disappear?** Probably they disappear (less noise on small packets). Rollout already disappears when empty; consistency suggests OQs do too.
-3. **Where do agent self-verification results live?** Sketched as a sub-block of the Testing section ("performed by agent: …"). Worth confirming this is the right home versus a peer of testing.
-4. **Coverage map UX.** The data model supports per-hunk approval; the UX exposes step-level. What does the coverage map *look like* in the sidebar — a step-by-step list with reviewer avatars, or something denser? Design open.
-
-## Reference
-
-The detailed spec at [`./review-packet-spec.md`](./review-packet-spec.md) covers:
-
-- Architecture and component boundaries
-- Ecto-shaped schemas for `Packet`, `Step`, `Check`, `ReviewerCheckProgress`, `HunkApproval`
-- The Row primitive and the allowed MDX component palette inside prose
-- Hunk-anchoring algorithm and drift behavior across patchsets
-- Update-delta computation
-- CLI packet file format
-- Notes on the LiveView/React boundary
+- **PRD:** [`./review-packet-prd.md`](./review-packet-prd.md) — lifecycle, stories, flow diagrams.
+- **Spec:** [`./review-packet-spec.md`](./review-packet-spec.md) — schemas, anchoring, CLI integration, rendering boundary.
+- **Branch:** `claude/review-packet-design-6iw4V`.
