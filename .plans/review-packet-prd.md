@@ -1,6 +1,6 @@
 # PRD: review packet lifecycle
 
-Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-packet-spec.md`](./review-packet-spec.md). Holds the user stories cut from the RFC and walks through the **Draft → In Review → Approved** lifecycle transitions with detailed flows for each.
+Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-packet-spec.md`](./review-packet-spec.md). Holds the user stories cut from the RFC and walks through the **In Review → Approved** lifecycle transitions with detailed flows for each.
 
 ---
 
@@ -8,7 +8,7 @@ Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-p
 
 | Persona | Role |
 | --- | --- |
-| **Author** | Agent, human, or agent+human pair that produces the diff and packet. Owns the change until it's published. |
+| **Author** | Agent, human, or agent+human pair that produces the diff and packet. Owns the change until it lands approved. |
 | **Reviewer** | One or more humans who sign off. May be primary (owns the merge decision) or supplementary (sign off on a specific tour section or testing task). |
 | **Future reader** | Anyone who lands on the URL after approval (auditor, on-call investigating a regression, new hire onboarding). |
 
@@ -16,71 +16,21 @@ Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-p
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Draft: reviews push --draft
-    Draft --> Draft: reviews push --draft (overwrites in place)
-    Draft --> InReview: reviews publish (creates v1)
-    InReview --> InReview: reviews publish (creates vN+1, after a draft cycle)
-    InReview --> Draft: reviews unpublish
+    [*] --> InReview: reviews push (creates v1)
+    InReview --> InReview: reviews push --update <slug> (creates vN+1)
     InReview --> Approved: all required sign-offs
-    Approved --> InReview: reviews reopen
+    Approved --> InReview: reviews reopen (rare)
     Approved --> [*]
 ```
 
 | State | Who can see it | Notifications | Mutable? |
 | --- | --- | --- | --- |
-| **Draft** | Author(s) only | None | Yes. Each draft push overwrites the in-flight patchset; intra-draft churn is not preserved as separate revisions |
-| **In Review** | Author + invited reviewers (or public via link, per existing model) | Reviewers notified on each *publish* event | Author can push new drafts that supersede the current one; only `reviews publish` produces a new visible patchset |
+| **In Review** | Anyone with the link, per the existing visibility model | Reviewers notified on each push | Author pushes new patchsets; reviewers add state |
 | **Approved** | Anyone with the link | None | Frozen; threads and coverage are archival |
 
 `Approved` is a terminal review-lifecycle state. The review tool doesn't manage merges; what the author does with the branch afterward is their business. "Approved" means *the reviewer has signed off on this packet*; deployment is downstream.
 
----
-
-## Draft: author preparation
-
-### Story: Agent self-verification before handoff
-
-The agent finishes coding a feature, generates the packet, and wants to walk through its own work before pinging a human. Goals:
-
-- Run anything the agent can run automatically (tests, lint, type check) and update the packet's testing tasks to reflect what's already passed.
-- Validate invariants against the actual diff (evidence pointers resolve, claims aren't trivially contradicted by the code).
-- Catch packet-level errors (orphaned hunks, tour sections with no hunks, unresolved inline references).
-- Optionally let the *human* who invoked the agent glance at the packet before reviewers are notified.
-
-```mermaid
-sequenceDiagram
-    actor Author as Author
-    participant CLI as reviews CLI
-    participant Server
-    actor Reviewer
-
-    Author->>Author: produce diff
-    Author->>Author: generate packet.json
-    Author->>CLI: reviews push --draft
-    CLI->>Server: upload diff + packet (state = :draft, number = null)
-    Server-->>Author: slug + draft URL
-    Note over Reviewer: not notified
-
-    rect rgb(150, 150, 180)
-    Note over Author,Server: Self-verification loop
-    loop until ready
-      Author->>Author: run tests, walk tour, validate invariants
-      opt revisions
-        Author->>Author: amend code + packet
-        Author->>CLI: reviews push --draft
-        CLI->>Server: overwrite in-flight :draft patchset
-      end
-    end
-    end
-
-    Author->>CLI: reviews publish <slug>
-    Server->>Server: assign number = 1, state = :published
-    Server->>Server: anchor rehydration + delta computation
-    CLI->>Server: transition review to :in_review
-    Server->>Reviewer: notify
-```
-
-Draft pushes overwrite the in-flight patchset in place; they don't accumulate as separate revisions. The reviewer eventually sees a clean v1, v2, v3 sequence corresponding 1-to-1 with publish events. Intra-draft churn is invisible in the review view. Anchoring and delta computation only fire on publish, so the cost of draft iteration is just an upload (no rehydration). MVP doesn't preserve intra-draft snapshots; if "agent process telemetry" turns out useful for postmortem later, a side table can be added without affecting the user-facing model.
+**MVP does not include a Draft state.** Every push is immediately visible. The agent's "self-check before pushing" workflow is covered by `reviews validate` and standard git iteration. A full Draft state (private iteration with `reviews publish` as the visibility gate) is sketched in the spec's §13 as future work.
 
 ---
 
@@ -98,7 +48,7 @@ sequenceDiagram
     participant Server
     actor Reviewer
 
-    Author->>Server: publish (title + 1 tour section + 1 preview-URL task)
+    Author->>Server: reviews push (title + 1 tour section + 1 preview-URL task)
     Server->>Reviewer: notify
     Reviewer->>Server: visit preview URL, confirm fix, approve
     Server->>Server: transition :in_review → :approved
@@ -116,7 +66,7 @@ sequenceDiagram
     participant Server
     actor Reviewer
 
-    Author->>Server: publish (cache invalidation fix, 1 OQ: backfill old deletes?)
+    Author->>Server: reviews push (cache invalidation fix, 1 OQ: backfill old deletes?)
     Server->>Reviewer: notify
     Reviewer->>Reviewer: read packet (~30s)
     Reviewer->>Server: reply on OQ: skip backfill, file follow-up
@@ -139,7 +89,7 @@ sequenceDiagram
     participant Server
     actor Reviewer
 
-    Author->>Server: publish v1 (CSV export, 4 steps, 2 OQs: filename + row cap)
+    Author->>Server: reviews push (v1: CSV export, 4 sections, 2 OQs: filename + row cap)
     Server->>Reviewer: notify
 
     Reviewer->>Server: tick tasks, approve sections 1+3
@@ -150,7 +100,7 @@ sequenceDiagram
     Server->>Author: notify of replies + comment
 
     Author->>Author: address comment, implement row cap, update packet
-    Author->>Server: reviews push --draft + reviews publish (v2)
+    Author->>Server: reviews push --update <slug> (v2)
 
     Server->>Server: anchor rehydration, section 2 hunks need re-verify
     Server->>Server: compute update delta
@@ -226,18 +176,15 @@ The packet becomes evidence in a postmortem: claimed invariants vs. actual behav
 
 | Transition | Trigger | Behavior |
 | --- | --- | --- |
-| `In Review → Draft` | `reviews unpublish` | Author pulls the review back; reviewers notified once. Prior reviewer state preserved but hidden. Re-publishing restores state. |
 | `Approved → In Review` | `reviews reopen` | Rare. Used post-approval if a critical issue surfaces before merge. Approval signatures preserved but marked stale until re-confirmed. |
 | Multi-reviewer in progress | n/a | Approvals accumulate per reviewer. Transition to `:approved` requires all *required* reviewers to have signed off; others are advisory. Required vs. advisory is configured per review or per task with a `required_role`. |
-| In-review draft cycle | `reviews push --draft` on an in-review review | Creates a new in-flight `:draft` patchset that supersedes the next publish slot. Overwrites on subsequent draft pushes. Reviewers don't see it until `reviews publish`. |
-| Author pushes draft after approval | `reviews push --draft` on approved review | Rejected by default; author must `reviews reopen` first. Prevents silent post-approval drift. |
+| Author pushes after approval | `reviews push --update` on approved review | Rejected by default; author must `reviews reopen` first. Prevents silent post-approval drift. |
 
 ---
 
 ## Open PRD questions
 
 1. **Who's "required" vs. "advisory" by default?** Most lightweight: the first invited reviewer is required, additions are advisory until explicitly upgraded. Decide before MVP, since it affects the `:approved` transition.
-2. **Notification mechanism in scope for MVP?** "Notify reviewer on publish" implies a channel (in-app only, email, Slack, webhook). The lifecycle works regardless, but the *experience* of being a reviewer depends on this.
-3. **What does "publish" surface to the reviewer?** Just the URL, or a digest of the packet? Needs a small design pass; the publish notification is the first contact with the packet for the reviewer.
-4. **Should draft state be visible to *invited* reviewers (read-only) or strictly private?** Some authors will want to share a draft for early feedback without formally publishing. Could be a `--share-draft` flag. Defer to post-MVP unless there's a strong pull.
-5. **Reopen semantics for approval signatures.** When a review is reopened post-approval, do prior approvals carry as advisory until re-confirmed, or are they wiped? Leaning carry-as-stale; needs confirmation.
+2. **Notification mechanism in scope for MVP?** "Notify reviewer on push" implies a channel (in-app only, email, Slack, webhook). The lifecycle works regardless, but the *experience* of being a reviewer depends on this.
+3. **What does the push notification surface to the reviewer?** Just the URL, or a digest of the packet? Needs a small design pass; the notification is the first contact with the packet for the reviewer.
+4. **Reopen semantics for approval signatures.** When a review is reopened post-approval, do prior approvals carry as advisory until re-confirmed, or are they wiped? Leaning carry-as-stale; needs confirmation.
