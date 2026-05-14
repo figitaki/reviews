@@ -9,7 +9,7 @@ Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-p
 | Persona | Role |
 | --- | --- |
 | **Author** | Agent, human, or agent+human pair that produces the diff and packet. Owns the change until it's published. |
-| **Reviewer** | One or more humans who sign off. May be primary (owns the merge decision) or supplementary (sign off on a specific step or check). |
+| **Reviewer** | One or more humans who sign off. May be primary (owns the merge decision) or supplementary (sign off on a specific tour section or testing task). |
 | **Future reader** | Anyone who lands on the URL after approval (auditor, on-call investigating a regression, new hire onboarding). |
 
 ## Lifecycle at a glance
@@ -42,9 +42,9 @@ stateDiagram-v2
 
 The agent finishes coding a feature, generates the packet, and wants to walk through its own work before pinging a human. Goals:
 
-- Run anything the agent can run automatically (tests, lint, type check) and update the packet's testing checks to reflect what's already passed.
+- Run anything the agent can run automatically (tests, lint, type check) and update the packet's testing tasks to reflect what's already passed.
 - Validate invariants against the actual diff (evidence pointers resolve, claims aren't trivially contradicted by the code).
-- Catch packet-level errors (orphaned hunks, broken refs, tour steps with no hunks).
+- Catch packet-level errors (orphaned hunks, tour sections with no hunks, unresolved inline references).
 - Optionally let the *human* who invoked the agent glance at the packet before reviewers are notified.
 
 ```mermaid
@@ -90,7 +90,7 @@ Three stories, increasing in complexity. Each illustrates a different valued beh
 
 ### Story A: typo fix
 
-Zero feedback rounds. The packet collapses to almost nothing: summary, a single tour step wrapping the one-line hunk, optionally one testing check pointing at the preview URL. Invariants, deploy, and open questions are all empty and suppress from the render.
+Zero feedback rounds. The packet collapses to almost nothing: summary, a single tour section wrapping the one-line hunk, optionally one testing task pointing at the preview URL. Invariants, deploy, and open questions are all empty and suppress from the render.
 
 ```mermaid
 sequenceDiagram
@@ -98,7 +98,7 @@ sequenceDiagram
     participant Server
     actor Reviewer
 
-    Author->>Server: publish (summary + 1 tour step + 1 preview-URL check)
+    Author->>Server: publish (summary + 1 tour section + 1 preview-URL task)
     Server->>Reviewer: notify
     Reviewer->>Server: visit preview URL, confirm fix, approve
     Server->>Server: transition :in_review → :approved
@@ -142,22 +142,22 @@ sequenceDiagram
     Author->>Server: publish v1 (CSV export, 4 steps, 2 OQs: filename + row cap)
     Server->>Reviewer: notify
 
-    Reviewer->>Server: tick checks, approve steps 1+3
+    Reviewer->>Server: tick tasks, approve sections 1+3
     Reviewer->>Server: reply OQ#1 (keep yours)
     Reviewer->>Server: reply OQ#2 (hard cap at 1M)
-    Reviewer->>Server: inline comment on step 2
+    Reviewer->>Server: inline comment on section 2
 
     Server->>Author: notify of replies + comment
 
     Author->>Author: address comment, implement row cap, update packet
-    Author->>Server: reviews push --update (v2)
+    Author->>Server: reviews push --draft + reviews publish (v2)
 
-    Server->>Server: anchor rehydration, step 2 needs re-verify
+    Server->>Server: anchor rehydration, section 2 hunks need re-verify
     Server->>Server: compute update delta
     Server->>Reviewer: notify; delta banner
 
     Reviewer->>Reviewer: read delta only (~20s)
-    Reviewer->>Server: re-verify step 2, approve step 5
+    Reviewer->>Server: re-verify section 2, approve section 5
     Reviewer->>Server: approve review
 
     Server->>Server: transition → :approved
@@ -165,9 +165,9 @@ sequenceDiagram
 
 What this story exercises:
 
-- Approvals on unchanged steps survived the patchset update; the reviewer didn't have to re-approve the whole thing.
+- Approvals on unchanged sections survived the patchset update; the reviewer didn't have to re-approve the whole thing.
 - The delta banner is the load-bearing UX. Without it, the reviewer reads v2 cold and burns the time savings.
-- The "needs re-verification" affordance on step 2 directs attention precisely to the hunks that changed.
+- The "needs re-verification" affordance on section 2 directs attention precisely to the hunks that changed.
 
 ---
 
@@ -218,7 +218,7 @@ flowchart LR
     Verdict --> Postmortem
 ```
 
-The packet becomes evidence in a postmortem: claimed invariants vs. actual behavior, manual checks performed vs. the bug's actual repro, OQs that hint someone considered the risk vs. ones that show nobody did. The packet's value compounds over time. At review-time it directs attention; in audit, it's the receipt.
+The packet becomes evidence in a postmortem: claimed invariants vs. actual behavior, manual tasks performed vs. the bug's actual repro, OQs that hint someone considered the risk vs. ones that show nobody did. The packet's value compounds over time. At review-time it directs attention; in audit, it's the receipt.
 
 ---
 
@@ -228,7 +228,7 @@ The packet becomes evidence in a postmortem: claimed invariants vs. actual behav
 | --- | --- | --- |
 | `In Review → Draft` | `reviews unpublish` | Author pulls the review back; reviewers notified once. Prior reviewer state preserved but hidden. Re-publishing restores state. |
 | `Approved → In Review` | `reviews reopen` | Rare. Used post-approval if a critical issue surfaces before merge. Approval signatures preserved but marked stale until re-confirmed. |
-| Multi-reviewer in progress | n/a | Approvals accumulate per reviewer. Transition to `:approved` requires all *required* reviewers to have signed off; others are advisory. Required vs. advisory is configured per review or per `required_role` check. |
+| Multi-reviewer in progress | n/a | Approvals accumulate per reviewer. Transition to `:approved` requires all *required* reviewers to have signed off; others are advisory. Required vs. advisory is configured per review or per task with a `required_role`. |
 | In-review draft cycle | `reviews push --draft` on an in-review review | Creates a new in-flight `:draft` patchset that supersedes the next publish slot. Overwrites on subsequent draft pushes. Reviewers don't see it until `reviews publish`. |
 | Author pushes draft after approval | `reviews push --draft` on approved review | Rejected by default; author must `reviews reopen` first. Prevents silent post-approval drift. |
 

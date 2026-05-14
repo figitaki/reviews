@@ -121,32 +121,23 @@ schema "packets" do
   belongs_to :patchset, Patchset
 
   field :summary, :string
-  field :invariants, {:array, :map}     # [Row]
+  field :invariants, {:array, :map}     # [Row]; optional, suppresses when empty
+  field :tour, {:array, :map}           # [Row]; flat, headings ## / ### come from markdown
+  field :testing_instructions, :string  # markdown blob, optional
   field :rollout, {:array, :map}        # [Row], nullable / empty when N/A
-  field :format_version, :integer       # for forward compat (see §13)
+  field :format_version, :integer       # for forward compat (see §4.3)
 
-  has_many :steps, Step                 # tour steps, ordered
-  has_many :checks, Check               # testing checks, ordered
+  has_many :tasks, PacketTask           # testing checklist
   # Open questions live in threads with kind=:open_question;
   # they're not stored on the packet itself.
 
   timestamps()
 end
 
-schema "packet_steps" do
+schema "packet_tasks" do
   belongs_to :packet, Packet
   field :ordinal, :integer
-  field :heading, :string
-  field :body, {:array, :map}           # [Row]
-  field :refs, {:array, :map}           # [{label, url, kind}]
-  field :hunk_ids, {:array, :integer}   # hunks owned by this step
-end
-
-schema "packet_checks" do
-  belongs_to :packet, Packet
-  field :ordinal, :integer
-  field :body, {:array, :map}           # [Row]
-  field :hunk_anchors, {:array, :string} # content-hashed; for drift detection
+  field :description, :string           # markdown string (not [Row])
   field :required_role, :string         # optional: "ops", "design", etc.
 end
 ```
@@ -154,8 +145,8 @@ end
 Notes:
 
 - `Row` lists are stored as JSONB arrays. Each row is `%{"kind" => "markdown" | "hunk", ...}`.
-- `Step.hunk_ids` references hunks in *this patchset*. The anchoring layer is responsible for tracking the same step across patchsets if needed for delta computation; the persisted hunk ids are patchset-local.
-- `Check.hunk_anchors` are content-hashed, not patchset-local ids. This is what makes check progress survive updates (see §6).
+- **Tour is flat.** Section boundaries inside the tour come from markdown headings (`##`, `###`) in markdown rows, not from a separate `Step` entity. The renderer and the update-delta computation walk the tour rows and group by heading at render/diff time. Refs like Linear/Slack/Figma chips live as inline `<Pill>` MDX components inside markdown rows, not as a separate `refs` array.
+- **Tasks carry no hunk anchors.** A task is just a markdown description. Per-reviewer status (see §7) survives patchset updates by task id; the reviewer manually decides which tasks to re-run based on the delta banner. Tasks that genuinely tie to a hunk can mention it in their description.
 - Open questions are *not* a separate table; they piggyback on the existing threads infrastructure with a `kind` discriminator.
 
 **Dedup and carry-forward.** Each `Patchset` row points at one `Packet`, but two patchsets can point at the *same* packet row when the agent's submission is byte-for-byte identical to the prior published one. The server hashes the canonicalized packet on ingest and reuses the prior row when the hash matches; "no packet changes between v1 and v2" then falls out of an `INNER JOIN` and the update delta surfaces it explicitly.
@@ -200,7 +191,7 @@ This reuses anchoring (already content-hashed) and cross-patchset carry-over (al
 
 ## 6. Anchoring & drift
 
-Hunks have stable identity *within a patchset only*. Between patchsets, hunks may be added, removed, or modified. State that needs to survive (check progress, hunk approvals, threads) anchors to a **content hash** computed from hunk text plus surrounding context, the same mechanism already used for threads.
+Hunks have stable identity *within a patchset only*. Between patchsets, hunks may be added, removed, or modified. State that needs to survive (hunk approvals, threads) anchors to a **content hash** computed from hunk text plus surrounding context, the same mechanism already used for threads. Tasks don't anchor to hunks; their per-reviewer state carries forward by task id (see §7).
 
 ```mermaid
 flowchart TB
@@ -214,9 +205,9 @@ flowchart TB
     H2v1 -->|hash| A2[("anchor B: hash_b")]
     H3v1 -->|hash| A3[("anchor C: hash_c")]
 
-    A1 -.attaches.-> CP1[Check progress / approval / thread]
-    A2 -.attaches.-> CP2[Check progress / approval / thread]
-    A3 -.attaches.-> CP3[Check progress / approval / thread]
+    A1 -.attaches.-> CP1[Hunk approval / thread]
+    A2 -.attaches.-> CP2[Hunk approval / thread]
+    A3 -.attaches.-> CP3[Hunk approval / thread]
 
     subgraph Patchset_v2
       H1v2[Hunk #1 v2 - unchanged]
@@ -236,7 +227,7 @@ flowchart TB
 **Carry-forward rule.** For each prior anchor `A`:
 
 1. If `A.hash` matches a hunk in the new patchset → state carries forward unchanged.
-2. If no match → state is **invalidated, not deleted**. It's surfaced to the reviewer as "needs re-verification" (for checks/approvals) or as "anchor lost" (for threads, which then float in a sidebar bucket).
+2. If no match → state is **invalidated, not deleted**. It's surfaced to the reviewer as "needs re-verification" (for hunk approvals) or as "anchor lost" (for threads, which then float in a sidebar bucket).
 
 **When this runs.** Anchor rehydration only fires at publish time. Draft pushes overwrite the in-flight patchset's hunks but don't trigger rehydration; there's no published predecessor to carry state forward from yet. This keeps draft iteration cheap (just an upload) and means reviewer-visible state is only ever computed against published patchsets.
 
@@ -247,8 +238,8 @@ This is the **only** drift mechanism. The MVP does not attempt fuzzy matching be
 ## 7. Per-reviewer state
 
 ```elixir
-schema "reviewer_check_progress" do
-  belongs_to :check, Check
+schema "reviewer_task_progress" do
+  belongs_to :task, PacketTask
   belongs_to :reviewer, User
 
   field :state, Ecto.Enum,
@@ -270,8 +261,9 @@ end
 
 Notes:
 
-- `hunk_approvals` are keyed by anchor hash, not hunk id. Same carry-forward as checks.
-- Multiple reviewers' rows coexist. The coverage map is a left-join from `Step.hunk_ids` (resolved to anchors for the current patchset) over `hunk_approvals` grouped by reviewer.
+- `reviewer_task_progress` is keyed by `(task_id, reviewer_id)`. Tasks don't anchor to hunks (see §4.2 / §6), so a task's progress simply carries forward by id; the reviewer manually decides to re-run if the delta banner suggests the task is affected.
+- `hunk_approvals` are keyed by anchor hash, not hunk id. Carry-forward via the §6 anchoring rule.
+- Multiple reviewers' rows coexist. The coverage map is a left-join over the current patchset's tour hunks (resolved to anchors) grouped by reviewer. Section boundaries for the map UX come from markdown headings inside the tour.
 - For MVP, no merge gating. These tables are read-only signals for the UI.
 
 ## 8. Update delta
@@ -282,14 +274,18 @@ When a patchset is **published** (not on draft pushes), the server computes a de
 %{
   open_questions_addressed: [thread_id, ...],
   open_questions_resolved:  [thread_id, ...],
-  steps_changed: [
-    %{step_ordinal: 2, kind: :hunks_modified},
-    %{step_ordinal: 5, kind: :added},
+  tour_sections_changed: [
+    # sections derived from markdown headings inside the tour
+    %{heading: "Add invalidate/1 call", kind: :hunks_modified},
+    %{heading: "Regression test",      kind: :added},
   ],
   invariants_added: [row_index, ...],
   invariants_removed: [...],
-  reverification_needed: %{
-    checks: [check_id, ...],
+  tasks_added:   [task_id, ...],
+  tasks_removed: [task_id, ...],
+  reverification_suggested: %{
+    # advisory only — reviewer decides; tasks don't auto-invalidate (§7)
+    tasks:     [task_id, ...],
     approvals: [anchor_hash, ...]
   }
 }
@@ -323,29 +319,34 @@ The delta is computed once at ingest and persisted. The LiveView reads it as a s
 
 ### 9.1 File layout
 
-`.reviews/` is the per-checkout working directory. It is gitignored; the packet is a source artifact uploaded to the server, not a committed file. Per-branch subdirectories let one checkout (or one worktree) juggle multiple reviews without clobbering.
+Two locations:
+
+- **`~/.config/reviews/`** is global. Holds user config (server URL, auth token, default editor). One per user, not per checkout.
+- **`.reviews/`** is per-checkout. Gitignored. Holds the local SQLite cache and any in-progress packet files. Worktrees naturally get their own because each is on its own branch with its own working tree.
 
 ```
-$ tree -L 3 myrepo/
-myrepo/
-├── .reviews/                          # gitignored
-│   ├── <branch-sanitized>/            # one dir per branch
-│   │   ├── packet.json                # the packet the agent authors
-│   │   ├── threads.json               # cached server state (OQs, inline comments)
-│   │   └── .meta                      # { slug, last_pushed_at, last_synced_at }
-│   └── _drafts/                       # pre-push, slug not yet assigned
-│       └── <branch-sanitized>.json
+~/.config/reviews/
+└── config.toml                        # server URL, auth token, defaults
+
+<repo>/
+├── .reviews/                          # gitignored, per-checkout
+│   ├── state.db                       # SQLite: reviews, threads, task progress, sync state
+│   └── drafts/                        # in-progress packets (text, agent-edited)
+│       └── <branch-sanitized>/
+│           └── packet.json
 ├── src/
 └── ...
 ```
 
-The CLI resolves the active directory from the current branch. Worktrees naturally get their own dir because they're on their own branches. Branch names are sanitized to filesystem-safe characters (slashes → `__`, etc.).
+Branch names are sanitized to filesystem-safe characters (slashes → `__`, etc.). A branch literally named `drafts` is special-cased — the sanitizer reserves the top-level `drafts/` and routes a branch-named-`drafts` to `drafts/_drafts/packet.json` or refuses with a clear message. Edge case, documented, not load-bearing.
+
+The in-progress packet stays a JSON file rather than a SQLite row for three reasons: agents edit it like any other source file, it's a single ~kb artifact, and text diffs are useful when iterating on the packet itself.
 
 ### 9.2 Commands
 
 ```
 # Author a packet, validate before pushing:
-$ reviews validate                    # parses .reviews/<branch>/packet.json, checks schema,
+$ reviews validate                    # parses drafts/<branch>/packet.json, checks schema,
                                       # resolves hunk references against current diff,
                                       # exits non-zero with line-pointed errors
 
@@ -353,8 +354,7 @@ $ reviews push --dry-run              # validate + print what would be sent (slu
                                       # diff, packet shape); no network call
 
 # First push to a fresh review (creates a draft patchset):
-$ reviews push --draft                # picks up .reviews/<branch>/packet.json,
-                                      # or .reviews/_drafts/<branch>.json on the first push
+$ reviews push --draft                # picks up drafts/<branch>/packet.json
 
 # Iterate on the in-flight draft (overwrites server-side):
 $ reviews push --draft                # same command; server identifies the draft
@@ -364,9 +364,9 @@ $ reviews push --draft --packet foo.json
 $ reviews publish <slug>              # finalizes the draft → patchset v1, notifies
 
 # Sync reviewer state into the local cache:
-$ reviews sync                        # fetches OQs, inline comments, check progress
-                                      # into .reviews/<branch>/threads.json
-$ reviews threads                     # print a summary of open threads from local cache
+$ reviews sync                        # fetches threads + task progress into state.db
+$ reviews threads                     # SELECT-backed summary of open threads
+$ reviews threads --state=open --kind=oq
 
 # After feedback, prepare the next revision:
 $ reviews push --draft                # creates a new in-flight draft patchset
@@ -388,25 +388,15 @@ $ reviews publish <slug>              # finalizes → patchset v2, computes delt
     { "kind": "hunk", "path": "test/search_cache_invalidation_test.exs", "anchor": "..." }
   ],
   "tour": [
-    {
-      "heading": "Add invalidate/1 call to Documents.delete/1",
-      "body": [
-        { "kind": "markdown", "body": "Hooks into the existing delete transaction so the cache clear is atomic." }
-      ],
-      "hunks": [{ "path": "lib/documents.ex", "anchor": "..." }],
-      "refs": [
-        { "label": "LIN-4892", "url": "https://linear.app/...", "kind": "ticket" },
-        { "label": "Slack thread", "url": "https://slack.com/...", "kind": "discussion" }
-      ]
-    }
+    { "kind": "markdown", "body": "## Add invalidate/1 call to Documents.delete/1\n\nHooks into the existing delete transaction so the cache clear is atomic. <Pill kind=\"linear\" href=\"https://linear.app/...\">LIN-4892</Pill>" },
+    { "kind": "hunk", "path": "lib/documents.ex", "anchor": "..." },
+    { "kind": "markdown", "body": "## Regression test\n\nReproduces the bug from <Pill kind=\"linear\" href=\"https://linear.app/...\">LIN-4892</Pill>." },
+    { "kind": "hunk", "path": "test/search_cache_invalidation_test.exs", "anchor": "..." }
   ],
-  "testing": [
-    {
-      "body": [
-        { "kind": "markdown", "body": "Delete a document while a search session is open. Confirm results refresh." }
-      ],
-      "hunks": [{ "path": "lib/documents.ex", "anchor": "..." }]
-    }
+  "testing_instructions": "Open a search session, delete a doc, confirm the result list refreshes.",
+  "tasks": [
+    { "description": "Delete a document via the UI; confirm it disappears from search results within 2s." },
+    { "description": "Visit the preview URL and verify the new test passes in CI." }
   ],
   "rollout": null,
   "open_questions": [
@@ -418,34 +408,92 @@ $ reviews publish <slug>              # finalizes → patchset v2, computes delt
 }
 ```
 
-### 9.4 Threads cache format
+The tour example above uses two flat `markdown` rows with `## ` headings, interleaved with `hunk` rows. The renderer derives section boundaries from those headings.
 
-`threads.json` mirrors the server's view of the review's threads at last sync. Read-only from the agent's perspective; the CLI rewrites it on `sync`.
+### 9.4 Local state — SQLite schema
 
-```jsonc
-{
-  "synced_at": "2026-05-14T10:23:00Z",
-  "patchset_number": 2,
-  "threads": [
-    {
-      "id": 142,
-      "kind": "open_question",
-      "state": "answered",
-      "anchor": { "path": "lib/documents.ex", "hash": "...", "context": "..." },
-      "body": "Should we backfill: clear the cache for docs deleted in the last 24h?",
-      "messages": [
-        { "author": "alice", "at": "...", "body": "Skip backfill, file a follow-up." }
-      ]
-    }
-  ]
+`state.db` is a SQLite database cached from the server. The server is the source of truth; deleting `state.db` is harmless and a `reviews sync` rebuilds it. WAL mode is enabled so concurrent CLI invocations (agent + human, or two agent worktrees pointed at the same checkout) don't race.
+
+```sql
+CREATE TABLE reviews (
+  slug             TEXT PRIMARY KEY,
+  branch           TEXT NOT NULL,
+  state            TEXT NOT NULL,         -- draft | in_review | approved
+  current_patchset INTEGER,
+  last_synced_at   TIMESTAMP,
+  last_pushed_at   TIMESTAMP
+);
+
+CREATE TABLE threads (
+  id              INTEGER PRIMARY KEY,    -- server-assigned
+  review_slug     TEXT NOT NULL REFERENCES reviews(slug) ON DELETE CASCADE,
+  kind            TEXT NOT NULL,          -- open_question | inline_comment
+  state           TEXT NOT NULL,          -- open | answered | resolved
+  anchor_path     TEXT,
+  anchor_hash     TEXT,
+  body            TEXT,
+  last_message_at TIMESTAMP
+);
+CREATE INDEX threads_by_review_state ON threads(review_slug, state);
+
+CREATE TABLE thread_messages (
+  id        INTEGER PRIMARY KEY,
+  thread_id INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+  author    TEXT,
+  body      TEXT,
+  at        TIMESTAMP
+);
+
+CREATE TABLE task_progress (
+  task_id      INTEGER NOT NULL,
+  reviewer     TEXT NOT NULL,
+  state        TEXT NOT NULL,             -- unchecked | verified | failed | skipped
+  notes        TEXT,
+  checked_at   TIMESTAMP,
+  PRIMARY KEY (task_id, reviewer)
+);
+```
+
+### 9.5 Rust migration strategy
+
+The CLI uses [`rusqlite_migration`](https://crates.io/crates/rusqlite_migration) (or equivalent) with forward-only migrations embedded in the binary. Migrations are addressed by `PRAGMA user_version` and applied in order at startup before any other query runs.
+
+```rust
+// cli/src/db/migrations.rs (sketch)
+use rusqlite_migration::{Migrations, M};
+
+pub fn migrations() -> Migrations<'static> {
+    Migrations::new(vec![
+        M::up(include_str!("../../migrations/V1__initial.sql")),
+        M::up(include_str!("../../migrations/V2__add_task_progress.sql")),
+        // future migrations append here
+    ])
+}
+
+pub fn open_or_init(path: &Path) -> Result<Connection> {
+    let mut conn = Connection::open(path)?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    migrations().to_latest(&mut conn)?;
+    Ok(conn)
 }
 ```
 
-### 9.5 Hunk identification on the author side
+Conventions:
+
+- Migrations are forward-only. No `down` migrations in MVP; if a fresh `state.db` is needed the user deletes it and re-syncs.
+- Each migration is a single `.sql` file in `cli/migrations/`, named `V{n}__{summary}.sql`.
+- Schema changes that aren't strictly additive (renames, drops, type changes) require a migration plus a `reviews sync` to repopulate.
+- The `state.db` is regenerable from the server, so migration safety isn't load-bearing the way it would be for the Phoenix DB. A "blow it away" recovery path is always available.
+- The CLI logs the applied migration sequence in verbose mode for debugging when the schema seems wrong.
+
+If migrations fail at startup, the CLI prints the failing migration name + SQLite error and exits non-zero. It does *not* attempt automatic recovery — the user can delete `state.db` to start fresh.
+
+### 9.6 Hunk identification on the author side
 
 The agent doesn't have hunk *ids* (those are assigned server-side after diff parsing). It identifies hunks by `(path, anchor)` where anchor is a content hash computed by the CLI from the local diff. The server matches these against the parsed patchset.
 
-### 9.6 Validation
+### 9.7 Validation
 
 Server rejects packets with:
 
@@ -490,16 +538,15 @@ The diff renderer needs one capability it may not already have: **accepting an a
 
 ## 12. Validation, errors, edge cases
 
-- **Empty sections suppress.** Only `summary` is required. Invariants, tour, testing, deploy, and open questions all disappear from the rendered packet when empty. A trivial change (typo fix) can ship with just summary + a one-step tour wrapping the single hunk, plus optionally a single testing check pointing at a preview URL. Nothing else.
-- **Hunks not referenced by any tour step.** Land in an "Other" bucket at the end of the tour with no prose. Agent should be nudged to keep this small via prompt design, not enforced server-side.
+- **Empty sections suppress.** Only `summary` is required. Invariants, tour, testing (instructions + tasks), deploy, and open questions all disappear from the rendered packet when empty. **Invariants in particular is optional** — small changes don't need them, and a missing block is just a missing block, not a quality signal.
+- **Hunks not referenced by any tour markdown.** Land in an "Other" bucket at the end of the tour with no surrounding prose. The agent should be nudged to keep this small via prompt design, not enforced server-side.
 - **OQ anchor lost across patchsets.** Surfaces in a sidebar bucket "orphaned threads"; reviewer can manually re-anchor or dismiss. Same behavior as inline comments today.
-- **Check anchor lost.** State is preserved but flagged "needs re-verification" with the prior reviewer + timestamp visible.
 - **Reviewer leaves a thread reply on an OQ then it's deleted by the agent in v2.** The thread isn't deleted; the OQ row's anchor is just gone from v2's hunks → moved to orphan bucket.
 
 ## 13. Future work (out of MVP)
 
 - **Cross-packet linking.** Sibling-packet chips, cross-service invariants with evidence in another repo's test suite, cascading thread replies. Story 4 in the RFC. Treat as separate schema additions on top of the single-packet model; don't pre-bake the interface.
-- **Merge gating tied to coverage.** Require N approvals per step, designated reviewers for `required_role` checks, etc. Pure policy layer once the data model is in place.
+- **Merge gating tied to coverage.** Require N approvals per tour section, designated reviewers for tasks with a `required_role`, etc. Pure policy layer once the data model is in place.
 - **Automated invariant verification.** Tie an invariant to a test or property check; surface red when it fails.
 - **Reference integrations.** Linear / Slack / Figma / Notion APIs to render rich previews on `<Pill>` hover.
 - **Editable packet post-push.** A reviewer-friendly correction mode that doesn't require a new patchset.
@@ -513,8 +560,8 @@ For the MVP we need test coverage on:
 1. **Packet parse / validate.** Well-formed and malformed packets, unknown row kinds, unknown MDX components, missing required fields.
 2. **Anchor rehydration.** Pat v1 hunks H1/H2/H3 with attached state, Pat v2 with H1 unchanged, H2 modified, H3 deleted, H4 new. Assert state on H1 carries, state on H2/H3 invalidated and surfaced, no spurious state on H4.
 3. **Update delta computation.** Known prior packet + new packet, assert delta record fields.
-4. **Per-reviewer check progress.** Alice ticks check X, Bob sees Alice's tick but his own is independent.
-5. **Hunk approval coverage map.** Query returns per-step, per-reviewer approval state.
+4. **Per-reviewer task progress.** Alice ticks task X, Bob sees Alice's tick but his own is independent. Carries forward by task id across patchsets.
+5. **Hunk approval coverage map.** Query groups by tour-section (derived from markdown headings) and returns per-reviewer approval state.
 6. **OQ lifecycle.** Agent opens, reviewer replies (transitions to `:answered`), agent's next patchset includes resolution (transitions to `:resolved`).
 7. **Rendering.** Golden tests for the rendered LiveView with each section populated / empty.
 
