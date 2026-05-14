@@ -1,18 +1,18 @@
 # RFC: Review packets for agent-authored PRs
 
-**Status:** Draft  
-**Author:** figitaki  
-**Date:** 2026-05-14
+|**Status:** | Draft |
+|**Author:** | [figitaki](https://github.com/figitaki) |
+|**Date:** |  2026-05-14 |
 
-**TL;DR.** Attach a structured packet to each PR patchset that tells reviewers where to look, what to trust, and what needs a decision. Measure whether this brings agent-authored PRs to approval faster without a rise in post-merge bugs.
+## Summary
 
----
+[Reviews](https://reviews-dev.fly.dev) aims to solve the issues that arise from the increased throughput required for modern code review practices in the age of LLM assisted coding. Attach a structured packet to each PR patchset that tells reviewers where to look, what to trust, and what needs a decision. Measure whether this brings agent-authored PRs to approval faster without a regression in stability (bugs).
 
 ## Problem
 
-Agent-authored diffs are getting larger and the review surface has not changed. The diff view assumes a human author who was in the meeting, wrote the PR description from memory, and can answer questions inline. Agent PRs break all three assumptions: no shared context, no author to ping, and often a change size that makes "read everything" impractical.
+Agent-authored diffs are getting larger and the review surface has not changed. The standard issue diff view assumes a human author who was in the meeting, wrote the PR description from memory, and can answer questions inline. Agent PRs break all three assumptions: no shared context, no author to ping, and often a change size that makes "read everything" impractical.
 
-Reviewers end up deciding where to start rather than actually reviewing. That is where the time goes.
+Reviewers end up deciding where to start rather than actually reviewing. 
 
 ## What we are proposing
 
@@ -20,12 +20,12 @@ A **review packet** is structured metadata the author attaches to each patchset.
 
 | Section | Question it answers |
 |---|---|
-| Summary | What is this? |
-| Invariants | What must I trust? |
-| Tour | What changed and why? |
-| Testing | What should I check by hand? |
-| Deploy | What happens when this ships? |
-| Open questions | What needs a decision from me? |
+| Summary | Why was this done? |
+| Invariants | What's the core of the change? |
+| Tour | Where were changes made? |
+| Testing | How should I check by hand? |
+| Deploy | When will this go out? Migrations, sequencing, etc |
+| Open questions | What needs a decision? |
 
 The packet has a lifecycle — draft, in review, approved — that matches the agent loop. Per-reviewer progress (which hunks they have covered, which testing checks they have run) carries across patchset updates via content-hash anchoring. Push a new patchset, and partial review work survives.
 
@@ -37,15 +37,20 @@ Agent-authored PRs are climbing. Review is where they stall. The platform pieces
 
 ## What we would measure
 
-**Primary metric:** time from patchset push to approval. Not time to merge — CI queues and deploy windows add noise that has nothing to do with review quality.
+### Primary Metric
+Time from patchset push to approval.
 
-**Guardrail:** post-merge revert and bug rate. Faster reviews that miss bugs are not wins.
+### Baseline Check
+Post-merge revert and bug rate. Faster reviews that miss bugs are not wins.
 
-**Cohort matching:** match by change size (LOC + file count), author type (human vs. agent), and repo. A naive packet-vs-no-packet comparison drowns in variance because most of the time-to-approval signal is in change size.
+### Cohort Matching
+Match control group cohorots to test group by change size (LOC + file count), author type (human vs. agent), and repo. A naive packet-vs-no-packet comparison drowns in variance because most of the time-to-approval signal is in change size.
 
-**Timeline:** two weeks of qualitative dogfooding to tune the packet schema and prompt, then four weeks of quantitative measurement.
+### Timeline
+Two weeks of qualitative dogfooding to tune the packet schema and prompt, then four weeks of quantitative measurement.
 
-**Exit condition:** if time-to-approval for packet PRs does not improve by at least 20% relative to matched controls in four weeks, we stop investing beyond MVP.
+### Exit condition
+If time-to-approval for packet PRs does not improve by at least 20% relative to matched controls in four weeks, we stop investing beyond MVP.
 
 ## Scope
 
