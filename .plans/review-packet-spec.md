@@ -1,4 +1,4 @@
-# Review Packet — Detailed Spec
+# Review packet: detailed spec
 
 Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md). Covers schema, anchoring, drift behavior, CLI integration, and rendering boundary. Pseudocode is Ecto-flavored; field types are illustrative, not final.
 
@@ -70,7 +70,7 @@ erDiagram
     HUNK_ANCHOR ||--o{ HUNK_APPROVAL : "approval target"
 ```
 
-The packet is a child of `Patchset`. Threads (including open questions) are already scoped to `Review` and anchored to hunks via content hashes — the existing model. Per-reviewer state lives in separate tables keyed by reviewer + anchor, so it survives patchset updates.
+The packet is a child of `Patchset`. Threads (including open questions) are already scoped to `Review` and anchored to hunks via content hashes (the existing model). Per-reviewer state lives in separate tables keyed by reviewer + anchor, so it survives patchset updates.
 
 ## 3. The Row primitive
 
@@ -156,20 +156,20 @@ Notes:
 - `Row` lists are stored as JSONB arrays. Each row is `%{"kind" => "markdown" | "hunk", ...}`.
 - `Step.hunk_ids` references hunks in *this patchset*. The anchoring layer is responsible for tracking the same step across patchsets if needed for delta computation; the persisted hunk ids are patchset-local.
 - `Check.hunk_anchors` are content-hashed, not patchset-local ids. This is what makes check progress survive updates (see §6).
-- Open questions are *not* a separate table — they piggyback on the existing threads infrastructure with a `kind` discriminator.
+- Open questions are *not* a separate table; they piggyback on the existing threads infrastructure with a `kind` discriminator.
 
 ### 4.3 Schema versioning
 
 `format_version` on `packets` exists to absorb evolution of the packet shape without breaking older renders. Strategy:
 
-- **Additive changes** (new optional row kind, new section, new MDX component) — no version bump. Renderers must tolerate unknown row/component kinds by rendering a graceful placeholder ("unknown row kind: X — upgrade your renderer").
-- **Breaking changes** (renamed field, removed section, semantics shift) — bump `format_version`. Renderer dispatches on version; old packets render against the old code path indefinitely.
+- **Additive changes** (new optional row kind, new section, new MDX component): no version bump. Renderers must tolerate unknown row/component kinds by rendering a graceful placeholder ("unknown row kind: X, upgrade your renderer").
+- **Breaking changes** (renamed field, removed section, semantics shift): bump `format_version`. Renderer dispatches on version; old packets render against the old code path indefinitely.
 - **Server validation** rejects packets whose `format_version` is newer than what the server understands. Older packets always parse.
 - We don't migrate stored packets between versions. Packet content is immutable once published; the schema evolves around them, not over them.
 
-This is a forward problem — MVP ships at `format_version: 1` and the policy doesn't bind until v2. Worth establishing now so the hooks are in place.
+MVP ships at `format_version: 1` and the policy doesn't bind until v2. The hooks need to be in place now so v2 isn't a breaking lift.
 
-## 5. Threads — open questions vs inline comments
+## 5. Threads: open questions vs inline comments
 
 ```elixir
 schema "threads" do
@@ -196,7 +196,7 @@ This reuses anchoring (already content-hashed) and cross-patchset carry-over (al
 
 ## 6. Anchoring & drift
 
-Hunks have stable identity *within a patchset only*. Between patchsets, hunks may be added, removed, or modified. State that needs to survive (check progress, hunk approvals, threads) anchors to a **content hash** computed from hunk text plus surrounding context — the same mechanism already used for threads.
+Hunks have stable identity *within a patchset only*. Between patchsets, hunks may be added, removed, or modified. State that needs to survive (check progress, hunk approvals, threads) anchors to a **content hash** computed from hunk text plus surrounding context, the same mechanism already used for threads.
 
 ```mermaid
 flowchart TB
@@ -234,9 +234,9 @@ flowchart TB
 1. If `A.hash` matches a hunk in the new patchset → state carries forward unchanged.
 2. If no match → state is **invalidated, not deleted**. It's surfaced to the reviewer as "needs re-verification" (for checks/approvals) or as "anchor lost" (for threads, which then float in a sidebar bucket).
 
-**When this runs.** Anchor rehydration only fires at publish time. Draft pushes overwrite the in-flight patchset's hunks but don't trigger rehydration — there's no published predecessor to carry state forward from yet. This keeps draft iteration cheap (just an upload) and means reviewer-visible state is only ever computed against published patchsets.
+**When this runs.** Anchor rehydration only fires at publish time. Draft pushes overwrite the in-flight patchset's hunks but don't trigger rehydration; there's no published predecessor to carry state forward from yet. This keeps draft iteration cheap (just an upload) and means reviewer-visible state is only ever computed against published patchsets.
 
-**Prior-patchset coverage map.** When a reviewer approved hunks in v1 and v2 publishes with some hunks unchanged: the carry-forward leaves their prior approval anchors intact. The coverage map at v2 reflects those carried approvals plus any new approvals on v2's new hunks. A reviewer who approved every hunk in v1 will see a partial coverage on v2 if v2 introduced new hunks they haven't approved — by design, since "still approved" is a claim about specific code, not about a revision.
+**Prior-patchset coverage map.** When a reviewer approved hunks in v1 and v2 publishes with some hunks unchanged, the carry-forward leaves their prior approval anchors intact. The coverage map at v2 reflects those carried approvals plus any new approvals on v2's new hunks. A reviewer who approved every hunk in v1 will see partial coverage on v2 if v2 introduced new hunks they haven't approved. That's by design: "still approved" is a claim about specific code, not about a revision.
 
 This is the **only** drift mechanism. The MVP does not attempt fuzzy matching beyond the existing thread anchoring code (`Anchoring.relocate/3`). The token-range branch already in the codebase remains stubbed.
 
@@ -268,7 +268,7 @@ Notes:
 
 - `hunk_approvals` are keyed by anchor hash, not hunk id. Same carry-forward as checks.
 - Multiple reviewers' rows coexist. The coverage map is a left-join from `Step.hunk_ids` (resolved to anchors for the current patchset) over `hunk_approvals` grouped by reviewer.
-- For MVP, no merge gating — these tables are read-only signals for the UI.
+- For MVP, no merge gating. These tables are read-only signals for the UI.
 
 ## 8. Update delta
 
@@ -299,7 +299,7 @@ sequenceDiagram
 
     Agent->>Server: reviews push --draft (one or more times)
     Server->>DB: upsert in-flight :draft patchset
-    Note over Server,DB: no rehydration, no delta — draft pushes are cheap
+    Note over Server,DB: no rehydration, no delta; draft pushes are cheap
 
     Agent->>Server: reviews publish
     Server->>DB: assign number=2, state=:published, persist packet v2
@@ -325,10 +325,10 @@ myrepo/
 ├── src/
 └── ...
 
-# First push to a fresh review — creates a draft patchset:
+# First push to a fresh review (creates a draft patchset):
 $ reviews push --draft           # picks up .reviews/packet.json if present
 
-# Iterating on the in-flight draft — overwrites server-side:
+# Iterating on the in-flight draft (overwrites server-side):
 $ reviews push --draft           # same command; server identifies the draft
 $ reviews push --draft --packet foo.json
 
@@ -419,14 +419,14 @@ No new React island.
 | --- | --- |
 | HEEx (LiveView) | Page chrome, summary, invariants list, tour outline & headings, testing panel, rollout block, OQ sidebar, all stateful interactions (tick, approve, reply) |
 | Colocated JS hooks | Small affordances: `HunkLink` scroll behavior, copy-to-clipboard, anchor highlighting |
-| `phx-hook="DiffRenderer"` React island | Diff rendering only — `@pierre/diffs` `PatchDiff` |
+| `phx-hook="DiffRenderer"` React island | Diff rendering only (`@pierre/diffs` `PatchDiff`) |
 | Server-side MDX compile | Markdown rows → HTML with allowlisted components inlined as HEEx |
 
 The diff renderer needs one capability it may not already have: **accepting an arbitrary hunk order** and/or **rendering a subset of hunks** for a tour step. If `<PatchDiff>` is strictly file-grouped, the tour can either (a) render a custom hunk component for tour steps and use `<PatchDiff>` only for the "Other" / flat view, or (b) we contribute upstream support for hunk-ordered rendering. Decision deferred until the React side is inspected.
 
 ## 12. Validation, errors, edge cases
 
-- **Empty sections.** Rollout and open questions disappear from the rendered packet when empty. Invariants and testing are always shown (even if testing says "no manual verification needed" — that's a positive signal).
+- **Empty sections suppress.** Only `summary` is required. Invariants, tour, testing, deploy, and open questions all disappear from the rendered packet when empty. A trivial change (typo fix) can ship with just summary + a one-step tour wrapping the single hunk, plus optionally a single testing check pointing at a preview URL. Nothing else.
 - **Hunks not referenced by any tour step.** Land in an "Other" bucket at the end of the tour with no prose. Agent should be nudged to keep this small via prompt design, not enforced server-side.
 - **OQ anchor lost across patchsets.** Surfaces in a sidebar bucket "orphaned threads"; reviewer can manually re-anchor or dismiss. Same behavior as inline comments today.
 - **Check anchor lost.** State is preserved but flagged "needs re-verification" with the prior reviewer + timestamp visible.
@@ -434,23 +434,23 @@ The diff renderer needs one capability it may not already have: **accepting an a
 
 ## 13. Future work (out of MVP)
 
-- **Cross-packet linking.** Sibling-packet chips, cross-service invariants with evidence in another repo's test suite, cascading thread replies. Story 4 in the RFC. Treat as separate schema additions on top of the single-packet model — don't pre-bake the interface.
+- **Cross-packet linking.** Sibling-packet chips, cross-service invariants with evidence in another repo's test suite, cascading thread replies. Story 4 in the RFC. Treat as separate schema additions on top of the single-packet model; don't pre-bake the interface.
 - **Merge gating tied to coverage.** Require N approvals per step, designated reviewers for `required_role` checks, etc. Pure policy layer once the data model is in place.
 - **Automated invariant verification.** Tie an invariant to a test or property check; surface red when it fails.
 - **Reference integrations.** Linear / Slack / Figma / Notion APIs to render rich previews on `<Pill>` hover.
 - **Editable packet post-push.** A reviewer-friendly correction mode that doesn't require a new patchset.
-- **Reviewer-facing reordering.** Sort by reviewed-first, by file kind, by hunk size — orthogonal to the tour-driven ordering.
+- **Reviewer-facing reordering.** Sort by reviewed-first, by file kind, by hunk size. Orthogonal to the tour-driven ordering.
 
 ## 14. Test plan sketch
 
 For the MVP we need test coverage on:
 
-1. **Packet parse / validate** — well-formed and malformed packets, unknown row kinds, unknown MDX components, missing required fields.
-2. **Anchor rehydration** — Pat v1 hunks H1/H2/H3 with attached state, Pat v2 with H1 unchanged, H2 modified, H3 deleted, H4 new. Assert state on H1 carries, state on H2/H3 invalidated and surfaced, no spurious state on H4.
-3. **Update delta computation** — known prior packet + new packet, assert delta record fields.
-4. **Per-reviewer check progress** — Alice ticks check X, Bob sees Alice's tick but his own is independent.
-5. **Hunk approval coverage map** — query returns per-step, per-reviewer approval state.
-6. **OQ lifecycle** — agent opens, reviewer replies (transitions to `:answered`), agent's next patchset includes resolution (transitions to `:resolved`).
-7. **Rendering** — golden tests for the rendered LiveView with each section populated / empty.
+1. **Packet parse / validate.** Well-formed and malformed packets, unknown row kinds, unknown MDX components, missing required fields.
+2. **Anchor rehydration.** Pat v1 hunks H1/H2/H3 with attached state, Pat v2 with H1 unchanged, H2 modified, H3 deleted, H4 new. Assert state on H1 carries, state on H2/H3 invalidated and surfaced, no spurious state on H4.
+3. **Update delta computation.** Known prior packet + new packet, assert delta record fields.
+4. **Per-reviewer check progress.** Alice ticks check X, Bob sees Alice's tick but his own is independent.
+5. **Hunk approval coverage map.** Query returns per-step, per-reviewer approval state.
+6. **OQ lifecycle.** Agent opens, reviewer replies (transitions to `:answered`), agent's next patchset includes resolution (transitions to `:resolved`).
+7. **Rendering.** Golden tests for the rendered LiveView with each section populated / empty.
 
 Existing test suite is 27 tests; this proposal adds roughly 20–30 tests at the unit + integration level.

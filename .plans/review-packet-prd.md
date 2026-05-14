@@ -1,6 +1,6 @@
-# PRD — Review Packet Lifecycle
+# PRD: review packet lifecycle
 
-Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-packet-spec.md`](./review-packet-spec.md). Holds the user stories cut from the RFC and walks through the lifecycle transitions — **Draft → In Review → Approved** — with detailed flows for each.
+Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-packet-spec.md`](./review-packet-spec.md). Holds the user stories cut from the RFC and walks through the **Draft → In Review → Approved** lifecycle transitions with detailed flows for each.
 
 ---
 
@@ -10,7 +10,7 @@ Companion to [`./review-packet-rfc.md`](./review-packet-rfc.md) and [`./review-p
 | --- | --- |
 | **Author** | Agent, human, or agent+human pair that produces the diff and packet. Owns the change until it's published. |
 | **Reviewer** | One or more humans who sign off. May be primary (owns the merge decision) or supplementary (sign off on a specific step or check). |
-| **Future reader** | Anyone who lands on the URL after approval — auditor, on-call investigating a regression, new hire onboarding. |
+| **Future reader** | Anyone who lands on the URL after approval (auditor, on-call investigating a regression, new hire onboarding). |
 
 ## Lifecycle at a glance
 
@@ -28,15 +28,15 @@ stateDiagram-v2
 
 | State | Who can see it | Notifications | Mutable? |
 | --- | --- | --- | --- |
-| **Draft** | Author(s) only | None | Yes — each draft push overwrites the in-flight patchset; intra-draft churn is not preserved as separate revisions |
+| **Draft** | Author(s) only | None | Yes. Each draft push overwrites the in-flight patchset; intra-draft churn is not preserved as separate revisions |
 | **In Review** | Author + invited reviewers (or public via link, per existing model) | Reviewers notified on each *publish* event | Author can push new drafts that supersede the current one; only `reviews publish` produces a new visible patchset |
 | **Approved** | Anyone with the link | None | Frozen; threads and coverage are archival |
 
-`Approved` is a terminal review-lifecycle state. The review tool doesn't manage merges — what the author does with the branch afterward is their business. "Approved" means *the reviewer has signed off on this packet*; deployment is downstream.
+`Approved` is a terminal review-lifecycle state. The review tool doesn't manage merges; what the author does with the branch afterward is their business. "Approved" means *the reviewer has signed off on this packet*; deployment is downstream.
 
 ---
 
-## Draft — author preparation
+## Draft: author preparation
 
 ### Story: Agent self-verification before handoff
 
@@ -80,17 +80,17 @@ sequenceDiagram
     Server->>Reviewer: notify
 ```
 
-**Notable:** draft pushes overwrite the in-flight patchset in place — they don't accumulate as separate revisions. The reviewer eventually sees a clean v1, v2, v3 sequence corresponding 1-to-1 with publish events; intra-draft churn is invisible in the review view. Anchoring and delta computation only fire on publish, so the cost of draft iteration is just an upload (no rehydration). MVP doesn't preserve intra-draft snapshots; if "agent process telemetry" turns out to be useful for postmortem, a side table can be added later without affecting the user-facing model.
+Draft pushes overwrite the in-flight patchset in place; they don't accumulate as separate revisions. The reviewer eventually sees a clean v1, v2, v3 sequence corresponding 1-to-1 with publish events. Intra-draft churn is invisible in the review view. Anchoring and delta computation only fire on publish, so the cost of draft iteration is just an upload (no rehydration). MVP doesn't preserve intra-draft snapshots; if "agent process telemetry" turns out useful for postmortem later, a side table can be added without affecting the user-facing model.
 
 ---
 
-## In Review — rounds of feedback
+## In Review: rounds of feedback
 
 Three stories, increasing in complexity. Each illustrates a different valued behavior of the packet.
 
-### Story A — Trivial: typo fix
+### Story A: typo fix
 
-Zero feedback rounds. The packet is so small the loop barely exists.
+Zero feedback rounds. The packet collapses to almost nothing: summary, a single tour step wrapping the one-line hunk, optionally one testing check pointing at the preview URL. Invariants, deploy, and open questions are all empty and suppress from the render.
 
 ```mermaid
 sequenceDiagram
@@ -98,15 +98,15 @@ sequenceDiagram
     participant Server
     actor Reviewer
 
-    Author->>Server: publish (1-line summary, 2 invariants, 1 tour step, 0 OQs)
+    Author->>Server: publish (summary + 1 tour step + 1 preview-URL check)
     Server->>Reviewer: notify
-    Reviewer->>Server: glance, approve all
+    Reviewer->>Server: visit preview URL, confirm fix, approve
     Server->>Server: transition :in_review → :approved
 ```
 
-Total reviewer time: under a minute. **The packet structure doesn't get in the way of trivial changes.** That's the test — if reviewers learn to ignore small packets, the structure is wrong.
+Total reviewer time: under a minute. The whole packet renders as a header, one diff hunk, and a single "verify on preview" checkbox. The packet structure doesn't get in the way of trivial changes. That's the test. If reviewers learn to ignore small packets, the structure is wrong.
 
-### Story B — Scoped bug fix with a judgment call
+### Story B: scoped bug fix with a judgment call
 
 The fix is mechanical. The *open question* is where the human's time concentrates. No new patchset gets pushed.
 
@@ -127,11 +127,11 @@ sequenceDiagram
     Server->>Server: transition → :approved
 ```
 
-**Notable:** the in-review loop runs without a patchset bump. Open questions aren't always coupled to code changes — sometimes the resolution is a decision, a follow-up ticket, or a confirmation. The packet model has to support that.
+The in-review loop runs without a patchset bump. Open questions aren't always coupled to code changes; sometimes the resolution is a decision, a follow-up ticket, or a confirmation. The packet model has to support that.
 
-### Story C — Simple feature with iteration
+### Story C: simple feature with iteration
 
-The patchset-update flow + the update delta carries this story.
+This story exercises the patchset-update flow and the update delta together.
 
 ```mermaid
 sequenceDiagram
@@ -163,15 +163,15 @@ sequenceDiagram
     Server->>Server: transition → :approved
 ```
 
-**Notable:**
+What this story exercises:
 
-- Approvals on unchanged steps survived the patchset update — the reviewer didn't have to re-approve the whole thing.
+- Approvals on unchanged steps survived the patchset update; the reviewer didn't have to re-approve the whole thing.
 - The delta banner is the load-bearing UX. Without it, the reviewer reads v2 cold and burns the time savings.
 - The "needs re-verification" affordance on step 2 directs attention precisely to the hunks that changed.
 
 ---
 
-## Approved — historical / archival view
+## Approved: historical / archival view
 
 Once approved, the review's job changes from *driving a decision* to *preserving institutional memory*. The packet stops being interactive and starts being a document.
 
@@ -187,20 +187,20 @@ flowchart TB
     G --> H[Archival view:<br/>final packet at top,<br/>delta history collapsed,<br/>approval signatures sidebar,<br/>diff still navigable]
 ```
 
-### Story D — Future reader / onboarding
+### Story D: future reader / onboarding
 
 A new hire is trying to understand why a system behaves a certain way. They git-blame to a commit, the commit references a `/r/<slug>` URL. They land on the approved review.
 
 What they see:
 
 - **Summary + invariants first.** They learn what the change claimed to do and what it claimed to preserve.
-- **Tour.** Walks them through the diff in narrative order — far easier to understand than the raw diff.
-- **Open questions, all resolved.** Reads as a Q&A about why specific decisions were made. *This is the highest-value section for historical readers* — it captures the alternative paths considered and rejected.
+- **Tour.** Walks them through the diff in narrative order, which is much easier than reading the raw diff.
+- **Open questions, all resolved.** Reads as a Q&A about why specific decisions were made. For historical readers this is often the most useful section; it captures the alternative paths considered and rejected.
 - **Testing block + coverage map.** Shows what was verified, by whom, including the reviewer's notes if any.
 
-The future reader doesn't need a different page — the same review URL serves both live and archival audiences. The UI just shifts mode based on state.
+The future reader doesn't need a different page; the same review URL serves both live and archival audiences. The UI just shifts mode based on state.
 
-### Story E — Audit traceback
+### Story E: audit traceback
 
 A bug surfaces in production. On-call traces it back through approved reviews to find the suspect change.
 
@@ -218,7 +218,7 @@ flowchart LR
     Verdict --> Postmortem
 ```
 
-The packet becomes evidence in a postmortem: claimed invariants vs. actual behavior, manual checks performed vs. the bug's actual repro, OQs that hint someone considered the risk vs. ones that show nobody did. **The packet's value compounds over time** — at review-time it directs attention; in audit, it's the receipt.
+The packet becomes evidence in a postmortem: claimed invariants vs. actual behavior, manual checks performed vs. the bug's actual repro, OQs that hint someone considered the risk vs. ones that show nobody did. The packet's value compounds over time. At review-time it directs attention; in audit, it's the receipt.
 
 ---
 
@@ -228,7 +228,7 @@ The packet becomes evidence in a postmortem: claimed invariants vs. actual behav
 | --- | --- | --- |
 | `In Review → Draft` | `reviews unpublish` | Author pulls the review back; reviewers notified once. Prior reviewer state preserved but hidden. Re-publishing restores state. |
 | `Approved → In Review` | `reviews reopen` | Rare. Used post-approval if a critical issue surfaces before merge. Approval signatures preserved but marked stale until re-confirmed. |
-| Multi-reviewer in progress | n/a | Approvals accumulate per reviewer. Transition to `:approved` requires all *required* reviewers to have signed off — others are advisory. Required vs. advisory is configured per review or per `required_role` check. |
+| Multi-reviewer in progress | n/a | Approvals accumulate per reviewer. Transition to `:approved` requires all *required* reviewers to have signed off; others are advisory. Required vs. advisory is configured per review or per `required_role` check. |
 | In-review draft cycle | `reviews push --draft` on an in-review review | Creates a new in-flight `:draft` patchset that supersedes the next publish slot. Overwrites on subsequent draft pushes. Reviewers don't see it until `reviews publish`. |
 | Author pushes draft after approval | `reviews push --draft` on approved review | Rejected by default; author must `reviews reopen` first. Prevents silent post-approval drift. |
 
@@ -236,8 +236,8 @@ The packet becomes evidence in a postmortem: claimed invariants vs. actual behav
 
 ## Open PRD questions
 
-1. **Who's "required" vs. "advisory" by default?** Most lightweight: the first invited reviewer is required, additions are advisory until explicitly upgraded. Worth deciding before MVP because it affects the `:approved` transition.
-2. **Notification mechanism in scope for MVP?** "Notify reviewer on publish" implies a channel — in-app only, email, Slack, webhook? The lifecycle works regardless, but the *experience* of being a reviewer depends on this.
-3. **What does "publish" surface to the reviewer?** Just the URL, or a digest of the packet? Worth a small design pass — the publish notification is the first contact with the packet for the reviewer.
+1. **Who's "required" vs. "advisory" by default?** Most lightweight: the first invited reviewer is required, additions are advisory until explicitly upgraded. Decide before MVP, since it affects the `:approved` transition.
+2. **Notification mechanism in scope for MVP?** "Notify reviewer on publish" implies a channel (in-app only, email, Slack, webhook). The lifecycle works regardless, but the *experience* of being a reviewer depends on this.
+3. **What does "publish" surface to the reviewer?** Just the URL, or a digest of the packet? Needs a small design pass; the publish notification is the first contact with the packet for the reviewer.
 4. **Should draft state be visible to *invited* reviewers (read-only) or strictly private?** Some authors will want to share a draft for early feedback without formally publishing. Could be a `--share-draft` flag. Defer to post-MVP unless there's a strong pull.
-5. **Reopen semantics for approval signatures.** When a review is reopened post-approval, do prior approvals carry as advisory until re-confirmed, or are they wiped? Leaning carry-as-stale, but worth confirming.
+5. **Reopen semantics for approval signatures.** When a review is reopened post-approval, do prior approvals carry as advisory until re-confirmed, or are they wiped? Leaning carry-as-stale; needs confirmation.
