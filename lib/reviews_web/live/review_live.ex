@@ -15,9 +15,13 @@ defmodule ReviewsWeb.ReviewLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.Accounts
+  alias Reviews.ReviewNavigation
   alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
+  alias ReviewsWeb.ReviewLive.DiffComponents
+  alias ReviewsWeb.ReviewLive.PacketComponents
+  alias ReviewsWeb.ReviewLive.RevisionNavComponents
 
   @impl true
   def mount(%{"slug" => slug}, session, socket) do
@@ -351,8 +355,8 @@ defmodule ReviewsWeb.ReviewLive do
 
         <div class="design-main">
           <% packet = @selected_patchset && @selected_patchset.packet %>
-          <% has_packet = packet_present?(packet) %>
-          <% revision_nav = revision_nav(@patchsets, @selected_patchset) %>
+          <% has_packet = ReviewNavigation.packet_present?(packet) %>
+          <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
 
           <header class="review-header">
             <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
@@ -361,11 +365,11 @@ defmodule ReviewsWeb.ReviewLive do
               class={["review-title", has_packet && "is-packet-title"]}
               translate="no"
             >
-              {if(has_packet, do: packet_text(packet, "title"), else: @review.title)}
+              {if(has_packet, do: ReviewNavigation.packet_text(packet, "title"), else: @review.title)}
             </h1>
-            <.packet_markdown
-              :if={has_packet && packet_text(packet, "summary") != ""}
-              body={packet_text(packet, "summary")}
+            <PacketComponents.markdown
+              :if={has_packet && ReviewNavigation.packet_text(packet, "summary") != ""}
+              body={ReviewNavigation.packet_text(packet, "summary")}
               class="review-description review-packet-lede"
             />
             <p
@@ -377,11 +381,18 @@ defmodule ReviewsWeb.ReviewLive do
             <div :if={@selected_patchset} class="review-header-meta">
               <span>Round {revision_nav.current_round.index}</span>
               <span>Turn v{@selected_patchset.number}</span>
-              <span>{format_diff_stats(diff_stats(@file_diffs))}</span>
+              <span>
+                {ReviewNavigation.format_diff_stats(
+                  ReviewNavigation.diff_stats_from_files(@file_diffs)
+                )}
+              </span>
             </div>
           </header>
 
-          <.revision_nav nav={revision_nav} selected_patchset={@selected_patchset} />
+          <RevisionNavComponents.revision_nav
+            nav={revision_nav}
+            selected_patchset={@selected_patchset}
+          />
 
           <%!-- Patchset-pushed banner --%>
           <div
@@ -395,203 +406,27 @@ defmodule ReviewsWeb.ReviewLive do
             </button>
           </div>
 
-          <section
+          <PacketComponents.packet
             :if={has_packet}
-            id="review-packet"
-            class="review-packet"
-            aria-labelledby="review-packet-title"
-          >
-            <div class="review-packet-grid">
-              <section :if={packet_rows(packet, "invariants") != []} class="review-packet-section">
-                <h3 class="review-packet-section-title">What must stay true</h3>
-                <div class="review-packet-point-list">
-                  <article
-                    :for={{body, idx} <- packet_indexed_invariant_points(packet)}
-                    class="review-packet-point"
-                  >
-                    <span class="review-packet-point-index">{idx + 1}</span>
-                    <.packet_markdown body={body} class="review-packet-point-body" />
-                  </article>
-                </div>
-              </section>
-
-              <section :if={packet_rows(packet, "tour") != []} class="review-packet-section">
-                <h3 class="review-packet-section-title">Tour</h3>
-                <div class="review-packet-row-list">
-                  <.packet_row
-                    :for={{row, idx} <- packet_indexed_rows(packet, "tour")}
-                    row={row}
-                    row_id={"packet-tour-#{idx}"}
-                    file_diffs={@file_diffs}
-                    selected_patchset={@selected_patchset}
-                    published_threads={@published_threads}
-                    drafts={@drafts}
-                    current_user={@current_user}
-                    diff_style={@diff_style}
-                  />
-                </div>
-              </section>
-
-              <section
-                :if={
-                  packet_text(packet, "testing_instructions") != "" ||
-                    packet_rows(packet, "tasks") != []
-                }
-                class="review-packet-section"
-              >
-                <h3 class="review-packet-section-title">Testing</h3>
-                <.packet_markdown
-                  :if={packet_text(packet, "testing_instructions") != ""}
-                  body={packet_text(packet, "testing_instructions")}
-                  class="review-packet-markdown"
-                />
-                <ul :if={packet_rows(packet, "tasks") != []} class="review-packet-task-list">
-                  <li :for={task <- packet_rows(packet, "tasks")} class="review-packet-task">
-                    <span class="review-packet-checkbox" aria-hidden="true"></span>
-                    <span>
-                      <.packet_inline segments={markdown_inline(packet_text(task, "description"))} />
-                    </span>
-                  </li>
-                </ul>
-              </section>
-
-              <section :if={packet_rows(packet, "rollout") != []} class="review-packet-section">
-                <h3 class="review-packet-section-title">Rollout</h3>
-                <div class="review-packet-row-list">
-                  <.packet_row
-                    :for={{row, idx} <- packet_indexed_rows(packet, "rollout")}
-                    row={row}
-                    row_id={"packet-rollout-#{idx}"}
-                    file_diffs={@file_diffs}
-                    selected_patchset={@selected_patchset}
-                    published_threads={@published_threads}
-                    drafts={@drafts}
-                    current_user={@current_user}
-                    diff_style={@diff_style}
-                  />
-                </div>
-              </section>
-
-              <section
-                :if={packet_rows(packet, "open_questions") != []}
-                class="review-packet-section review-packet-section-wide"
-              >
-                <h3 class="review-packet-section-title">Open Questions</h3>
-                <ul class="review-packet-question-list">
-                  <li
-                    :for={question <- packet_rows(packet, "open_questions")}
-                    class="review-packet-question"
-                  >
-                    <span class="review-packet-question-key">
-                      {packet_text(question, "key")}
-                    </span>
-                    <span>
-                      <.packet_inline segments={markdown_inline(packet_text(question, "body"))} />
-                    </span>
-                  </li>
-                </ul>
-              </section>
-            </div>
-          </section>
+            packet={packet}
+            file_diffs={@file_diffs}
+            selected_patchset={@selected_patchset}
+            published_threads={@published_threads}
+            drafts={@drafts}
+            current_user={@current_user}
+            diff_style={@diff_style}
+          />
 
           <%!-- Body: sidebar + diff list --%>
-          <div class="rev-shell">
-            <aside id="file-tree" class="rev-sidebar">
-              <ul class="rev-file-list">
-                <li :for={fd <- @file_diffs}>
-                  <a href={"#file-#{fd.id}"} class="rev-file-link">
-                    <span class="flex items-center gap-2 min-w-0">
-                      <.ds_status_mark status={fd.status} />
-                      <span class="rev-file-path truncate" translate="no">{fd.path}</span>
-                    </span>
-                    <span class="rev-file-stats">
-                      <span class="rev-stat-add">+{fd.additions}</span>
-                      <span class="rev-stat-del">-{fd.deletions}</span>
-                    </span>
-                  </a>
-                </li>
-                <li :if={@file_diffs == []}>
-                  <span class="rev-empty">No files in this patchset.</span>
-                </li>
-              </ul>
-
-              <section
-                :if={@open_threads_by_op != []}
-                id="open-threads"
-                class="rev-open-threads"
-                aria-label="Open threads"
-              >
-                <h2 class="rev-open-threads-heading">Open threads</h2>
-                <div :for={{op, threads} <- @open_threads_by_op} class="rev-open-thread-group">
-                  <header class="rev-open-thread-group-header">
-                    <img
-                      :if={op && op.avatar_url}
-                      src={op.avatar_url}
-                      alt=""
-                      width="16"
-                      height="16"
-                      loading="lazy"
-                      class="rdr-avatar"
-                    />
-                    <span>{(op && op.username) || "anonymous"}</span>
-                  </header>
-                  <button
-                    :for={t <- threads}
-                    type="button"
-                    class="rev-open-thread-entry"
-                    phx-click={
-                      JS.dispatch("reviews:scroll-to-anchor",
-                        detail: %{
-                          file_id: file_id_for(@file_diffs, t.file_path),
-                          file_path: t.file_path,
-                          side: t.side,
-                          line_number_hint: anchor_line_hint(t)
-                        }
-                      )
-                    }
-                  >
-                    <span class="rev-open-thread-meta">
-                      <span class="rev-open-thread-path" translate="no">
-                        {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
-                      </span>
-                      <span class="rev-open-thread-snippet">
-                        {ReviewView.first_comment_snippet(t)}
-                      </span>
-                    </span>
-                  </button>
-                </div>
-              </section>
-            </aside>
-
-            <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
-              <article
-                :for={fd <- @file_diffs}
-                id={"file-#{fd.id}"}
-                class="rev-file-card"
-              >
-                <div
-                  id={"diff-#{fd.id}"}
-                  phx-hook="DiffRenderer"
-                  phx-update="ignore"
-                  data-file-id={fd.id}
-                  data-file-path={fd.path}
-                  data-file-status={fd.status}
-                  data-side="new"
-                  data-patchset-number={@selected_patchset.number}
-                  data-raw-diff={fd.raw_diff}
-                  data-threads={threads_json(@published_threads, fd.path)}
-                  data-drafts={drafts_json(@drafts, fd.path, @current_user)}
-                  data-signed-in={if @current_user, do: "true", else: "false"}
-                  data-diff-style={@diff_style}
-                >
-                </div>
-              </article>
-
-              <p :if={@file_diffs == []} class="rev-empty">
-                No files in this patchset.
-              </p>
-            </section>
-          </div>
+          <DiffComponents.diff_shell
+            file_diffs={@file_diffs}
+            open_threads_by_op={@open_threads_by_op}
+            selected_patchset={@selected_patchset}
+            published_threads={@published_threads}
+            drafts={@drafts}
+            current_user={@current_user}
+            diff_style={@diff_style}
+          />
         </div>
       </.ds_shell>
 
@@ -726,224 +561,6 @@ defmodule ReviewsWeb.ReviewLive do
     """
   end
 
-  attr :nav, :map, required: true
-  attr :selected_patchset, :any, required: true
-
-  defp revision_nav(assigns) do
-    ~H"""
-    <section
-      :if={@selected_patchset && @nav.rounds != []}
-      id="revision-nav"
-      class="review-revision-nav"
-      aria-label="Review rounds and turns"
-    >
-      <div class="review-round-nav">
-        <div class="review-revision-copy">
-          <span class="review-revision-label">
-            Round {@nav.current_round.index} of {@nav.round_count}
-          </span>
-          <strong class="review-revision-title">
-            {@nav.current_round.title}
-          </strong>
-        </div>
-
-        <div class="review-revision-controls" aria-label="Round navigation">
-          <button
-            type="button"
-            class="review-nav-button"
-            phx-click="select_patchset"
-            phx-value-number={@nav.previous_round && @nav.previous_round.start_number}
-            disabled={!@nav.previous_round}
-            aria-label="Previous round"
-          >
-            <.icon name="hero-arrow-left" class="size-4" /> Round
-          </button>
-          <div class="review-round-chip-list" aria-label="Rounds">
-            <button
-              :for={round <- @nav.rounds}
-              type="button"
-              class={[
-                "review-round-chip",
-                round.index == @nav.current_round.index && "is-active"
-              ]}
-              phx-click="select_patchset"
-              phx-value-number={round.start_number}
-              aria-pressed={if(round.index == @nav.current_round.index, do: "true", else: "false")}
-              title={round.title}
-            >
-              {round.index}
-            </button>
-          </div>
-          <button
-            type="button"
-            class="review-nav-button"
-            phx-click="select_patchset"
-            phx-value-number={@nav.next_round && @nav.next_round.start_number}
-            disabled={!@nav.next_round}
-            aria-label="Next round"
-          >
-            Round <.icon name="hero-arrow-right" class="size-4" />
-          </button>
-        </div>
-      </div>
-
-      <div class="review-turn-nav">
-        <div class="review-revision-copy">
-          <span class="review-revision-label">
-            Turn {@nav.selected_turn_index} of {@nav.current_round.turn_count}
-          </span>
-          <span class="review-turn-range">
-            v{@nav.current_round.start_number}
-            <%= if @nav.current_round.end_number != @nav.current_round.start_number do %>
-              -v{@nav.current_round.end_number}
-            <% end %>
-          </span>
-        </div>
-
-        <div class="review-revision-controls" aria-label="Turn navigation">
-          <button
-            type="button"
-            class="review-nav-button"
-            phx-click="select_patchset"
-            phx-value-number={@nav.previous_turn && @nav.previous_turn.number}
-            disabled={!@nav.previous_turn}
-            aria-label="Previous turn"
-          >
-            <.icon name="hero-arrow-left" class="size-4" /> Turn
-          </button>
-          <div class="review-turn-chip-list" aria-label="Turns in this round">
-            <button
-              :for={turn <- @nav.current_round.turns}
-              id={"patchset-#{turn.number}"}
-              type="button"
-              class={[
-                "review-turn-chip",
-                turn.number == @selected_patchset.number && "is-active",
-                turn.packet_present && "has-packet"
-              ]}
-              phx-click="select_patchset"
-              phx-value-number={turn.number}
-              aria-pressed={if(turn.number == @selected_patchset.number, do: "true", else: "false")}
-              title={
-                if(turn.packet_present,
-                  do: "v#{turn.number} has a review packet",
-                  else: "v#{turn.number}"
-                )
-              }
-            >
-              v{turn.number}
-            </button>
-          </div>
-          <button
-            type="button"
-            class="review-nav-button"
-            phx-click="select_patchset"
-            phx-value-number={@nav.next_turn && @nav.next_turn.number}
-            disabled={!@nav.next_turn}
-            aria-label="Next turn"
-          >
-            Turn <.icon name="hero-arrow-right" class="size-4" />
-          </button>
-        </div>
-      </div>
-    </section>
-    """
-  end
-
-  attr :row, :map, required: true
-  attr :row_id, :string, required: true
-  attr :file_diffs, :list, required: true
-  attr :selected_patchset, :any, required: true
-  attr :published_threads, :list, required: true
-  attr :drafts, :list, required: true
-  attr :current_user, :any, required: true
-  attr :diff_style, :string, required: true
-
-  defp packet_row(%{row: row} = assigns) do
-    assigns =
-      assigns
-      |> assign(:kind, packet_text(row, "kind"))
-      |> assign(:body, packet_text(row, "body"))
-      |> assign(:path, packet_text(row, "path"))
-      |> assign(:file, file_for(assigns.file_diffs, packet_text(row, "path")))
-
-    ~H"""
-    <%= cond do %>
-      <% @kind == "hunk" && @file -> %>
-        <div class="review-packet-inline-diff">
-          <div
-            id={"#{@row_id}-diff"}
-            phx-hook="DiffRenderer"
-            phx-update="ignore"
-            data-file-id={"packet-#{@file.id}"}
-            data-file-path={@file.path}
-            data-file-status={@file.status}
-            data-side="new"
-            data-patchset-number={@selected_patchset && @selected_patchset.number}
-            data-raw-diff={@file.raw_diff}
-            data-threads={threads_json(@published_threads, @file.path)}
-            data-drafts={drafts_json(@drafts, @file.path, @current_user)}
-            data-signed-in={if @current_user, do: "true", else: "false"}
-            data-diff-style={@diff_style}
-          >
-          </div>
-        </div>
-      <% @kind == "hunk" -> %>
-        <span class="review-packet-hunk is-unresolved" translate="no">
-          <.icon name="hero-code-bracket-square" class="size-4" />
-          {@path}
-        </span>
-      <% true -> %>
-        <.packet_markdown body={@body} class="review-packet-markdown" />
-    <% end %>
-    """
-  end
-
-  attr :body, :string, required: true
-  attr :class, :string, default: "review-packet-markdown"
-
-  defp packet_markdown(assigns) do
-    assigns = assign(assigns, :blocks, markdown_blocks(assigns.body))
-
-    ~H"""
-    <div class={@class}>
-      <%= for block <- @blocks do %>
-        <h3
-          :if={block.kind == :heading && block.level == 3}
-          class="review-packet-md-heading is-h3"
-        >
-          <.packet_inline segments={block.segments} />
-        </h3>
-        <h4
-          :if={block.kind == :heading && block.level == 4}
-          class="review-packet-md-heading is-h4"
-        >
-          <.packet_inline segments={block.segments} />
-        </h4>
-        <ul :if={block.kind == :list} class="review-packet-md-list">
-          <li :for={item <- block.items}>
-            <.packet_inline segments={item} />
-          </li>
-        </ul>
-        <p :if={block.kind == :paragraph} class="review-packet-md-paragraph">
-          <.packet_inline segments={block.segments} />
-        </p>
-      <% end %>
-    </div>
-    """
-  end
-
-  attr :segments, :list, required: true
-
-  defp packet_inline(assigns) do
-    ~H"""
-    <%= for segment <- @segments do %>
-      <code :if={segment.kind == :code} class="review-packet-inline-code">{segment.text}</code>
-      <span :if={segment.kind == :text}>{segment.text}</span>
-    <% end %>
-    """
-  end
-
   defp review_summary(file_diffs, drafts) do
     file_count = length(file_diffs)
     draft_count = length(drafts)
@@ -951,301 +568,11 @@ defmodule ReviewsWeb.ReviewLive do
     "#{file_count} changed #{plural(file_count, "file")} · #{draft_count} #{plural(draft_count, "draft")}"
   end
 
-  defp diff_stats(file_diffs) do
-    Enum.reduce(file_diffs, %{files: 0, additions: 0, deletions: 0}, fn file, acc ->
-      %{
-        files: acc.files + 1,
-        additions: acc.additions + Map.get(file, :additions, 0),
-        deletions: acc.deletions + Map.get(file, :deletions, 0)
-      }
-    end)
-  end
-
-  defp format_diff_stats(%{files: files, additions: additions, deletions: deletions}) do
-    "#{files} #{plural(files, "file")} · +#{additions} -#{deletions}"
-  end
-
-  defp revision_nav(patchsets, selected_patchset) do
-    rounds = review_rounds(patchsets)
-    selected_number = selected_patchset && selected_patchset.number
-
-    current_round =
-      Enum.find(rounds, &Enum.any?(&1.turns, fn t -> t.number == selected_number end))
-
-    current_round = current_round || List.last(rounds) || empty_round()
-    current_round_index = Enum.find_index(rounds, &(&1.index == current_round.index)) || 0
-
-    selected_turn_index =
-      Enum.find_index(current_round.turns, &(&1.number == selected_number)) || 0
-
-    %{
-      rounds: rounds,
-      round_count: length(rounds),
-      current_round: current_round,
-      selected_turn_index: selected_turn_index + 1,
-      previous_round: at_index(rounds, current_round_index - 1),
-      next_round: Enum.at(rounds, current_round_index + 1),
-      previous_turn: at_index(current_round.turns, selected_turn_index - 1),
-      next_turn: Enum.at(current_round.turns, selected_turn_index + 1)
-    }
-  end
-
-  defp review_rounds([]), do: []
-
-  defp review_rounds(patchsets) do
-    patchsets
-    |> Enum.reduce([], fn patchset, rounds ->
-      turn = patchset_turn(patchset)
-
-      cond do
-        rounds == [] ->
-          [new_round(1, turn, patchset)]
-
-        packet_present?(patchset.packet) ->
-          [new_round(length(rounds) + 1, turn, patchset) | rounds]
-
-        true ->
-          [round | rest] = rounds
-
-          [
-            %{
-              round
-              | turns: [turn | round.turns],
-                end_number: turn.number,
-                turn_count: round.turn_count + 1
-            }
-            | rest
-          ]
-      end
-    end)
-    |> Enum.reverse()
-    |> Enum.map(fn round -> %{round | turns: Enum.reverse(round.turns)} end)
-  end
-
-  defp patchset_turn(patchset) do
-    stats = patchset_stats(patchset)
-
-    %{
-      number: patchset.number,
-      packet_present: packet_present?(patchset.packet),
-      stats: stats
-    }
-  end
-
-  defp new_round(index, turn, patchset) do
-    %{
-      index: index,
-      title: round_title(patchset, index),
-      start_number: turn.number,
-      end_number: turn.number,
-      turn_count: 1,
-      turns: [turn]
-    }
-  end
-
-  defp empty_round do
-    %{index: 1, title: "Round 1", start_number: nil, end_number: nil, turn_count: 0, turns: []}
-  end
-
-  defp round_title(patchset, index) do
-    case packet_text(patchset.packet, "title") do
-      "" -> "Round #{index}"
-      title -> title
-    end
-  end
-
-  defp patchset_stats(%{raw_diff: raw_diff}) do
-    raw_diff
-    |> ReviewsContext.parse_diff_files()
-    |> diff_stats()
-  end
-
-  defp at_index(_items, index) when index < 0, do: nil
-  defp at_index(items, index), do: Enum.at(items, index)
-
   defp plural(1, word), do: word
   defp plural(_, word), do: word <> "s"
 
   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
   defp anchor_line_hint(_), do: nil
-
-  defp file_id_for(file_diffs, file_path) do
-    Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
-  end
-
-  defp file_for(file_diffs, file_path) do
-    Enum.find(file_diffs, fn fd -> fd.path == file_path end)
-  end
-
-  defp packet_present?(packet) when is_map(packet) do
-    packet_text(packet, "title") != "" ||
-      packet_text(packet, "summary") != "" ||
-      packet_rows(packet, "invariants") != [] ||
-      packet_rows(packet, "tour") != [] ||
-      packet_text(packet, "testing_instructions") != "" ||
-      packet_rows(packet, "tasks") != [] ||
-      packet_rows(packet, "rollout") != [] ||
-      packet_rows(packet, "open_questions") != []
-  end
-
-  defp packet_present?(_), do: false
-
-  defp packet_rows(packet, key) when is_map(packet) do
-    case packet_value(packet, key) do
-      rows when is_list(rows) -> Enum.filter(rows, &is_map/1)
-      _ -> []
-    end
-  end
-
-  defp packet_rows(_, _), do: []
-
-  defp packet_indexed_rows(packet, key), do: packet_rows(packet, key) |> Enum.with_index()
-
-  defp packet_indexed_invariant_points(packet) do
-    packet
-    |> packet_rows("invariants")
-    |> Enum.flat_map(&packet_invariant_point_bodies/1)
-    |> Enum.with_index()
-  end
-
-  defp packet_invariant_point_bodies(row) do
-    body = packet_text(row, "body")
-
-    points =
-      body
-      |> String.split("\n")
-      |> Enum.map(&String.trim/1)
-      |> Enum.filter(&String.starts_with?(&1, "- "))
-      |> Enum.map(&String.replace_prefix(&1, "- ", ""))
-      |> Enum.reject(&(&1 == ""))
-
-    cond do
-      points != [] -> points
-      body != "" -> [body]
-      true -> []
-    end
-  end
-
-  defp packet_text(packet, key) when is_map(packet) do
-    case packet_value(packet, key) do
-      value when is_binary(value) -> value
-      value when is_integer(value) -> Integer.to_string(value)
-      _ -> ""
-    end
-  end
-
-  defp packet_text(_, _), do: ""
-
-  defp packet_value(packet, key) do
-    Map.get(packet, key) || Map.get(packet, String.to_atom(key))
-  end
-
-  defp markdown_blocks(body) when is_binary(body) do
-    body
-    |> String.split("\n")
-    |> parse_markdown_blocks([])
-    |> Enum.reverse()
-  end
-
-  defp markdown_blocks(_), do: []
-
-  defp parse_markdown_blocks([], acc), do: acc
-
-  defp parse_markdown_blocks([line | rest], acc) do
-    trimmed = String.trim(line)
-
-    cond do
-      trimmed == "" ->
-        parse_markdown_blocks(rest, acc)
-
-      heading = markdown_heading(trimmed) ->
-        {level, heading_text} = heading
-
-        parse_markdown_blocks(rest, [
-          %{kind: :heading, level: level, segments: markdown_inline(heading_text)} | acc
-        ])
-
-      markdown_list_item?(trimmed) ->
-        {items, rest} = take_markdown_list([line | rest], [])
-        parse_markdown_blocks(rest, [%{kind: :list, items: items} | acc])
-
-      true ->
-        {paragraph, rest} = take_markdown_paragraph([line | rest], [])
-
-        parse_markdown_blocks(rest, [
-          %{kind: :paragraph, segments: markdown_inline(paragraph)} | acc
-        ])
-    end
-  end
-
-  defp markdown_heading(line) do
-    case Regex.run(~r/^(####|###)\s+(.+)$/, line) do
-      [_, marks, text] -> {String.length(marks), String.trim(text)}
-      _ -> nil
-    end
-  end
-
-  defp markdown_list_item?(line), do: String.starts_with?(line, "- ")
-
-  defp take_markdown_list([], acc), do: {Enum.reverse(acc), []}
-
-  defp take_markdown_list([line | rest], acc) do
-    trimmed = String.trim(line)
-
-    if markdown_list_item?(trimmed) do
-      item =
-        trimmed
-        |> String.replace_prefix("- ", "")
-        |> markdown_inline()
-
-      take_markdown_list(rest, [item | acc])
-    else
-      {Enum.reverse(acc), [line | rest]}
-    end
-  end
-
-  defp take_markdown_paragraph([], acc), do: {trim_paragraph(acc), []}
-
-  defp take_markdown_paragraph([line | rest], acc) do
-    trimmed = String.trim(line)
-
-    cond do
-      trimmed == "" || markdown_heading(trimmed) || markdown_list_item?(trimmed) ->
-        {trim_paragraph(acc), [line | rest]}
-
-      true ->
-        take_markdown_paragraph(rest, [String.trim(line) | acc])
-    end
-  end
-
-  defp trim_paragraph(lines) do
-    lines
-    |> Enum.reverse()
-    |> Enum.join(" ")
-    |> String.trim()
-  end
-
-  defp markdown_inline(text) when is_binary(text) do
-    text
-    |> String.split("`")
-    |> Enum.with_index()
-    |> Enum.reject(fn {part, _idx} -> part == "" end)
-    |> Enum.map(fn {part, idx} ->
-      %{kind: if(rem(idx, 2) == 1, do: :code, else: :text), text: part}
-    end)
-  end
-
-  defp markdown_inline(_), do: []
-
-  defp threads_json(threads, file_path) do
-    snapshot = %{published_threads: threads}
-    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
-  end
-
-  defp drafts_json(drafts, file_path, viewer) do
-    snapshot = %{drafts: drafts, viewer: viewer}
-    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
-  end
 
   defp assign_snapshot(socket, snapshot) do
     socket
