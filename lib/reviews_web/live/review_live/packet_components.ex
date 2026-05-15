@@ -2,7 +2,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   @moduledoc false
   use ReviewsWeb, :html
 
-  alias Reviews.ReviewNavigation
+  alias Reviews.ReviewPacket
   alias Reviews.ReviewView
 
   attr :packet, :map, required: true
@@ -22,7 +22,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     >
       <div class="review-packet-grid">
         <section
-          :if={ReviewNavigation.packet_rows(@packet, "invariants") != []}
+          :if={ReviewPacket.rows(@packet, "invariants") != []}
           class="review-packet-section"
         >
           <h3 class="review-packet-section-title">What must stay true</h3>
@@ -38,7 +38,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </section>
 
         <section
-          :if={ReviewNavigation.packet_rows(@packet, "tour") != []}
+          :if={ReviewPacket.rows(@packet, "tour") != []}
           class="review-packet-section"
         >
           <h3 class="review-packet-section-title">Tour</h3>
@@ -59,35 +59,35 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
         <section
           :if={
-            ReviewNavigation.packet_text(@packet, "testing_instructions") != "" ||
-              ReviewNavigation.packet_rows(@packet, "tasks") != []
+            ReviewPacket.text(@packet, "testing_instructions") != "" ||
+              ReviewPacket.rows(@packet, "tasks") != []
           }
           class="review-packet-section"
         >
           <h3 class="review-packet-section-title">Testing</h3>
           <.markdown
-            :if={ReviewNavigation.packet_text(@packet, "testing_instructions") != ""}
-            body={ReviewNavigation.packet_text(@packet, "testing_instructions")}
+            :if={ReviewPacket.text(@packet, "testing_instructions") != ""}
+            body={ReviewPacket.text(@packet, "testing_instructions")}
             class="review-packet-markdown"
           />
           <ul
-            :if={ReviewNavigation.packet_rows(@packet, "tasks") != []}
+            :if={ReviewPacket.rows(@packet, "tasks") != []}
             class="review-packet-task-list"
           >
             <li
-              :for={task <- ReviewNavigation.packet_rows(@packet, "tasks")}
+              :for={task <- ReviewPacket.rows(@packet, "tasks")}
               class="review-packet-task"
             >
               <span class="review-packet-checkbox" aria-hidden="true"></span>
               <span>
-                <.inline segments={markdown_inline(ReviewNavigation.packet_text(task, "description"))} />
+                <.inline segments={markdown_inline(ReviewPacket.text(task, "description"))} />
               </span>
             </li>
           </ul>
         </section>
 
         <section
-          :if={ReviewNavigation.packet_rows(@packet, "rollout") != []}
+          :if={ReviewPacket.rows(@packet, "rollout") != []}
           class="review-packet-section"
         >
           <h3 class="review-packet-section-title">Rollout</h3>
@@ -107,20 +107,20 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </section>
 
         <section
-          :if={ReviewNavigation.packet_rows(@packet, "open_questions") != []}
+          :if={ReviewPacket.rows(@packet, "open_questions") != []}
           class="review-packet-section review-packet-section-wide"
         >
           <h3 class="review-packet-section-title">Open Questions</h3>
           <ul class="review-packet-question-list">
             <li
-              :for={question <- ReviewNavigation.packet_rows(@packet, "open_questions")}
+              :for={question <- ReviewPacket.rows(@packet, "open_questions")}
               class="review-packet-question"
             >
               <span class="review-packet-question-key">
-                {ReviewNavigation.packet_text(question, "key")}
+                {ReviewPacket.text(question, "key")}
               </span>
               <span>
-                <.inline segments={markdown_inline(ReviewNavigation.packet_text(question, "body"))} />
+                <.inline segments={markdown_inline(ReviewPacket.text(question, "body"))} />
               </span>
             </li>
           </ul>
@@ -142,10 +142,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   def packet_row(%{row: row} = assigns) do
     assigns =
       assigns
-      |> assign(:kind, ReviewNavigation.packet_text(row, "kind"))
-      |> assign(:body, ReviewNavigation.packet_text(row, "body"))
-      |> assign(:path, ReviewNavigation.packet_text(row, "path"))
-      |> assign(:file, file_for(assigns.file_diffs, ReviewNavigation.packet_text(row, "path")))
+      |> assign(:kind, ReviewPacket.text(row, "kind"))
+      |> assign(:body, ReviewPacket.text(row, "body"))
+      |> assign(:path, ReviewPacket.text(row, "path"))
+      |> assign(:file, file_for(assigns.file_diffs, ReviewPacket.text(row, "path")))
 
     ~H"""
     <%= cond do %>
@@ -226,19 +226,19 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   defp packet_indexed_rows(packet, key) do
     packet
-    |> ReviewNavigation.packet_rows(key)
+    |> ReviewPacket.rows(key)
     |> Enum.with_index()
   end
 
   defp packet_indexed_invariant_points(packet) do
     packet
-    |> ReviewNavigation.packet_rows("invariants")
+    |> ReviewPacket.rows("invariants")
     |> Enum.flat_map(&packet_invariant_point_bodies/1)
     |> Enum.with_index()
   end
 
   defp packet_invariant_point_bodies(row) do
-    body = ReviewNavigation.packet_text(row, "body")
+    body = ReviewPacket.text(row, "body")
 
     points =
       body

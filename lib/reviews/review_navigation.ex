@@ -6,7 +6,7 @@ defmodule Reviews.ReviewNavigation do
   derived round, and later patchsets are turns inside that round.
   """
 
-  alias Reviews.Reviews, as: ReviewsContext
+  alias Reviews.{ReviewPacket, Reviews}
 
   def build(patchsets, selected_patchset) do
     rounds = rounds(patchsets)
@@ -44,7 +44,7 @@ defmodule Reviews.ReviewNavigation do
         rounds == [] ->
           [new_round(1, turn, patchset)]
 
-        packet_present?(patchset.packet) ->
+        ReviewPacket.present?(patchset.packet) ->
           [new_round(length(rounds) + 1, turn, patchset) | rounds]
 
         true ->
@@ -67,7 +67,7 @@ defmodule Reviews.ReviewNavigation do
 
   def patchset_stats(%{raw_diff: raw_diff}) do
     raw_diff
-    |> ReviewsContext.parse_diff_files()
+    |> Reviews.parse_diff_files()
     |> diff_stats_from_files()
   end
 
@@ -85,42 +85,10 @@ defmodule Reviews.ReviewNavigation do
     "#{files} #{plural(files, "file")} · +#{additions} -#{deletions}"
   end
 
-  def packet_present?(packet) when is_map(packet) do
-    packet_text(packet, "title") != "" ||
-      packet_text(packet, "summary") != "" ||
-      packet_rows(packet, "invariants") != [] ||
-      packet_rows(packet, "tour") != [] ||
-      packet_text(packet, "testing_instructions") != "" ||
-      packet_rows(packet, "tasks") != [] ||
-      packet_rows(packet, "rollout") != [] ||
-      packet_rows(packet, "open_questions") != []
-  end
-
-  def packet_present?(_), do: false
-
-  def packet_rows(packet, key) when is_map(packet) do
-    case packet_value(packet, key) do
-      rows when is_list(rows) -> Enum.filter(rows, &is_map/1)
-      _ -> []
-    end
-  end
-
-  def packet_rows(_, _), do: []
-
-  def packet_text(packet, key) when is_map(packet) do
-    case packet_value(packet, key) do
-      value when is_binary(value) -> value
-      value when is_integer(value) -> Integer.to_string(value)
-      _ -> ""
-    end
-  end
-
-  def packet_text(_, _), do: ""
-
   defp patchset_turn(patchset) do
     %{
       number: patchset.number,
-      packet_present: packet_present?(patchset.packet),
+      packet_present: ReviewPacket.present?(patchset.packet),
       stats: patchset_stats(patchset)
     }
   end
@@ -141,14 +109,10 @@ defmodule Reviews.ReviewNavigation do
   end
 
   defp round_title(patchset, index) do
-    case packet_text(patchset.packet, "title") do
+    case ReviewPacket.text(patchset.packet, "title") do
       "" -> "Round #{index}"
       title -> title
     end
-  end
-
-  defp packet_value(packet, key) do
-    Map.get(packet, key) || Map.get(packet, String.to_atom(key))
   end
 
   defp at_index(_items, index) when index < 0, do: nil

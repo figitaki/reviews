@@ -12,7 +12,7 @@ defmodule ReviewsWeb.Api.ReviewController do
   """
   use ReviewsWeb, :controller
 
-  alias Reviews.{ReviewNavigation, ReviewView}
+  alias Reviews.{ReviewNavigation, ReviewPacket, ReviewView}
   alias Reviews.Reviews, as: ReviewsContext
 
   @doc "GET /api/v1/reviews/:slug"
@@ -63,7 +63,7 @@ defmodule ReviewsWeb.Api.ReviewController do
       base_sha: ps.base_sha,
       branch_name: ps.branch_name,
       pushed_at: ps.pushed_at,
-      packet_present: ReviewNavigation.packet_present?(ps.packet),
+      packet_present: ReviewPacket.present?(ps.packet),
       stats: ReviewNavigation.patchset_stats(ps)
     }
   end

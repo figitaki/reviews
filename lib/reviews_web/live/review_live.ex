@@ -16,6 +16,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   alias Reviews.Accounts
   alias Reviews.ReviewNavigation
+  alias Reviews.ReviewPacket
   alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
@@ -355,7 +356,7 @@ defmodule ReviewsWeb.ReviewLive do
 
         <div class="design-main">
           <% packet = @selected_patchset && @selected_patchset.packet %>
-          <% has_packet = ReviewNavigation.packet_present?(packet) %>
+          <% has_packet = ReviewPacket.present?(packet) %>
           <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
 
           <header class="review-header">
@@ -365,11 +366,11 @@ defmodule ReviewsWeb.ReviewLive do
               class={["review-title", has_packet && "is-packet-title"]}
               translate="no"
             >
-              {if(has_packet, do: ReviewNavigation.packet_text(packet, "title"), else: @review.title)}
+              {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
             </h1>
             <PacketComponents.markdown
-              :if={has_packet && ReviewNavigation.packet_text(packet, "summary") != ""}
-              body={ReviewNavigation.packet_text(packet, "summary")}
+              :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
+              body={ReviewPacket.text(packet, "summary")}
               class="review-description review-packet-lede"
             />
             <p
