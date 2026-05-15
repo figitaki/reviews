@@ -2,10 +2,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   @moduledoc false
   use ReviewsWeb, :html
 
+  alias Reviews.PacketSectionDecisions
   alias Reviews.ReviewPacket
   alias Reviews.ReviewView
 
   attr :packet, :map, required: true
+  attr :review, :any, required: true
+  attr :patchsets, :list, required: true
+  attr :section_decisions, :list, required: true
   attr :file_diffs, :list, required: true
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
@@ -14,119 +18,355 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :diff_style, :string, required: true
 
   def packet(assigns) do
+    sections = packet_sections(assigns)
+
+    assigns =
+      assigns
+      |> assign(:sections, sections)
+
     ~H"""
-    <section
-      id="review-packet"
-      class="review-packet"
-      aria-labelledby="review-packet-title"
-    >
+    <section id="review-packet" class="review-packet" aria-labelledby="review-packet-title">
       <div class="review-packet-grid">
-        <section
-          :if={ReviewPacket.rows(@packet, "invariants") != []}
-          class="review-packet-section"
+        <details
+          :for={section <- @sections}
+          id={"packet-section-#{section.index}"}
+          class={["review-packet-section", section.effective_status && "is-decided"]}
         >
-          <h3 class="review-packet-section-title">What must stay true</h3>
-          <div class="review-packet-point-list">
-            <article
-              :for={{body, idx} <- packet_indexed_invariant_points(@packet)}
-              class="review-packet-point"
-            >
-              <span class="review-packet-point-index">{idx + 1}</span>
-              <.markdown body={body} class="review-packet-point-body" />
-            </article>
-          </div>
-        </section>
+          <summary class="review-packet-section-summary">
+            <div class="review-packet-section-heading">
+              <div class="review-packet-section-title-row">
+                <h3 class="review-packet-section-title">{section.title}</h3>
+                <span
+                  class="review-packet-section-estimate"
+                  title={"Estimated from #{section.estimate.changed_lines} changed lines across #{section.estimate.hunk_count} hunk rows."}
+                >
+                  <.change_stat
+                    additions={section.estimate.additions}
+                    deletions={section.estimate.deletions}
+                  />
+                  {section.estimate.time}
+                  <span class={["review-effort-pill", "is-#{effort_class(section.estimate.effort)}"]}>
+                    {section.estimate.effort}
+                  </span>
+                </span>
+              </div>
+              <p :if={section.summary != ""} class="review-packet-section-summary-text">
+                {section.summary}
+              </p>
+            </div>
 
-        <section
-          :if={ReviewPacket.rows(@packet, "tour") != []}
-          class="review-packet-section"
-        >
-          <h3 class="review-packet-section-title">Tour</h3>
-          <div class="review-packet-row-list">
-            <.packet_row
-              :for={{row, idx} <- packet_indexed_rows(@packet, "tour")}
-              row={row}
-              row_id={"packet-tour-#{idx}"}
-              file_diffs={@file_diffs}
-              selected_patchset={@selected_patchset}
-              published_threads={@published_threads}
-              drafts={@drafts}
-              current_user={@current_user}
-              diff_style={@diff_style}
-            />
-          </div>
-        </section>
-
-        <section
-          :if={
-            ReviewPacket.text(@packet, "testing_instructions") != "" ||
-              ReviewPacket.rows(@packet, "tasks") != []
-          }
-          class="review-packet-section"
-        >
-          <h3 class="review-packet-section-title">Testing</h3>
-          <.markdown
-            :if={ReviewPacket.text(@packet, "testing_instructions") != ""}
-            body={ReviewPacket.text(@packet, "testing_instructions")}
-            class="review-packet-markdown"
-          />
-          <ul
-            :if={ReviewPacket.rows(@packet, "tasks") != []}
-            class="review-packet-task-list"
-          >
-            <li
-              :for={task <- ReviewPacket.rows(@packet, "tasks")}
-              class="review-packet-task"
-            >
-              <span class="review-packet-checkbox" aria-hidden="true"></span>
-              <span>
-                <.inline segments={markdown_inline(ReviewPacket.text(task, "description"))} />
+            <div class="review-packet-section-controls">
+              <span
+                :if={section.previous}
+                class={[
+                  "review-section-state-pill",
+                  "is-previous",
+                  "is-#{section.previous.status}"
+                ]}
+                title={"Previously #{section.previous.status} in v#{section.previous.patchset_number}"}
+                aria-label={"Previously #{section.previous.status} in version #{section.previous.patchset_number}"}
+              >
+                <.section_status_icon status={section.previous.status} />
+                <span class="sr-only">
+                  Previously {section.previous.status} in v{section.previous.patchset_number}
+                </span>
               </span>
-            </li>
-          </ul>
-        </section>
 
-        <section
-          :if={ReviewPacket.rows(@packet, "rollout") != []}
-          class="review-packet-section"
-        >
-          <h3 class="review-packet-section-title">Rollout</h3>
-          <div class="review-packet-row-list">
-            <.packet_row
-              :for={{row, idx} <- packet_indexed_rows(@packet, "rollout")}
-              row={row}
-              row_id={"packet-rollout-#{idx}"}
-              file_diffs={@file_diffs}
-              selected_patchset={@selected_patchset}
-              published_threads={@published_threads}
-              drafts={@drafts}
-              current_user={@current_user}
-              diff_style={@diff_style}
-            />
+              <.icon
+                :if={section.previous}
+                name="hero-chevron-right"
+                class="review-section-transition-icon"
+              />
+
+              <div
+                class="review-packet-section-actions"
+                aria-label={"Decision for #{section.title}"}
+              >
+                <%= if @current_user do %>
+                  <button
+                    :for={status <- ~w(approved denied ignored)}
+                    type="button"
+                    class={[
+                      "review-section-action",
+                      section.effective_status == status && "is-active",
+                      "is-#{status}"
+                    ]}
+                    title={section_status_label(status)}
+                    aria-label={section_status_label(status)}
+                    phx-click="set_section_status"
+                    phx-value-section_index={section.index}
+                    phx-value-status={status}
+                  >
+                    <.section_status_icon status={status} />
+                    <span class="review-section-action-label">{section_status_label(status)}</span>
+                  </button>
+                <% else %>
+                  <span class="review-packet-section-signin">Sign in to review</span>
+                <% end %>
+              </div>
+
+              <.icon name="hero-chevron-down" class="review-collapse-icon" />
+            </div>
+          </summary>
+
+          <div class="review-packet-section-body">
+            <div class="review-packet-row-list">
+              <.packet_row
+                :for={{row, idx} <- Enum.with_index(section.rows)}
+                row={row}
+                row_id={"packet-section-#{section.index}-row-#{idx}"}
+                file_diffs={@file_diffs}
+                selected_patchset={@selected_patchset}
+                published_threads={@published_threads}
+                drafts={@drafts}
+                current_user={@current_user}
+                diff_style={@diff_style}
+              />
+            </div>
           </div>
-        </section>
+        </details>
 
-        <section
-          :if={ReviewPacket.rows(@packet, "open_questions") != []}
-          class="review-packet-section review-packet-section-wide"
-        >
-          <h3 class="review-packet-section-title">Open Questions</h3>
-          <ul class="review-packet-question-list">
-            <li
-              :for={question <- ReviewPacket.rows(@packet, "open_questions")}
-              class="review-packet-question"
-            >
-              <span class="review-packet-question-key">
-                {ReviewPacket.text(question, "key")}
-              </span>
-              <span>
-                <.inline segments={markdown_inline(ReviewPacket.text(question, "body"))} />
-              </span>
-            </li>
-          </ul>
+        <section :if={@sections == []} class="review-packet-section">
+          <h3 class="review-packet-section-title">No sections</h3>
+          <p class="review-packet-md-paragraph">This packet does not include narrative sections.</p>
         </section>
       </div>
     </section>
+    """
+  end
+
+  def packet_effort_for_header(
+        packet,
+        file_diffs,
+        section_decisions,
+        selected_patchset,
+        patchsets
+      ) do
+    %{
+      packet: packet,
+      file_diffs: file_diffs,
+      section_decisions: section_decisions,
+      selected_patchset: selected_patchset,
+      patchsets: patchsets
+    }
+    |> packet_sections()
+    |> packet_effort()
+  end
+
+  defp packet_sections(assigns) do
+    selected_patchset = assigns.selected_patchset
+
+    assigns.packet
+    |> ReviewPacket.sections()
+    |> Enum.map(fn section ->
+      state =
+        PacketSectionDecisions.section_state(
+          section,
+          assigns.section_decisions,
+          selected_patchset,
+          assigns.patchsets
+        )
+
+      section
+      |> Map.put(:status, state.current && state.current.status)
+      |> Map.put(:effective_status, state.effective && state.effective.status)
+      |> Map.put(:previous, state.previous)
+      |> Map.put(:summary, section_summary(section))
+      |> Map.put(:estimate, section_estimate(section, assigns.file_diffs))
+    end)
+  end
+
+  defp packet_effort(sections) do
+    minutes = Enum.sum(Enum.map(sections, & &1.estimate.minutes))
+    buckets = effort_buckets(sections)
+
+    %{
+      minutes: minutes,
+      remaining_minutes: buckets.pending,
+      time: format_minutes(minutes),
+      remaining_time: format_minutes(buckets.pending),
+      effort: effort_label(minutes),
+      progress_label: progress_label(buckets, minutes)
+    }
+  end
+
+  defp effort_buckets(sections) do
+    Enum.reduce(sections, %{approved: 0, denied: 0, ignored: 0, pending: 0}, fn section, acc ->
+      key =
+        case section.effective_status do
+          "approved" -> :approved
+          "denied" -> :denied
+          "ignored" -> :ignored
+          _ -> :pending
+        end
+
+      Map.update!(acc, key, &(&1 + section.estimate.minutes))
+    end)
+  end
+
+  defp progress_label(buckets, total) do
+    "Approved #{format_minutes(buckets.approved)} of #{format_minutes(total)}; denied #{format_minutes(buckets.denied)}; ignored #{format_minutes(buckets.ignored)}."
+  end
+
+  defp section_summary(section) do
+    section.rows
+    |> Enum.find_value("", fn row ->
+      if ReviewPacket.text(row, "kind") == "markdown" do
+        row
+        |> ReviewPacket.text("body")
+        |> markdown_summary()
+      end
+    end)
+  end
+
+  defp markdown_summary(body) do
+    body
+    |> String.split("\n\n")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.find_value("", fn block ->
+      block
+      |> String.split("\n")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == "" || String.starts_with?(&1, "#")))
+      |> case do
+        [] -> nil
+        lines -> lines |> Enum.join(" ") |> plain_markdown() |> truncate_summary()
+      end
+    end)
+  end
+
+  defp plain_markdown(text) do
+    text
+    |> String.replace(~r/`([^`]+)`/, "\\1")
+    |> String.replace(~r/\*\*([^*]+)\*\*/, "\\1")
+    |> String.replace(~r/\*([^*]+)\*/, "\\1")
+  end
+
+  defp truncate_summary(text) do
+    text = String.trim(text)
+
+    if String.length(text) > 150 do
+      text |> String.slice(0, 147) |> String.trim_trailing() |> Kernel.<>("...")
+    else
+      text
+    end
+  end
+
+  defp section_estimate(section, file_diffs) do
+    {additions, deletions, hunk_count} =
+      Enum.reduce(section.rows, {0, 0, 0}, fn row, {additions, deletions, hunks} ->
+        if ReviewPacket.text(row, "kind") == "hunk" do
+          file = file_for(file_diffs, ReviewPacket.text(row, "path"))
+
+          raw_diff =
+            packet_row_raw_diff(
+              file,
+              ReviewPacket.int(row, "hunk_index"),
+              ReviewPacket.int(row, "line_start"),
+              ReviewPacket.int(row, "line_end")
+            )
+
+          {row_additions, row_deletions} = changed_line_stats(raw_diff)
+
+          {additions + row_additions, deletions + row_deletions, hunks + 1}
+        else
+          {additions, deletions, hunks}
+        end
+      end)
+
+    changed_lines = additions + deletions
+
+    minutes =
+      changed_lines
+      |> estimate_minutes(hunk_count)
+
+    %{
+      additions: additions,
+      deletions: deletions,
+      changed_lines: changed_lines,
+      hunk_count: hunk_count,
+      minutes: minutes,
+      time: format_minutes(minutes),
+      effort: effort_label(minutes)
+    }
+  end
+
+  defp changed_line_stats(raw_diff) do
+    Enum.reduce(String.split(raw_diff, "\n"), {0, 0}, fn line, {additions, deletions} ->
+      cond do
+        String.starts_with?(line, "+") && !String.starts_with?(line, "+++") ->
+          {additions + 1, deletions}
+
+        String.starts_with?(line, "-") && !String.starts_with?(line, "---") ->
+          {additions, deletions + 1}
+
+        true ->
+          {additions, deletions}
+      end
+    end)
+  end
+
+  defp estimate_minutes(0, 0), do: 1
+
+  defp estimate_minutes(changed_lines, hunk_count) do
+    line_minutes = max(1, ceil(changed_lines / 45))
+    hunk_minutes = div(max(hunk_count - 1, 0), 3)
+    line_minutes + hunk_minutes
+  end
+
+  defp format_minutes(1), do: "1 min"
+  defp format_minutes(minutes), do: "#{minutes} min"
+
+  defp effort_label(minutes) when minutes <= 2, do: "Light"
+  defp effort_label(minutes) when minutes <= 6, do: "Moderate"
+  defp effort_label(minutes) when minutes <= 12, do: "Involved"
+  defp effort_label(_minutes), do: "Deep"
+
+  defp effort_class("Light"), do: "light"
+  defp effort_class("Moderate"), do: "moderate"
+  defp effort_class("Involved"), do: "involved"
+  defp effort_class("Deep"), do: "deep"
+  defp effort_class(_), do: "moderate"
+
+  defp section_status_label("approved"), do: "Approve"
+  defp section_status_label("denied"), do: "Deny"
+  defp section_status_label("ignored"), do: "Ignore"
+  defp section_status_label(status), do: status
+
+  attr :additions, :integer, required: true
+  attr :deletions, :integer, required: true
+
+  def change_stat(assigns) do
+    ~H"""
+    <span
+      class="review-change-stat"
+      aria-label={"#{@additions} additions and #{@deletions} deletions"}
+    >
+      <span :if={@additions > 0} class="review-change-stat-add">+{@additions}</span>
+      <span :if={@deletions > 0} class="review-change-stat-del">-{@deletions}</span>
+      <span :if={@additions == 0 && @deletions == 0} class="review-change-stat-empty">±0</span>
+    </span>
+    """
+  end
+
+  attr :status, :string, required: true
+
+  defp section_status_icon(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :icon,
+        case assigns.status do
+          "approved" -> "hero-check"
+          "denied" -> "hero-x-mark"
+          "ignored" -> "hero-minus"
+          _ -> "hero-minus"
+        end
+      )
+
+    ~H"""
+    <.icon name={@icon} class="review-section-state-icon" />
     """
   end
 
@@ -145,39 +385,107 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> assign(:kind, ReviewPacket.text(row, "kind"))
       |> assign(:body, ReviewPacket.text(row, "body"))
       |> assign(:path, ReviewPacket.text(row, "path"))
+      |> assign(:hunk_index, ReviewPacket.int(row, "hunk_index"))
+      |> assign(:line_start, ReviewPacket.int(row, "line_start"))
+      |> assign(:line_end, ReviewPacket.int(row, "line_end"))
       |> assign(:file, file_for(assigns.file_diffs, ReviewPacket.text(row, "path")))
+
+    assigns =
+      assign(
+        assigns,
+        :raw_diff,
+        packet_row_raw_diff(
+          assigns.file,
+          assigns.hunk_index,
+          assigns.line_start,
+          assigns.line_end
+        )
+      )
 
     ~H"""
     <%= cond do %>
-      <% @kind == "hunk" && @file -> %>
-        <div class="review-packet-inline-diff">
-          <div
-            id={"#{@row_id}-diff"}
-            phx-hook="DiffRenderer"
-            phx-update="ignore"
-            data-file-id={"packet-#{@file.id}"}
-            data-file-path={@file.path}
-            data-file-status={@file.status}
-            data-side="new"
-            data-patchset-number={@selected_patchset && @selected_patchset.number}
-            data-raw-diff={@file.raw_diff}
-            data-threads={threads_json(@published_threads, @file.path)}
-            data-drafts={drafts_json(@drafts, @file.path, @current_user)}
-            data-signed-in={if @current_user, do: "true", else: "false"}
-            data-diff-style={@diff_style}
-          >
+      <% @kind == "hunk" && @file && @raw_diff != "" -> %>
+        <div id={@row_id} class="review-packet-row is-hunk">
+          <div class="review-packet-inline-diff">
+            <div
+              id={"#{@row_id}-diff"}
+              phx-hook="DiffRenderer"
+              phx-update="ignore"
+              data-file-id={"packet-#{@file.id}-#{@row_id}"}
+              data-file-path={@file.path}
+              data-file-status={@file.status}
+              data-side="new"
+              data-patchset-number={@selected_patchset && @selected_patchset.number}
+              data-raw-diff={@raw_diff}
+              data-threads={threads_json(@published_threads, @file.path)}
+              data-drafts={drafts_json(@drafts, @file.path, @current_user)}
+              data-signed-in={if @current_user, do: "true", else: "false"}
+              data-diff-style={@diff_style}
+            >
+            </div>
           </div>
         </div>
       <% @kind == "hunk" -> %>
-        <span class="review-packet-hunk is-unresolved" translate="no">
+        <span id={@row_id} class="review-packet-hunk is-unresolved" translate="no">
           <.icon name="hero-code-bracket-square" class="size-4" />
-          {@path}
+          {ReviewPacket.row_ref(@row)}
         </span>
       <% true -> %>
-        <.markdown body={@body} class="review-packet-markdown" />
+        <div id={@row_id} class="review-packet-row is-markdown">
+          <.markdown body={@body} class="review-packet-markdown" />
+        </div>
     <% end %>
     """
   end
+
+  defp packet_row_raw_diff(nil, _hunk_index, _line_start, _line_end), do: ""
+
+  defp packet_row_raw_diff(file, hunk_index, line_start, line_end) do
+    slice_raw_diff(file.raw_diff || "", hunk_index, line_start, line_end)
+  end
+
+  defp slice_raw_diff(raw_diff, hunk_index, line_start, line_end)
+       when is_integer(hunk_index) and hunk_index > 0 do
+    lines = String.split(raw_diff, "\n", trim: false)
+    {header_lines, rest} = Enum.split_while(lines, &(not String.starts_with?(&1, "@@ ")))
+
+    {_, selected} =
+      Enum.reduce(rest, {0, []}, fn line, {idx, acc} ->
+        cond do
+          String.starts_with?(line, "@@ ") ->
+            next_idx = idx + 1
+            {next_idx, if(next_idx == hunk_index, do: [line], else: acc)}
+
+          idx == hunk_index ->
+            {idx, acc ++ [line]}
+
+          true ->
+            {idx, acc}
+        end
+      end)
+
+    case selected do
+      [] ->
+        ""
+
+      [hunk_header | hunk_lines] ->
+        hunk_lines = slice_hunk_lines(hunk_lines, line_start, line_end)
+        Enum.join(header_lines ++ [hunk_header | hunk_lines], "\n")
+    end
+  end
+
+  defp slice_raw_diff(_raw_diff, _hunk_index, _line_start, _line_end), do: ""
+
+  defp slice_hunk_lines(lines, nil, nil), do: Enum.reject(lines, &(&1 == ""))
+
+  defp slice_hunk_lines(lines, line_start, line_end)
+       when is_integer(line_start) and is_integer(line_end) do
+    lines
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.slice((line_start - 1)..(line_end - 1))
+  end
+
+  defp slice_hunk_lines(lines, _line_start, _line_end), do: Enum.reject(lines, &(&1 == ""))
 
   attr :body, :string, required: true
   attr :class, :string, default: "review-packet-markdown"
@@ -222,41 +530,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       <span :if={segment.kind == :text}>{segment.text}</span>
     <% end %>
     """
-  end
-
-  defp packet_indexed_rows(packet, key) do
-    packet
-    |> ReviewPacket.rows(key)
-    |> Enum.with_index()
-  end
-
-  defp packet_indexed_invariant_points(packet) do
-    packet
-    |> ReviewPacket.rows("invariants")
-    |> Enum.flat_map(&packet_invariant_point_bodies/1)
-    |> Enum.with_index()
-  end
-
-  defp packet_invariant_point_bodies(row) do
-    body = ReviewPacket.text(row, "body")
-
-    points =
-      body
-      |> String.split("\n")
-      |> Enum.map(&String.trim/1)
-      |> Enum.filter(&String.starts_with?(&1, "- "))
-      |> Enum.map(&String.replace_prefix(&1, "- ", ""))
-      |> Enum.reject(&(&1 == ""))
-
-    cond do
-      points != [] -> points
-      body != "" -> [body]
-      true -> []
-    end
-  end
-
-  defp file_for(file_diffs, file_path) do
-    Enum.find(file_diffs, fn fd -> fd.path == file_path end)
   end
 
   defp markdown_blocks(body) when is_binary(body) do
@@ -355,6 +628,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   end
 
   defp markdown_inline(_), do: []
+
+  defp file_for(file_diffs, path) do
+    Enum.find(file_diffs, &(&1.path == path || &1.old_path == path))
+  end
 
   defp threads_json(threads, file_path) do
     snapshot = %{published_threads: threads}

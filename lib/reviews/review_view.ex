@@ -8,6 +8,7 @@ defmodule Reviews.ReviewView do
   """
 
   alias Reviews.Accounts.User
+  alias Reviews.PacketSectionDecisions
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.{File, Patchset, Review}
   alias Reviews.Threads
@@ -18,6 +19,7 @@ defmodule Reviews.ReviewView do
           selected_patchset: Patchset.t() | nil,
           files: [File.t()],
           file_diffs: [map()],
+          packet_section_decisions: [map()],
           published_threads: [map()],
           drafts: [map()],
           viewer: User.t() | nil
@@ -100,6 +102,7 @@ defmodule Reviews.ReviewView do
       selected_patchset: selected,
       files: files,
       file_diffs: file_diff_meta(files, selected),
+      packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
       published_threads: Threads.list_published_threads(review.id),
       drafts: list_drafts(review, viewer),
       viewer: viewer

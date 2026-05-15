@@ -8,37 +8,48 @@ defmodule Reviews.ReviewPacketTest do
       ReviewPacket.new(%{
         "title" => "Packet",
         "summary" => "Read first.",
-        "tour" => [
-          %{"kind" => "markdown", "body" => "Start here."},
-          %{"kind" => "hunk", "path" => "lib/foo.ex"}
+        "sections" => [
+          %{
+            "title" => "Walkthrough",
+            "rows" => [
+              %{"kind" => "markdown", "body" => "Start here."},
+              %{"kind" => "hunk", "path" => "lib/foo.ex", "hunk_index" => 1}
+            ]
+          }
         ]
       })
 
     assert ReviewPacket.present?(packet)
     assert ReviewPacket.text(packet, "title") == "Packet"
     assert ReviewPacket.text(packet, "summary") == "Read first."
-    assert [%{"kind" => "markdown"}, %{"kind" => "hunk"}] = ReviewPacket.rows(packet, "tour")
+    assert [%{title: "Walkthrough", rows: rows}] = ReviewPacket.sections(packet)
+    assert [%{"kind" => "markdown"}, %{"kind" => "hunk"}] = rows
   end
 
   test "supports locally-built atom-key packet maps without arbitrary atom creation" do
     packet = %{
       title: "Packet",
-      tasks: [
-        %{key: "smoke", description: "Run smoke test"},
-        "not a task"
+      sections: [
+        %{
+          title: "Smoke",
+          rows: [
+            %{kind: "markdown", body: "Run smoke test"},
+            "not a row"
+          ]
+        }
       ]
     }
 
     assert ReviewPacket.present?(packet)
     assert ReviewPacket.text(packet, "title") == "Packet"
-    assert [%{key: "smoke"}] = ReviewPacket.rows(packet, "tasks")
-    assert ReviewPacket.text(%{description: "Run smoke test"}, "description") == "Run smoke test"
+    assert [%{title: "Smoke", rows: [%{body: "Run smoke test"}]}] = ReviewPacket.sections(packet)
+    assert ReviewPacket.text(%{body: "Run smoke test"}, "body") == "Run smoke test"
   end
 
   test "handles nil and malformed packet values as empty packets" do
     refute ReviewPacket.present?(nil)
     refute ReviewPacket.present?(%{})
     assert ReviewPacket.text(%{"title" => ["not", "text"]}, "title") == ""
-    assert ReviewPacket.rows(%{"tour" => "not rows"}, "tour") == []
+    assert ReviewPacket.rows(%{"sections" => "not rows"}, "sections") == []
   end
 end

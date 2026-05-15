@@ -15,6 +15,7 @@ defmodule ReviewsWeb.ReviewLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.Accounts
+  alias Reviews.PacketSectionDecisions
   alias Reviews.ReviewNavigation
   alias Reviews.ReviewPacket
   alias Reviews.ReviewView
@@ -64,7 +65,21 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_params(_params, _uri, socket), do: {:noreply, socket}
+  def handle_params(params, _uri, socket) do
+    case parse_optional_patchset(params["patchset"]) do
+      {:ok, patchset_number} ->
+        case refresh_snapshot(socket, patchset_number: patchset_number) do
+          {:ok, socket} ->
+            {:noreply, socket}
+
+          {:error, :patchset_not_found} ->
+            {:noreply, put_flash(socket, :error, "Patchset not found.")}
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Patchset not found.")}
+    end
+  end
 
   @impl true
   def handle_event("select_patchset", %{"number" => number}, socket) do
@@ -79,6 +94,23 @@ defmodule ReviewsWeb.ReviewLive do
         {:noreply, socket}
     end
   end
+
+  @impl true
+  def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
+      when status in ["approved", "denied", "ignored"] do
+    with %{} = user <- socket.assigns.current_user,
+         %{} = patchset <- socket.assigns.selected_patchset,
+         {section_index, ""} <- Integer.parse(to_string(index)),
+         %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
+         {:ok, _decision} <- put_section_status(socket, patchset, user, section, status) do
+      {:noreply, refresh_snapshot!(socket)}
+    else
+      nil -> {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
+      _ -> {:noreply, put_flash(socket, :error, "Could not update section.")}
+    end
+  end
+
+  def handle_event("set_section_status", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("open_publish_modal", _params, socket) do
@@ -253,6 +285,15 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp parse_int(_), do: nil
 
+  defp parse_optional_patchset(nil), do: {:ok, nil}
+
+  defp parse_optional_patchset(value) do
+    case Integer.parse(to_string(value)) do
+      {n, ""} when n > 0 -> {:ok, n}
+      _ -> :error
+    end
+  end
+
   defp load_current_user(session) do
     case session["current_user_id"] do
       nil ->
@@ -358,6 +399,17 @@ defmodule ReviewsWeb.ReviewLive do
           <% packet = @selected_patchset && @selected_patchset.packet %>
           <% has_packet = ReviewPacket.present?(packet) %>
           <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
+          <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
+          <% packet_effort =
+            if has_packet do
+              PacketComponents.packet_effort_for_header(
+                packet,
+                @file_diffs,
+                @packet_section_decisions,
+                @selected_patchset,
+                @patchsets
+              )
+            end %>
 
           <header class="review-header">
             <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
@@ -381,16 +433,24 @@ defmodule ReviewsWeb.ReviewLive do
             </p>
             <div :if={@selected_patchset} class="review-header-meta">
               <span>Revision v{@selected_patchset.number}</span>
-              <span>
-                {ReviewNavigation.format_diff_stats(
-                  ReviewNavigation.diff_stats_from_files(@file_diffs)
-                )}
+              <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
+              <span class="review-header-change-stat">
+                <PacketComponents.change_stat
+                  additions={diff_stats.additions}
+                  deletions={diff_stats.deletions}
+                />
+              </span>
+              <span :if={has_packet && packet_effort} class="review-header-estimate">
+                Estimated Review Time <strong>Total {packet_effort.time}</strong>
+                <span>(Remaining {packet_effort.remaining_time})</span>
               </span>
             </div>
           </header>
 
           <RevisionNavComponents.revision_nav
             nav={revision_nav}
+            review={@review}
+            live_action={@live_action}
             selected_patchset={@selected_patchset}
           />
 
@@ -407,8 +467,11 @@ defmodule ReviewsWeb.ReviewLive do
           </div>
 
           <PacketComponents.packet
-            :if={has_packet}
+            :if={has_packet && @live_action != :changes}
             packet={packet}
+            review={@review}
+            patchsets={@patchsets}
+            section_decisions={@packet_section_decisions}
             file_diffs={@file_diffs}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
@@ -419,6 +482,7 @@ defmodule ReviewsWeb.ReviewLive do
 
           <%!-- Body: sidebar + diff list --%>
           <DiffComponents.diff_shell
+            :if={@live_action == :changes || !has_packet}
             file_diffs={@file_diffs}
             open_threads_by_op={@open_threads_by_op}
             selected_patchset={@selected_patchset}
@@ -582,8 +646,38 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:selected_patchset, snapshot.selected_patchset)
     |> assign(:files, snapshot.files)
     |> assign(:file_diffs, snapshot.file_diffs)
+    |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
     |> assign(:drafts, snapshot.drafts)
     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
+  end
+
+  defp put_section_status(socket, patchset, user, section, status) do
+    state =
+      PacketSectionDecisions.section_state(
+        section,
+        socket.assigns.packet_section_decisions,
+        patchset,
+        socket.assigns.patchsets
+      )
+
+    next_status =
+      if state.effective && state.effective.status == status do
+        "pending"
+      else
+        status
+      end
+
+    if state.current && state.current.status == next_status do
+      PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
+    else
+      PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
+        section_index: section.index,
+        section_title: section.title,
+        section_fingerprint: section.fingerprint,
+        section_refs: section.refs,
+        status: next_status
+      })
+    end
   end
 end

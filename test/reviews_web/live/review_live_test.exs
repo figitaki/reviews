@@ -68,22 +68,25 @@ defmodule ReviewsWeb.ReviewLiveTest do
             "format_version" => 1,
             "title" => "Packet walkthrough",
             "summary" => "Read this first.",
-            "invariants" => [
+            "sections" => [
               %{
-                "kind" => "markdown",
-                "body" =>
-                  "- Preserve packet JSON as the server contract.\n- Keep packet.md editable."
+                "title" => "Main change",
+                "rows" => [
+                  %{
+                    "kind" => "markdown",
+                    "body" =>
+                      "### Main change\nPreserve packet JSON as the server contract.\n\nKeep packet.md editable."
+                  },
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1,
+                    "line_start" => 1,
+                    "line_end" => 2
+                  },
+                  %{"kind" => "markdown", "body" => "Run the smoke test."}
+                ]
               }
-            ],
-            "tour" => [
-              %{"kind" => "markdown", "body" => "### Main change\nStart here."},
-              %{"kind" => "hunk", "path" => "lib/packet.ex"}
-            ],
-            "tasks" => [
-              %{"key" => "smoke", "description" => "Run the smoke test"}
-            ],
-            "open_questions" => [
-              %{"key" => "decision", "body" => "Is this the right direction?"}
             ]
           }
         })
@@ -94,10 +97,23 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-packet")
       assert has_element?(view, ".review-title.is-packet-title", "Packet walkthrough")
       assert has_element?(view, ".review-packet-lede", "Read this first.")
+      assert has_element?(view, ".review-header-estimate", "Estimated Review Time")
+      assert has_element?(view, ".review-header-change-stat .review-change-stat-add", "+1")
+      assert has_element?(view, ".review-header-change-stat .review-change-stat-del", "-1")
+      assert has_element?(view, "#packet-section-0:not([open])")
+      assert has_element?(view, "#packet-section-0 .review-packet-section-estimate", "Light")
+      assert has_element?(view, "#packet-section-0 .review-change-stat-add", "+1")
+      assert has_element?(view, "#packet-section-0 .review-change-stat-del", "-1")
+
+      assert has_element?(
+               view,
+               "#packet-section-0 .review-packet-section-summary-text",
+               "Preserve packet JSON as the server contract."
+             )
+
       assert html =~ "Preserve packet JSON as the server contract."
       assert html =~ "Keep packet.md editable."
       assert html =~ "Run the smoke test"
-      assert html =~ "Is this the right direction?"
       refute html =~ "### Main change"
 
       assert has_element?(
@@ -125,7 +141,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
           """,
           packet: %{
             "format_version" => 1,
-            "title" => "First packet"
+            "title" => "First packet",
+            "sections" => []
           }
         })
 
@@ -153,7 +170,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
           """,
           packet: %{
             "format_version" => 1,
-            "title" => "Second packet"
+            "title" => "Second packet",
+            "sections" => []
           }
         })
 
@@ -173,6 +191,47 @@ defmodule ReviewsWeb.ReviewLiveTest do
     test "Publish review button is disabled with no drafts", %{conn: conn, review: review} do
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
       assert has_element?(view, "#publish-review-button[disabled]")
+    end
+
+    test "renders the classic diff on the changes route", %{conn: conn, author: author} do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Packet change",
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1 +1 @@
+          -old
+          +new
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [
+                  %{"kind" => "hunk", "path" => "lib/packet.ex", "hunk_index" => 1}
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+      assert has_element?(packet_view, "#review-packet")
+      refute has_element?(packet_view, "#diff-files")
+
+      {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
+      assert has_element?(changes_view, "#diff-files")
+      assert has_element?(changes_view, "#diff-files details.rev-file-card[open]")
+      assert has_element?(changes_view, "#diff-files summary.rev-file-summary", "lib/packet.ex")
+
+      assert has_element?(
+               changes_view,
+               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
+             )
     end
   end
 
@@ -245,6 +304,168 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert length(seeded_drafts) == 1
       assert hd(seeded_drafts).body == "from-hook"
+    end
+
+    test "section decisions persist and later changed sections link to the previous decision", %{
+      conn: conn,
+      author: author
+    } do
+      diff_v1 = """
+      diff --git a/lib/packet.ex b/lib/packet.ex
+      --- a/lib/packet.ex
+      +++ b/lib/packet.ex
+      @@ -1 +1 @@
+      -old
+      +new
+      """
+
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Packet decision",
+          raw_diff: diff_v1,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1,
+                    "line_start" => 1,
+                    "line_end" => 2
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}?patchset=1")
+      view |> element("#packet-section-0 button", "Approve") |> render_click()
+      assert has_element?(view, ~s|#packet-section-0:not([open])|)
+
+      refute has_element?(view, "#packet-section-0 .review-section-state-pill.is-current")
+      assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
+
+      view |> element("#packet-section-0 button", "Approve") |> render_click()
+      assert has_element?(view, ~s|#packet-section-0:not([open])|)
+      refute has_element?(view, "#packet-section-0 .review-section-action.is-active")
+
+      view |> element("#packet-section-0 button", "Approve") |> render_click()
+      assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
+
+      {:ok, _ps2} =
+        ReviewsCtx.append_patchset(packet_review, %{
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1,2 +1,3 @@
+          -old
+          +newer
+          +again
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1,
+                    "line_start" => 1,
+                    "line_end" => 3
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, latest_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+      refute has_element?(latest_view, "#packet-section-0 .review-section-action.is-active")
+
+      assert has_element?(
+               latest_view,
+               ~s|#packet-section-0 .review-section-state-pill.is-previous.is-approved[title="Previously approved in v1"]|
+             )
+
+      refute has_element?(
+               latest_view,
+               "#packet-section-0 a.review-section-state-pill.is-previous"
+             )
+
+      assert has_element?(latest_view, "#packet-section-0 .review-section-transition-icon")
+      assert has_element?(latest_view, "#packet-section-0 .review-packet-section-actions")
+      assert has_element?(latest_view, ~s|#packet-section-0:not([open])|)
+
+      latest_view |> element("#packet-section-0 button", "Ignore") |> render_click()
+
+      assert has_element?(
+               latest_view,
+               ~s|#packet-section-0 .review-section-state-pill.is-previous.is-approved[title="Previously approved in v1"]|
+             )
+
+      refute has_element?(latest_view, "#packet-section-0 .review-section-state-pill.is-current")
+
+      assert has_element?(
+               latest_view,
+               "#packet-section-0 .review-section-action.is-active",
+               "Ignore"
+             )
+
+      {:ok, _ps3} =
+        ReviewsCtx.append_patchset(packet_review, %{
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1,2 +1,3 @@
+          -old
+          +newer
+          +again
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1,
+                    "line_start" => 1,
+                    "line_end" => 3
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, carried_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      assert has_element?(
+               carried_view,
+               "#packet-section-0 .review-section-action.is-active",
+               "Ignore"
+             )
+
+      refute has_element?(
+               carried_view,
+               "#packet-section-0 .review-section-state-pill.is-previous"
+             )
+
+      carried_view |> element("#packet-section-0 button", "Ignore") |> render_click()
+      refute has_element?(carried_view, "#packet-section-0 .review-section-action.is-active")
     end
   end
 end

@@ -83,28 +83,35 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
       </aside>
 
       <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
-        <article
+        <details
           :for={fd <- @file_diffs}
           id={"file-#{fd.id}"}
           class="rev-file-card"
+          open
         >
-          <div
-            id={"diff-#{fd.id}"}
-            phx-hook="DiffRenderer"
-            phx-update="ignore"
-            data-file-id={fd.id}
-            data-file-path={fd.path}
-            data-file-status={fd.status}
-            data-side="new"
-            data-patchset-number={@selected_patchset.number}
-            data-raw-diff={fd.raw_diff}
-            data-threads={threads_json(@published_threads, fd.path)}
-            data-drafts={drafts_json(@drafts, fd.path, @current_user)}
-            data-signed-in={if @current_user, do: "true", else: "false"}
-            data-diff-style={@diff_style}
-          >
+          <summary class="rev-file-summary">
+            <span class="sr-only">Toggle {fd.path}</span>
+            <.icon name="hero-chevron-down" class="review-collapse-icon" />
+          </summary>
+          <div class="rev-file-body">
+            <div
+              id={"diff-#{fd.id}"}
+              phx-hook="DiffRenderer"
+              phx-update="ignore"
+              data-file-id={fd.id}
+              data-file-path={fd.path}
+              data-file-status={fd.status}
+              data-side="new"
+              data-patchset-number={@selected_patchset.number}
+              data-raw-diff={fd.raw_diff}
+              data-threads={threads_json(@published_threads, fd.path)}
+              data-drafts={drafts_json(@drafts, fd.path, @current_user)}
+              data-signed-in={if @current_user, do: "true", else: "false"}
+              data-diff-style={@diff_style}
+            >
+            </div>
           </div>
-        </article>
+        </details>
 
         <p :if={@file_diffs == []} class="rev-empty">
           No files in this patchset.

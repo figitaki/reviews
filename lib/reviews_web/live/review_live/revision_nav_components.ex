@@ -3,6 +3,8 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
   use ReviewsWeb, :html
 
   attr :nav, :map, required: true
+  attr :review, :any, required: true
+  attr :live_action, :atom, required: true
   attr :selected_patchset, :any, required: true
 
   def revision_nav(assigns) do
@@ -24,6 +26,12 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
         </div>
 
         <div class="review-revision-controls" aria-label="Revision navigation">
+          <.link
+            navigate={revision_mode_path(@review, @selected_patchset, @live_action)}
+            class="review-nav-button"
+          >
+            {if(@live_action == :changes, do: "Packet", else: "Changes")}
+          </.link>
           <button
             type="button"
             class="review-nav-button"
@@ -74,4 +82,17 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
     </section>
     """
   end
+
+  defp revision_mode_path(review, selected_patchset, :changes) do
+    suffix = patchset_query(selected_patchset)
+    "/r/#{review.slug}#{suffix}"
+  end
+
+  defp revision_mode_path(review, selected_patchset, _action) do
+    suffix = patchset_query(selected_patchset)
+    "/r/#{review.slug}/changes#{suffix}"
+  end
+
+  defp patchset_query(nil), do: ""
+  defp patchset_query(%{number: number}), do: "?patchset=#{number}"
 end

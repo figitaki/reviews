@@ -35,7 +35,7 @@ pub fn run(args: PushArgs) -> Result<()> {
     let cfg = Config::load()?;
     let cwd = env::current_dir().context("could not read current directory")?;
     let cap = git::capture_diff(&cwd, args.range.as_deref())?;
-    let packet = load_packet_for_push(&cwd, &cap.branch_name, args.packet.as_ref())?;
+    let packet = load_packet_for_push(&cwd, &cap.branch_name, args.packet.as_ref(), &cap.raw_diff)?;
 
     let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
 
@@ -83,6 +83,7 @@ fn load_packet_for_push(
     cwd: &std::path::Path,
     branch_name: &str,
     explicit_path: Option<&PathBuf>,
+    raw_diff: &str,
 ) -> Result<Option<serde_json::Value>> {
     let path = match explicit_path {
         Some(path) => Some(path.clone()),
@@ -90,7 +91,7 @@ fn load_packet_for_push(
     };
 
     match path {
-        Some(path) => Ok(Some(packet::load_packet(&path)?)),
+        Some(path) => Ok(Some(packet::load_packet_for_diff(&path, raw_diff)?)),
         None => Ok(None),
     }
 }
@@ -112,9 +113,9 @@ mod tests {
     fn load_packet_for_push_uses_explicit_markdown() {
         let dir = tempfile::tempdir().unwrap();
         let packet_path = dir.path().join("packet.md");
-        fs::write(&packet_path, "# Packet\n\nSummary").unwrap();
+        fs::write(&packet_path, "# Packet\n\nSummary\n\n## Section").unwrap();
 
-        let packet = load_packet_for_push(dir.path(), "main", Some(&packet_path))
+        let packet = load_packet_for_push(dir.path(), "main", Some(&packet_path), "")
             .unwrap()
             .unwrap();
 
@@ -127,9 +128,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let packet_dir = dir.path().join(".reviews").join("carey__branch");
         fs::create_dir_all(&packet_dir).unwrap();
-        fs::write(packet_dir.join("packet.md"), "# Branch Packet").unwrap();
+        fs::write(
+            packet_dir.join("packet.md"),
+            "# Branch Packet\n\n## Section",
+        )
+        .unwrap();
 
-        let packet = load_packet_for_push(dir.path(), "carey/branch", None)
+        let packet = load_packet_for_push(dir.path(), "carey/branch", None, "")
             .unwrap()
             .unwrap();
 
@@ -139,7 +144,7 @@ mod tests {
     #[test]
     fn load_packet_for_push_allows_missing_default_packet() {
         let dir = tempfile::tempdir().unwrap();
-        assert!(load_packet_for_push(dir.path(), "main", None)
+        assert!(load_packet_for_push(dir.path(), "main", None, "")
             .unwrap()
             .is_none());
     }
@@ -150,7 +155,7 @@ mod tests {
         let packet_path = dir.path().join("packet.md");
         fs::write(&packet_path, "no title").unwrap();
 
-        let err = load_packet_for_push(dir.path(), "main", Some(&packet_path)).unwrap_err();
+        let err = load_packet_for_push(dir.path(), "main", Some(&packet_path), "").unwrap_err();
         assert!(format!("{err:#}").contains("# title"));
     }
 }

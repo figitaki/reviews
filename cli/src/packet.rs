@@ -1,36 +1,54 @@
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Map, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Section {
-    Invariants,
-    Tour,
-    Testing,
-    Rollout,
-    OpenQuestions,
-}
 
 #[derive(Debug, Clone)]
 struct ParsedMarkdown {
     title: String,
     summary: String,
-    sections: Vec<(Section, String)>,
+    sections: Vec<ParsedSection>,
 }
 
-pub fn load_packet(path: &Path) -> Result<Value> {
+#[derive(Debug, Clone)]
+struct ParsedSection {
+    title: String,
+    content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ChangeLine {
+    path: String,
+    hunk_index: usize,
+    row: usize,
+}
+
+#[derive(Debug, Clone)]
+struct DiffHunk {
+    changed_rows: BTreeSet<usize>,
+    row_count: usize,
+}
+
+type DiffIndex = BTreeMap<String, Vec<DiffHunk>>;
+
+pub fn load_packet_for_diff(path: &Path, raw_diff: &str) -> Result<Value> {
     let body = fs::read_to_string(path)
         .with_context(|| format!("could not read packet file {}", path.display()))?;
+    let diff = diff_index(raw_diff);
 
-    match path.extension().and_then(|ext| ext.to_str()) {
+    let packet = match path.extension().and_then(|ext| ext.to_str()) {
         Some("json") => serde_json::from_str(&body)
-            .with_context(|| format!("could not parse packet JSON {}", path.display())),
+            .with_context(|| format!("could not parse packet JSON {}", path.display()))?,
         Some("md") | Some("markdown") => parse_markdown(&body)
-            .with_context(|| format!("could not parse packet Markdown {}", path.display())),
+            .with_context(|| format!("could not parse packet Markdown {}", path.display()))?,
         Some(ext) => bail!("unsupported packet extension .{ext}; use .md or .json"),
         None => bail!("packet file must have a .md or .json extension"),
-    }
+    };
+
+    validate_packet(&packet, &diff)
+        .with_context(|| format!("could not validate packet {}", path.display()))?;
+    Ok(packet)
 }
 
 pub fn discover_packet(repo: &Path, branch_name: &str) -> Option<PathBuf> {
@@ -64,7 +82,6 @@ fn sanitize_branch_name(branch_name: &str) -> String {
 
 fn parse_markdown(body: &str) -> Result<Value> {
     let parsed = split_markdown(body)?;
-
     let mut packet = Map::new();
     packet.insert("format_version".to_string(), json!(1));
     packet.insert("title".to_string(), json!(parsed.title));
@@ -73,44 +90,19 @@ fn parse_markdown(body: &str) -> Result<Value> {
         packet.insert("summary".to_string(), json!(parsed.summary));
     }
 
-    for (section, content) in parsed.sections {
-        match section {
-            Section::Invariants => {
-                let rows = parse_markdown_rows(&content);
-                if !rows.is_empty() {
-                    packet.insert("invariants".to_string(), Value::Array(rows));
-                }
-            }
-            Section::Tour => {
-                let rows = parse_tour_rows(&content);
-                if !rows.is_empty() {
-                    packet.insert("tour".to_string(), Value::Array(rows));
-                }
-            }
-            Section::Testing => {
-                let (instructions, tasks) = parse_testing(&content);
-                if !instructions.is_empty() {
-                    packet.insert("testing_instructions".to_string(), json!(instructions));
-                }
-                if !tasks.is_empty() {
-                    packet.insert("tasks".to_string(), Value::Array(tasks));
-                }
-            }
-            Section::Rollout => {
-                let rows = parse_markdown_rows(&content);
-                if !rows.is_empty() {
-                    packet.insert("rollout".to_string(), Value::Array(rows));
-                }
-            }
-            Section::OpenQuestions => {
-                let questions = parse_open_questions(&content)?;
-                if !questions.is_empty() {
-                    packet.insert("open_questions".to_string(), Value::Array(questions));
-                }
-            }
-        }
-    }
+    let sections: Vec<Value> = parsed
+        .sections
+        .into_iter()
+        .map(|section| {
+            let rows = parse_section_rows(&section.content)?;
+            Ok(json!({
+                "title": section.title,
+                "rows": rows
+            }))
+        })
+        .collect::<Result<_>>()?;
 
+    packet.insert("sections".to_string(), Value::Array(sections));
     Ok(Value::Object(packet))
 }
 
@@ -118,7 +110,7 @@ fn split_markdown(body: &str) -> Result<ParsedMarkdown> {
     let mut title = None;
     let mut summary_lines = Vec::new();
     let mut sections = Vec::new();
-    let mut current_section: Option<Section> = None;
+    let mut current_title: Option<String> = None;
     let mut current_lines = Vec::new();
 
     for line in body.lines() {
@@ -135,12 +127,19 @@ fn split_markdown(body: &str) -> Result<ParsedMarkdown> {
                 bail!("packet Markdown must start with a # title before section headings");
             }
 
-            if let Some(section) = current_section.take() {
-                sections.push((section, trim_join(&current_lines)));
+            if let Some(section_title) = current_title.take() {
+                sections.push(ParsedSection {
+                    title: section_title,
+                    content: trim_join(&current_lines),
+                });
                 current_lines.clear();
             }
 
-            current_section = Some(parse_section(rest.trim())?);
+            let section_title = rest.trim();
+            if section_title.is_empty() {
+                bail!("packet section headings cannot be empty");
+            }
+            current_title = Some(section_title.to_string());
             continue;
         }
 
@@ -151,15 +150,18 @@ fn split_markdown(body: &str) -> Result<ParsedMarkdown> {
             bail!("packet Markdown must start with a # title");
         }
 
-        if current_section.is_some() {
+        if current_title.is_some() {
             current_lines.push(line.to_string());
         } else {
             summary_lines.push(line.to_string());
         }
     }
 
-    if let Some(section) = current_section {
-        sections.push((section, trim_join(&current_lines)));
+    if let Some(section_title) = current_title {
+        sections.push(ParsedSection {
+            title: section_title,
+            content: trim_join(&current_lines),
+        });
     }
 
     let title = title.ok_or_else(|| anyhow!("packet Markdown must start with a # title"))?;
@@ -174,44 +176,19 @@ fn split_markdown(body: &str) -> Result<ParsedMarkdown> {
     })
 }
 
-fn parse_section(heading: &str) -> Result<Section> {
-    match heading {
-        "Invariants" => Ok(Section::Invariants),
-        "Tour" => Ok(Section::Tour),
-        "Testing" => Ok(Section::Testing),
-        "Rollout" => Ok(Section::Rollout),
-        "Open Questions" => Ok(Section::OpenQuestions),
-        other => bail!(
-            "unknown packet section `## {other}`; expected Invariants, Tour, Testing, Rollout, or Open Questions"
-        ),
-    }
-}
-
-fn parse_markdown_rows(content: &str) -> Vec<Value> {
-    content
-        .split("\n\n")
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|body| json!({"kind": "markdown", "body": body}))
-        .collect()
-}
-
-fn parse_tour_rows(content: &str) -> Vec<Value> {
+fn parse_section_rows(content: &str) -> Result<Vec<Value>> {
     let mut rows = Vec::new();
     let mut prose = Vec::new();
 
     for line in content.lines() {
-        if let Some(path) = line.trim().strip_prefix("@hunk ") {
+        if let Some(rest) = line.trim().strip_prefix("@hunk ") {
             let body = trim_join(&prose);
             if !body.is_empty() {
                 rows.push(json!({"kind": "markdown", "body": body}));
                 prose.clear();
             }
 
-            let path = path.trim();
-            if !path.is_empty() {
-                rows.push(json!({"kind": "hunk", "path": path}));
-            }
+            rows.push(parse_hunk_row(rest.trim())?);
         } else {
             prose.push(line.to_string());
         }
@@ -222,101 +199,305 @@ fn parse_tour_rows(content: &str) -> Vec<Value> {
         rows.push(json!({"kind": "markdown", "body": body}));
     }
 
-    rows
+    Ok(rows)
 }
 
-fn parse_testing(content: &str) -> (String, Vec<Value>) {
-    let mut instructions = Vec::new();
-    let mut tasks = Vec::new();
+fn parse_hunk_row(rest: &str) -> Result<Value> {
+    let (path_and_hunk, slice) = match rest.split_once(":L") {
+        Some((left, right)) => (left, Some(right)),
+        None => (rest, None),
+    };
 
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed
-            .strip_prefix("- [ ] ")
-            .or_else(|| trimmed.strip_prefix("- [x] "))
-            .or_else(|| trimmed.strip_prefix("- [X] "))
-        {
-            let (key, description) = parse_optional_key(rest);
-            let description = description.trim();
-            if !description.is_empty() {
-                tasks.push(json!({
-                    "key": key.unwrap_or_else(|| slugify(description)),
-                    "description": description
-                }));
+    let (path, hunk) = path_and_hunk.rsplit_once('#').ok_or_else(|| {
+        anyhow!("hunk refs must look like `@hunk path#N` or `@hunk path#N:Lx-Ly`")
+    })?;
+    let path = path.trim();
+    if path.is_empty() {
+        bail!("hunk refs must include a path");
+    }
+
+    let hunk_index = parse_positive_usize(hunk.trim(), "hunk number")?;
+    let mut row = Map::new();
+    row.insert("kind".to_string(), json!("hunk"));
+    row.insert("path".to_string(), json!(path));
+    row.insert("hunk_index".to_string(), json!(hunk_index));
+
+    if let Some(slice) = slice {
+        let (start, end) = slice
+            .split_once("-L")
+            .ok_or_else(|| anyhow!("hunk slices must look like `Lx-Ly`"))?;
+        let start = parse_positive_usize(start.trim(), "slice start")?;
+        let end = parse_positive_usize(end.trim(), "slice end")?;
+        if start > end {
+            bail!("hunk slice start must be <= end");
+        }
+        row.insert("line_start".to_string(), json!(start));
+        row.insert("line_end".to_string(), json!(end));
+    }
+
+    Ok(Value::Object(row))
+}
+
+fn parse_positive_usize(input: &str, label: &str) -> Result<usize> {
+    let value: usize = input
+        .parse()
+        .with_context(|| format!("{label} must be a positive integer"))?;
+    if value == 0 {
+        bail!("{label} must be >= 1");
+    }
+    Ok(value)
+}
+
+fn validate_packet(packet: &Value, diff: &DiffIndex) -> Result<()> {
+    validate_shape(packet)?;
+
+    if diff.is_empty() {
+        return Ok(());
+    }
+
+    let expected = expected_change_lines(diff);
+    if expected.is_empty() {
+        return Ok(());
+    }
+
+    let mut covered = BTreeMap::<ChangeLine, usize>::new();
+
+    for row in packet_hunk_rows(packet) {
+        let path = string_field(row, "path")?;
+        let hunk_index = usize_field(row, "hunk_index")?;
+        let hunks = diff
+            .get(path)
+            .ok_or_else(|| anyhow!("packet references unknown file `{path}`"))?;
+        let hunk = hunks
+            .get(hunk_index - 1)
+            .ok_or_else(|| anyhow!("packet references unknown hunk `{path}#{hunk_index}`"))?;
+
+        let (start, end) = match (
+            optional_usize_field(row, "line_start")?,
+            optional_usize_field(row, "line_end")?,
+        ) {
+            (Some(start), Some(end)) => (start, end),
+            (None, None) => (1, hunk.row_count),
+            _ => bail!("hunk rows must include both line_start and line_end or neither"),
+        };
+
+        if start == 0 || end == 0 || start > end || end > hunk.row_count {
+            bail!(
+                "packet references invalid slice `{path}#{hunk_index}:L{start}-L{end}`; hunk has {} rows",
+                hunk.row_count
+            );
+        }
+
+        for row_number in hunk.changed_rows.range(start..=end) {
+            let key = ChangeLine {
+                path: path.to_string(),
+                hunk_index,
+                row: *row_number,
+            };
+            *covered.entry(key).or_insert(0) += 1;
+        }
+    }
+
+    let covered_lines: BTreeSet<_> = covered.keys().cloned().collect();
+    let missing: Vec<_> = expected.difference(&covered_lines).collect();
+    if let Some(line) = missing.first() {
+        bail!(
+            "packet does not cover changed line `{}`#{}:L{}",
+            line.path,
+            line.hunk_index,
+            line.row
+        );
+    }
+
+    if let Some((line, count)) = covered.iter().find(|(_, count)| **count > 1) {
+        bail!(
+            "packet covers changed line `{}`#{}:L{} more than once ({count} times)",
+            line.path,
+            line.hunk_index,
+            line.row
+        );
+    }
+
+    Ok(())
+}
+
+fn validate_shape(packet: &Value) -> Result<()> {
+    let obj = packet
+        .as_object()
+        .ok_or_else(|| anyhow!("packet must be a JSON object"))?;
+
+    match obj.get("title").and_then(Value::as_str).map(str::trim) {
+        Some(title) if !title.is_empty() => {}
+        _ => bail!("packet title cannot be empty"),
+    }
+
+    let sections = obj
+        .get("sections")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("packet must include a sections array"))?;
+
+    for (section_idx, section) in sections.iter().enumerate() {
+        let section = section
+            .as_object()
+            .ok_or_else(|| anyhow!("packet section {} must be an object", section_idx + 1))?;
+        match section.get("title").and_then(Value::as_str).map(str::trim) {
+            Some(title) if !title.is_empty() => {}
+            _ => bail!("packet section {} must include a title", section_idx + 1),
+        }
+        let rows = section
+            .get("rows")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                anyhow!(
+                    "packet section {} must include a rows array",
+                    section_idx + 1
+                )
+            })?;
+        for (row_idx, row) in rows.iter().enumerate() {
+            let kind = row.get("kind").and_then(Value::as_str).ok_or_else(|| {
+                anyhow!(
+                    "packet section {} row {} must include kind",
+                    section_idx + 1,
+                    row_idx + 1
+                )
+            })?;
+            match kind {
+                "markdown" => {
+                    if row.get("body").and_then(Value::as_str).is_none() {
+                        bail!("markdown row must include body");
+                    }
+                }
+                "hunk" => {
+                    string_field(row, "path")?;
+                    usize_field(row, "hunk_index")?;
+                }
+                other => bail!("unknown packet row kind `{other}`"),
             }
-        } else {
-            instructions.push(line.to_string());
         }
     }
 
-    (trim_join(&instructions), tasks)
+    Ok(())
 }
 
-fn parse_open_questions(content: &str) -> Result<Vec<Value>> {
-    let mut questions = Vec::new();
+fn packet_hunk_rows(packet: &Value) -> Vec<&Value> {
+    packet
+        .get("sections")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .flat_map(|section| {
+            section
+                .get("rows")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter(|row| row.get("kind").and_then(Value::as_str) == Some("hunk"))
+        .collect()
+}
 
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
+fn string_field<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow!("hunk rows must include `{key}`"))
+}
+
+fn usize_field(value: &Value, key: &str) -> Result<usize> {
+    value
+        .get(key)
+        .and_then(Value::as_u64)
+        .map(|value| value as usize)
+        .filter(|value| *value > 0)
+        .ok_or_else(|| anyhow!("hunk rows must include positive integer `{key}`"))
+}
+
+fn optional_usize_field(value: &Value, key: &str) -> Result<Option<usize>> {
+    match value.get(key) {
+        Some(v) => v
+            .as_u64()
+            .map(|value| Some(value as usize))
+            .ok_or_else(|| anyhow!("`{key}` must be a positive integer")),
+        None => Ok(None),
+    }
+}
+
+fn expected_change_lines(diff: &DiffIndex) -> BTreeSet<ChangeLine> {
+    let mut expected = BTreeSet::new();
+    for (path, hunks) in diff {
+        for (idx, hunk) in hunks.iter().enumerate() {
+            for row in &hunk.changed_rows {
+                expected.insert(ChangeLine {
+                    path: path.clone(),
+                    hunk_index: idx + 1,
+                    row: *row,
+                });
+            }
+        }
+    }
+    expected
+}
+
+fn diff_index(raw_diff: &str) -> DiffIndex {
+    let mut index = DiffIndex::new();
+    for chunk in raw_diff.split("\ndiff --git ") {
+        let chunk = chunk.strip_prefix("diff --git ").unwrap_or(chunk);
+        let mut lines = chunk.lines();
+        let Some(header) = lines.next() else { continue };
+        let Some(path) = path_from_header(header, chunk) else {
             continue;
+        };
+        let mut hunks = Vec::new();
+        let mut current: Option<DiffHunk> = None;
+
+        for line in lines {
+            if line.starts_with("@@ ") {
+                if let Some(hunk) = current.take() {
+                    hunks.push(hunk);
+                }
+                current = Some(DiffHunk {
+                    changed_rows: BTreeSet::new(),
+                    row_count: 0,
+                });
+                continue;
+            }
+
+            if let Some(hunk) = current.as_mut() {
+                if line.starts_with('\\') {
+                    continue;
+                }
+                hunk.row_count += 1;
+                if (line.starts_with('+') && !line.starts_with("+++"))
+                    || (line.starts_with('-') && !line.starts_with("---"))
+                {
+                    hunk.changed_rows.insert(hunk.row_count);
+                }
+            }
         }
 
-        let rest = trimmed
-            .strip_prefix("- ")
-            .ok_or_else(|| anyhow!("open questions must use `- [key] Question text` list items"))?;
-        let (key, body) = parse_required_key(rest)?;
-        questions.push(json!({"key": key, "body": body.trim()}));
+        if let Some(hunk) = current {
+            hunks.push(hunk);
+        }
+        if !hunks.is_empty() {
+            index.insert(path, hunks);
+        }
     }
-
-    Ok(questions)
+    index
 }
 
-fn parse_optional_key(rest: &str) -> (Option<String>, &str) {
-    match parse_bracketed_key(rest) {
-        Some((key, body)) => (Some(key), body),
-        None => (None, rest),
+fn path_from_header(header: &str, chunk: &str) -> Option<String> {
+    let (_, new_path) = header.strip_prefix("a/")?.split_once(" b/")?;
+    if chunk.contains("\ndeleted file mode") {
+        let (old_path, _) = header.strip_prefix("a/")?.split_once(" b/")?;
+        Some(old_path.to_string())
+    } else {
+        Some(new_path.to_string())
     }
-}
-
-fn parse_required_key(rest: &str) -> Result<(String, &str)> {
-    parse_bracketed_key(rest)
-        .ok_or_else(|| anyhow!("open questions must use `- [key] Question text` list items"))
-}
-
-fn parse_bracketed_key(rest: &str) -> Option<(String, &str)> {
-    let rest = rest.strip_prefix('[')?;
-    let end = rest.find(']')?;
-    let key = rest[..end].trim();
-    if key.is_empty() {
-        return None;
-    }
-    Some((key.to_string(), rest[end + 1..].trim_start()))
 }
 
 fn trim_join(lines: &[String]) -> String {
     lines.join("\n").trim().to_string()
-}
-
-fn slugify(input: &str) -> String {
-    let mut out = String::new();
-    let mut last_dash = false;
-
-    for ch in input.chars().flat_map(char::to_lowercase) {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch);
-            last_dash = false;
-        } else if !last_dash {
-            out.push('-');
-            last_dash = true;
-        }
-    }
-
-    let out = out.trim_matches('-').to_string();
-    if out.is_empty() {
-        "task".to_string()
-    } else {
-        out
-    }
 }
 
 #[cfg(test)]
@@ -324,106 +505,95 @@ mod tests {
     use super::*;
     use std::fs;
 
-    const SAMPLE: &str = r#"# Invalidate search cache on document delete
+    const DIFF: &str = "diff --git a/lib/a.ex b/lib/a.ex\n--- a/lib/a.ex\n+++ b/lib/a.ex\n@@ -1,3 +1,3 @@\n context\n-old\n+new\n@@ -8,2 +8,3 @@\n other\n+added\n+again\n";
 
-Closes LIN-4892. Cache misses now follow the existing delete transaction.
+    const PACKET: &str = r#"# Narrative packet
 
-## Invariants
-- Cache is invalidated whenever a document is deleted.
-- Existing search results still paginate the same way.
+Read this first.
 
-## Tour
-### Add invalidate call
-Hooks into the delete transaction.
+## First section
+This explains the first change.
 
-@hunk lib/documents.ex
+@hunk lib/a.ex#1:L2-L3
 
-### Regression test
-Covers the stale search result case.
+Then the second hunk.
 
-@hunk test/search_cache_invalidation_test.exs
-
-## Testing
-Run the focused cache invalidation test.
-
-- [ ] Delete a document via the UI and confirm it disappears from search.
-- [ ] [focused-cache-test] Run `mix test test/search_cache_invalidation_test.exs`
-
-## Rollout
-Ship normally. No migration or feature flag.
-
-## Open Questions
-- [cache-backfill-window] Should we clear cache entries for documents deleted before this fix?
+@hunk lib/a.ex#2
 "#;
 
     #[test]
-    fn parses_structured_markdown_packet() {
-        let packet = parse_markdown(SAMPLE).unwrap();
+    fn parses_sections_with_interleaved_hunk_slices() {
+        let packet = parse_markdown(PACKET).unwrap();
 
         assert_eq!(packet["format_version"], 1);
-        assert_eq!(
-            packet["title"],
-            "Invalidate search cache on document delete"
-        );
-        assert_eq!(
-            packet["summary"],
-            "Closes LIN-4892. Cache misses now follow the existing delete transaction."
-        );
-        assert_eq!(packet["invariants"].as_array().unwrap().len(), 1);
+        assert_eq!(packet["title"], "Narrative packet");
+        assert_eq!(packet["summary"], "Read this first.");
+        let sections = packet["sections"].as_array().unwrap();
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0]["title"], "First section");
+        let rows = sections[0]["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 4);
+        assert_eq!(rows[1]["kind"], "hunk");
+        assert_eq!(rows[1]["path"], "lib/a.ex");
+        assert_eq!(rows[1]["hunk_index"], 1);
+        assert_eq!(rows[1]["line_start"], 2);
+        assert_eq!(rows[1]["line_end"], 3);
+    }
 
-        let tour = packet["tour"].as_array().unwrap();
-        assert_eq!(tour.len(), 4);
-        assert_eq!(tour[0]["kind"], "markdown");
-        assert!(tour[0]["body"]
-            .as_str()
-            .unwrap()
-            .contains("### Add invalidate call"));
-        assert_eq!(tour[1], json!({"kind": "hunk", "path": "lib/documents.ex"}));
+    #[test]
+    fn validates_full_changed_line_coverage() {
+        let packet = parse_markdown(PACKET).unwrap();
+        validate_packet(&packet, &diff_index(DIFF)).unwrap();
+    }
 
-        let tasks = packet["tasks"].as_array().unwrap();
-        assert_eq!(
-            tasks[0],
-            json!({
-                "key": "delete-a-document-via-the-ui-and-confirm-it-disappears-from-search",
-                "description": "Delete a document via the UI and confirm it disappears from search."
-            })
-        );
-        assert_eq!(tasks[1]["key"], "focused-cache-test");
+    #[test]
+    fn rejects_missing_changed_line_coverage() {
+        let packet = parse_markdown("# T\n\n## S\n@hunk lib/a.ex#1:L2-L3").unwrap();
+        let err = validate_packet(&packet, &diff_index(DIFF)).unwrap_err();
+        assert!(format!("{err:#}").contains("does not cover changed line"));
+    }
 
-        assert_eq!(
-            packet["open_questions"][0],
-            json!({
-                "key": "cache-backfill-window",
-                "body": "Should we clear cache entries for documents deleted before this fix?"
-            })
-        );
+    #[test]
+    fn rejects_duplicate_changed_line_coverage() {
+        let packet = parse_markdown(
+            "# T\n\n## S\n@hunk lib/a.ex#1\n@hunk lib/a.ex#1:L2-L3\n@hunk lib/a.ex#2",
+        )
+        .unwrap();
+        let err = validate_packet(&packet, &diff_index(DIFF)).unwrap_err();
+        assert!(format!("{err:#}").contains("more than once"));
+    }
+
+    #[test]
+    fn rejects_unknown_hunk_refs() {
+        let packet = parse_markdown("# T\n\n## S\n@hunk lib/a.ex#3").unwrap();
+        let err = validate_packet(&packet, &diff_index(DIFF)).unwrap_err();
+        assert!(format!("{err:#}").contains("unknown hunk"));
+    }
+
+    #[test]
+    fn rejects_invalid_slice_ranges() {
+        let packet = parse_markdown("# T\n\n## S\n@hunk lib/a.ex#1:L2-L8").unwrap();
+        let err = validate_packet(&packet, &diff_index(DIFF)).unwrap_err();
+        assert!(format!("{err:#}").contains("invalid slice"));
     }
 
     #[test]
     fn rejects_missing_title() {
-        let err = parse_markdown("## Tour\nbody").unwrap_err();
+        let err = parse_markdown("## Section\nbody").unwrap_err();
         assert!(format!("{err:#}").contains("# title"));
     }
 
     #[test]
-    fn rejects_unknown_sections() {
-        let err = parse_markdown("# T\n\n## Security\nbody").unwrap_err();
-        assert!(format!("{err:#}").contains("unknown packet section"));
-    }
-
-    #[test]
-    fn rejects_open_questions_without_keys() {
-        let err = parse_markdown("# T\n\n## Open Questions\n- Missing key?").unwrap_err();
-        assert!(format!("{err:#}").contains("[key]"));
-    }
-
-    #[test]
-    fn loads_json_packets_unchanged() {
+    fn validates_json_packets() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("packet.json");
-        fs::write(&path, r#"{"format_version":1,"title":"JSON"}"#).unwrap();
+        fs::write(
+            &path,
+            r#"{"format_version":1,"title":"JSON","sections":[{"title":"S","rows":[{"kind":"hunk","path":"lib/a.ex","hunk_index":1},{"kind":"hunk","path":"lib/a.ex","hunk_index":2}]}]}"#,
+        )
+        .unwrap();
 
-        let packet = load_packet(&path).unwrap();
+        let packet = load_packet_for_diff(&path, DIFF).unwrap();
         assert_eq!(packet["title"], "JSON");
     }
 
