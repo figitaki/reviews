@@ -270,8 +270,7 @@
   padding-block: 14px;
 }
 
-.review-round-nav,
-.review-turn-nav {
+.review-revision-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -293,8 +292,7 @@
   text-transform: uppercase;
 }
 
-.review-revision-title,
-.review-turn-range {
+.review-revision-title {
   min-width: 0;
   color: var(--review-text);
   font-size: 13px;
@@ -303,29 +301,20 @@
   overflow-wrap: anywhere;
 }
 
-.review-turn-range {
-  color: var(--review-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-weight: 600;
-}
-
 .review-revision-controls,
-.review-round-chip-list,
-.review-turn-chip-list {
+.review-revision-chip-list {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.review-round-chip-list,
-.review-turn-chip-list {
+.review-revision-chip-list {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
 .review-nav-button,
-.review-round-chip,
-.review-turn-chip {
+.review-revision-chip {
   display: inline-flex;
   min-height: 28px;
   align-items: center;
@@ -345,28 +334,25 @@
   padding: 0 9px;
 }
 
-.review-round-chip,
-.review-turn-chip {
+.review-revision-chip {
   min-width: 30px;
   padding: 0 8px;
 }
 
 .review-nav-button:hover:not(:disabled),
-.review-round-chip:hover,
-.review-turn-chip:hover {
+.review-revision-chip:hover {
   border-color: var(--review-line-strong);
   background: var(--review-hover);
   color: var(--review-text);
 }
 
-.review-round-chip.is-active,
-.review-turn-chip.is-active {
+.review-revision-chip.is-active {
   border-color: var(--review-text);
   background: var(--review-panel-raised);
   color: var(--review-text);
 }
 
-.review-turn-chip.has-packet::after {
+.review-revision-chip.has-packet::after {
   width: 5px;
   height: 5px;
   border-radius: 999px;

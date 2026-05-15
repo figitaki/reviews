@@ -380,8 +380,7 @@ defmodule ReviewsWeb.ReviewLive do
               {@review.description || review_summary(@file_diffs, @drafts)}
             </p>
             <div :if={@selected_patchset} class="review-header-meta">
-              <span>Round {revision_nav.current_round.index}</span>
-              <span>Turn v{@selected_patchset.number}</span>
+              <span>Revision v{@selected_patchset.number}</span>
               <span>
                 {ReviewNavigation.format_diff_stats(
                   ReviewNavigation.diff_stats_from_files(@file_diffs)

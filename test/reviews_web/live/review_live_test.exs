@@ -108,13 +108,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-packet .review-packet-md-heading", "Main change")
     end
 
-    test "renders round and turn navigation from packet-bearing patchsets", %{
+    test "renders linear revision navigation from patchsets", %{
       conn: conn,
       author: author
     } do
       {:ok, %{review: packet_review}} =
         ReviewsCtx.create_review_with_initial_patchset(author, %{
-          title: "Round nav",
+          title: "Revision nav",
           raw_diff: """
           diff --git a/lib/one.ex b/lib/one.ex
           --- a/lib/one.ex
@@ -159,12 +159,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
-      assert has_element?(view, "#revision-nav", "Round 2 of 2")
-      assert has_element?(view, "#revision-nav", "Second packet")
-      assert has_element?(view, ".review-header-meta", "Turn v3")
+      assert has_element?(view, "#revision-nav", "Revision 3 of 3")
+      assert has_element?(view, "#revision-nav", "v1")
+      assert has_element?(view, "#revision-nav", "v2")
+      assert has_element?(view, "#revision-nav", "v3")
+      assert has_element?(view, ".review-header-meta", "Revision v3")
       assert has_element?(view, ".review-header-meta", "+1 -1")
-      assert has_element?(view, ~s|#revision-nav .review-round-chip.is-active|, "2")
       assert has_element?(view, ~s|#revision-nav #patchset-3.is-active|, "v3")
+      assert has_element?(view, ~s|#revision-nav #patchset-1.has-packet|)
+      assert has_element?(view, ~s|#revision-nav #patchset-3.has-packet|)
     end
 
     test "Publish review button is disabled with no drafts", %{conn: conn, review: review} do
