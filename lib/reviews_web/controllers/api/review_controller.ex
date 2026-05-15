@@ -62,7 +62,9 @@ defmodule ReviewsWeb.Api.ReviewController do
       number: ps.number,
       base_sha: ps.base_sha,
       branch_name: ps.branch_name,
-      pushed_at: ps.pushed_at
+      pushed_at: ps.pushed_at,
+      packet_present: packet_present?(ps.packet),
+      stats: patchset_stats(ps)
     }
   end
 
@@ -74,9 +76,35 @@ defmodule ReviewsWeb.Api.ReviewController do
       base_sha: ps.base_sha,
       branch_name: ps.branch_name,
       pushed_at: ps.pushed_at,
+      packet: ps.packet,
+      stats: patchset_stats(ps),
       files: Enum.map(ReviewView.file_payloads(snapshot), &render_file/1)
     }
   end
+
+  defp patchset_stats(ps) do
+    ps.raw_diff
+    |> ReviewsContext.parse_diff_files()
+    |> Enum.reduce(%{files: 0, additions: 0, deletions: 0}, fn file, acc ->
+      %{
+        files: acc.files + 1,
+        additions: acc.additions + Map.get(file, :additions, 0),
+        deletions: acc.deletions + Map.get(file, :deletions, 0)
+      }
+    end)
+  end
+
+  defp packet_present?(packet) when is_map(packet) do
+    packet != %{} &&
+      Enum.any?(
+        ["title", "summary", "invariants", "tour", "testing_instructions", "tasks"],
+        fn key ->
+          Map.get(packet, key) not in [nil, "", []]
+        end
+      )
+  end
+
+  defp packet_present?(_), do: false
 
   defp render_file(file) do
     %{
@@ -146,7 +174,8 @@ defmodule ReviewsWeb.Api.ReviewController do
       description: params["description"],
       base_sha: params["base_sha"],
       branch_name: params["branch_name"],
-      raw_diff: params["raw_diff"]
+      raw_diff: params["raw_diff"],
+      packet: params["packet"]
     }
   end
 

@@ -110,10 +110,7 @@ mod tests {
 
     #[test]
     fn parse_location_handles_colon_in_filename() {
-        assert_eq!(
-            parse_location("a:b:7").unwrap(),
-            ("a:b".to_string(), 7)
-        );
+        assert_eq!(parse_location("a:b:7").unwrap(), ("a:b".to_string(), 7));
     }
 
     #[test]

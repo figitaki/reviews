@@ -20,7 +20,8 @@ defmodule ReviewsWeb.Api.PatchsetController do
         attrs = %{
           base_sha: params["base_sha"],
           branch_name: params["branch_name"],
-          raw_diff: params["raw_diff"]
+          raw_diff: params["raw_diff"],
+          packet: params["packet"]
         }
 
         case Reviews.append_patchset(review, attrs) do

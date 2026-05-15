@@ -46,6 +46,7 @@ defmodule Reviews.Reviews do
     patchset_attrs = %{
       number: 1,
       raw_diff: raw_diff,
+      packet: attrs[:packet] || attrs["packet"],
       base_sha: attrs[:base_sha] || attrs["base_sha"],
       branch_name: attrs[:branch_name] || attrs["branch_name"],
       pushed_at: DateTime.utc_now() |> DateTime.truncate(:second)
@@ -77,6 +78,7 @@ defmodule Reviews.Reviews do
       review_id: review.id,
       number: next_number,
       raw_diff: raw_diff,
+      packet: attrs[:packet] || attrs["packet"],
       base_sha: attrs[:base_sha] || attrs["base_sha"],
       branch_name: attrs[:branch_name] || attrs["branch_name"],
       pushed_at: DateTime.utc_now() |> DateTime.truncate(:second)
