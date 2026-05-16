@@ -1420,14 +1420,6 @@ details[open] > summary .review-collapse-icon,
     --review-main-nav-h: 64px;
   }
 
-  .design-wrap {
-    width: min(1440px, calc(100vw - 16px));
-  }
-
-  .design-main {
-    width: min(1440px, calc(100vw - 24px));
-  }
-
   .review-packet-row.is-markdown {
     position: static;
     min-height: 0;
@@ -2670,7 +2662,12 @@ details[open] > summary .review-collapse-icon,
     padding: 52px 0 44px;
   }
 
+  .design-wrap {
+    width: min(1440px, calc(100vw - 16px));
+  }
+
   .design-main {
+    width: min(1440px, calc(100vw - 32px));
     padding-bottom: 80px;
   }
 
