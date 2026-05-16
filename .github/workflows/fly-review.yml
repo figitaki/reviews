@@ -100,12 +100,14 @@ jobs:
           PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
           PREVIEW_GITHUB_CLIENT_ID: ${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}
           PREVIEW_GITHUB_CLIENT_SECRET: ${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
+          PREVIEW_API_TOKEN: ${{ secrets.PREVIEW_API_TOKEN }}
         run: |
           flyctl secrets set --stage --app "$APP_NAME" \
             SECRET_KEY_BASE="$PREVIEW_SECRET_KEY_BASE" \
             DATABASE_URL="$PREVIEW_DATABASE_URL" \
             GITHUB_CLIENT_ID="$PREVIEW_GITHUB_CLIENT_ID" \
             GITHUB_CLIENT_SECRET="$PREVIEW_GITHUB_CLIENT_SECRET" \
+            PREVIEW_API_TOKEN="$PREVIEW_API_TOKEN" \
             PHX_HOST="$APP_HOST"
 
       - name: Deploy preview app
