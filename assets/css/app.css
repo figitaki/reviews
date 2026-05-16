@@ -1009,7 +1009,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-packet-row.is-markdown {
   position: sticky;
-  top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h) + 1px);
+  top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h));
   z-index: 7;
   margin-inline: -8px;
   min-height: 64px;
