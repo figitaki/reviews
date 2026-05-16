@@ -6,11 +6,12 @@ name: Fly Review App
 # one Fly app per PR named `reviews-pr-<number>`, created on open/sync and
 # destroyed on close.
 #
-# We drive flyctl directly rather than using superfly/fly-pr-review-apps
-# because that action invokes `flyctl launch --copy-config` for first-time
-# app creation, which runs Phoenix scanners that shell out to `mix compile`
-# against an unfetched checkout (no deps, no _build/) and fails. Going
-# direct via `flyctl apps create` skips scanners entirely.
+# Action version is pinned to `@1.2.1`. Later versions changed the
+# `flyctl launch` behavior in ways that break first-time app creation for
+# Phoenix projects (the scanner tries to `mix compile` against an
+# unfetched checkout). See
+# https://gist.github.com/anniebabannie/3cb800f2a890a6f3ed3167c09a0234dd?permalink_comment_id=5370873
+# for community confirmation that `@1.2.1` is the right pin.
 #
 # Self-disabling: the job's `if:` guard checks for `vars.FLY_ORG`. Until a
 # maintainer sets that repo variable (plus the secrets documented in
@@ -50,7 +51,7 @@ jobs:
 
     environment:
       name: preview
-      url: https://reviews-pr-${{ github.event.pull_request.number }}.fly.dev
+      url: ${{ steps.deploy.outputs.url }}
 
     permissions:
       contents: read
@@ -59,40 +60,17 @@ jobs:
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       FLY_ORG: ${{ vars.FLY_ORG }}
-      APP_NAME: reviews-pr-${{ github.event.pull_request.number }}
-      APP_HOST: reviews-pr-${{ github.event.pull_request.number }}.fly.dev
+      FLY_REGION: sjc
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Create app if not exists
-        if: github.event.action != 'closed'
-        run: |
-          if ! flyctl apps show "$APP_NAME" > /dev/null 2>&1; then
-            flyctl apps create "$APP_NAME" --org "$FLY_ORG"
-          fi
-
-      - name: Stage secrets
-        if: github.event.action != 'closed'
-        run: |
-          flyctl secrets set --stage --app "$APP_NAME" \
-            SECRET_KEY_BASE="${{ secrets.PREVIEW_SECRET_KEY_BASE }}" \
-            DATABASE_URL="${{ secrets.PREVIEW_DATABASE_URL }}" \
-            GITHUB_CLIENT_ID="${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}" \
-            GITHUB_CLIENT_SECRET="${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}" \
-            PHX_HOST="$APP_HOST"
-
       - name: Deploy preview app
-        if: github.event.action != 'closed'
-        run: |
-          flyctl deploy \
-            --app "$APP_NAME" \
-            --config fly.toml \
-            --remote-only \
-            --yes
-
-      - name: Destroy preview app
-        if: github.event.action == 'closed'
-        run: flyctl apps destroy "$APP_NAME" --yes || true
+        id: deploy
+        uses: superfly/fly-pr-review-apps@1.2.1
+        with:
+          secrets: |
+            SECRET_KEY_BASE=${{ secrets.PREVIEW_SECRET_KEY_BASE }}
+            DATABASE_URL=${{ secrets.PREVIEW_DATABASE_URL }}
+            GITHUB_CLIENT_ID=${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}
+            GITHUB_CLIENT_SECRET=${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}

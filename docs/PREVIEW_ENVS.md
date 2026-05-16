@@ -7,9 +7,10 @@ the PR closes.
 
 This follows the pattern in
 [Fly's review-apps blueprint](https://fly.io/docs/blueprints/review-apps-guide/),
-driving `flyctl` directly (`apps create` → `secrets set --stage` →
-`deploy --remote-only` → `apps destroy`). Workflow lives at
-`.github/workflows/fly-review.yml`.
+using the `superfly/fly-pr-review-apps` Action to manage the app
+lifecycle. Workflow lives at `.github/workflows/fly-review.yml`. The
+action is pinned to `@1.2.1` — later releases change `flyctl launch`'s
+behavior in ways that break Phoenix first-time app creation.
 
 The production deploy from `main` (in `.github/workflows/ci.yml`) is
 unaffected — preview envs are a separate workflow with their own
