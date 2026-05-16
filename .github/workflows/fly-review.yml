@@ -6,22 +6,17 @@ name: Fly Review App
 # one Fly app per PR named `reviews-pr-<number>`, created on open/sync and
 # destroyed on close.
 #
-# Implementation notes
-# --------------------
-# We use the official `superfly/fly-pr-review-apps` action, but pre-create
-# the Fly app ourselves via `flyctl apps create` before the action runs.
+# We drive flyctl directly instead of using `superfly/fly-pr-review-apps`.
+# That action runs `flyctl launch --copy-config` unconditionally inside a
+# Docker container, and `flyctl launch` always runs language scanners.
+# For Phoenix projects the scanner shells out to `mix compile`, which
+# fails because the action's container has no Elixir. There is no flag
+# to disable the scanner and no host-side workaround (the container is
+# isolated from the runner). See the conversation on
+# https://gist.github.com/anniebabannie/3cb800f2a890a6f3ed3167c09a0234dd .
 #
-# Why pre-create? On first-app creation the action shells out to
-# `flyctl launch --copy-config --no-deploy`, which runs Phoenix scanners
-# that try `mix compile` against an unfetched checkout. That fails with
-# either "mix: not found" or "we identified an elixir project but when
-# attempting to compile it we ran into an error" depending on whether
-# Elixir is on PATH. The action's launch step only runs when the app
-# doesn't exist yet — pre-creating sidesteps the scanner entirely.
-#
-# Action version pinned to `@1.2.1`. See
-# https://gist.github.com/anniebabannie/3cb800f2a890a6f3ed3167c09a0234dd?permalink_comment_id=5370873
-# for community confirmation that this pin is the working one.
+# So: we call `flyctl apps create / secrets set / deploy / apps destroy`
+# directly. The Docker build still happens on Fly's remote builders.
 #
 # Self-disabling: the job's `if:` guard checks for `vars.FLY_ORG`. Until a
 # maintainer sets that repo variable (plus the secrets documented in
@@ -61,7 +56,7 @@ jobs:
 
     environment:
       name: preview
-      url: ${{ steps.deploy.outputs.url }}
+      url: https://reviews-pr-${{ github.event.pull_request.number }}.fly.dev
 
     permissions:
       contents: read
@@ -70,32 +65,58 @@ jobs:
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       FLY_ORG: ${{ vars.FLY_ORG }}
-      FLY_REGION: sjc
       APP_NAME: reviews-pr-${{ github.event.pull_request.number }}
+      APP_HOST: reviews-pr-${{ github.event.pull_request.number }}.fly.dev
+
+    # Verbose tracing so a failure is debuggable from the run log without
+    # having to reproduce locally.
+    defaults:
+      run:
+        shell: bash -eo pipefail -x {0}
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      # Pre-create the app so the action's internal `flyctl launch` step
-      # is skipped (it only runs when the app doesn't already exist).
-      # Idempotent on synchronize: `apps show` succeeds → no-op.
-      - name: Ensure app exists
+      - name: Show flyctl version + auth
+        run: |
+          flyctl version
+          flyctl auth whoami
+
+      - name: Create app if not exists
         if: github.event.action != 'closed'
         run: |
-          if ! flyctl apps show "$APP_NAME" > /dev/null 2>&1; then
+          if flyctl status --app "$APP_NAME" > /dev/null 2>&1; then
+            echo "App $APP_NAME already exists; skipping create."
+          else
             flyctl apps create "$APP_NAME" --org "$FLY_ORG"
           fi
 
+      - name: Stage secrets
+        if: github.event.action != 'closed'
+        env:
+          PREVIEW_SECRET_KEY_BASE: ${{ secrets.PREVIEW_SECRET_KEY_BASE }}
+          PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+          PREVIEW_GITHUB_CLIENT_ID: ${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}
+          PREVIEW_GITHUB_CLIENT_SECRET: ${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
+        run: |
+          flyctl secrets set --stage --app "$APP_NAME" \
+            SECRET_KEY_BASE="$PREVIEW_SECRET_KEY_BASE" \
+            DATABASE_URL="$PREVIEW_DATABASE_URL" \
+            GITHUB_CLIENT_ID="$PREVIEW_GITHUB_CLIENT_ID" \
+            GITHUB_CLIENT_SECRET="$PREVIEW_GITHUB_CLIENT_SECRET" \
+            PHX_HOST="$APP_HOST"
+
       - name: Deploy preview app
-        id: deploy
-        uses: superfly/fly-pr-review-apps@1.2.1
-        with:
-          name: ${{ env.APP_NAME }}
-          secrets: |
-            SECRET_KEY_BASE=${{ secrets.PREVIEW_SECRET_KEY_BASE }}
-            DATABASE_URL=${{ secrets.PREVIEW_DATABASE_URL }}
-            GITHUB_CLIENT_ID=${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}
-            GITHUB_CLIENT_SECRET=${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
-            PHX_HOST=${{ env.APP_NAME }}.fly.dev
+        if: github.event.action != 'closed'
+        run: |
+          flyctl deploy \
+            --app "$APP_NAME" \
+            --config fly.toml \
+            --remote-only \
+            --yes
+
+      - name: Destroy preview app
+        if: github.event.action == 'closed'
+        run: flyctl apps destroy "$APP_NAME" --yes || true
