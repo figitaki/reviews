@@ -59,9 +59,14 @@ fn resolve_server_and_token(server_override: Option<&str>) -> Result<(String, Op
 }
 
 fn render_markdown(body: &Value) -> Result<String> {
-    let obj = body.as_object().ok_or_else(|| anyhow!("response is not a JSON object"))?;
+    let obj = body
+        .as_object()
+        .ok_or_else(|| anyhow!("response is not a JSON object"))?;
 
-    let title = obj.get("title").and_then(Value::as_str).unwrap_or("(untitled)");
+    let title = obj
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("(untitled)");
     let url = obj.get("url").and_then(Value::as_str).unwrap_or("");
     let description = obj.get("description").and_then(Value::as_str).unwrap_or("");
 
@@ -91,7 +96,10 @@ fn render_markdown(body: &Value) -> Result<String> {
             .get("branch_name")
             .and_then(Value::as_str)
             .unwrap_or("");
-        let base = selected.get("base_sha").and_then(Value::as_str).unwrap_or("");
+        let base = selected
+            .get("base_sha")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         out.push_str(&format!("## Patchset v{n}"));
         if !branch.is_empty() {
             out.push_str(&format!(" — `{branch}`"));
@@ -115,9 +123,7 @@ fn render_markdown(body: &Value) -> Result<String> {
                     "renamed" => "R",
                     _ => "?",
                 };
-                out.push_str(&format!(
-                    "### {status_letter} `{path}` (+{add} -{del})\n\n"
-                ));
+                out.push_str(&format!("### {status_letter} `{path}` (+{add} -{del})\n\n"));
                 let raw = file.get("raw_diff").and_then(Value::as_str).unwrap_or("");
                 if !raw.is_empty() {
                     out.push_str("```diff\n");
@@ -137,7 +143,10 @@ fn render_markdown(body: &Value) -> Result<String> {
             for t in threads {
                 let path = t.get("file_path").and_then(Value::as_str).unwrap_or("?");
                 let line = t.get("line_hint").and_then(Value::as_i64);
-                let author = t.get("author").and_then(Value::as_str).unwrap_or("anonymous");
+                let author = t
+                    .get("author")
+                    .and_then(Value::as_str)
+                    .unwrap_or("anonymous");
                 let location = match line {
                     Some(n) => format!("{path}:{n}"),
                     None => path.to_string(),

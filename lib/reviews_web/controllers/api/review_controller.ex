@@ -12,7 +12,7 @@ defmodule ReviewsWeb.Api.ReviewController do
   """
   use ReviewsWeb, :controller
 
-  alias Reviews.ReviewView
+  alias Reviews.{ReviewNavigation, ReviewPacket, ReviewView}
   alias Reviews.Reviews, as: ReviewsContext
 
   @doc "GET /api/v1/reviews/:slug"
@@ -62,7 +62,9 @@ defmodule ReviewsWeb.Api.ReviewController do
       number: ps.number,
       base_sha: ps.base_sha,
       branch_name: ps.branch_name,
-      pushed_at: ps.pushed_at
+      pushed_at: ps.pushed_at,
+      packet_present: ReviewPacket.present?(ps.packet),
+      stats: ReviewNavigation.patchset_stats(ps)
     }
   end
 
@@ -74,6 +76,8 @@ defmodule ReviewsWeb.Api.ReviewController do
       base_sha: ps.base_sha,
       branch_name: ps.branch_name,
       pushed_at: ps.pushed_at,
+      packet: ps.packet,
+      stats: ReviewNavigation.patchset_stats(ps),
       files: Enum.map(ReviewView.file_payloads(snapshot), &render_file/1)
     }
   end
@@ -146,7 +150,8 @@ defmodule ReviewsWeb.Api.ReviewController do
       description: params["description"],
       base_sha: params["base_sha"],
       branch_name: params["branch_name"],
-      raw_diff: params["raw_diff"]
+      raw_diff: params["raw_diff"],
+      packet: params["packet"]
     }
   end
 

@@ -21,7 +21,10 @@ fn help_prints_usage() {
 
 #[test]
 fn subcommand_help_works_for_push() {
-    let out = bin().args(["push", "--help"]).output().expect("push --help");
+    let out = bin()
+        .args(["push", "--help"])
+        .output()
+        .expect("push --help");
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("--range"), "stdout = {stdout}");

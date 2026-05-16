@@ -8,6 +8,7 @@ defmodule Reviews.ReviewView do
   """
 
   alias Reviews.Accounts.User
+  alias Reviews.PacketSectionDecisions
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.{File, Patchset, Review}
   alias Reviews.Threads
@@ -18,6 +19,7 @@ defmodule Reviews.ReviewView do
           selected_patchset: Patchset.t() | nil,
           files: [File.t()],
           file_diffs: [map()],
+          packet_section_decisions: [map()],
           published_threads: [map()],
           drafts: [map()],
           viewer: User.t() | nil
@@ -100,6 +102,7 @@ defmodule Reviews.ReviewView do
       selected_patchset: selected,
       files: files,
       file_diffs: file_diff_meta(files, selected),
+      packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
       published_threads: Threads.list_published_threads(review.id),
       drafts: list_drafts(review, viewer),
       viewer: viewer
@@ -112,19 +115,38 @@ defmodule Reviews.ReviewView do
   defp file_diff_meta(_files, nil), do: []
 
   defp file_diff_meta(files, %Patchset{} = selected_patchset) do
-    raw = selected_patchset.raw_diff || ""
-    parsed = ReviewsContext.parse_diff_files(raw) |> Enum.into(%{}, &{&1.path, &1})
-
     Enum.map(files, fn file ->
-      meta = Map.get(parsed, file.path, %{additions: 0, deletions: 0})
-      raw_for_file = ReviewsContext.raw_diff_for_file(selected_patchset, file.path) || ""
+      raw_for_file =
+        if file.raw_diff in [nil, ""] do
+          ReviewsContext.raw_diff_for_file(selected_patchset, file.path) || ""
+        else
+          file.raw_diff
+        end
+
+      {additions, deletions} = file_change_counts(file, raw_for_file)
 
       Map.merge(file_to_map(file), %{
-        additions: Map.get(meta, :additions, 0),
-        deletions: Map.get(meta, :deletions, 0),
+        additions: additions,
+        deletions: deletions,
         raw_diff: raw_for_file
       })
     end)
+  end
+
+  defp file_change_counts(%File{additions: additions, deletions: deletions}, _raw_for_file)
+       when (is_integer(additions) and additions > 0) or
+              (is_integer(deletions) and deletions > 0) do
+    {additions || 0, deletions || 0}
+  end
+
+  defp file_change_counts(%File{additions: additions, deletions: deletions}, raw_for_file) do
+    case ReviewsContext.parse_diff_files(raw_for_file) do
+      [%{additions: parsed_additions, deletions: parsed_deletions} | _] ->
+        {parsed_additions, parsed_deletions}
+
+      _ ->
+        {additions || 0, deletions || 0}
+    end
   end
 
   defp file_to_map(file) do

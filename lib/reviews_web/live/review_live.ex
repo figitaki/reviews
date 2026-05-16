@@ -15,9 +15,15 @@ defmodule ReviewsWeb.ReviewLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.Accounts
+  alias Reviews.PacketSectionDecisions
+  alias Reviews.ReviewNavigation
+  alias Reviews.ReviewPacket
   alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
+  alias ReviewsWeb.ReviewLive.DiffComponents
+  alias ReviewsWeb.ReviewLive.PacketComponents
+  alias ReviewsWeb.ReviewLive.RevisionNavComponents
 
   @impl true
   def mount(%{"slug" => slug}, session, socket) do
@@ -45,6 +51,8 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:summary_body, "")
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
+              |> assign(:expanded_file_ids, MapSet.new())
+              |> assign(:expanded_section_ids, MapSet.new())
               |> assign_snapshot(snapshot)
 
             {:ok, socket}
@@ -59,7 +67,21 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_params(_params, _uri, socket), do: {:noreply, socket}
+  def handle_params(params, _uri, socket) do
+    case parse_optional_patchset(params["patchset"]) do
+      {:ok, patchset_number} ->
+        case refresh_snapshot(socket, patchset_number: patchset_number) do
+          {:ok, socket} ->
+            {:noreply, socket}
+
+          {:error, :patchset_not_found} ->
+            {:noreply, put_flash(socket, :error, "Patchset not found.")}
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Patchset not found.")}
+    end
+  end
 
   @impl true
   def handle_event("select_patchset", %{"number" => number}, socket) do
@@ -74,6 +96,23 @@ defmodule ReviewsWeb.ReviewLive do
         {:noreply, socket}
     end
   end
+
+  @impl true
+  def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
+      when status in ["approved", "denied", "ignored"] do
+    with %{} = user <- socket.assigns.current_user,
+         %{} = patchset <- socket.assigns.selected_patchset,
+         {section_index, ""} <- Integer.parse(to_string(index)),
+         %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
+         {:ok, _decision} <- put_section_status(socket, patchset, user, section, status) do
+      {:noreply, refresh_snapshot!(socket)}
+    else
+      nil -> {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
+      _ -> {:noreply, put_flash(socket, :error, "Could not update section.")}
+    end
+  end
+
+  def handle_event("set_section_status", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("open_publish_modal", _params, socket) do
@@ -101,7 +140,12 @@ defmodule ReviewsWeb.ReviewLive do
     socket = assign(socket, :diff_style, style)
 
     socket =
-      Enum.reduce(socket.assigns.files, socket, fn file, acc ->
+      socket.assigns.file_diffs
+      |> Enum.filter(fn file ->
+        MapSet.member?(socket.assigns.expanded_file_ids, file.id) ||
+          packet_diff_path?(socket.assigns.selected_patchset, file.path)
+      end)
+      |> Enum.reduce(socket, fn file, acc ->
         push_event(acc, "diff_style_updated:#{file.path}", %{style: style})
       end)
 
@@ -109,6 +153,42 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   def handle_event("select_diff_style", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("toggle_packet_section", %{"section_index" => section_index}, socket) do
+    case parse_int(section_index) do
+      index when is_integer(index) ->
+        expanded_section_ids =
+          if MapSet.member?(socket.assigns.expanded_section_ids, index) do
+            MapSet.delete(socket.assigns.expanded_section_ids, index)
+          else
+            MapSet.put(socket.assigns.expanded_section_ids, index)
+          end
+
+        {:noreply, assign(socket, :expanded_section_ids, expanded_section_ids)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_file_diff", %{"file_id" => file_id}, socket) do
+    case parse_int(file_id) do
+      id when is_integer(id) ->
+        expanded_file_ids =
+          if MapSet.member?(socket.assigns.expanded_file_ids, id) do
+            MapSet.delete(socket.assigns.expanded_file_ids, id)
+          else
+            MapSet.put(socket.assigns.expanded_file_ids, id)
+          end
+
+        {:noreply, assign(socket, :expanded_file_ids, expanded_file_ids)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
 
   @impl true
   def handle_event("save_draft", params, socket) do
@@ -248,6 +328,15 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp parse_int(_), do: nil
 
+  defp parse_optional_patchset(nil), do: {:ok, nil}
+
+  defp parse_optional_patchset(value) do
+    case Integer.parse(to_string(value)) do
+      {n, ""} when n > 0 -> {:ok, n}
+      _ -> :error
+    end
+  end
+
   defp load_current_user(session) do
     case session["current_user_id"] do
       nil ->
@@ -332,29 +421,6 @@ defmodule ReviewsWeb.ReviewLive do
             </script>
           </div>
 
-          <div class="review-patchset" id="patchset-selector" aria-label="Patchset">
-            <button
-              :for={ps <- @patchsets}
-              id={"patchset-#{ps.number}"}
-              type="button"
-              phx-click="select_patchset"
-              phx-value-number={ps.number}
-              aria-pressed={
-                if(@selected_patchset && @selected_patchset.id == ps.id,
-                  do: "true",
-                  else: "false"
-                )
-              }
-              class={[
-                "review-chip focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
-                @selected_patchset && @selected_patchset.id == ps.id &&
-                  "is-active"
-              ]}
-            >
-              v{ps.number}
-            </button>
-          </div>
-
           <button
             id="publish-review-button"
             type="button"
@@ -373,12 +439,66 @@ defmodule ReviewsWeb.ReviewLive do
         </:actions>
 
         <div class="design-main">
+          <% packet = @selected_patchset && @selected_patchset.packet %>
+          <% has_packet = ReviewPacket.present?(packet) %>
+          <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
+          <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
+          <% packet_effort =
+            if has_packet do
+              PacketComponents.packet_effort_for_header(
+                packet,
+                @file_diffs,
+                @packet_section_decisions,
+                @selected_patchset,
+                @patchsets
+              )
+            end %>
+
           <header class="review-header">
-            <h1 class="review-title" translate="no">{@review.title}</h1>
-            <p :if={@review.description || @file_diffs != []} class="review-description">
+            <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
+            <h1
+              id={if(has_packet, do: "review-packet-title", else: "review-title")}
+              class={["review-title", has_packet && "is-packet-title"]}
+              translate="no"
+            >
+              {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
+            </h1>
+            <PacketComponents.markdown
+              :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
+              body={ReviewPacket.text(packet, "summary")}
+              class="review-description review-packet-lede"
+            />
+            <p
+              :if={!has_packet && (@review.description || @file_diffs != [])}
+              class="review-description"
+            >
               {@review.description || review_summary(@file_diffs, @drafts)}
             </p>
+            <div :if={@selected_patchset} class="review-header-meta">
+              <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
+              <span class="review-header-change-stat">
+                <PacketComponents.change_stat
+                  additions={diff_stats.additions}
+                  deletions={diff_stats.deletions}
+                />
+              </span>
+              <span
+                :if={has_packet && packet_effort}
+                class="review-header-estimate"
+                title="Estimated review time"
+              >
+                <strong>{packet_effort.time}</strong>
+                <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
+              </span>
+            </div>
           </header>
+
+          <RevisionNavComponents.revision_nav
+            nav={revision_nav}
+            review={@review}
+            live_action={@live_action}
+            selected_patchset={@selected_patchset}
+          />
 
           <%!-- Patchset-pushed banner --%>
           <div
@@ -392,104 +512,33 @@ defmodule ReviewsWeb.ReviewLive do
             </button>
           </div>
 
+          <PacketComponents.packet
+            :if={has_packet && @live_action != :changes}
+            packet={packet}
+            review={@review}
+            patchsets={@patchsets}
+            section_decisions={@packet_section_decisions}
+            file_diffs={@file_diffs}
+            selected_patchset={@selected_patchset}
+            published_threads={@published_threads}
+            drafts={@drafts}
+            current_user={@current_user}
+            diff_style={@diff_style}
+            expanded_section_ids={@expanded_section_ids}
+          />
+
           <%!-- Body: sidebar + diff list --%>
-          <div class="rev-shell">
-            <aside id="file-tree" class="rev-sidebar">
-              <ul class="rev-file-list">
-                <li :for={fd <- @file_diffs}>
-                  <a href={"#file-#{fd.id}"} class="rev-file-link">
-                    <span class="flex items-center gap-2 min-w-0">
-                      <.ds_status_mark status={fd.status} />
-                      <span class="rev-file-path truncate" translate="no">{fd.path}</span>
-                    </span>
-                    <span class="rev-file-stats">
-                      <span class="rev-stat-add">+{fd.additions}</span>
-                      <span class="rev-stat-del">-{fd.deletions}</span>
-                    </span>
-                  </a>
-                </li>
-                <li :if={@file_diffs == []}>
-                  <span class="rev-empty">No files in this patchset.</span>
-                </li>
-              </ul>
-
-              <section
-                :if={@open_threads_by_op != []}
-                id="open-threads"
-                class="rev-open-threads"
-                aria-label="Open threads"
-              >
-                <h2 class="rev-open-threads-heading">Open threads</h2>
-                <div :for={{op, threads} <- @open_threads_by_op} class="rev-open-thread-group">
-                  <header class="rev-open-thread-group-header">
-                    <img
-                      :if={op && op.avatar_url}
-                      src={op.avatar_url}
-                      alt=""
-                      width="16"
-                      height="16"
-                      loading="lazy"
-                      class="rdr-avatar"
-                    />
-                    <span>{(op && op.username) || "anonymous"}</span>
-                  </header>
-                  <button
-                    :for={t <- threads}
-                    type="button"
-                    class="rev-open-thread-entry"
-                    phx-click={
-                      JS.dispatch("reviews:scroll-to-anchor",
-                        detail: %{
-                          file_id: file_id_for(@file_diffs, t.file_path),
-                          file_path: t.file_path,
-                          side: t.side,
-                          line_number_hint: anchor_line_hint(t)
-                        }
-                      )
-                    }
-                  >
-                    <span class="rev-open-thread-meta">
-                      <span class="rev-open-thread-path" translate="no">
-                        {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
-                      </span>
-                      <span class="rev-open-thread-snippet">
-                        {ReviewView.first_comment_snippet(t)}
-                      </span>
-                    </span>
-                  </button>
-                </div>
-              </section>
-            </aside>
-
-            <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
-              <article
-                :for={fd <- @file_diffs}
-                id={"file-#{fd.id}"}
-                class="rev-file-card"
-              >
-                <div
-                  id={"diff-#{fd.id}"}
-                  phx-hook="DiffRenderer"
-                  phx-update="ignore"
-                  data-file-id={fd.id}
-                  data-file-path={fd.path}
-                  data-file-status={fd.status}
-                  data-side="new"
-                  data-patchset-number={@selected_patchset.number}
-                  data-raw-diff={fd.raw_diff}
-                  data-threads={threads_json(@published_threads, fd.path)}
-                  data-drafts={drafts_json(@drafts, fd.path, @current_user)}
-                  data-signed-in={if @current_user, do: "true", else: "false"}
-                  data-diff-style={@diff_style}
-                >
-                </div>
-              </article>
-
-              <p :if={@file_diffs == []} class="rev-empty">
-                No files in this patchset.
-              </p>
-            </section>
-          </div>
+          <DiffComponents.diff_shell
+            :if={@live_action == :changes || !has_packet}
+            file_diffs={@file_diffs}
+            open_threads_by_op={@open_threads_by_op}
+            selected_patchset={@selected_patchset}
+            published_threads={@published_threads}
+            drafts={@drafts}
+            current_user={@current_user}
+            diff_style={@diff_style}
+            expanded_file_ids={@expanded_file_ids}
+          />
         </div>
       </.ds_shell>
 
@@ -575,17 +624,8 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp user_menu(%{current_user: nil} = assigns) do
     ~H"""
-    <a href="/auth/github" class="review-button review-button-secondary gap-2">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 16 16"
-        class="size-4"
-        aria-hidden="true"
-        fill="currentColor"
-      >
-        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-      </svg>
-      Sign in with GitHub
+    <a href="/auth/github" class="review-button review-button-secondary">
+      Sign in
     </a>
     """
   end
@@ -637,21 +677,26 @@ defmodule ReviewsWeb.ReviewLive do
   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
   defp anchor_line_hint(_), do: nil
 
-  defp file_id_for(file_diffs, file_path) do
-    Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
-  end
-
-  defp threads_json(threads, file_path) do
-    snapshot = %{published_threads: threads}
-    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
-  end
-
-  defp drafts_json(drafts, file_path, viewer) do
-    snapshot = %{drafts: drafts, viewer: viewer}
-    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
-  end
-
   defp assign_snapshot(socket, snapshot) do
+    previous_patchset_id =
+      socket.assigns[:selected_patchset] && socket.assigns.selected_patchset.id
+
+    next_patchset_id = snapshot.selected_patchset && snapshot.selected_patchset.id
+
+    expanded_file_ids =
+      if previous_patchset_id == next_patchset_id do
+        socket.assigns[:expanded_file_ids] || MapSet.new()
+      else
+        MapSet.new()
+      end
+
+    expanded_section_ids =
+      if previous_patchset_id == next_patchset_id do
+        socket.assigns[:expanded_section_ids] || MapSet.new()
+      else
+        MapSet.new()
+      end
+
     socket
     |> assign(:review_snapshot, snapshot)
     |> assign(:review, snapshot.review)
@@ -659,8 +704,52 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:selected_patchset, snapshot.selected_patchset)
     |> assign(:files, snapshot.files)
     |> assign(:file_diffs, snapshot.file_diffs)
+    |> assign(:expanded_file_ids, expanded_file_ids)
+    |> assign(:expanded_section_ids, expanded_section_ids)
+    |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
     |> assign(:drafts, snapshot.drafts)
     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
+  end
+
+  defp packet_diff_path?(nil, _path), do: false
+
+  defp packet_diff_path?(patchset, path) do
+    patchset.packet
+    |> ReviewPacket.sections()
+    |> Enum.any?(fn section ->
+      Enum.any?(section.rows, fn row ->
+        ReviewPacket.text(row, "kind") == "hunk" && ReviewPacket.text(row, "path") == path
+      end)
+    end)
+  end
+
+  defp put_section_status(socket, patchset, user, section, status) do
+    state =
+      PacketSectionDecisions.section_state(
+        section,
+        socket.assigns.packet_section_decisions,
+        patchset,
+        socket.assigns.patchsets
+      )
+
+    next_status =
+      if state.effective && state.effective.status == status do
+        "pending"
+      else
+        status
+      end
+
+    if state.current && state.current.status == next_status do
+      PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
+    else
+      PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
+        section_index: section.index,
+        section_title: section.title,
+        section_fingerprint: section.fingerprint,
+        section_refs: section.refs,
+        status: next_status
+      })
+    end
   end
 end

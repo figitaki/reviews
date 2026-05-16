@@ -16,6 +16,7 @@ defmodule Reviews.Reviews.Patchset do
     field :number, :integer
     field :raw_diff, :string
     field :parsed_diff, :map
+    field :packet, :map
     field :base_sha, :string
     field :branch_name, :string
     field :pushed_at, :utc_datetime
@@ -27,7 +28,7 @@ defmodule Reviews.Reviews.Patchset do
   end
 
   @required ~w(review_id number raw_diff)a
-  @optional ~w(parsed_diff base_sha branch_name pushed_at)a
+  @optional ~w(parsed_diff packet base_sha branch_name pushed_at)a
 
   def changeset(patchset, attrs) do
     patchset
