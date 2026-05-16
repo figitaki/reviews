@@ -6,18 +6,19 @@ name: Fly Review App
 # one Fly app per PR named `reviews-pr-<number>`, created on open/sync and
 # destroyed on close.
 #
-# Contributor-only gating happens in two layers (belt + suspenders):
-#   1. The job's `if:` guard requires the PR head to live in this repo
-#      (no forks) AND the author_association to be OWNER / MEMBER /
-#      COLLABORATOR. This is enforced in the YAML itself.
+# Self-disabling: the job's `if:` guard checks for `vars.FLY_ORG`. Until a
+# maintainer sets that repo variable (plus the secrets documented in
+# docs/PREVIEW_ENVS.md), the job is skipped on every PR — no red checks
+# from missing configuration.
+#
+# Contributor-only gating, once enabled:
+#   1. The PR head must live in this repo (no forks) AND the author's
+#      association must be OWNER / MEMBER / COLLABORATOR. Enforced in
+#      the YAML below.
 #   2. The job targets the `preview` GitHub Environment, which can be
 #      configured in repo settings with required reviewers so a maintainer
 #      has to click "Approve" before the deploy step runs. See
 #      docs/PREVIEW_ENVS.md for setup.
-#
-# Both layers must be in place. (1) alone is bypassed if a maintainer
-# pushes to a contributor's branch; (2) alone gives no static signal in
-# the file when a fork PR is opened.
 
 on:
   pull_request:
@@ -32,11 +33,12 @@ jobs:
     name: Preview
     runs-on: ubuntu-latest
 
-    # Skip fork PRs entirely (no secrets would be available anyway) and
-    # skip PRs from anyone without write access. CONTRIBUTOR and
-    # FIRST_TIME_CONTRIBUTOR are deliberately excluded — write-access
-    # collaborators only.
+    # Three gates, all must hold:
+    #   - vars.FLY_ORG is set         (one-time setup complete)
+    #   - PR is not from a fork       (secrets wouldn't be available)
+    #   - author has write access     (OWNER / MEMBER / COLLABORATOR)
     if: |
+      vars.FLY_ORG != '' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
 
@@ -50,25 +52,12 @@ jobs:
 
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      FLY_POSTGRES_APP: ${{ vars.FLY_POSTGRES_APP }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      PR_DB_NAME: reviews_pr_${{ github.event.pull_request.number }}
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
-
-      # Create the per-PR database before deploy. Postgres has no
-      # CREATE DATABASE IF NOT EXISTS, so we tolerate the duplicate error
-      # on synchronize (second+ push to the same PR).
-      - name: Provision per-PR database
-        if: github.event.action != 'closed'
-        run: |
-          set -e
-          flyctl postgres connect -a "$FLY_POSTGRES_APP" <<SQL || true
-          CREATE DATABASE ${PR_DB_NAME};
-          SQL
 
       - name: Deploy preview app
         id: deploy
@@ -80,17 +69,7 @@ jobs:
           org: ${{ vars.FLY_ORG }}
           secrets: |
             SECRET_KEY_BASE=${{ secrets.PREVIEW_SECRET_KEY_BASE }}
-            DATABASE_URL=${{ secrets.PREVIEW_DATABASE_URL_BASE }}/${{ env.PR_DB_NAME }}
+            DATABASE_URL=${{ secrets.PREVIEW_DATABASE_URL }}
             GITHUB_CLIENT_ID=${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}
             GITHUB_CLIENT_SECRET=${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
             PHX_HOST=reviews-pr-${{ env.PR_NUMBER }}.fly.dev
-
-      # On PR close, the action above already destroys the app; drop the
-      # database too so we don't leak storage.
-      - name: Drop per-PR database
-        if: github.event.action == 'closed'
-        run: |
-          set -e
-          flyctl postgres connect -a "$FLY_POSTGRES_APP" <<SQL || true
-          DROP DATABASE IF EXISTS ${PR_DB_NAME};
-          SQL
