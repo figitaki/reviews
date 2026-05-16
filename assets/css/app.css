@@ -915,26 +915,73 @@ details[open] > summary .review-collapse-icon,
 }
 
 @media (max-width: 640px) {
+  .review-revision-nav {
+    margin-bottom: 24px;
+  }
+
+  .review-revision-row {
+    display: grid;
+    gap: 10px;
+  }
+
+  .review-revision-copy {
+    grid-template-columns: auto auto;
+    align-items: baseline;
+    justify-content: start;
+    gap: 8px;
+  }
+
+  .review-revision-label {
+    font-size: 10px;
+  }
+
+  .review-revision-controls {
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    padding-bottom: 3px;
+    scrollbar-width: none;
+  }
+
+  .review-revision-controls::-webkit-scrollbar {
+    display: none;
+  }
+
+  .review-revision-chip-list {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+
+  .review-nav-button,
+  .review-revision-chip {
+    flex: 0 0 auto;
+  }
+
+  .review-nav-button-label {
+    display: none;
+  }
+
   .review-packet-section-summary {
-    flex-wrap: wrap;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
     gap: 10px;
   }
 
   .review-packet-section-heading {
-    flex: 1 1 calc(100% - 34px);
+    min-width: 0;
   }
 
   .review-packet-section-controls {
-    order: 2;
-    width: 100%;
+    width: auto;
     flex-wrap: wrap;
-    justify-content: flex-start;
+    justify-content: flex-end;
+    justify-self: end;
   }
 
   .review-packet-section-controls .review-collapse-icon {
-    position: absolute;
-    right: 0;
+    position: static;
   }
 }
 
@@ -1370,7 +1417,27 @@ details[open] > summary .review-collapse-icon,
 
 @media (max-width: 768px) {
   .review-page {
-    --review-main-nav-h: 112px;
+    --review-main-nav-h: 64px;
+  }
+
+  .design-wrap {
+    width: min(1440px, calc(100vw - 16px));
+  }
+
+  .design-main {
+    width: min(1440px, calc(100vw - 24px));
+  }
+
+  .review-packet-row.is-markdown {
+    position: static;
+    min-height: 0;
+    border-bottom: 0;
+  }
+
+  .review-packet-row.is-markdown .review-packet-markdown {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
   }
 
   .review-topbar {

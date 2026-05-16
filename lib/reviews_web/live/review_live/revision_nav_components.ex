@@ -40,7 +40,8 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
             disabled={!@nav.previous_revision}
             aria-label="Previous revision"
           >
-            <.icon name="hero-arrow-left" class="size-4" /> Revision
+            <.icon name="hero-arrow-left" class="size-4" />
+            <span class="review-nav-button-label">Revision</span>
           </button>
           <div class="review-revision-chip-list" aria-label="Revisions">
             <button
@@ -75,7 +76,8 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
             disabled={!@nav.next_revision}
             aria-label="Next revision"
           >
-            Revision <.icon name="hero-arrow-right" class="size-4" />
+            <span class="review-nav-button-label">Revision</span>
+            <.icon name="hero-arrow-right" class="size-4" />
           </button>
         </div>
       </div>
