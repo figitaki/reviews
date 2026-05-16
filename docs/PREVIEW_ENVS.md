@@ -7,8 +7,9 @@ the PR closes.
 
 This follows the pattern in
 [Fly's review-apps blueprint](https://fly.io/docs/blueprints/review-apps-guide/),
-using the `superfly/fly-pr-review-apps` Action to manage the app
-lifecycle. Workflow lives at `.github/workflows/fly-review.yml`.
+driving `flyctl` directly (`apps create` → `secrets set --stage` →
+`deploy --remote-only` → `apps destroy`). Workflow lives at
+`.github/workflows/fly-review.yml`.
 
 The production deploy from `main` (in `.github/workflows/ci.yml`) is
 unaffected — preview envs are a separate workflow with their own
