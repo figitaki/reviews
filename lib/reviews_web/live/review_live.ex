@@ -105,7 +105,10 @@ defmodule ReviewsWeb.ReviewLive do
          {section_index, ""} <- Integer.parse(to_string(index)),
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
          {:ok, _decision} <- put_section_status(socket, patchset, user, section, status) do
-      {:noreply, refresh_snapshot!(socket)}
+      {:noreply,
+       socket
+       |> refresh_snapshot!()
+       |> collapse_packet_section(section_index)}
     else
       nil -> {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
       _ -> {:noreply, put_flash(socket, :error, "Could not update section.")}
@@ -674,6 +677,15 @@ defmodule ReviewsWeb.ReviewLive do
   defp plural(1, word), do: word
   defp plural(_, word), do: word <> "s"
 
+  defp collapse_packet_section(socket, section_index) do
+    expanded_section_ids =
+      socket.assigns[:expanded_section_ids]
+      |> Kernel.||(MapSet.new())
+      |> MapSet.delete(section_index)
+
+    assign(socket, :expanded_section_ids, expanded_section_ids)
+  end
+
   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
   defp anchor_line_hint(_), do: nil
 
@@ -733,23 +745,27 @@ defmodule ReviewsWeb.ReviewLive do
         socket.assigns.patchsets
       )
 
-    next_status =
-      if state.effective && state.effective.status == status do
-        "pending"
-      else
-        status
-      end
+    cond do
+      state.current && state.current.status == status ->
+        PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
 
-    if state.current && state.current.status == next_status do
-      PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
-    else
-      PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
-        section_index: section.index,
-        section_title: section.title,
-        section_fingerprint: section.fingerprint,
-        section_refs: section.refs,
-        status: next_status
-      })
+      is_nil(state.current) && state.inherited && state.inherited.status == status ->
+        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
+          section_index: section.index,
+          section_title: section.title,
+          section_fingerprint: section.fingerprint,
+          section_refs: section.refs,
+          status: "pending"
+        })
+
+      true ->
+        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
+          section_index: section.index,
+          section_title: section.title,
+          section_fingerprint: section.fingerprint,
+          section_refs: section.refs,
+          status: status
+        })
     end
   end
 end

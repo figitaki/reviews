@@ -378,6 +378,9 @@ defmodule ReviewsWeb.ReviewLiveTest do
         })
 
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}?patchset=1")
+      view |> element("#packet-section-0 .review-packet-section-toggle") |> render_click()
+      assert has_element?(view, "#packet-section-0.is-open")
+
       view |> element("#packet-section-0 button", "Approve") |> render_click()
       assert has_element?(view, "#packet-section-0:not(.is-open)")
 

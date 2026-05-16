@@ -962,6 +962,17 @@ details[open] > summary .review-collapse-icon,
     display: none;
   }
 
+  .review-section-action.is-active {
+    width: 30px;
+    gap: 0;
+    padding: 0;
+  }
+
+  .review-section-action.is-active .review-section-action-label {
+    max-width: 0;
+    opacity: 0;
+  }
+
   .review-packet-section-summary {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
