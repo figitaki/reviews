@@ -115,8 +115,33 @@ Under **Settings → Secrets and variables → Actions**:
 | `FLY_API_TOKEN`                 | Same token as production CI (`fly auth token`)        |
 | `PREVIEW_SECRET_KEY_BASE`       | Output of `mix phx.gen.secret`                        |
 | `PREVIEW_DATABASE_URL`          | Full `postgres://...` URL for the shared preview DB   |
+| `PREVIEW_API_TOKEN`             | A bearer token of your choice (e.g. `rev_$(openssl rand -hex 24)`). Used to bootstrap a synthetic "preview" user — see "Pushing diffs to a preview" below. |
 | `PREVIEW_GITHUB_CLIENT_ID`      | _(optional — leave unset to skip OAuth on previews)_  |
 | `PREVIEW_GITHUB_CLIENT_SECRET`  | _(optional — leave unset to skip OAuth on previews)_  |
+
+---
+
+## Pushing diffs to a preview
+
+GitHub OAuth doesn't work on per-PR hostnames, so there's no UI path to
+mint an API token on a preview app. Instead, every preview boots with
+a synthetic `preview` user seeded by
+`Reviews.Release.seed_preview_user/0`, with an API token derived from
+the `PREVIEW_API_TOKEN` secret above.
+
+To use it:
+
+```sh
+reviews login
+# server_url: https://reviews-pr-42.fly.dev
+# api_token:  <the same string you put in PREVIEW_API_TOKEN>
+
+reviews push
+```
+
+The seeding step is a no-op in production (the prod app has no
+`PREVIEW_API_TOKEN` env var), so the synthetic user only exists on
+previews.
 
 ---
 
@@ -124,15 +149,16 @@ Under **Settings → Secrets and variables → Actions**:
 
 1. **PR opened** by a maintainer/collaborator → workflow fires →
    if a `preview` Environment with required reviewers is configured,
-   waits for approval → `superfly/fly-pr-review-apps` creates app
-   `reviews-pr-<N>`, sets secrets, and runs `fly deploy`. The release
-   command in `fly.toml` runs migrations against the shared preview DB.
+   waits for approval → `flyctl apps create` makes `reviews-pr-<N>`,
+   `flyctl secrets set --stage` writes config, and `flyctl deploy
+   --remote-only` builds the image on Fly's builders. The release
+   command in `fly.toml` runs migrations and seeds the preview user.
 
 2. **Subsequent pushes** → workflow re-runs → app redeploys with the
    new HEAD.
 
 3. **PR closed (merged or not)** → workflow fires the close path →
-   `superfly/fly-pr-review-apps` destroys the Fly app.
+   `flyctl apps destroy` removes the Fly app.
 
 ---
 
