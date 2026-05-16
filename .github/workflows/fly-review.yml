@@ -6,12 +6,22 @@ name: Fly Review App
 # one Fly app per PR named `reviews-pr-<number>`, created on open/sync and
 # destroyed on close.
 #
-# Action version is pinned to `@1.2.1`. Later versions changed the
-# `flyctl launch` behavior in ways that break first-time app creation for
-# Phoenix projects (the scanner tries to `mix compile` against an
-# unfetched checkout). See
+# Implementation notes
+# --------------------
+# We use the official `superfly/fly-pr-review-apps` action, but pre-create
+# the Fly app ourselves via `flyctl apps create` before the action runs.
+#
+# Why pre-create? On first-app creation the action shells out to
+# `flyctl launch --copy-config --no-deploy`, which runs Phoenix scanners
+# that try `mix compile` against an unfetched checkout. That fails with
+# either "mix: not found" or "we identified an elixir project but when
+# attempting to compile it we ran into an error" depending on whether
+# Elixir is on PATH. The action's launch step only runs when the app
+# doesn't exist yet — pre-creating sidesteps the scanner entirely.
+#
+# Action version pinned to `@1.2.1`. See
 # https://gist.github.com/anniebabannie/3cb800f2a890a6f3ed3167c09a0234dd?permalink_comment_id=5370873
-# for community confirmation that `@1.2.1` is the right pin.
+# for community confirmation that this pin is the working one.
 #
 # Self-disabling: the job's `if:` guard checks for `vars.FLY_ORG`. Until a
 # maintainer sets that repo variable (plus the secrets documented in
@@ -61,16 +71,31 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       FLY_ORG: ${{ vars.FLY_ORG }}
       FLY_REGION: sjc
+      APP_NAME: reviews-pr-${{ github.event.pull_request.number }}
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Pre-create the app so the action's internal `flyctl launch` step
+      # is skipped (it only runs when the app doesn't already exist).
+      # Idempotent on synchronize: `apps show` succeeds → no-op.
+      - name: Ensure app exists
+        if: github.event.action != 'closed'
+        run: |
+          if ! flyctl apps show "$APP_NAME" > /dev/null 2>&1; then
+            flyctl apps create "$APP_NAME" --org "$FLY_ORG"
+          fi
 
       - name: Deploy preview app
         id: deploy
         uses: superfly/fly-pr-review-apps@1.2.1
         with:
+          name: ${{ env.APP_NAME }}
           secrets: |
             SECRET_KEY_BASE=${{ secrets.PREVIEW_SECRET_KEY_BASE }}
             DATABASE_URL=${{ secrets.PREVIEW_DATABASE_URL }}
             GITHUB_CLIENT_ID=${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}
             GITHUB_CLIENT_SECRET=${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
+            PHX_HOST=${{ env.APP_NAME }}.fly.dev
