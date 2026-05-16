@@ -611,31 +611,14 @@
   background: color-mix(in srgb, var(--review-bg) 92%, transparent);
   padding: 8px;
   backdrop-filter: blur(16px);
-  cursor: pointer;
   list-style: none;
 }
 
-.review-packet-section-summary::-webkit-details-marker,
-.rev-file-summary::-webkit-details-marker {
-  display: none;
-}
-
-.review-packet-section[open] .review-packet-section-summary {
+.review-packet-section.is-open .review-packet-section-summary {
   margin-bottom: 16px;
 }
 
-.review-packet-section::details-content {
-  block-size: 0;
-  overflow: clip;
-  interpolate-size: allow-keywords;
-  transition: block-size 250ms linear 75ms, content-visibility 250ms linear 75ms allow-discrete;
-}
-
-.review-packet-section[open]::details-content {
-  block-size: auto;
-}
-
-.review-packet-section.is-decided:not([open]) .review-packet-section-summary {
+.review-packet-section.is-decided:not(.is-open) .review-packet-section-summary {
   color: var(--review-faint);
 }
 
@@ -644,7 +627,7 @@
   gap: 14px;
 }
 
-.review-packet-section[open] .review-packet-section-body {
+.review-packet-section.is-open .review-packet-section-body {
   animation: review-packet-section-open 250ms linear 75ms both;
 }
 
@@ -668,21 +651,31 @@
   transition: transform 160ms ease, color 160ms ease;
 }
 
-details[open] > summary .review-collapse-icon {
+details[open] > summary .review-collapse-icon,
+.review-packet-section.is-open .review-collapse-icon,
+.rev-file-card.is-open .review-collapse-icon {
   transform: rotate(180deg);
   color: var(--review-text);
 }
 
 .review-packet-section-title {
   margin: 0;
-  color: var(--review-muted);
-  font-size: 13px;
-  font-weight: 700;
+  color: var(--review-text);
+  font-size: 17px;
+  font-weight: 550;
   line-height: 1.25;
 }
 
 .review-packet-section-heading {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
   min-width: 0;
+  padding: 0;
+  text-align: left;
 }
 
 .review-packet-section-title-row {
@@ -727,11 +720,15 @@ details[open] > summary .review-collapse-icon {
 
 .review-packet-section-summary-text {
   max-width: 74ch;
-  margin: 5px 0 0;
-  color: var(--review-faint);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.35;
+  margin: 8px 0 0;
+  color: var(--review-muted);
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1.45;
+}
+
+.review-packet-section-summary-text + .review-packet-section-body {
+  margin-top: 18px;
 }
 
 .review-packet-section-controls {
@@ -741,6 +738,26 @@ details[open] > summary .review-collapse-icon {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.review-packet-section-toggle {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--review-muted);
+}
+
+.review-packet-section-toggle:hover {
+  border-color: var(--review-line-strong);
+  background: var(--review-panel-raised);
+  color: var(--review-text);
 }
 
 .review-section-state-pill {
@@ -821,8 +838,10 @@ details[open] > summary .review-collapse-icon {
   padding: 0;
   overflow: hidden;
   white-space: nowrap;
-  transition: width 250ms linear 75ms, gap 250ms linear 75ms, padding 250ms linear 75ms,
-    background-color 250ms linear 75ms, border-color 250ms linear 75ms, color 250ms linear 75ms;
+  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1) 100ms,
+    gap 420ms cubic-bezier(0.22, 1, 0.36, 1) 100ms,
+    padding 420ms cubic-bezier(0.22, 1, 0.36, 1) 100ms,
+    background-color 220ms ease 80ms, border-color 220ms ease 80ms, color 220ms ease 80ms;
 }
 
 .review-section-action:hover,
@@ -845,7 +864,7 @@ details[open] > summary .review-collapse-icon {
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
-  transition: max-width 250ms linear 75ms, opacity 250ms linear 75ms;
+  transition: max-width 360ms cubic-bezier(0.22, 1, 0.36, 1) 120ms, opacity 240ms ease 140ms;
 }
 
 .review-section-action:hover .review-section-action-label,
@@ -1217,12 +1236,17 @@ details[open] > summary .review-collapse-icon {
   min-width: 0;
 }
 
-.rev-file-card:not([open]) .rev-file-body {
-  display: none;
+.rev-file-card:not(.is-open) {
+  min-height: 60px;
 }
 
-.rev-file-card:not([open]) {
+.rev-file-placeholder {
+  display: flex;
   min-height: 60px;
+  align-items: center;
+  padding: 0 56px 0 18px;
+  color: var(--review-muted);
+  font-size: 13px;
 }
 
 .rev-file-path {

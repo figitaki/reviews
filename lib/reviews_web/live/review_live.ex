@@ -51,6 +51,8 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:summary_body, "")
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
+              |> assign(:expanded_file_ids, MapSet.new())
+              |> assign(:expanded_section_ids, MapSet.new())
               |> assign_snapshot(snapshot)
 
             {:ok, socket}
@@ -138,7 +140,12 @@ defmodule ReviewsWeb.ReviewLive do
     socket = assign(socket, :diff_style, style)
 
     socket =
-      Enum.reduce(socket.assigns.files, socket, fn file, acc ->
+      socket.assigns.file_diffs
+      |> Enum.filter(fn file ->
+        MapSet.member?(socket.assigns.expanded_file_ids, file.id) ||
+          packet_diff_path?(socket.assigns.selected_patchset, file.path)
+      end)
+      |> Enum.reduce(socket, fn file, acc ->
         push_event(acc, "diff_style_updated:#{file.path}", %{style: style})
       end)
 
@@ -146,6 +153,42 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   def handle_event("select_diff_style", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("toggle_packet_section", %{"section_index" => section_index}, socket) do
+    case parse_int(section_index) do
+      index when is_integer(index) ->
+        expanded_section_ids =
+          if MapSet.member?(socket.assigns.expanded_section_ids, index) do
+            MapSet.delete(socket.assigns.expanded_section_ids, index)
+          else
+            MapSet.put(socket.assigns.expanded_section_ids, index)
+          end
+
+        {:noreply, assign(socket, :expanded_section_ids, expanded_section_ids)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_file_diff", %{"file_id" => file_id}, socket) do
+    case parse_int(file_id) do
+      id when is_integer(id) ->
+        expanded_file_ids =
+          if MapSet.member?(socket.assigns.expanded_file_ids, id) do
+            MapSet.delete(socket.assigns.expanded_file_ids, id)
+          else
+            MapSet.put(socket.assigns.expanded_file_ids, id)
+          end
+
+        {:noreply, assign(socket, :expanded_file_ids, expanded_file_ids)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
 
   @impl true
   def handle_event("save_draft", params, socket) do
@@ -432,7 +475,6 @@ defmodule ReviewsWeb.ReviewLive do
               {@review.description || review_summary(@file_diffs, @drafts)}
             </p>
             <div :if={@selected_patchset} class="review-header-meta">
-              <span>Revision v{@selected_patchset.number}</span>
               <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
               <span class="review-header-change-stat">
                 <PacketComponents.change_stat
@@ -440,9 +482,13 @@ defmodule ReviewsWeb.ReviewLive do
                   deletions={diff_stats.deletions}
                 />
               </span>
-              <span :if={has_packet && packet_effort} class="review-header-estimate">
-                Estimated Review Time <strong>Total {packet_effort.time}</strong>
-                <span>(Remaining {packet_effort.remaining_time})</span>
+              <span
+                :if={has_packet && packet_effort}
+                class="review-header-estimate"
+                title="Estimated review time"
+              >
+                <strong>{packet_effort.time}</strong>
+                <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
               </span>
             </div>
           </header>
@@ -478,6 +524,7 @@ defmodule ReviewsWeb.ReviewLive do
             drafts={@drafts}
             current_user={@current_user}
             diff_style={@diff_style}
+            expanded_section_ids={@expanded_section_ids}
           />
 
           <%!-- Body: sidebar + diff list --%>
@@ -490,6 +537,7 @@ defmodule ReviewsWeb.ReviewLive do
             drafts={@drafts}
             current_user={@current_user}
             diff_style={@diff_style}
+            expanded_file_ids={@expanded_file_ids}
           />
         </div>
       </.ds_shell>
@@ -639,6 +687,25 @@ defmodule ReviewsWeb.ReviewLive do
   defp anchor_line_hint(_), do: nil
 
   defp assign_snapshot(socket, snapshot) do
+    previous_patchset_id =
+      socket.assigns[:selected_patchset] && socket.assigns.selected_patchset.id
+
+    next_patchset_id = snapshot.selected_patchset && snapshot.selected_patchset.id
+
+    expanded_file_ids =
+      if previous_patchset_id == next_patchset_id do
+        socket.assigns[:expanded_file_ids] || MapSet.new()
+      else
+        MapSet.new()
+      end
+
+    expanded_section_ids =
+      if previous_patchset_id == next_patchset_id do
+        socket.assigns[:expanded_section_ids] || MapSet.new()
+      else
+        MapSet.new()
+      end
+
     socket
     |> assign(:review_snapshot, snapshot)
     |> assign(:review, snapshot.review)
@@ -646,10 +713,24 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:selected_patchset, snapshot.selected_patchset)
     |> assign(:files, snapshot.files)
     |> assign(:file_diffs, snapshot.file_diffs)
+    |> assign(:expanded_file_ids, expanded_file_ids)
+    |> assign(:expanded_section_ids, expanded_section_ids)
     |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
     |> assign(:drafts, snapshot.drafts)
     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
+  end
+
+  defp packet_diff_path?(nil, _path), do: false
+
+  defp packet_diff_path?(patchset, path) do
+    patchset.packet
+    |> ReviewPacket.sections()
+    |> Enum.any?(fn section ->
+      Enum.any?(section.rows, fn row ->
+        ReviewPacket.text(row, "kind") == "hunk" && ReviewPacket.text(row, "path") == path
+      end)
+    end)
   end
 
   defp put_section_status(socket, patchset, user, section, status) do

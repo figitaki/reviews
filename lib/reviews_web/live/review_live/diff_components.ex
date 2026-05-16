@@ -11,6 +11,7 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
   attr :drafts, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
+  attr :expanded_file_ids, :any, required: true
 
   def diff_shell(assigns) do
     ~H"""
@@ -83,17 +84,27 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
       </aside>
 
       <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
-        <details
+        <article
           :for={fd <- @file_diffs}
           id={"file-#{fd.id}"}
-          class="rev-file-card"
-          open
+          class={["rev-file-card", file_expanded?(@expanded_file_ids, fd.id) && "is-open"]}
         >
-          <summary class="rev-file-summary">
+          <button
+            type="button"
+            class="rev-file-summary"
+            phx-click="toggle_file_diff"
+            phx-value-file_id={fd.id}
+            aria-expanded={file_expanded?(@expanded_file_ids, fd.id)}
+            aria-controls={"diff-file-body-#{fd.id}"}
+          >
             <span class="sr-only">Toggle {fd.path}</span>
             <.icon name="hero-chevron-down" class="review-collapse-icon" />
-          </summary>
-          <div class="rev-file-body">
+          </button>
+          <div
+            :if={file_expanded?(@expanded_file_ids, fd.id)}
+            id={"diff-file-body-#{fd.id}"}
+            class="rev-file-body"
+          >
             <div
               id={"diff-#{fd.id}"}
               phx-hook="DiffRenderer"
@@ -111,7 +122,10 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
             >
             </div>
           </div>
-        </details>
+          <div :if={!file_expanded?(@expanded_file_ids, fd.id)} class="rev-file-placeholder">
+            <span>Diff deferred until this file is opened.</span>
+          </div>
+        </article>
 
         <p :if={@file_diffs == []} class="rev-empty">
           No files in this patchset.
@@ -126,6 +140,10 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
 
   defp file_id_for(file_diffs, file_path) do
     Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
+  end
+
+  defp file_expanded?(expanded_file_ids, file_id) do
+    MapSet.member?(expanded_file_ids, file_id)
   end
 
   defp threads_json(threads, file_path) do

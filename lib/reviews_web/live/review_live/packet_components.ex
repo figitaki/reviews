@@ -16,6 +16,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :drafts, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
+  attr :expanded_section_ids, :any, required: true
 
   def packet(assigns) do
     sections = packet_sections(assigns)
@@ -27,13 +28,24 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     ~H"""
     <section id="review-packet" class="review-packet" aria-labelledby="review-packet-title">
       <div class="review-packet-grid">
-        <details
+        <article
           :for={section <- @sections}
           id={"packet-section-#{section.index}"}
-          class={["review-packet-section", section.effective_status && "is-decided"]}
+          class={[
+            "review-packet-section",
+            section.effective_status && "is-decided",
+            section_expanded?(@expanded_section_ids, section.index) && "is-open"
+          ]}
         >
-          <summary class="review-packet-section-summary">
-            <div class="review-packet-section-heading">
+          <header class="review-packet-section-summary">
+            <button
+              type="button"
+              class="review-packet-section-heading"
+              phx-click="toggle_packet_section"
+              phx-value-section_index={section.index}
+              aria-expanded={section_expanded?(@expanded_section_ids, section.index)}
+              aria-controls={"packet-section-#{section.index}-body"}
+            >
               <div class="review-packet-section-title-row">
                 <h3 class="review-packet-section-title">{section.title}</h3>
                 <span
@@ -50,10 +62,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                   </span>
                 </span>
               </div>
-              <p :if={section.summary != ""} class="review-packet-section-summary-text">
-                {section.summary}
-              </p>
-            </div>
+            </button>
 
             <div class="review-packet-section-controls">
               <span
@@ -105,11 +114,32 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 <% end %>
               </div>
 
-              <.icon name="hero-chevron-down" class="review-collapse-icon" />
+              <button
+                type="button"
+                class="review-packet-section-toggle"
+                phx-click="toggle_packet_section"
+                phx-value-section_index={section.index}
+                aria-expanded={section_expanded?(@expanded_section_ids, section.index)}
+                aria-controls={"packet-section-#{section.index}-body"}
+              >
+                <span class="sr-only">Toggle {section.title}</span>
+                <.icon name="hero-chevron-down" class="review-collapse-icon" />
+              </button>
             </div>
-          </summary>
+          </header>
 
-          <div class="review-packet-section-body">
+          <p
+            :if={section.summary != "" && !section_expanded?(@expanded_section_ids, section.index)}
+            class="review-packet-section-summary-text"
+          >
+            {section.summary}
+          </p>
+
+          <div
+            :if={section_expanded?(@expanded_section_ids, section.index)}
+            id={"packet-section-#{section.index}-body"}
+            class="review-packet-section-body"
+          >
             <div class="review-packet-row-list">
               <.packet_row
                 :for={{row, idx} <- Enum.with_index(section.rows)}
@@ -124,7 +154,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               />
             </div>
           </div>
-        </details>
+        </article>
 
         <section :if={@sections == []} class="review-packet-section">
           <h3 class="review-packet-section-title">No sections</h3>
@@ -174,6 +204,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> Map.put(:summary, section_summary(section))
       |> Map.put(:estimate, section_estimate(section, assigns.file_diffs))
     end)
+  end
+
+  defp section_expanded?(expanded_section_ids, section_index) do
+    MapSet.member?(expanded_section_ids, section_index)
   end
 
   defp packet_effort(sections) do
@@ -316,7 +350,21 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   end
 
   defp format_minutes(1), do: "1 min"
+  defp format_minutes(minutes) when minutes > 59, do: format_hours(minutes)
   defp format_minutes(minutes), do: "#{minutes} min"
+
+  defp format_hours(minutes) do
+    half_hour_steps = max(2, round(minutes / 30))
+
+    label =
+      if rem(half_hour_steps, 2) == 0 do
+        "#{div(half_hour_steps, 2)}hr"
+      else
+        "#{div(half_hour_steps, 2)}.5hr"
+      end
+
+    "~" <> label
+  end
 
   defp effort_label(minutes) when minutes <= 2, do: "Light"
   defp effort_label(minutes) when minutes <= 6, do: "Moderate"

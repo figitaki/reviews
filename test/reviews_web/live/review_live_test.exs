@@ -43,13 +43,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
   describe "anonymous viewer" do
     setup :seed!
 
-    test "renders the review screen with file tree + diff hooks", %{conn: conn, review: review} do
-      {:ok, _view, html} = live(conn, ~p"/r/#{review.slug}")
+    test "renders the review screen with file tree and defers diff hooks", %{
+      conn: conn,
+      review: review
+    } do
+      {:ok, view, html} = live(conn, ~p"/r/#{review.slug}")
 
       assert html =~ "Great change"
       assert html =~ "lib/foo.ex"
-      assert html =~ "phx-hook=\"DiffRenderer\""
-      assert html =~ "data-file-path=\"lib/foo.ex\""
+      refute html =~ "phx-hook=\"DiffRenderer\""
+
+      view
+      |> element("#diff-files button.rev-file-summary", "lib/foo.ex")
+      |> render_click()
+
+      assert has_element?(view, ~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"]|)
     end
 
     test "renders a stored review packet above the diff", %{conn: conn, author: author} do
@@ -97,24 +105,35 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-packet")
       assert has_element?(view, ".review-title.is-packet-title", "Packet walkthrough")
       assert has_element?(view, ".review-packet-lede", "Read this first.")
-      assert has_element?(view, ".review-header-estimate", "Estimated Review Time")
+      assert has_element?(view, ".review-header-estimate", "1 min")
       assert has_element?(view, ".review-header-change-stat .review-change-stat-add", "+1")
       assert has_element?(view, ".review-header-change-stat .review-change-stat-del", "-1")
-      assert has_element?(view, "#packet-section-0:not([open])")
+      assert has_element?(view, "#packet-section-0:not(.is-open)")
       assert has_element?(view, "#packet-section-0 .review-packet-section-estimate", "Light")
       assert has_element?(view, "#packet-section-0 .review-change-stat-add", "+1")
       assert has_element?(view, "#packet-section-0 .review-change-stat-del", "-1")
 
       assert has_element?(
                view,
-               "#packet-section-0 .review-packet-section-summary-text",
+               "#packet-section-0 > .review-packet-section-summary-text",
                "Preserve packet JSON as the server contract."
              )
 
+      refute has_element?(
+               view,
+               "#packet-section-0 .review-packet-section-summary .review-packet-section-summary-text"
+             )
+
       assert html =~ "Preserve packet JSON as the server contract."
-      assert html =~ "Keep packet.md editable."
-      assert html =~ "Run the smoke test"
+      refute html =~ "Keep packet.md editable."
+      refute html =~ "Run the smoke test"
       refute html =~ "### Main change"
+
+      view
+      |> element("#packet-section-0 .review-packet-section-heading", "Main change")
+      |> render_click()
+
+      refute has_element?(view, "#packet-section-0 > .review-packet-section-summary-text")
 
       assert has_element?(
                view,
@@ -122,6 +141,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       assert has_element?(view, "#review-packet .review-packet-md-heading", "Main change")
+      assert has_element?(view, "#review-packet", "Preserve packet JSON as the server contract.")
+
+      view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      assert has_element?(view, "#packet-section-0.is-open")
     end
 
     test "renders linear revision navigation from patchsets", %{
@@ -181,7 +207,6 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#revision-nav", "v1")
       assert has_element?(view, "#revision-nav", "v2")
       assert has_element?(view, "#revision-nav", "v3")
-      assert has_element?(view, ".review-header-meta", "Revision v3")
       assert has_element?(view, ".review-header-meta", "+1 -1")
       assert has_element?(view, ~s|#revision-nav #patchset-3.is-active|, "v3")
       assert has_element?(view, ~s|#revision-nav #patchset-1.has-packet|)
@@ -225,8 +250,17 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
       assert has_element?(changes_view, "#diff-files")
-      assert has_element?(changes_view, "#diff-files details.rev-file-card[open]")
-      assert has_element?(changes_view, "#diff-files summary.rev-file-summary", "lib/packet.ex")
+      assert has_element?(changes_view, "#diff-files .rev-file-card:not(.is-open)")
+      assert has_element?(changes_view, "#diff-files button.rev-file-summary", "lib/packet.ex")
+
+      refute has_element?(
+               changes_view,
+               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
+             )
+
+      changes_view
+      |> element("#diff-files button.rev-file-summary", "lib/packet.ex")
+      |> render_click()
 
       assert has_element?(
                changes_view,
@@ -345,13 +379,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}?patchset=1")
       view |> element("#packet-section-0 button", "Approve") |> render_click()
-      assert has_element?(view, ~s|#packet-section-0:not([open])|)
+      assert has_element?(view, "#packet-section-0:not(.is-open)")
 
       refute has_element?(view, "#packet-section-0 .review-section-state-pill.is-current")
       assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
 
       view |> element("#packet-section-0 button", "Approve") |> render_click()
-      assert has_element?(view, ~s|#packet-section-0:not([open])|)
+      assert has_element?(view, "#packet-section-0:not(.is-open)")
       refute has_element?(view, "#packet-section-0 .review-section-action.is-active")
 
       view |> element("#packet-section-0 button", "Approve") |> render_click()
@@ -403,7 +437,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(latest_view, "#packet-section-0 .review-section-transition-icon")
       assert has_element?(latest_view, "#packet-section-0 .review-packet-section-actions")
-      assert has_element?(latest_view, ~s|#packet-section-0:not([open])|)
+      assert has_element?(latest_view, "#packet-section-0:not(.is-open)")
 
       latest_view |> element("#packet-section-0 button", "Ignore") |> render_click()
 

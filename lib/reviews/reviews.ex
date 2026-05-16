@@ -153,7 +153,7 @@ defmodule Reviews.Reviews do
   # --- Diff parsing -------------------------------------------------------
 
   @doc """
-  Returns a list of `%{path, old_path, status, additions, deletions}` parsed
+  Returns a list of `%{path, old_path, status, additions, deletions, raw_diff}` parsed
   out of a unified `git diff` string. Exposed for the LiveView so it can
   display +/- counts without re-querying the DB rows. Pure function.
   """
@@ -165,11 +165,12 @@ defmodule Reviews.Reviews do
     # Split on `diff --git ` boundaries, keeping each chunk.
     raw_diff
     |> String.split(~r/^diff --git /m, trim: true)
-    |> Enum.map(&parse_one_file_chunk/1)
+    |> Enum.map(&parse_one_file_chunk("diff --git " <> &1))
     |> Enum.reject(&is_nil/1)
   end
 
-  defp parse_one_file_chunk(chunk) do
+  defp parse_one_file_chunk(raw_chunk) do
+    chunk = String.trim_leading(raw_chunk, "diff --git ")
     lines = String.split(chunk, "\n")
     header_line = List.first(lines) || ""
 
@@ -194,7 +195,8 @@ defmodule Reviews.Reviews do
           old_path: if(status in ["renamed", "deleted"], do: old_path),
           status: status,
           additions: additions,
-          deletions: deletions
+          deletions: deletions,
+          raw_diff: raw_chunk
         }
     end
   end
@@ -229,7 +231,10 @@ defmodule Reviews.Reviews do
           patchset_id: patchset_id,
           path: meta.path,
           old_path: meta.old_path,
-          status: meta.status
+          status: meta.status,
+          additions: meta.additions,
+          deletions: meta.deletions,
+          raw_diff: meta.raw_diff
         }
 
         case %File{} |> File.changeset(attrs) |> Repo.insert() do
