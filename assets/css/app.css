@@ -608,9 +608,8 @@
   gap: 14px;
   min-height: var(--review-section-sticky-h);
   margin-inline: -8px;
-  background: color-mix(in srgb, var(--review-bg) 92%, transparent);
+  background: var(--review-bg);
   padding: 8px;
-  backdrop-filter: blur(16px);
   list-style: none;
 }
 
@@ -952,12 +951,21 @@ details[open] > summary .review-collapse-icon,
 
 .review-packet-row.is-markdown {
   position: sticky;
-  top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h));
+  top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h) + 1px);
   z-index: 7;
   margin-inline: -8px;
-  background: color-mix(in srgb, var(--review-bg) 94%, transparent);
+  min-height: 64px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--review-line);
+  background: var(--review-bg);
   padding: 8px;
-  backdrop-filter: blur(16px);
+}
+
+.review-packet-row.is-markdown .review-packet-markdown {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .review-packet-point-list {
