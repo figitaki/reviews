@@ -1,0 +1,122 @@
+name: Fly Review App
+
+# Per-PR preview environments on Fly.
+#
+# Pattern follows https://fly.io/docs/blueprints/review-apps-guide/ —
+# one Fly app per PR named `reviews-pr-<number>`, created on open/sync and
+# destroyed on close.
+#
+# We drive flyctl directly instead of using `superfly/fly-pr-review-apps`.
+# That action runs `flyctl launch --copy-config` unconditionally inside a
+# Docker container, and `flyctl launch` always runs language scanners.
+# For Phoenix projects the scanner shells out to `mix compile`, which
+# fails because the action's container has no Elixir. There is no flag
+# to disable the scanner and no host-side workaround (the container is
+# isolated from the runner). See the conversation on
+# https://gist.github.com/anniebabannie/3cb800f2a890a6f3ed3167c09a0234dd .
+#
+# So: we call `flyctl apps create / secrets set / deploy / apps destroy`
+# directly. The Docker build still happens on Fly's remote builders.
+#
+# Self-disabling: the job's `if:` guard checks for `vars.FLY_ORG`. Until a
+# maintainer sets that repo variable (plus the secrets documented in
+# docs/PREVIEW_ENVS.md), the job is skipped on every PR — no red checks
+# from missing configuration.
+#
+# Contributor-only gating, once enabled:
+#   1. The PR head must live in this repo (no forks) AND the author's
+#      association must be OWNER / MEMBER / COLLABORATOR. Enforced in
+#      the YAML below.
+#   2. The job targets the `preview` GitHub Environment, which can be
+#      configured in repo settings with required reviewers so a maintainer
+#      has to click "Approve" before the deploy step runs. See
+#      docs/PREVIEW_ENVS.md for setup.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency:
+  group: fly-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review_app:
+    name: Preview
+    runs-on: ubuntu-latest
+
+    # Three gates, all must hold:
+    #   - vars.FLY_ORG is set         (one-time setup complete)
+    #   - PR is not from a fork       (secrets wouldn't be available)
+    #   - author has write access     (OWNER / MEMBER / COLLABORATOR)
+    if: |
+      vars.FLY_ORG != '' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+
+    environment:
+      name: preview
+      url: https://reviews-pr-${{ github.event.pull_request.number }}.fly.dev
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ORG: ${{ vars.FLY_ORG }}
+      APP_NAME: reviews-pr-${{ github.event.pull_request.number }}
+      APP_HOST: reviews-pr-${{ github.event.pull_request.number }}.fly.dev
+
+    # Verbose tracing so a failure is debuggable from the run log without
+    # having to reproduce locally.
+    defaults:
+      run:
+        shell: bash -eo pipefail -x {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Show flyctl version + auth
+        run: |
+          flyctl version
+          flyctl auth whoami
+
+      - name: Create app if not exists
+        if: github.event.action != 'closed'
+        run: |
+          if flyctl status --app "$APP_NAME" > /dev/null 2>&1; then
+            echo "App $APP_NAME already exists; skipping create."
+          else
+            flyctl apps create "$APP_NAME" --org "$FLY_ORG"
+          fi
+
+      - name: Stage secrets
+        if: github.event.action != 'closed'
+        env:
+          PREVIEW_SECRET_KEY_BASE: ${{ secrets.PREVIEW_SECRET_KEY_BASE }}
+          PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+          PREVIEW_GITHUB_CLIENT_ID: ${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}
+          PREVIEW_GITHUB_CLIENT_SECRET: ${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
+        run: |
+          flyctl secrets set --stage --app "$APP_NAME" \
+            SECRET_KEY_BASE="$PREVIEW_SECRET_KEY_BASE" \
+            DATABASE_URL="$PREVIEW_DATABASE_URL" \
+            GITHUB_CLIENT_ID="$PREVIEW_GITHUB_CLIENT_ID" \
+            GITHUB_CLIENT_SECRET="$PREVIEW_GITHUB_CLIENT_SECRET" \
+            PHX_HOST="$APP_HOST"
+
+      - name: Deploy preview app
+        if: github.event.action != 'closed'
+        run: |
+          flyctl deploy \
+            --app "$APP_NAME" \
+            --config fly.toml \
+            --remote-only \
+            --yes
+
+      - name: Destroy preview app
+        if: github.event.action == 'closed'
+        run: flyctl apps destroy "$APP_NAME" --yes || true

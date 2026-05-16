@@ -7,6 +7,9 @@ auto-deploys `main`.
 The currently-deployed prod app is **`reviews-dev`** on Fly (`reviews-dev.fly.dev`).
 The name has `-dev` for historical reasons; treat it as production.
 
+For per-PR preview environments (a separate workflow that deploys
+`reviews-pr-<number>.fly.dev` apps), see [`PREVIEW_ENVS.md`](PREVIEW_ENVS.md).
+
 ---
 
 ## 1. Prerequisites
