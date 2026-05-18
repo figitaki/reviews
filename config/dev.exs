@@ -1,14 +1,24 @@
 import Config
 
 # Configure your database
+postgres_host = System.get_env("POSTGRES_HOST")
+postgres_port = System.get_env("POSTGRES_PORT")
+
 config :reviews, Reviews.Repo,
-  username: "warbler",
-  password: "",
-  socket_dir: "/tmp",
+  username: System.get_env("POSTGRES_USER", "reviews"),
+  password: System.get_env("POSTGRES_PASSWORD", ""),
   database: "reviews_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
+
+if postgres_host || postgres_port do
+  config :reviews, Reviews.Repo,
+    hostname: postgres_host || "localhost",
+    port: String.to_integer(postgres_port || "5432")
+else
+  config :reviews, Reviews.Repo, socket_dir: System.get_env("POSTGRES_SOCKET_DIR", "/tmp")
+end
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
