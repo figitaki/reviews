@@ -470,6 +470,8 @@ defmodule ReviewsWeb.ReviewLive do
             <% end %>
           </button>
 
+          <.decider_stack deciders={@deciders} />
+
           <.user_menu current_user={@current_user} />
         </:actions>
 
@@ -662,6 +664,60 @@ defmodule ReviewsWeb.ReviewLive do
 
   attr :current_user, :any, default: nil
 
+  attr :deciders, :list, default: []
+
+  defp decider_stack(%{deciders: []} = assigns) do
+    ~H"""
+    <div id="decider-stack" class="rev-decider-stack is-empty" aria-label="No published reviews yet">
+      <span class="rev-decider-empty">No reviews</span>
+    </div>
+    """
+  end
+
+  defp decider_stack(assigns) do
+    assigns =
+      assigns
+      |> assign(:visible_deciders, Enum.take(assigns.deciders, 5))
+      |> assign(:overflow_count, max(length(assigns.deciders) - 5, 0))
+
+    ~H"""
+    <div id="decider-stack" class="rev-decider-stack" aria-label="Published review decisions">
+      <span class="sr-only">Published reviews</span>
+      <div
+        :for={decider <- @visible_deciders}
+        class="rev-decider"
+        title={decider_title(decider)}
+        aria-label={decider_title(decider)}
+      >
+        <div class="rev-decider-avatar">
+          <img
+            :if={decider.author.avatar_url}
+            src={decider.author.avatar_url}
+            alt=""
+            width="28"
+            height="28"
+            loading="lazy"
+          />
+          <span :if={!decider.author.avatar_url} aria-hidden="true">
+            {user_initials(decider.author.username)}
+          </span>
+        </div>
+        <span class="rev-decider-badge" aria-hidden="true">
+          <.icon name="hero-chat-bubble-left-ellipsis" class="size-3" />
+        </span>
+      </div>
+      <div
+        :if={@overflow_count > 0}
+        class="rev-decider rev-decider-more"
+        title={"#{@overflow_count} more published reviews"}
+        aria-label={"#{@overflow_count} more published reviews"}
+      >
+        +{@overflow_count}
+      </div>
+    </div>
+    """
+  end
+
   defp user_menu(%{current_user: nil} = assigns) do
     ~H"""
     <a href="/auth/github" class="review-button review-button-secondary">
@@ -713,6 +769,37 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp plural(1, word), do: word
   defp plural(_, word), do: word <> "s"
+
+  defp decider_title(%{
+         author: author,
+         decision: decision,
+         comment_count: count,
+         summary: summary
+       }) do
+    base = "#{author.username}: #{decision_label(decision)}"
+
+    details =
+      cond do
+        is_binary(summary) && String.trim(summary) != "" -> summary
+        count == 1 -> "1 comment"
+        count > 1 -> "#{count} comments"
+        true -> nil
+      end
+
+    if details, do: base <> " · " <> details, else: base
+  end
+
+  defp decision_label("reviewed"), do: "reviewed"
+  defp decision_label(decision), do: decision
+
+  defp user_initials(username) when is_binary(username) do
+    username
+    |> String.trim()
+    |> String.slice(0, 2)
+    |> String.upcase()
+  end
+
+  defp user_initials(_), do: "?"
 
   defp collapse_packet_section(socket, section_index) do
     expanded_section_ids =
@@ -1033,6 +1120,7 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:expanded_section_ids, expanded_section_ids)
     |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
+    |> assign(:deciders, snapshot.deciders)
     |> assign(:drafts, snapshot.drafts)
     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
   end

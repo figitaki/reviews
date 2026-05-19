@@ -25,6 +25,7 @@ defmodule Reviews.ReviewView do
           packet_hunk_views: [map()],
           packet_section_decisions: [map()],
           published_threads: [map()],
+          deciders: [map()],
           drafts: [map()],
           viewer: User.t() | nil
         }
@@ -112,8 +113,9 @@ defmodule Reviews.ReviewView do
       file_diffs: file_diffs,
       hunks_by_path: hunks_by_path,
       packet_hunk_views: packet_hunk_views,
-      packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
+      packet_section_decisions: PacketSectionDecisions.list_visible_for_review(review),
       published_threads: Threads.list_published_threads(review.id),
+      deciders: Threads.list_published_deciders(review.id),
       drafts: list_drafts(review, viewer),
       viewer: viewer
     }
