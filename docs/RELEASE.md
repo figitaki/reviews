@@ -44,7 +44,6 @@ The `release-cli.yml` workflow publishes GitHub release assets named:
 
 - `reviews-cli-<version>-linux-x64.tar.gz`
 - `reviews-cli-<version>-linux-arm64.tar.gz`
-- `reviews-cli-<version>-macos-x64.tar.gz`
 - `reviews-cli-<version>-macos-arm64.tar.gz`
 
 Each archive contains a `reviews` binary at its root plus `LICENSE`,

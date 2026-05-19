@@ -23,9 +23,6 @@ jobs:
           - os: ubuntu-24.04-arm
             rust_target: aarch64-unknown-linux-gnu
             archive_target: linux-arm64
-          - os: macos-13
-            rust_target: x86_64-apple-darwin
-            archive_target: macos-x64
           - os: macos-14
             rust_target: aarch64-apple-darwin
             archive_target: macos-arm64

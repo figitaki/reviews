@@ -89,7 +89,10 @@ arch="$(uname -m)"
 
 case "$os:$arch" in
   Darwin:arm64) target="macos-arm64" ;;
-  Darwin:x86_64) target="macos-x64" ;;
+  Darwin:x86_64)
+    echo "error: macOS x64 release builds are not currently published; build from source with cargo instead" >&2
+    exit 1
+    ;;
   Linux:aarch64|Linux:arm64) target="linux-arm64" ;;
   Linux:x86_64|Linux:amd64) target="linux-x64" ;;
   *)
