@@ -1,0 +1,4 @@
+interface:
+  display_name: "Using Reviews Locally"
+  short_description: "Run Reviews and push local revisions."
+  default_prompt: "Use $using-reviews-locally to run the local Reviews server and push a local review packet or revision."
