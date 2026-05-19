@@ -53,6 +53,23 @@ defmodule Reviews.Release do
   end
 
   @doc """
+  Seeds the bundled demo review used by the homepage and hosted demos.
+  """
+  def seed_demo_review do
+    load_app()
+
+    for repo <- repos() do
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(repo, fn _ ->
+          Reviews.DemoReview.seed!()
+          :ok
+        end)
+    end
+
+    :ok
+  end
+
+  @doc """
   Inserts (or no-ops) the synthetic preview user + token. Assumes the
   repo is already running — `seed_preview_user/0` is the release-time
   entrypoint that handles starting it via `Ecto.Migrator.with_repo/2`.
