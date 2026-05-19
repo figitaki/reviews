@@ -1,3 +1,4 @@
 #!/bin/sh
 cd -P -- "$(dirname -- "$0")"
-exec ./reviews eval Reviews.Release.migrate
+./reviews eval Reviews.Release.migrate
+exec ./reviews eval Reviews.Release.seed_preview_user
