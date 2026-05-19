@@ -30,6 +30,8 @@ defmodule ReviewsWeb.ReviewLive do
   @section_auto_open_min_hunk_loc 6
   @section_auto_open_max_hunk_loc 500
   @single_section_auto_open_line_limit 100
+  @section_expand_all_line_limit 500
+  @section_expand_all_file_limit 25
 
   @impl true
   def mount(%{"slug" => slug}, session, socket) do
@@ -725,9 +727,8 @@ defmodule ReviewsWeb.ReviewLive do
     with %{} = patchset <- socket.assigns.selected_patchset,
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
       section
-      |> PacketComponents.packet_units(socket.assigns.hunks_by_path)
-      |> Enum.flat_map(&section_preview_hunk/1)
-      |> open_preview_hunks(socket)
+      |> section_hunks(socket.assigns.hunks_by_path)
+      |> open_section_hunks(socket)
     else
       _ -> socket
     end
@@ -784,20 +785,7 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp open_preview_hunks(hunks, socket) do
-    hunk_ids =
-      hunks
-      |> Enum.reject(& &1.viewed?)
-      |> Enum.reject(&(hunk_display_loc(&1) > @section_auto_open_max_hunk_loc))
-      |> Enum.reduce_while({[], 0}, fn hunk, {ids, spent} ->
-        cost = hunk_preview_cost(hunk)
-
-        if spent == 0 || spent + cost <= @section_auto_open_loc_budget do
-          {:cont, {[hunk.id | ids], spent + cost}}
-        else
-          {:halt, {ids, spent}}
-        end
-      end)
-      |> elem(0)
+    hunk_ids = preview_hunk_ids(hunks)
 
     assign(
       socket,
@@ -806,8 +794,48 @@ defmodule ReviewsWeb.ReviewLive do
     )
   end
 
+  defp open_section_hunks(hunks, socket) do
+    hunk_ids = section_hunk_ids_to_open(hunks)
+
+    assign(
+      socket,
+      :expanded_hunk_ids,
+      MapSet.union(socket.assigns.expanded_hunk_ids, MapSet.new(hunk_ids))
+    )
+  end
+
+  defp section_hunk_ids_to_open(hunks) do
+    if expand_all_section_hunks?(hunks) do
+      Enum.map(hunks, & &1.id)
+    else
+      preview_hunk_ids(hunks)
+    end
+  end
+
+  defp preview_hunk_ids(hunks) do
+    hunks
+    |> Enum.reject(& &1.viewed?)
+    |> Enum.reject(&(hunk_display_loc(&1) > @section_auto_open_max_hunk_loc))
+    |> Enum.reduce_while({[], 0}, fn hunk, {ids, spent} ->
+      cost = hunk_preview_cost(hunk)
+
+      if spent == 0 || spent + cost <= @section_auto_open_loc_budget do
+        {:cont, {[hunk.id | ids], spent + cost}}
+      else
+        {:halt, {ids, spent}}
+      end
+    end)
+    |> elem(0)
+  end
+
   defp section_preview_hunk(%{kind: :hunk_group, hunk: hunk}), do: [hunk]
   defp section_preview_hunk(_unit), do: []
+
+  defp section_hunks(section, hunks_by_path) do
+    section
+    |> PacketComponents.packet_units(hunks_by_path)
+    |> Enum.flat_map(&section_preview_hunk/1)
+  end
 
   defp hunk_preview_cost(hunk) do
     hunk
@@ -1042,30 +1070,41 @@ defmodule ReviewsWeb.ReviewLive do
   defp default_expanded_packet_state(snapshot) do
     sections = ReviewPacket.sections(snapshot.selected_patchset.packet || %{})
 
-    section_ids =
+    {section_ids, hunk_ids} =
       case sections do
         [section] ->
-          if section_changed_lines(section, snapshot.hunks_by_path) <
-               @single_section_auto_open_line_limit do
-            MapSet.new([section.index])
+          hunks = section_hunks(section, snapshot.hunks_by_path)
+
+          if section_changed_lines(hunks) < @single_section_auto_open_line_limit do
+            {MapSet.new([section.index]), MapSet.new(section_hunk_ids_to_open(hunks))}
           else
-            MapSet.new()
+            {MapSet.new(), MapSet.new()}
           end
 
         _ ->
-          MapSet.new()
+          {MapSet.new(), MapSet.new()}
       end
 
-    %{section_ids: section_ids, hunk_ids: MapSet.new()}
+    %{section_ids: section_ids, hunk_ids: hunk_ids}
   end
 
-  defp section_changed_lines(section, hunks_by_path) do
-    section
-    |> PacketComponents.packet_units(hunks_by_path)
-    |> Enum.flat_map(&section_preview_hunk/1)
+  defp expand_all_section_hunks?(hunks) do
+    section_changed_lines(hunks) < @section_expand_all_line_limit &&
+      section_file_count(hunks) < @section_expand_all_file_limit
+  end
+
+  defp section_changed_lines(hunks) do
+    hunks
     |> Enum.reduce(0, fn hunk, changed_lines ->
       changed_lines + hunk.display_additions + hunk.display_deletions
     end)
+  end
+
+  defp section_file_count(hunks) do
+    hunks
+    |> Enum.map(& &1.file_path)
+    |> MapSet.new()
+    |> MapSet.size()
   end
 
   defp file_diff_id(file), do: "file-diff-#{file.id}"

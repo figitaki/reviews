@@ -182,19 +182,13 @@ fn parse_section_rows(content: &str) -> Result<Vec<Value>> {
 
     for line in content.lines() {
         if let Some(rest) = line.trim().strip_prefix("@hunk ") {
-            let body = trim_join(&prose);
-            if !body.is_empty() {
-                rows.push(json!({"kind": "markdown", "body": body}));
-                prose.clear();
-            }
+            push_prose_rows(&mut rows, &prose);
+            prose.clear();
 
             rows.push(parse_hunk_row(rest.trim())?);
         } else if markdown_subheading(line) {
-            let body = trim_join(&prose);
-            if !body.is_empty() {
-                rows.push(json!({"kind": "markdown", "body": body}));
-                prose.clear();
-            }
+            push_prose_rows(&mut rows, &prose);
+            prose.clear();
 
             rows.push(json!({"kind": "markdown", "body": line.trim().to_string()}));
         } else {
@@ -202,16 +196,51 @@ fn parse_section_rows(content: &str) -> Result<Vec<Value>> {
         }
     }
 
-    let body = trim_join(&prose);
-    if !body.is_empty() {
-        rows.push(json!({"kind": "markdown", "body": body}));
-    }
+    push_prose_rows(&mut rows, &prose);
 
     Ok(rows)
 }
 
+fn push_prose_rows(rows: &mut Vec<Value>, lines: &[String]) {
+    for body in prose_rows(lines) {
+        rows.push(json!({"kind": "markdown", "body": body}));
+    }
+}
+
+fn prose_rows(lines: &[String]) -> Vec<String> {
+    let mut rows = Vec::new();
+    let mut list_lines = Vec::new();
+
+    for line in lines {
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() {
+            flush_list_rows(&mut rows, &mut list_lines);
+        } else if markdown_list_item(trimmed) {
+            list_lines.push(trimmed.to_string());
+        } else {
+            flush_list_rows(&mut rows, &mut list_lines);
+            rows.push(trimmed.to_string());
+        }
+    }
+
+    flush_list_rows(&mut rows, &mut list_lines);
+    rows
+}
+
+fn flush_list_rows(rows: &mut Vec<String>, list_lines: &mut Vec<String>) {
+    if !list_lines.is_empty() {
+        rows.push(list_lines.join("\n"));
+        list_lines.clear();
+    }
+}
+
 fn markdown_subheading(line: &str) -> bool {
     line.trim_start().starts_with("### ")
+}
+
+fn markdown_list_item(line: &str) -> bool {
+    line.starts_with("- ")
 }
 
 fn parse_hunk_row(rest: &str) -> Result<Value> {
@@ -579,6 +608,33 @@ Implementation notes.
         assert_eq!(rows[1]["body"], "### Technical overview");
         assert_eq!(rows[2]["kind"], "markdown");
         assert_eq!(rows[2]["body"], "Implementation notes.");
+        assert_eq!(rows[3]["kind"], "hunk");
+    }
+
+    #[test]
+    fn parses_each_prose_line_as_its_own_markdown_row() {
+        let packet = parse_markdown(
+            r#"# Packet
+
+## Section
+First thought.
+Second thought.
+
+- grouped item
+- another grouped item
+
+@hunk lib/a.ex#1
+"#,
+        )
+        .unwrap();
+
+        let sections = packet["sections"].as_array().unwrap();
+        let rows = sections[0]["rows"].as_array().unwrap();
+
+        assert_eq!(rows.len(), 4);
+        assert_eq!(rows[0]["body"], "First thought.");
+        assert_eq!(rows[1]["body"], "Second thought.");
+        assert_eq!(rows[2]["body"], "- grouped item\n- another grouped item");
         assert_eq!(rows[3]["kind"], "hunk");
     }
 

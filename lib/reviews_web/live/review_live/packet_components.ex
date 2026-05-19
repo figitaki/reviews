@@ -958,25 +958,16 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     end
   end
 
-  defp take_markdown_paragraph([], acc), do: {trim_paragraph(acc), []}
-
-  defp take_markdown_paragraph([line | rest], acc) do
+  defp take_markdown_paragraph([line | rest], _acc) do
     trimmed = String.trim(line)
 
     cond do
       trimmed == "" || markdown_heading(trimmed) || markdown_list_item?(trimmed) ->
-        {trim_paragraph(acc), [line | rest]}
+        {"", [line | rest]}
 
       true ->
-        take_markdown_paragraph(rest, [String.trim(line) | acc])
+        {String.trim(line), rest}
     end
-  end
-
-  defp trim_paragraph(lines) do
-    lines
-    |> Enum.reverse()
-    |> Enum.join(" ")
-    |> String.trim()
   end
 
   defp markdown_inline(text) when is_binary(text) do

@@ -127,6 +127,8 @@
 .review-page {
   --review-main-nav-h: 64px;
   --review-section-sticky-h: 46px;
+  --review-sticky-prose-cover-h: calc((1em * 1.55 * 2) + 16px);
+  --review-hunk-sticky-top: var(--review-main-nav-h);
   --review-bg: #f7f7f5;
   --review-panel: #fff;
   --review-panel-raised: #fbfbf8;
@@ -685,6 +687,10 @@
 }
 
 .review-packet-section-body {
+  --review-hunk-sticky-top: calc(
+    var(--review-main-nav-h) + var(--review-section-sticky-h) + var(--review-sticky-prose-cover-h)
+  );
+
   display: grid;
   gap: 14px;
 }
@@ -1071,8 +1077,6 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-row.is-markdown {
-  --review-sticky-prose-cover-h: calc((1em * 1.55 * 2) + 16px);
-
   position: sticky;
   top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h));
   z-index: 7;
@@ -1298,10 +1302,13 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-hunk-card {
-  overflow: hidden;
   border: 1px solid var(--review-line);
   border-radius: 8px;
   background: var(--review-panel-raised);
+}
+
+.review-hunk-card.is-open {
+  overflow: visible;
 }
 
 .review-hunk-card.is-viewed {
@@ -1313,10 +1320,17 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-hunk-summary {
+  position: sticky;
+  top: var(--review-hunk-sticky-top);
+  z-index: 6;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
+  border-radius: 8px 8px 0 0;
+  background:
+    linear-gradient(var(--review-panel-raised), var(--review-panel-raised)) padding-box,
+    var(--review-bg);
   padding: 6px;
 }
 
