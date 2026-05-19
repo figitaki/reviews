@@ -18,6 +18,14 @@ defmodule Reviews.PacketSectionDecisions do
 
   def list_for_review(_review, nil), do: []
 
+  def list_visible_for_review(%Review{id: review_id}) do
+    PacketSectionDecision
+    |> where([d], d.review_id == ^review_id)
+    |> preload([:author])
+    |> order_by([d], asc: d.patchset_id, asc: d.section_index, asc: d.author_id)
+    |> Repo.all()
+  end
+
   def set_status(%Review{} = review, %Patchset{} = patchset, %User{} = author, attrs) do
     section_index = attrs.section_index
 
