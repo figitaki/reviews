@@ -526,6 +526,8 @@ defmodule ReviewsWeb.ReviewLive do
     <div class="review-page min-h-screen">
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
+          <ReviewsWeb.DeciderComponents.decider_stack deciders={@review_snapshot.deciders} />
+
           <.user_menu current_user={@current_user} return_to={@return_to} />
         </:actions>
 

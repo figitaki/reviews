@@ -26,6 +26,7 @@ defmodule Reviews.ReviewView do
           packet_hunk_views: [map()],
           packet_section_decisions: [map()],
           published_threads: [map()],
+          deciders: [map()],
           viewer: Identity.t() | nil
         }
 
@@ -119,6 +120,7 @@ defmodule Reviews.ReviewView do
             Policy.can?(viewer, {:update_thread_status, &1}, review)
           )
         ),
+      deciders: Threads.list_published_deciders(review.id),
       viewer: viewer
     }
   end
