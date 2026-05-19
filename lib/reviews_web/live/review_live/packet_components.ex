@@ -142,7 +142,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           >
             <div class="review-packet-row-list">
               <.packet_row
-                :for={{row, idx} <- Enum.with_index(section.rows)}
+                :for={{row, idx} <- Enum.with_index(expanded_section_rows(section))}
                 row={row}
                 row_id={"packet-section-#{section.index}-row-#{idx}"}
                 file_diffs={@file_diffs}
@@ -251,6 +251,16 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         |> markdown_summary()
       end
     end)
+  end
+
+  defp expanded_section_rows(section) do
+    case section.rows do
+      [first | rest] ->
+        if ReviewPacket.text(first, "kind") == "markdown", do: rest, else: section.rows
+
+      rows ->
+        rows
+    end
   end
 
   defp markdown_summary(body) do

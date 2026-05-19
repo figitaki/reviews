@@ -140,8 +140,9 @@ defmodule ReviewsWeb.ReviewLiveTest do
                ~s|#review-packet [phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
              )
 
-      assert has_element?(view, "#review-packet .review-packet-md-heading", "Main change")
-      assert has_element?(view, "#review-packet", "Preserve packet JSON as the server contract.")
+      refute has_element?(view, "#review-packet .review-packet-md-heading", "Main change")
+      refute has_element?(view, "#review-packet", "Preserve packet JSON as the server contract.")
+      assert has_element?(view, "#review-packet", "Run the smoke test.")
 
       view
       |> element("#diff-style-unified")
