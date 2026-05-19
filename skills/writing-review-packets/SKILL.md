@@ -27,17 +27,14 @@ More detailed explanation of implementation shape, decisions, tradeoffs, and exp
 One sentence of context before the hunk when useful.
 
 @hunk path/to/file.ex#1
-
-@hunk path/to/file.ex#2:L3-L18
 ```
 
 Rules:
 - Start with exactly one `#` title.
 - Use `##` for review packet sections.
 - Prose between hunk refs is allowed and encouraged.
-- Hunk refs use `@hunk path#N` or `@hunk path#N:Lx-Ly`.
+- Hunk refs use `@hunk path#N`.
 - Paths and hunk numbers must match the diff being pushed.
-- Hunk slice line numbers are row numbers inside that hunk, not absolute file line numbers.
 
 ## Writing Method
 
@@ -54,7 +51,7 @@ Rules:
 
 - Cover every changed line exactly once unless intentionally grouping duplicate ref coverage is acceptable for the current tool.
 - Use full hunk refs for small cohesive changes.
-- Use `:Lx-Ly` slices when one large hunk contains multiple review topics.
+- If one large hunk contains multiple review topics, split the surrounding prose instead of using sliced hunk refs.
 - Keep generated files, lockfiles, or purely mechanical output out of the packet unless they need review.
 - If the packet is only for local review, put it in `/private/tmp` or another temporary path to avoid accidentally committing it.
 
