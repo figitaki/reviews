@@ -127,6 +127,8 @@
 .review-page {
   --review-main-nav-h: 64px;
   --review-section-sticky-h: 46px;
+  --review-sticky-prose-cover-h: calc((1em * 1.55 * 2) + 16px);
+  --review-hunk-sticky-top: var(--review-main-nav-h);
   --review-bg: #f7f7f5;
   --review-panel: #fff;
   --review-panel-raised: #fbfbf8;
@@ -685,6 +687,10 @@
 }
 
 .review-packet-section-body {
+  --review-hunk-sticky-top: calc(
+    var(--review-main-nav-h) + var(--review-section-sticky-h) + var(--review-sticky-prose-cover-h)
+  );
+
   display: grid;
   gap: 14px;
 }
@@ -1071,8 +1077,6 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-row.is-markdown {
-  --review-sticky-prose-cover-h: calc((1em * 1.55 * 2) + 16px);
-
   position: sticky;
   top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h));
   z-index: 7;
@@ -1103,6 +1107,35 @@ details[open] > summary .review-collapse-icon,
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-height: 1.55;
+}
+
+.review-packet-row.is-markdown.is-annotation {
+  position: static;
+  z-index: auto;
+  margin: 8px 0 -8px;
+  overflow: visible;
+  border-bottom: 0;
+  padding: 2px 0;
+}
+
+.review-packet-row.is-markdown.is-annotation::before {
+  content: none;
+}
+
+.review-packet-row.is-markdown.is-annotation .review-packet-markdown {
+  display: block;
+  max-height: none;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-height: 1.45;
+}
+
+.review-packet-row.is-markdown.is-annotation .review-packet-md-heading {
+  margin: 0;
+  color: var(--review-muted);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .review-packet-point-list {
@@ -1235,22 +1268,69 @@ details[open] > summary .review-collapse-icon,
   gap: 10px;
 }
 
+.review-file-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--review-line);
+  border-radius: 8px;
+  background: var(--review-panel);
+  padding: 10px 12px;
+}
+
+.review-file-header-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-file-view-state {
+  color: var(--review-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.review-file-view-state.is-viewed {
+  color: var(--review-add);
+}
+
+.review-file-view-state.is-partial {
+  color: var(--review-warn);
+}
+
 .review-hunk-card {
-  overflow: hidden;
   border: 1px solid var(--review-line);
   border-radius: 8px;
   background: var(--review-panel-raised);
+}
+
+.review-hunk-card.is-open {
+  overflow: visible;
 }
 
 .review-hunk-card.is-viewed {
   border-color: color-mix(in srgb, var(--review-add) 36%, var(--review-line));
 }
 
+.review-hunk-card.is-partially-viewed {
+  border-color: color-mix(in srgb, var(--review-warn) 42%, var(--review-line));
+}
+
 .review-hunk-summary {
+  position: sticky;
+  top: var(--review-hunk-sticky-top);
+  z-index: 6;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
+  border-radius: 8px 8px 0 0;
+  background:
+    linear-gradient(var(--review-panel-raised), var(--review-panel-raised)) padding-box,
+    var(--review-bg);
   padding: 6px;
 }
 
@@ -1320,6 +1400,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-hunk-viewed-pill,
+.review-hunk-partial-pill,
 .review-hunk-signin,
 .review-hunk-progress {
   color: var(--review-muted);
@@ -1328,6 +1409,11 @@ details[open] > summary .review-collapse-icon,
 
 .review-hunk-viewed-pill {
   color: var(--review-add);
+  font-weight: 700;
+}
+
+.review-hunk-partial-pill {
+  color: var(--review-warn);
   font-weight: 700;
 }
 

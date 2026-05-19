@@ -142,10 +142,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             class="review-packet-section-body"
           >
             <div class="review-packet-row-list">
-              <.packet_row
-                :for={{row, idx} <- Enum.with_index(section.rows)}
-                row={row}
-                row_id={"packet-section-#{section.index}-row-#{idx}"}
+              <.packet_unit
+                :for={unit <- packet_units(section, @hunks_by_path)}
+                unit={unit}
                 file_diffs={@file_diffs}
                 selected_patchset={@selected_patchset}
                 published_threads={@published_threads}
@@ -155,7 +154,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 hunks_by_path={@hunks_by_path}
                 expanded_hunk_ids={@expanded_hunk_ids}
                 section_title={section.title}
-                file_label={Map.get(@file_labels, ReviewPacket.text(row, "path"))}
+                file_labels={@file_labels}
               />
             </div>
           </div>
@@ -256,6 +255,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         row
         |> ReviewPacket.text("body")
         |> markdown_summary()
+        |> blank_to_nil()
       end
     end)
   end
@@ -283,6 +283,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     |> String.replace(~r/\*\*([^*]+)\*\*/, "\\1")
     |> String.replace(~r/\*([^*]+)\*/, "\\1")
   end
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
 
   defp truncate_summary(text) do
     text = String.trim(text)
@@ -453,6 +456,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       assigns
       |> assign(:kind, ReviewPacket.text(row, "kind"))
       |> assign(:body, ReviewPacket.text(row, "body"))
+      |> assign(:annotation?, annotation_markdown?(ReviewPacket.text(row, "body")))
       |> assign(:path, ReviewPacket.text(row, "path"))
       |> assign(:hunk_index, ReviewPacket.int(row, "hunk_index"))
       |> assign(:line_start, ReviewPacket.int(row, "line_start"))
@@ -467,7 +471,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         <div id={@row_id} class="review-packet-row is-hunk">
           <.hunk_card
             hunk={@hunk}
-            hunk_id={packet_hunk_id(@row_id, @hunk)}
+            hunk_id={@hunk.id}
             file={@file}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
@@ -486,15 +490,161 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           {ReviewPacket.row_ref(@row)}
         </span>
       <% true -> %>
-        <div id={@row_id} class="review-packet-row is-markdown" phx-hook="StickyProse">
+        <div
+          id={@row_id}
+          class={["review-packet-row is-markdown", @annotation? && "is-annotation"]}
+          phx-hook={if(@annotation?, do: nil, else: "StickyProse")}
+        >
           <.markdown body={@body} class="review-packet-markdown" />
         </div>
     <% end %>
     """
   end
 
+  defp annotation_markdown?(body) when is_binary(body) do
+    body
+    |> String.split("\n", trim: true)
+    |> List.first("")
+    |> String.trim()
+    |> String.starts_with?("### ")
+  end
+
+  defp annotation_markdown?(_body), do: false
+
   def packet_hunk_id(row_id, hunk) do
     "#{row_id}--#{hunk.id}"
+  end
+
+  def packet_units(section, hunks_by_path) do
+    section.rows
+    |> Enum.with_index()
+    |> Enum.reduce([], fn {row, index}, units ->
+      row_id = "packet-section-#{section.index}-row-#{index}"
+      hunk = hunk_for_packet_row(hunks_by_path, row)
+
+      cond do
+        hunk && continues_hunk_group?(List.first(units), hunk) ->
+          [append_hunk_to_group(List.first(units), row, row_id, hunk) | tl(units)]
+
+        hunk ->
+          [new_hunk_group(row, row_id, hunk) | units]
+
+        true ->
+          [%{kind: :row, row: row, row_id: row_id} | units]
+      end
+    end)
+    |> Enum.reverse()
+    |> Enum.map(&finalize_packet_unit/1)
+  end
+
+  defp hunk_for_packet_row(hunks_by_path, row) do
+    if ReviewPacket.text(row, "kind") == "hunk" do
+      ReviewHunks.for_packet_row(hunks_by_path, row)
+    end
+  end
+
+  defp continues_hunk_group?(%{kind: :hunk_group, hunks: [previous | _]}, hunk) do
+    previous.file_path == hunk.file_path && previous.hunk_index + 1 == hunk.hunk_index
+  end
+
+  defp continues_hunk_group?(_unit, _hunk), do: false
+
+  defp append_hunk_to_group(group, row, row_id, hunk) do
+    %{group | rows: group.rows ++ [{row, row_id}], hunks: [hunk | group.hunks]}
+  end
+
+  defp new_hunk_group(row, row_id, hunk) do
+    %{kind: :hunk_group, rows: [{row, row_id}], hunks: [hunk]}
+  end
+
+  defp finalize_packet_unit(%{kind: :hunk_group, hunks: hunks} = group) do
+    hunks = Enum.reverse(hunks)
+    row_id = group.rows |> List.first() |> elem(1)
+    combined_hunk = ReviewHunks.combine_consecutive(hunks)
+    combined_hunk = %{combined_hunk | id: packet_hunk_id(row_id, combined_hunk)}
+
+    %{
+      kind: :hunk_group,
+      row_id: row_id,
+      row_ids: Enum.map(group.rows, &elem(&1, 1)),
+      row: group.rows |> List.first() |> elem(0),
+      hunk: combined_hunk,
+      grouped?: length(hunks) > 1
+    }
+  end
+
+  defp finalize_packet_unit(unit), do: unit
+
+  attr :unit, :map, required: true
+  attr :file_diffs, :list, required: true
+  attr :selected_patchset, :any, required: true
+  attr :published_threads, :list, required: true
+  attr :drafts, :list, required: true
+  attr :current_user, :any, required: true
+  attr :diff_style, :string, required: true
+  attr :hunks_by_path, :map, required: true
+  attr :expanded_hunk_ids, :any, required: true
+  attr :section_title, :string, default: nil
+  attr :file_labels, :map, required: true
+
+  def packet_unit(%{unit: %{kind: :hunk_group} = unit} = assigns) do
+    row = unit.row
+    file = file_for(assigns.file_diffs, ReviewPacket.text(row, "path"))
+
+    assigns =
+      assigns
+      |> assign(:row_id, unit.row_id)
+      |> assign(:row_ids, unit.row_ids)
+      |> assign(:file, file)
+      |> assign(:hunk, unit.hunk)
+      |> assign(:grouped?, unit.grouped?)
+      |> assign(:section_index, section_index_from_row_id(unit.row_id))
+      |> assign(:file_label, Map.get(assigns.file_labels, ReviewPacket.text(row, "path")))
+
+    ~H"""
+    <div id={@row_id} class="review-packet-row is-hunk" data-packet-row-ids={Enum.join(@row_ids, " ")}>
+      <.hunk_card
+        hunk={@hunk}
+        hunk_id={@hunk.id}
+        file={@file}
+        selected_patchset={@selected_patchset}
+        published_threads={@published_threads}
+        drafts={@drafts}
+        current_user={@current_user}
+        diff_style={@diff_style}
+        expanded_hunk_ids={@expanded_hunk_ids}
+        section_index={@section_index}
+        section_title={@section_title}
+        file_label={@file_label}
+        grouped?={@grouped?}
+      />
+    </div>
+    """
+  end
+
+  def packet_unit(%{unit: %{kind: :row, row: row, row_id: row_id}} = assigns) do
+    assigns =
+      assigns
+      |> assign(:row, row)
+      |> assign(:row_id, row_id)
+      |> assign(:file_label, Map.get(assigns.file_labels, ReviewPacket.text(row, "path")))
+
+    ~H"""
+    <.packet_row
+      row={@row}
+      row_id={@row_id}
+      file_diffs={@file_diffs}
+      selected_patchset={@selected_patchset}
+      published_threads={@published_threads}
+      drafts={@drafts}
+      current_user={@current_user}
+      diff_style={@diff_style}
+      hunks_by_path={@hunks_by_path}
+      expanded_hunk_ids={@expanded_hunk_ids}
+      section_title={@section_title}
+      file_label={@file_label}
+    />
+    """
   end
 
   attr :hunk, :map, required: true
@@ -509,17 +659,38 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :section_index, :integer, default: nil
   attr :section_title, :string, default: nil
   attr :file_label, :string, default: nil
+  attr :grouped?, :boolean, default: false
+  attr :show_file_label?, :boolean, default: true
+  attr :show_hunk_label?, :boolean, default: true
+  attr :view_state, :any, default: nil
+  attr :class, :string, default: nil
 
   def hunk_card(assigns) do
     assigns =
       assigns
       |> assign(:expanded?, MapSet.member?(assigns.expanded_hunk_ids, assigns.hunk_id))
       |> assign(:viewed?, assigns.hunk.viewed?)
-      |> assign(:title, hunk_title(assigns.hunk, Map.get(assigns, :file_label)))
+      |> assign(:partially_viewed?, Map.get(assigns.hunk, :partially_viewed?, false))
+      |> assign(
+        :title,
+        hunk_title(
+          assigns.hunk,
+          Map.get(assigns, :file_label),
+          assigns.show_file_label?,
+          assigns.show_hunk_label?
+        )
+      )
       |> assign(:details, hunk_details(assigns.hunk))
+      |> assign(:hunk_attrs_json, hunk_attrs_json(assigns.hunk))
 
     ~H"""
-    <article class={["review-hunk-card", @expanded? && "is-open", @viewed? && "is-viewed"]}>
+    <article class={[
+      "review-hunk-card",
+      @class,
+      @expanded? && "is-open",
+      @viewed? && "is-viewed",
+      @partially_viewed? && "is-partially-viewed"
+    ]}>
       <header class="review-hunk-summary">
         <button
           type="button"
@@ -532,15 +703,24 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         >
           <.icon name="hero-chevron-down" class="review-collapse-icon" />
           <span class="review-hunk-title">
-            <span class="review-hunk-filename">{@title.file}</span>
-            <span class="review-hunk-separator">·</span>
-            <span class="review-hunk-index">{@title.hunk}</span>
-            <span :if={@title.lines != ""} class="review-hunk-separator">·</span>
+            <span :if={@title.file != ""} class="review-hunk-filename">{@title.file}</span>
+            <span :if={@title.file != "" && @title.hunk != ""} class="review-hunk-separator">·</span>
+            <span :if={@title.hunk != ""} class="review-hunk-index">{@title.hunk}</span>
+            <span :if={@title.hunk != "" && @title.lines != ""} class="review-hunk-separator">·</span>
             <span :if={@title.lines != ""} class="review-hunk-lines">{@title.lines}</span>
           </span>
         </button>
 
         <div class="review-hunk-meta">
+          <span
+            :if={@view_state}
+            class={[
+              "review-file-view-state",
+              "is-#{@view_state.status}"
+            ]}
+          >
+            {@view_state.label}
+          </span>
           <button
             :if={@current_user && !@viewed?}
             type="button"
@@ -550,6 +730,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-row_ref={@hunk.row_ref}
             phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
             phx-value-hunk_id={@hunk_id}
+            phx-value-hunk_attrs={@hunk_attrs_json}
             phx-value-hunk_index={@hunk.hunk_index}
             phx-value-line_start={@hunk.line_start}
             phx-value-line_end={@hunk.line_end}
@@ -567,6 +748,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-row_ref={@hunk.row_ref}
             phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
             phx-value-hunk_id={@hunk_id}
+            phx-value-hunk_attrs={@hunk_attrs_json}
             phx-value-hunk_index={@hunk.hunk_index}
             phx-value-line_start={@hunk.line_start}
             phx-value-line_end={@hunk.line_end}
@@ -576,7 +758,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           >
             Viewed
           </button>
+          <span :if={@current_user && @partially_viewed?} class="review-hunk-partial-pill">
+            Partially viewed
+          </span>
           <span :if={!@current_user && @viewed?} class="review-hunk-viewed-pill">Viewed</span>
+          <span :if={!@current_user && @partially_viewed?} class="review-hunk-partial-pill">
+            Partially viewed
+          </span>
           <span :if={!@current_user} class="review-hunk-signin">Sign in to save viewed state</span>
         </div>
       </header>
@@ -605,13 +793,40 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     """
   end
 
-  defp hunk_title(hunk, file_label) do
+  defp hunk_attrs_json(%{grouped_hunks: hunks}) do
+    hunks
+    |> Enum.map(&hunk_attrs/1)
+    |> Jason.encode!()
+  end
+
+  defp hunk_attrs_json(_hunk), do: nil
+
+  defp hunk_attrs(hunk) do
     %{
-      file: file_label || Path.basename(hunk.file_path || ""),
-      hunk: "hunk #{hunk.hunk_index}",
-      lines: hunk_line_label(hunk)
+      file_path: hunk.file_path,
+      row_ref: hunk.row_ref,
+      hunk_fingerprint: hunk.hunk_fingerprint,
+      hunk_index: hunk.hunk_index,
+      line_start: hunk.line_start,
+      line_end: hunk.line_end
     }
   end
+
+  defp hunk_title(hunk, file_label, show_file_label?, show_hunk_label?) do
+    %{
+      file: if(show_file_label?, do: file_label || Path.basename(hunk.file_path || ""), else: ""),
+      hunk: if(show_hunk_label?, do: hunk_index_label(hunk), else: ""),
+      lines: if(show_hunk_label?, do: hunk_line_label(hunk), else: "")
+    }
+  end
+
+  defp hunk_index_label(%{hunk_indices: [first | _] = indices}) when length(indices) > 1 do
+    "hunks #{first}-#{List.last(indices)}"
+  end
+
+  defp hunk_index_label(hunk), do: "hunk #{hunk.hunk_index}"
+
+  defp hunk_line_label(%{hunk_indices: [_first, _second | _rest]}), do: ""
 
   defp hunk_line_label(%{line_start: line_start, line_end: line_end})
        when is_integer(line_start) and is_integer(line_end) do
@@ -743,25 +958,16 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     end
   end
 
-  defp take_markdown_paragraph([], acc), do: {trim_paragraph(acc), []}
-
-  defp take_markdown_paragraph([line | rest], acc) do
+  defp take_markdown_paragraph([line | rest], _acc) do
     trimmed = String.trim(line)
 
     cond do
       trimmed == "" || markdown_heading(trimmed) || markdown_list_item?(trimmed) ->
-        {trim_paragraph(acc), [line | rest]}
+        {"", [line | rest]}
 
       true ->
-        take_markdown_paragraph(rest, [String.trim(line) | acc])
+        {String.trim(line), rest}
     end
-  end
-
-  defp trim_paragraph(lines) do
-    lines
-    |> Enum.reverse()
-    |> Enum.join(" ")
-    |> String.trim()
   end
 
   defp markdown_inline(text) when is_binary(text) do

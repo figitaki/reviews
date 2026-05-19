@@ -17,7 +17,6 @@ defmodule ReviewsWeb.ReviewLive do
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
-  alias Reviews.ReviewHunks
   alias Reviews.ReviewNavigation
   alias Reviews.ReviewPacket
   alias Reviews.ReviewView
@@ -30,6 +29,9 @@ defmodule ReviewsWeb.ReviewLive do
   @section_auto_open_loc_budget 25
   @section_auto_open_min_hunk_loc 6
   @section_auto_open_max_hunk_loc 500
+  @single_section_auto_open_line_limit 100
+  @section_expand_all_line_limit 500
+  @section_expand_all_file_limit 25
 
   @impl true
   def mount(%{"slug" => slug}, session, socket) do
@@ -724,10 +726,9 @@ defmodule ReviewsWeb.ReviewLive do
   defp auto_open_section_hunks(socket, section_index) do
     with %{} = patchset <- socket.assigns.selected_patchset,
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
-      section.rows
-      |> Enum.with_index()
-      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, section_index, &1))
-      |> open_preview_hunks(socket)
+      section
+      |> section_hunks(socket.assigns.hunks_by_path)
+      |> open_section_hunks(socket)
     else
       _ -> socket
     end
@@ -747,9 +748,9 @@ defmodule ReviewsWeb.ReviewLive do
        when is_integer(section_index) do
     with %{} = patchset <- socket.assigns.selected_patchset,
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
-      section.rows
-      |> Enum.with_index()
-      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, section_index, &1))
+      section
+      |> PacketComponents.packet_units(socket.assigns.hunks_by_path)
+      |> Enum.flat_map(&section_preview_hunk/1)
       |> hunks_after(attrs)
     else
       _ -> []
@@ -772,28 +773,19 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp hunk_matches_attrs?(hunk, attrs) do
-    hunk.file_path == attrs.file_path &&
-      hunk.row_ref == attrs.row_ref &&
-      hunk.hunk_fingerprint == attrs.hunk_fingerprint &&
-      hunk.line_start == attrs.line_start &&
-      hunk.line_end == attrs.line_end
+    if Map.has_key?(hunk, :grouped_hunks) do
+      Enum.any?(hunk.grouped_hunks, &hunk_matches_attrs?(&1, attrs))
+    else
+      hunk.file_path == attrs.file_path &&
+        hunk.row_ref == attrs.row_ref &&
+        hunk.hunk_fingerprint == attrs.hunk_fingerprint &&
+        hunk.line_start == attrs.line_start &&
+        hunk.line_end == attrs.line_end
+    end
   end
 
   defp open_preview_hunks(hunks, socket) do
-    hunk_ids =
-      hunks
-      |> Enum.reject(& &1.viewed?)
-      |> Enum.reject(&(hunk_display_loc(&1) > @section_auto_open_max_hunk_loc))
-      |> Enum.reduce_while({[], 0}, fn hunk, {ids, spent} ->
-        cost = hunk_preview_cost(hunk)
-
-        if spent == 0 || spent + cost <= @section_auto_open_loc_budget do
-          {:cont, {[hunk.id | ids], spent + cost}}
-        else
-          {:halt, {ids, spent}}
-        end
-      end)
-      |> elem(0)
+    hunk_ids = preview_hunk_ids(hunks)
 
     assign(
       socket,
@@ -802,27 +794,48 @@ defmodule ReviewsWeb.ReviewLive do
     )
   end
 
-  defp section_preview_hunk(hunks_by_path, section_index, {row, row_index}) do
-    if ReviewPacket.text(row, "kind") == "hunk" do
-      case ReviewHunks.for_packet_row(hunks_by_path, row) do
-        nil ->
-          []
+  defp open_section_hunks(hunks, socket) do
+    hunk_ids = section_hunk_ids_to_open(hunks)
 
-        hunk ->
-          [
-            %{
-              hunk
-              | id: PacketComponents.packet_hunk_id(packet_row_id(section_index, row_index), hunk)
-            }
-          ]
-      end
+    assign(
+      socket,
+      :expanded_hunk_ids,
+      MapSet.union(socket.assigns.expanded_hunk_ids, MapSet.new(hunk_ids))
+    )
+  end
+
+  defp section_hunk_ids_to_open(hunks) do
+    if expand_all_section_hunks?(hunks) do
+      Enum.map(hunks, & &1.id)
     else
-      []
+      preview_hunk_ids(hunks)
     end
   end
 
-  defp packet_row_id(section_index, row_index),
-    do: "packet-section-#{section_index}-row-#{row_index}"
+  defp preview_hunk_ids(hunks) do
+    hunks
+    |> Enum.reject(& &1.viewed?)
+    |> Enum.reject(&(hunk_display_loc(&1) > @section_auto_open_max_hunk_loc))
+    |> Enum.reduce_while({[], 0}, fn hunk, {ids, spent} ->
+      cost = hunk_preview_cost(hunk)
+
+      if spent == 0 || spent + cost <= @section_auto_open_loc_budget do
+        {:cont, {[hunk.id | ids], spent + cost}}
+      else
+        {:halt, {ids, spent}}
+      end
+    end)
+    |> elem(0)
+  end
+
+  defp section_preview_hunk(%{kind: :hunk_group, hunk: hunk}), do: [hunk]
+  defp section_preview_hunk(_unit), do: []
+
+  defp section_hunks(section, hunks_by_path) do
+    section
+    |> PacketComponents.packet_units(hunks_by_path)
+    |> Enum.flat_map(&section_preview_hunk/1)
+  end
 
   defp hunk_preview_cost(hunk) do
     hunk
@@ -846,11 +859,12 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp update_hunk_view(socket, params, action) do
-    with {:ok, attrs} <- hunk_attrs_from_params(params),
+    with {:ok, attrs_list} <- hunk_attrs_list_from_params(params),
          %{} = patchset <- socket.assigns.selected_patchset,
          %{} = user <- socket.assigns.current_user,
-         {:ok, _} <- persist_hunk_view(socket, patchset, user, attrs, action) do
+         {:ok, _} <- persist_hunk_views(socket, patchset, user, attrs_list, action) do
       socket = refresh_snapshot!(socket)
+      attrs = List.first(attrs_list)
 
       socket =
         case action do
@@ -867,6 +881,15 @@ defmodule ReviewsWeb.ReviewLive do
     else
       _ -> {:noreply, put_flash(socket, :error, "Could not update hunk.")}
     end
+  end
+
+  defp persist_hunk_views(socket, patchset, user, attrs_list, action) do
+    Enum.reduce_while(attrs_list, {:ok, []}, fn attrs, {:ok, persisted} ->
+      case persist_hunk_view(socket, patchset, user, attrs, action) do
+        {:ok, result} -> {:cont, {:ok, [result | persisted]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
   defp persist_hunk_view(socket, patchset, user, attrs, :viewed) do
@@ -908,6 +931,38 @@ defmodule ReviewsWeb.ReviewLive do
     |> Enum.find_value(fn hunk ->
       if hunk_matches_attrs?(hunk, attrs), do: hunk.id
     end)
+  end
+
+  defp hunk_attrs_list_from_params(%{"hunk_attrs" => encoded} = params)
+       when is_binary(encoded) and encoded != "" do
+    case Jason.decode(encoded) do
+      {:ok, attrs_list} when is_list(attrs_list) ->
+        attrs_list
+        |> Enum.map(&Map.put(&1, "hunk_id", params["hunk_id"]))
+        |> Enum.map(&hunk_attrs_from_params/1)
+        |> collect_hunk_attrs()
+
+      _ ->
+        :error
+    end
+  end
+
+  defp hunk_attrs_list_from_params(params) do
+    case hunk_attrs_from_params(params) do
+      {:ok, attrs} -> {:ok, [attrs]}
+      :error -> :error
+    end
+  end
+
+  defp collect_hunk_attrs(results) do
+    Enum.reduce_while(results, {:ok, []}, fn
+      {:ok, attrs}, {:ok, acc} -> {:cont, {:ok, [attrs | acc]}}
+      :error, _acc -> {:halt, :error}
+    end)
+    |> case do
+      {:ok, attrs} -> {:ok, Enum.reverse(attrs)}
+      :error -> :error
+    end
   end
 
   defp hunk_attrs_from_params(params) do
@@ -952,18 +1007,16 @@ defmodule ReviewsWeb.ReviewLive do
         MapSet.new()
       end
 
-    expanded_hunk_ids =
-      if previous_patchset_id == next_patchset_id do
-        socket.assigns[:expanded_hunk_ids] || MapSet.new()
-      else
-        MapSet.new()
-      end
+    default_expansion = default_expanded_packet_state(snapshot)
 
-    expanded_section_ids =
+    {expanded_hunk_ids, expanded_section_ids} =
       if previous_patchset_id == next_patchset_id do
-        socket.assigns[:expanded_section_ids] || MapSet.new()
+        {
+          socket.assigns[:expanded_hunk_ids] || default_expansion.hunk_ids,
+          socket.assigns[:expanded_section_ids] || default_expansion.section_ids
+        }
       else
-        MapSet.new()
+        {default_expansion.hunk_ids, default_expansion.section_ids}
       end
 
     socket
@@ -986,10 +1039,13 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp mounted_diff_paths(socket) do
     changes_paths =
-      socket.assigns.hunks_by_path
-      |> Enum.flat_map(fn {path, hunks} ->
-        if Enum.any?(hunks, &MapSet.member?(socket.assigns.expanded_hunk_ids, &1.id)) do
-          [path]
+      socket.assigns.file_diffs
+      |> Enum.flat_map(fn file ->
+        hunks = Map.get(socket.assigns.hunks_by_path, file.path, [])
+
+        if MapSet.member?(socket.assigns.expanded_hunk_ids, file_diff_id(file)) ||
+             Enum.any?(hunks, &MapSet.member?(socket.assigns.expanded_hunk_ids, &1.id)) do
+          [file.path]
         else
           []
         end
@@ -1006,6 +1062,52 @@ defmodule ReviewsWeb.ReviewLive do
 
     Enum.uniq(changes_paths ++ packet_paths)
   end
+
+  defp default_expanded_packet_state(%{selected_patchset: nil}) do
+    %{section_ids: MapSet.new(), hunk_ids: MapSet.new()}
+  end
+
+  defp default_expanded_packet_state(snapshot) do
+    sections = ReviewPacket.sections(snapshot.selected_patchset.packet || %{})
+
+    {section_ids, hunk_ids} =
+      case sections do
+        [section] ->
+          hunks = section_hunks(section, snapshot.hunks_by_path)
+
+          if section_changed_lines(hunks) < @single_section_auto_open_line_limit do
+            {MapSet.new([section.index]), MapSet.new(section_hunk_ids_to_open(hunks))}
+          else
+            {MapSet.new(), MapSet.new()}
+          end
+
+        _ ->
+          {MapSet.new(), MapSet.new()}
+      end
+
+    %{section_ids: section_ids, hunk_ids: hunk_ids}
+  end
+
+  defp expand_all_section_hunks?(hunks) do
+    section_changed_lines(hunks) < @section_expand_all_line_limit &&
+      section_file_count(hunks) < @section_expand_all_file_limit
+  end
+
+  defp section_changed_lines(hunks) do
+    hunks
+    |> Enum.reduce(0, fn hunk, changed_lines ->
+      changed_lines + hunk.display_additions + hunk.display_deletions
+    end)
+  end
+
+  defp section_file_count(hunks) do
+    hunks
+    |> Enum.map(& &1.file_path)
+    |> MapSet.new()
+    |> MapSet.size()
+  end
+
+  defp file_diff_id(file), do: "file-diff-#{file.id}"
 
   defp hunk_id_matches?(expanded_id, hunk_id) do
     expanded_id == hunk_id || String.ends_with?(expanded_id, "--#{hunk_id}")
