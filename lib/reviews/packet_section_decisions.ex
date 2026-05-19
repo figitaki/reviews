@@ -41,6 +41,19 @@ defmodule Reviews.PacketSectionDecisions do
 
   def list_for_review(_review, _viewer), do: []
 
+  @doc """
+  Every account's decisions on a review, with the deciding identity preloaded
+  as `author`. `list_for_review/2` is the viewer's own decisions, which the
+  section buttons read; this list feeds read models that show everyone.
+  """
+  def list_visible_for_review(%Review{id: review_id}) do
+    PacketSectionDecision
+    |> where([d], d.review_id == ^review_id)
+    |> preload([:author])
+    |> order_by([d], asc: d.patchset_id, asc: d.section_index, asc: d.account_id)
+    |> Repo.all()
+  end
+
   defp list_for_account(%Review{id: review_id}, account_id) do
     PacketSectionDecision
     |> where([d], d.review_id == ^review_id and d.account_id == ^account_id)
