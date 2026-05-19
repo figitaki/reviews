@@ -15,6 +15,7 @@ defmodule ReviewsWeb.ReviewLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.Accounts
+  alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
   alias Reviews.ReviewNavigation
   alias Reviews.ReviewPacket
@@ -52,6 +53,7 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
               |> assign(:expanded_file_ids, MapSet.new())
+              |> assign(:expanded_hunk_ids, MapSet.new())
               |> assign(:expanded_section_ids, MapSet.new())
               |> assign_snapshot(snapshot)
 
@@ -143,13 +145,10 @@ defmodule ReviewsWeb.ReviewLive do
     socket = assign(socket, :diff_style, style)
 
     socket =
-      socket.assigns.file_diffs
-      |> Enum.filter(fn file ->
-        MapSet.member?(socket.assigns.expanded_file_ids, file.id) ||
-          packet_diff_path?(socket.assigns.selected_patchset, file.path)
-      end)
+      socket
+      |> mounted_diff_paths()
       |> Enum.reduce(socket, fn file, acc ->
-        push_event(acc, "diff_style_updated:#{file.path}", %{style: style})
+        push_event(acc, "diff_style_updated:#{file}", %{style: style})
       end)
 
     {:noreply, socket}
@@ -191,6 +190,28 @@ defmodule ReviewsWeb.ReviewLive do
       _ ->
         {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_event("toggle_hunk_diff", %{"hunk_id" => hunk_id}, socket) do
+    expanded_hunk_ids =
+      if MapSet.member?(socket.assigns.expanded_hunk_ids, hunk_id) do
+        MapSet.delete(socket.assigns.expanded_hunk_ids, hunk_id)
+      else
+        MapSet.put(socket.assigns.expanded_hunk_ids, hunk_id)
+      end
+
+    {:noreply, assign(socket, :expanded_hunk_ids, expanded_hunk_ids)}
+  end
+
+  @impl true
+  def handle_event("mark_hunk_viewed", params, socket) do
+    update_hunk_view(socket, params, :viewed)
+  end
+
+  @impl true
+  def handle_event("mark_hunk_unviewed", params, socket) do
+    update_hunk_view(socket, params, :unviewed)
   end
 
   @impl true
@@ -451,6 +472,7 @@ defmodule ReviewsWeb.ReviewLive do
               PacketComponents.packet_effort_for_header(
                 packet,
                 @file_diffs,
+                @hunks_by_path,
                 @packet_section_decisions,
                 @selected_patchset,
                 @patchsets
@@ -522,12 +544,14 @@ defmodule ReviewsWeb.ReviewLive do
             patchsets={@patchsets}
             section_decisions={@packet_section_decisions}
             file_diffs={@file_diffs}
+            hunks_by_path={@hunks_by_path}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
             drafts={@drafts}
             current_user={@current_user}
             diff_style={@diff_style}
             expanded_section_ids={@expanded_section_ids}
+            expanded_hunk_ids={@expanded_hunk_ids}
           />
 
           <%!-- Body: sidebar + diff list --%>
@@ -541,6 +565,8 @@ defmodule ReviewsWeb.ReviewLive do
             current_user={@current_user}
             diff_style={@diff_style}
             expanded_file_ids={@expanded_file_ids}
+            expanded_hunk_ids={@expanded_hunk_ids}
+            hunks_by_path={@hunks_by_path}
           />
         </div>
       </.ds_shell>
@@ -686,6 +712,54 @@ defmodule ReviewsWeb.ReviewLive do
     assign(socket, :expanded_section_ids, expanded_section_ids)
   end
 
+  defp update_hunk_view(socket, _params, _action) when is_nil(socket.assigns.current_user) do
+    {:noreply, put_flash(socket, :error, "Sign in to mark hunks viewed.")}
+  end
+
+  defp update_hunk_view(socket, params, action) do
+    with {:ok, attrs} <- hunk_attrs_from_params(params),
+         %{} = patchset <- socket.assigns.selected_patchset,
+         %{} = user <- socket.assigns.current_user,
+         {:ok, _} <- persist_hunk_view(socket, patchset, user, attrs, action) do
+      {:noreply, refresh_snapshot!(socket)}
+    else
+      _ -> {:noreply, put_flash(socket, :error, "Could not update hunk.")}
+    end
+  end
+
+  defp persist_hunk_view(socket, patchset, user, attrs, :viewed) do
+    PacketHunkViews.mark_viewed(socket.assigns.review, patchset, user, attrs)
+  end
+
+  defp persist_hunk_view(socket, _patchset, user, attrs, :unviewed) do
+    PacketHunkViews.clear_viewed(socket.assigns.review, user, attrs)
+  end
+
+  defp hunk_attrs_from_params(params) do
+    with file_path when is_binary(file_path) and file_path != "" <- params["file_path"],
+         row_ref when is_binary(row_ref) and row_ref != "" <- params["row_ref"],
+         fingerprint when is_binary(fingerprint) and fingerprint != "" <-
+           params["hunk_fingerprint"],
+         hunk_index when is_integer(hunk_index) <- parse_int(params["hunk_index"]) do
+      {:ok,
+       %{
+         file_path: file_path,
+         row_ref: row_ref,
+         hunk_fingerprint: fingerprint,
+         hunk_index: hunk_index,
+         line_start: parse_int(params["line_start"]),
+         line_end: parse_int(params["line_end"]),
+         section_index: parse_int(params["section_index"]),
+         section_title: blank_to_nil(params["section_title"])
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  defp blank_to_nil(value) when value in ["", nil], do: nil
+  defp blank_to_nil(value), do: value
+
   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
   defp anchor_line_hint(_), do: nil
 
@@ -698,6 +772,13 @@ defmodule ReviewsWeb.ReviewLive do
     expanded_file_ids =
       if previous_patchset_id == next_patchset_id do
         socket.assigns[:expanded_file_ids] || MapSet.new()
+      else
+        MapSet.new()
+      end
+
+    expanded_hunk_ids =
+      if previous_patchset_id == next_patchset_id do
+        socket.assigns[:expanded_hunk_ids] || MapSet.new()
       else
         MapSet.new()
       end
@@ -716,7 +797,10 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:selected_patchset, snapshot.selected_patchset)
     |> assign(:files, snapshot.files)
     |> assign(:file_diffs, snapshot.file_diffs)
+    |> assign(:hunks_by_path, snapshot.hunks_by_path)
+    |> assign(:packet_hunk_views, snapshot.packet_hunk_views)
     |> assign(:expanded_file_ids, expanded_file_ids)
+    |> assign(:expanded_hunk_ids, expanded_hunk_ids)
     |> assign(:expanded_section_ids, expanded_section_ids)
     |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
@@ -724,16 +808,27 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
   end
 
-  defp packet_diff_path?(nil, _path), do: false
-
-  defp packet_diff_path?(patchset, path) do
-    patchset.packet
-    |> ReviewPacket.sections()
-    |> Enum.any?(fn section ->
-      Enum.any?(section.rows, fn row ->
-        ReviewPacket.text(row, "kind") == "hunk" && ReviewPacket.text(row, "path") == path
+  defp mounted_diff_paths(socket) do
+    changes_paths =
+      socket.assigns.hunks_by_path
+      |> Enum.flat_map(fn {path, hunks} ->
+        if Enum.any?(hunks, &MapSet.member?(socket.assigns.expanded_hunk_ids, &1.id)) do
+          [path]
+        else
+          []
+        end
       end)
-    end)
+
+    packet_paths =
+      socket.assigns.expanded_hunk_ids
+      |> Enum.flat_map(fn hunk_id ->
+        socket.assigns.hunks_by_path
+        |> Enum.find_value([], fn {path, hunks} ->
+          if Enum.any?(hunks, &(&1.id == hunk_id)), do: [path], else: nil
+        end)
+      end)
+
+    Enum.uniq(changes_paths ++ packet_paths)
   end
 
   defp put_section_status(socket, patchset, user, section, status) do

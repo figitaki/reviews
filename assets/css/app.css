@@ -1145,6 +1145,98 @@ details[open] > summary .review-collapse-icon,
   border-radius: 0;
 }
 
+.review-hunk-list {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.review-hunk-card {
+  overflow: hidden;
+  border: 1px solid var(--review-line);
+  border-radius: 8px;
+  background: var(--review-panel-raised);
+}
+
+.review-hunk-card.is-viewed {
+  border-color: color-mix(in srgb, var(--review-add) 36%, var(--review-line));
+}
+
+.review-hunk-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+}
+
+.review-hunk-toggle {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--review-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.review-hunk-toggle:hover {
+  background: var(--review-hover);
+}
+
+.review-hunk-card.is-open .review-collapse-icon {
+  transform: rotate(180deg);
+}
+
+.review-hunk-title {
+  min-width: 0;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-hunk-lines {
+  flex: 0 0 auto;
+  color: var(--review-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.review-hunk-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-hunk-viewed-pill,
+.review-hunk-signin,
+.review-hunk-progress {
+  color: var(--review-muted);
+  font-size: 12px;
+}
+
+.review-hunk-viewed-pill {
+  color: var(--review-add);
+  font-weight: 700;
+}
+
+.review-hunk-action {
+  min-height: 28px;
+  padding-inline: 9px;
+  font-size: 12px;
+}
+
+.review-hunk-body {
+  border-top: 1px solid var(--review-line);
+}
+
 .review-packet-task,
 .review-packet-question {
   display: flex;
