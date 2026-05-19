@@ -15,7 +15,7 @@ Usage:
   install.sh [options]
 
 Options:
-  --version <version>     Install a specific CLI version, e.g. 0.1.0 or cli-v0.1.0.
+  --version <version>     Install a specific CLI version, e.g. 0.0.1-alpha.0 or cli-v0.0.1-alpha.0.
   --install-dir <dir>     Install the reviews binary into <dir>.
   --with-skills           Also install packaged Reviews agent skills.
   --no-skills             Do not install agent skills.
@@ -127,6 +127,9 @@ curl -fsSL "$api_url" -o "$release_json"
 asset_url="$(
   sed -n "s/.*\"browser_download_url\": *\"\([^\"]*reviews-cli-[^\"]*-${target}\.tar\.gz\)\".*/\1/p" "$release_json" | head -n 1
 )"
+checksum_url="$(
+  sed -n "s/.*\"browser_download_url\": *\"\([^\"]*checksums\.txt\)\".*/\1/p" "$release_json" | head -n 1
+)"
 
 if [ -z "$asset_url" ]; then
   echo "error: no Reviews CLI artifact found for $target" >&2
@@ -136,12 +139,46 @@ if [ -z "$asset_url" ]; then
   exit 1
 fi
 
+if [ -z "$checksum_url" ]; then
+  echo "error: release did not include checksums.txt" >&2
+  exit 1
+fi
+
 archive="$tmp/reviews-cli.tar.gz"
+asset_name="${asset_url##*/}"
+checksums="$tmp/checksums.txt"
 extract_dir="$tmp/extract"
 mkdir -p "$extract_dir"
 
 echo "Downloading $asset_url..."
 curl -fL "$asset_url" -o "$archive"
+echo "Downloading $checksum_url..."
+curl -fsSL "$checksum_url" -o "$checksums"
+
+expected_sha="$(
+  awk -v file="$asset_name" '$2 == file { print $1; exit }' "$checksums"
+)"
+
+if [ -z "$expected_sha" ]; then
+  echo "error: checksums.txt did not include $asset_name" >&2
+  exit 1
+fi
+
+if command -v sha256sum >/dev/null 2>&1; then
+  actual_sha="$(sha256sum "$archive" | awk '{ print $1 }')"
+elif command -v shasum >/dev/null 2>&1; then
+  actual_sha="$(shasum -a 256 "$archive" | awk '{ print $1 }')"
+else
+  echo "error: sha256sum or shasum is required to verify the download" >&2
+  exit 1
+fi
+
+if [ "$actual_sha" != "$expected_sha" ]; then
+  echo "error: checksum verification failed for $asset_name" >&2
+  exit 1
+fi
+
+echo "Verified checksum for $asset_name"
 tar -xzf "$archive" -C "$extract_dir"
 
 if [ ! -f "$extract_dir/reviews" ]; then
