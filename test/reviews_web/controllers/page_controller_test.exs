@@ -6,6 +6,6 @@ defmodule ReviewsWeb.PageControllerTest do
     html = html_response(conn, 200)
 
     assert html =~ "Reviews Keeps Patchsets"
-    assert html =~ "Open Sample Review"
+    assert html =~ "Open Demo Review"
   end
 end
