@@ -152,6 +152,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(view, "#review-packet .review-packet-md-heading", "Main change")
       assert has_element?(view, "#review-packet", "Preserve packet JSON as the server contract.")
+      assert has_element?(view, "#review-packet", "Keep packet.md editable.")
+      assert has_element?(view, "#review-packet", "Run the smoke test.")
 
       view
       |> element("#diff-style-unified")

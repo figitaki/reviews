@@ -3,7 +3,7 @@
     <.ds_shell brand="Reviews" home={~p"/"}>
       <:nav>
         <.ds_nav_item navigate={~p"/"} active>Home</.ds_nav_item>
-        <.ds_nav_item navigate={~p"/r/uzRiKvyr"}>Review</.ds_nav_item>
+        <.ds_nav_item navigate={~p"/r/demo-review"}>Demo Review</.ds_nav_item>
         <.ds_nav_item navigate={~p"/settings"}>Settings</.ds_nav_item>
       </:nav>
       <:actions>
@@ -17,8 +17,8 @@
           description="A review surface for agents and humans to inspect arbitrary diffs, carry comments across patchsets, and publish decisions with the full context still visible."
         >
           <:actions>
-            <.link navigate={~p"/r/uzRiKvyr"} class="ds-button is-primary">
-              <.icon name="hero-code-bracket-square" class="size-4" /> Open Sample Review
+            <.link navigate={~p"/r/demo-review"} class="ds-button is-primary">
+              <.icon name="hero-code-bracket-square" class="size-4" /> Open Demo Review
             </.link>
             <.link navigate={~p"/settings"} class="ds-button">
               <.icon name="hero-cog-6-tooth" class="size-4" /> Configure Settings
@@ -101,8 +101,8 @@
                   translate="no"
                 >
                   <div>$ reviews push</div>
-                  <div class="text-emerald-300">http://localhost:4000/r/uzRiKvyr</div>
-                  <div>$ reviews push --update uzRiKvyr</div>
+                  <div class="text-emerald-300">http://localhost:4000/r/demo-review</div>
+                  <div>$ reviews push --update demo-review</div>
                 </div>
               </div>
             </.ds_card>
