@@ -9,14 +9,17 @@ push`) for ingestion.
 - Elixir 1.18 / Erlang 27
 - Node 22+ (or Bun)
 - Postgres 14+ running locally. The default dev config talks to a Postgres
-  on the `/tmp` unix socket as user `warbler` (no password). Override in
-  `config/dev.exs` if your setup differs.
+  on the `/tmp` unix socket as user `reviews` (no password). To avoid clashing
+  with another local project on port `5432`, set `POSTGRES_HOST=localhost` and
+  `POSTGRES_PORT=55432`.
 
 ## Setup
 
 ```sh
+cp .env.example .env.local
+set -a; source .env.local; set +a
 mix setup        # fetches deps, creates DB, runs migrations, installs assets
-mix phx.server   # starts the app on http://localhost:4000
+./bin/server     # starts the app on http://localhost:4000
 ```
 
 ## Running the dev server

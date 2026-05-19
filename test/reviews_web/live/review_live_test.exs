@@ -138,7 +138,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       refute has_element?(view, "#packet-section-0 > .review-packet-section-summary-text")
 
-      assert has_element?(view, "#review-packet .review-hunk-card", "lib/packet.ex")
+      assert has_element?(view, "#review-packet .review-hunk-card", "packet.ex")
+
+      assert has_element?(
+               view,
+               ~s|#review-packet .review-hunk-toggle[title^="lib/packet.ex"]|
+             )
 
       assert has_element?(
                view,

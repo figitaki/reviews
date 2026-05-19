@@ -56,6 +56,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                   class="review-packet-section-estimate"
                   title={"Estimated from #{section.estimate.changed_lines} changed lines across #{section.estimate.hunk_count} hunk rows."}
                 >
+                  {section.estimate.effort}
                   <.change_stat
                     additions={section.estimate.additions}
                     deletions={section.estimate.deletions}
