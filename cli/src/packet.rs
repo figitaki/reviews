@@ -189,6 +189,14 @@ fn parse_section_rows(content: &str) -> Result<Vec<Value>> {
             }
 
             rows.push(parse_hunk_row(rest.trim())?);
+        } else if markdown_subheading(line) {
+            let body = trim_join(&prose);
+            if !body.is_empty() {
+                rows.push(json!({"kind": "markdown", "body": body}));
+                prose.clear();
+            }
+
+            rows.push(json!({"kind": "markdown", "body": line.trim().to_string()}));
         } else {
             prose.push(line.to_string());
         }
@@ -200,6 +208,10 @@ fn parse_section_rows(content: &str) -> Result<Vec<Value>> {
     }
 
     Ok(rows)
+}
+
+fn markdown_subheading(line: &str) -> bool {
+    line.trim_start().starts_with("### ")
 }
 
 fn parse_hunk_row(rest: &str) -> Result<Value> {
@@ -538,6 +550,36 @@ Then the second hunk.
         assert_eq!(rows[1]["hunk_index"], 1);
         assert_eq!(rows[1]["line_start"], 2);
         assert_eq!(rows[1]["line_end"], 3);
+    }
+
+    #[test]
+    fn parses_subheadings_as_separate_markdown_rows() {
+        let packet = parse_markdown(
+            r#"# Packet
+
+## Section
+Intro summary.
+
+### Technical overview
+
+Implementation notes.
+
+@hunk lib/a.ex#1
+"#,
+        )
+        .unwrap();
+
+        let sections = packet["sections"].as_array().unwrap();
+        let rows = sections[0]["rows"].as_array().unwrap();
+
+        assert_eq!(rows.len(), 4);
+        assert_eq!(rows[0]["kind"], "markdown");
+        assert_eq!(rows[0]["body"], "Intro summary.");
+        assert_eq!(rows[1]["kind"], "markdown");
+        assert_eq!(rows[1]["body"], "### Technical overview");
+        assert_eq!(rows[2]["kind"], "markdown");
+        assert_eq!(rows[2]["body"], "Implementation notes.");
+        assert_eq!(rows[3]["kind"], "hunk");
     }
 
     #[test]

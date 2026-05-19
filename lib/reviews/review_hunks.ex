@@ -58,6 +58,29 @@ defmodule Reviews.ReviewHunks do
     |> Map.merge(extra)
   end
 
+  def combine_consecutive([hunk]), do: hunk
+
+  def combine_consecutive([first | _] = hunks) do
+    viewed_count = Enum.count(hunks, & &1.viewed?)
+
+    first
+    |> Map.merge(%{
+      id: combined_hunk_dom_id(hunks),
+      grouped_hunks: hunks,
+      hunk_index: first.hunk_index,
+      hunk_indices: Enum.map(hunks, & &1.hunk_index),
+      line_start: first.line_start,
+      line_end: List.last(hunks).line_end,
+      display_additions: Enum.sum(Enum.map(hunks, & &1.display_additions)),
+      display_deletions: Enum.sum(Enum.map(hunks, & &1.display_deletions)),
+      display_raw_diff: combine_raw_diffs(hunks),
+      viewed_count: viewed_count,
+      viewed?: viewed_count == length(hunks),
+      partially_viewed?: viewed_count > 0 && viewed_count < length(hunks),
+      grouped?: true
+    })
+  end
+
   defp parse_hunks(raw_diff, file_path) when is_binary(raw_diff) do
     lines = String.split(raw_diff, "\n", trim: false)
     {header_lines, rest} = Enum.split_while(lines, &(not String.starts_with?(&1, "@@ ")))
@@ -153,6 +176,29 @@ defmodule Reviews.ReviewHunks do
     end)
   end
 
+  defp combine_raw_diffs([first | rest]) do
+    header_lines = file_header_lines(first.display_raw_diff)
+
+    hunk_blocks =
+      [first | rest]
+      |> Enum.flat_map(&hunk_block_lines(&1.display_raw_diff))
+
+    Enum.join(header_lines ++ hunk_blocks, "\n")
+  end
+
+  defp file_header_lines(raw_diff) do
+    raw_diff
+    |> String.split("\n", trim: false)
+    |> Enum.take_while(&(not String.starts_with?(&1, "@@ ")))
+  end
+
+  defp hunk_block_lines(raw_diff) do
+    raw_diff
+    |> String.split("\n", trim: false)
+    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
+    |> Enum.reject(&(&1 == ""))
+  end
+
   defp hunk_line_range(header) when is_binary(header) do
     case Regex.run(~r/@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/, header) do
       [_, start, count] ->
@@ -184,5 +230,12 @@ defmodule Reviews.ReviewHunks do
       |> String.trim("-")
 
     "hunk-#{slug}-#{index}"
+  end
+
+  defp combined_hunk_dom_id(hunks) do
+    first = List.first(hunks)
+    last = List.last(hunks)
+
+    "#{first.id}-through-#{last.hunk_index}"
   end
 end

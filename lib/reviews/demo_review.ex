@@ -99,6 +99,12 @@ defmodule Reviews.DemoReview do
             {current, _prose} = flush_prose(current, prose)
             {sections, add_hunk_row(current, line), []}
 
+          markdown_subheading?(line) ->
+            current = ensure_section!(current)
+            {current, _prose} = flush_prose(current, prose)
+            current = add_row(current, %{"kind" => "markdown", "body" => String.trim(line)})
+            {sections, current, []}
+
           true ->
             {sections, current, [line | prose]}
         end
@@ -118,6 +124,8 @@ defmodule Reviews.DemoReview do
 
   defp ensure_section!(nil), do: raise("demo packet markdown has @hunk before a ## section")
   defp ensure_section!(section), do: section
+
+  defp markdown_subheading?(line), do: String.starts_with?(String.trim_leading(line), "### ")
 
   defp flush_prose(current, prose) do
     body =
