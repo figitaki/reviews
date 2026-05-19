@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reviews Overview"
+  short_description: "Understand what Reviews provides."
+  default_prompt: "Use $reviews-overview to decide whether Reviews is the right review surface for this agent workflow."

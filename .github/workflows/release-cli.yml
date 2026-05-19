@@ -1,0 +1,107 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - "cli-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.archive_target }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rust_target: x86_64-unknown-linux-gnu
+            archive_target: linux-x64
+          - os: ubuntu-24.04-arm
+            rust_target: aarch64-unknown-linux-gnu
+            archive_target: linux-arm64
+          - os: macos-13
+            rust_target: x86_64-apple-darwin
+            archive_target: macos-x64
+          - os: macos-14
+            rust_target: aarch64-apple-darwin
+            archive_target: macos-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate CLI version
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#cli-v}"
+          manifest_version="$(sed -n 's/^version = "\(.*\)"/\1/p' cli/Cargo.toml | head -n 1)"
+          if [ "$version" != "$manifest_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match cli/Cargo.toml version $manifest_version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_ENV"
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.rust_target }}
+
+      - name: Build CLI
+        run: cargo build --manifest-path cli/Cargo.toml --release --target ${{ matrix.rust_target }}
+
+      - name: Package artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="reviews-cli-${version}-${{ matrix.archive_target }}"
+          mkdir -p "dist/$archive"
+          cp "cli/target/${{ matrix.rust_target }}/release/reviews" "dist/$archive/reviews"
+          cp LICENSE README.md install.sh "dist/$archive/"
+          cp -R skills "dist/$archive/skills"
+          tar -C "dist/$archive" -czf "dist/$archive.tar.gz" reviews LICENSE README.md install.sh skills
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reviews-cli-${{ matrix.archive_target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate CLI version
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#cli-v}"
+          manifest_version="$(sed -n 's/^version = "\(.*\)"/\1/p' cli/Cargo.toml | head -n 1)"
+          if [ "$version" != "$manifest_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match cli/Cargo.toml version $manifest_version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum *.tar.gz > checksums.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Reviews CLI v${{ env.version }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          generate_release_notes: true
