@@ -142,10 +142,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             class="review-packet-section-body"
           >
             <div class="review-packet-row-list">
-              <.packet_row
-                :for={{row, idx} <- Enum.with_index(section.rows)}
-                row={row}
-                row_id={"packet-section-#{section.index}-row-#{idx}"}
+              <.packet_unit
+                :for={unit <- packet_units(section, @hunks_by_path)}
+                unit={unit}
                 file_diffs={@file_diffs}
                 selected_patchset={@selected_patchset}
                 published_threads={@published_threads}
@@ -155,7 +154,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 hunks_by_path={@hunks_by_path}
                 expanded_hunk_ids={@expanded_hunk_ids}
                 section_title={section.title}
-                file_label={Map.get(@file_labels, ReviewPacket.text(row, "path"))}
+                file_labels={@file_labels}
               />
             </div>
           </div>
@@ -467,7 +466,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         <div id={@row_id} class="review-packet-row is-hunk">
           <.hunk_card
             hunk={@hunk}
-            hunk_id={packet_hunk_id(@row_id, @hunk)}
+            hunk_id={@hunk.id}
             file={@file}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
@@ -497,6 +496,138 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     "#{row_id}--#{hunk.id}"
   end
 
+  def packet_units(section, hunks_by_path) do
+    section.rows
+    |> Enum.with_index()
+    |> Enum.reduce([], fn {row, index}, units ->
+      row_id = "packet-section-#{section.index}-row-#{index}"
+      hunk = hunk_for_packet_row(hunks_by_path, row)
+
+      cond do
+        hunk && continues_hunk_group?(List.first(units), hunk) ->
+          [append_hunk_to_group(List.first(units), row, row_id, hunk) | tl(units)]
+
+        hunk ->
+          [new_hunk_group(row, row_id, hunk) | units]
+
+        true ->
+          [%{kind: :row, row: row, row_id: row_id} | units]
+      end
+    end)
+    |> Enum.reverse()
+    |> Enum.map(&finalize_packet_unit/1)
+  end
+
+  defp hunk_for_packet_row(hunks_by_path, row) do
+    if ReviewPacket.text(row, "kind") == "hunk" do
+      ReviewHunks.for_packet_row(hunks_by_path, row)
+    end
+  end
+
+  defp continues_hunk_group?(%{kind: :hunk_group, hunks: [previous | _]}, hunk) do
+    previous.file_path == hunk.file_path && previous.hunk_index + 1 == hunk.hunk_index
+  end
+
+  defp continues_hunk_group?(_unit, _hunk), do: false
+
+  defp append_hunk_to_group(group, row, row_id, hunk) do
+    %{group | rows: group.rows ++ [{row, row_id}], hunks: [hunk | group.hunks]}
+  end
+
+  defp new_hunk_group(row, row_id, hunk) do
+    %{kind: :hunk_group, rows: [{row, row_id}], hunks: [hunk]}
+  end
+
+  defp finalize_packet_unit(%{kind: :hunk_group, hunks: hunks} = group) do
+    hunks = Enum.reverse(hunks)
+    row_id = group.rows |> List.first() |> elem(1)
+    combined_hunk = ReviewHunks.combine_consecutive(hunks)
+    combined_hunk = %{combined_hunk | id: packet_hunk_id(row_id, combined_hunk)}
+
+    %{
+      kind: :hunk_group,
+      row_id: row_id,
+      row_ids: Enum.map(group.rows, &elem(&1, 1)),
+      row: group.rows |> List.first() |> elem(0),
+      hunk: combined_hunk,
+      grouped?: length(hunks) > 1
+    }
+  end
+
+  defp finalize_packet_unit(unit), do: unit
+
+  attr :unit, :map, required: true
+  attr :file_diffs, :list, required: true
+  attr :selected_patchset, :any, required: true
+  attr :published_threads, :list, required: true
+  attr :drafts, :list, required: true
+  attr :current_user, :any, required: true
+  attr :diff_style, :string, required: true
+  attr :hunks_by_path, :map, required: true
+  attr :expanded_hunk_ids, :any, required: true
+  attr :section_title, :string, default: nil
+  attr :file_labels, :map, required: true
+
+  def packet_unit(%{unit: %{kind: :hunk_group} = unit} = assigns) do
+    row = unit.row
+    file = file_for(assigns.file_diffs, ReviewPacket.text(row, "path"))
+
+    assigns =
+      assigns
+      |> assign(:row_id, unit.row_id)
+      |> assign(:row_ids, unit.row_ids)
+      |> assign(:file, file)
+      |> assign(:hunk, unit.hunk)
+      |> assign(:grouped?, unit.grouped?)
+      |> assign(:section_index, section_index_from_row_id(unit.row_id))
+      |> assign(:file_label, Map.get(assigns.file_labels, ReviewPacket.text(row, "path")))
+
+    ~H"""
+    <div id={@row_id} class="review-packet-row is-hunk" data-packet-row-ids={Enum.join(@row_ids, " ")}>
+      <.hunk_card
+        hunk={@hunk}
+        hunk_id={@hunk.id}
+        file={@file}
+        selected_patchset={@selected_patchset}
+        published_threads={@published_threads}
+        drafts={@drafts}
+        current_user={@current_user}
+        diff_style={@diff_style}
+        expanded_hunk_ids={@expanded_hunk_ids}
+        section_index={@section_index}
+        section_title={@section_title}
+        file_label={@file_label}
+        grouped?={@grouped?}
+      />
+    </div>
+    """
+  end
+
+  def packet_unit(%{unit: %{kind: :row, row: row, row_id: row_id}} = assigns) do
+    assigns =
+      assigns
+      |> assign(:row, row)
+      |> assign(:row_id, row_id)
+      |> assign(:file_label, Map.get(assigns.file_labels, ReviewPacket.text(row, "path")))
+
+    ~H"""
+    <.packet_row
+      row={@row}
+      row_id={@row_id}
+      file_diffs={@file_diffs}
+      selected_patchset={@selected_patchset}
+      published_threads={@published_threads}
+      drafts={@drafts}
+      current_user={@current_user}
+      diff_style={@diff_style}
+      hunks_by_path={@hunks_by_path}
+      expanded_hunk_ids={@expanded_hunk_ids}
+      section_title={@section_title}
+      file_label={@file_label}
+    />
+    """
+  end
+
   attr :hunk, :map, required: true
   attr :hunk_id, :string, required: true
   attr :file, :map, required: true
@@ -509,6 +640,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :section_index, :integer, default: nil
   attr :section_title, :string, default: nil
   attr :file_label, :string, default: nil
+  attr :grouped?, :boolean, default: false
 
   def hunk_card(assigns) do
     assigns =
@@ -542,7 +674,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
         <div class="review-hunk-meta">
           <button
-            :if={@current_user && !@viewed?}
+            :if={@current_user && !@viewed? && !@grouped?}
             type="button"
             class="review-button review-button-ghost review-hunk-action"
             phx-click="mark_hunk_viewed"
@@ -559,7 +691,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             Mark Viewed
           </button>
           <button
-            :if={@current_user && @viewed?}
+            :if={@current_user && @viewed? && !@grouped?}
             type="button"
             class="review-hunk-viewed-pill review-hunk-viewed-button"
             phx-click="mark_hunk_unviewed"
@@ -576,6 +708,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           >
             Viewed
           </button>
+          <span :if={@current_user && @grouped?} class="review-hunk-signin">
+            Grouped diff
+          </span>
           <span :if={!@current_user && @viewed?} class="review-hunk-viewed-pill">Viewed</span>
           <span :if={!@current_user} class="review-hunk-signin">Sign in to save viewed state</span>
         </div>
@@ -608,10 +743,16 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp hunk_title(hunk, file_label) do
     %{
       file: file_label || Path.basename(hunk.file_path || ""),
-      hunk: "hunk #{hunk.hunk_index}",
+      hunk: hunk_index_label(hunk),
       lines: hunk_line_label(hunk)
     }
   end
+
+  defp hunk_index_label(%{hunk_indices: [first | _] = indices}) when length(indices) > 1 do
+    "hunks #{first}-#{List.last(indices)}"
+  end
+
+  defp hunk_index_label(hunk), do: "hunk #{hunk.hunk_index}"
 
   defp hunk_line_label(%{line_start: line_start, line_end: line_end})
        when is_integer(line_start) and is_integer(line_end) do

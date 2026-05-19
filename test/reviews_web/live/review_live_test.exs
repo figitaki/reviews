@@ -233,6 +233,64 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
     end
 
+    test "consecutive packet hunks in the same file share one diff island", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Packet consecutive hunks",
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1 +1 @@
+          -old_one
+          +new_one
+          @@ -8 +8 @@
+          -old_two
+          +new_two
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Consecutive hunks",
+                "rows" => [
+                  %{"kind" => "hunk", "path" => "lib/packet.ex", "hunk_index" => 1},
+                  %{"kind" => "hunk", "path" => "lib/packet.ex", "hunk_index" => 2}
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      view
+      |> element("#packet-section-0 .review-packet-section-heading", "Consecutive hunks")
+      |> render_click()
+
+      assert has_element?(
+               view,
+               ~s|#packet-section-0-row-0[data-packet-row-ids="packet-section-0-row-0 packet-section-0-row-1"] .review-hunk-card|,
+               "hunks 1-2"
+             )
+
+      assert has_element?(
+               view,
+               ~s|#packet-section-0-row-0 [id="packet-section-0-row-0--hunk-lib-packet-ex-1-through-2-diff"][phx-hook="DiffRenderer"]|
+             )
+
+      refute has_element?(view, "#packet-section-0-row-1 .review-hunk-card")
+
+      refute has_element?(
+               view,
+               ~s|#packet-section-0-row-1 [phx-hook="DiffRenderer"]|
+             )
+    end
+
     test "renders linear revision navigation from patchsets", %{
       conn: conn,
       author: author

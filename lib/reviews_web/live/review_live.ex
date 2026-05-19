@@ -17,7 +17,6 @@ defmodule ReviewsWeb.ReviewLive do
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
-  alias Reviews.ReviewHunks
   alias Reviews.ReviewNavigation
   alias Reviews.ReviewPacket
   alias Reviews.ReviewView
@@ -724,9 +723,9 @@ defmodule ReviewsWeb.ReviewLive do
   defp auto_open_section_hunks(socket, section_index) do
     with %{} = patchset <- socket.assigns.selected_patchset,
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
-      section.rows
-      |> Enum.with_index()
-      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, section_index, &1))
+      section
+      |> PacketComponents.packet_units(socket.assigns.hunks_by_path)
+      |> Enum.flat_map(&section_preview_hunk/1)
       |> open_preview_hunks(socket)
     else
       _ -> socket
@@ -747,9 +746,9 @@ defmodule ReviewsWeb.ReviewLive do
        when is_integer(section_index) do
     with %{} = patchset <- socket.assigns.selected_patchset,
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
-      section.rows
-      |> Enum.with_index()
-      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, section_index, &1))
+      section
+      |> PacketComponents.packet_units(socket.assigns.hunks_by_path)
+      |> Enum.flat_map(&section_preview_hunk/1)
       |> hunks_after(attrs)
     else
       _ -> []
@@ -802,27 +801,8 @@ defmodule ReviewsWeb.ReviewLive do
     )
   end
 
-  defp section_preview_hunk(hunks_by_path, section_index, {row, row_index}) do
-    if ReviewPacket.text(row, "kind") == "hunk" do
-      case ReviewHunks.for_packet_row(hunks_by_path, row) do
-        nil ->
-          []
-
-        hunk ->
-          [
-            %{
-              hunk
-              | id: PacketComponents.packet_hunk_id(packet_row_id(section_index, row_index), hunk)
-            }
-          ]
-      end
-    else
-      []
-    end
-  end
-
-  defp packet_row_id(section_index, row_index),
-    do: "packet-section-#{section_index}-row-#{row_index}"
+  defp section_preview_hunk(%{kind: :hunk_group, hunk: hunk}), do: [hunk]
+  defp section_preview_hunk(_unit), do: []
 
   defp hunk_preview_cost(hunk) do
     hunk
