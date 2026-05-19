@@ -641,17 +641,28 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :section_title, :string, default: nil
   attr :file_label, :string, default: nil
   attr :grouped?, :boolean, default: false
+  attr :show_file_label?, :boolean, default: true
 
   def hunk_card(assigns) do
     assigns =
       assigns
       |> assign(:expanded?, MapSet.member?(assigns.expanded_hunk_ids, assigns.hunk_id))
       |> assign(:viewed?, assigns.hunk.viewed?)
-      |> assign(:title, hunk_title(assigns.hunk, Map.get(assigns, :file_label)))
+      |> assign(:partially_viewed?, Map.get(assigns.hunk, :partially_viewed?, false))
+      |> assign(
+        :title,
+        hunk_title(assigns.hunk, Map.get(assigns, :file_label), assigns.show_file_label?)
+      )
       |> assign(:details, hunk_details(assigns.hunk))
+      |> assign(:hunk_attrs_json, hunk_attrs_json(assigns.hunk))
 
     ~H"""
-    <article class={["review-hunk-card", @expanded? && "is-open", @viewed? && "is-viewed"]}>
+    <article class={[
+      "review-hunk-card",
+      @expanded? && "is-open",
+      @viewed? && "is-viewed",
+      @partially_viewed? && "is-partially-viewed"
+    ]}>
       <header class="review-hunk-summary">
         <button
           type="button"
@@ -664,8 +675,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         >
           <.icon name="hero-chevron-down" class="review-collapse-icon" />
           <span class="review-hunk-title">
-            <span class="review-hunk-filename">{@title.file}</span>
-            <span class="review-hunk-separator">·</span>
+            <span :if={@title.file != ""} class="review-hunk-filename">{@title.file}</span>
+            <span :if={@title.file != ""} class="review-hunk-separator">·</span>
             <span class="review-hunk-index">{@title.hunk}</span>
             <span :if={@title.lines != ""} class="review-hunk-separator">·</span>
             <span :if={@title.lines != ""} class="review-hunk-lines">{@title.lines}</span>
@@ -674,7 +685,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
         <div class="review-hunk-meta">
           <button
-            :if={@current_user && !@viewed? && !@grouped?}
+            :if={@current_user && !@viewed?}
             type="button"
             class="review-button review-button-ghost review-hunk-action"
             phx-click="mark_hunk_viewed"
@@ -682,6 +693,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-row_ref={@hunk.row_ref}
             phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
             phx-value-hunk_id={@hunk_id}
+            phx-value-hunk_attrs={@hunk_attrs_json}
             phx-value-hunk_index={@hunk.hunk_index}
             phx-value-line_start={@hunk.line_start}
             phx-value-line_end={@hunk.line_end}
@@ -691,7 +703,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             Mark Viewed
           </button>
           <button
-            :if={@current_user && @viewed? && !@grouped?}
+            :if={@current_user && @viewed?}
             type="button"
             class="review-hunk-viewed-pill review-hunk-viewed-button"
             phx-click="mark_hunk_unviewed"
@@ -699,6 +711,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-row_ref={@hunk.row_ref}
             phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
             phx-value-hunk_id={@hunk_id}
+            phx-value-hunk_attrs={@hunk_attrs_json}
             phx-value-hunk_index={@hunk.hunk_index}
             phx-value-line_start={@hunk.line_start}
             phx-value-line_end={@hunk.line_end}
@@ -708,10 +721,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           >
             Viewed
           </button>
-          <span :if={@current_user && @grouped?} class="review-hunk-signin">
-            Grouped diff
+          <span :if={@current_user && @partially_viewed?} class="review-hunk-partial-pill">
+            Partially viewed
           </span>
           <span :if={!@current_user && @viewed?} class="review-hunk-viewed-pill">Viewed</span>
+          <span :if={!@current_user && @partially_viewed?} class="review-hunk-partial-pill">
+            Partially viewed
+          </span>
           <span :if={!@current_user} class="review-hunk-signin">Sign in to save viewed state</span>
         </div>
       </header>
@@ -740,9 +756,28 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     """
   end
 
-  defp hunk_title(hunk, file_label) do
+  defp hunk_attrs_json(%{grouped_hunks: hunks}) do
+    hunks
+    |> Enum.map(&hunk_attrs/1)
+    |> Jason.encode!()
+  end
+
+  defp hunk_attrs_json(_hunk), do: nil
+
+  defp hunk_attrs(hunk) do
     %{
-      file: file_label || Path.basename(hunk.file_path || ""),
+      file_path: hunk.file_path,
+      row_ref: hunk.row_ref,
+      hunk_fingerprint: hunk.hunk_fingerprint,
+      hunk_index: hunk.hunk_index,
+      line_start: hunk.line_start,
+      line_end: hunk.line_end
+    }
+  end
+
+  defp hunk_title(hunk, file_label, show_file_label?) do
+    %{
+      file: if(show_file_label?, do: file_label || Path.basename(hunk.file_path || ""), else: ""),
       hunk: hunk_index_label(hunk),
       lines: hunk_line_label(hunk)
     }
@@ -753,6 +788,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   end
 
   defp hunk_index_label(hunk), do: "hunk #{hunk.hunk_index}"
+
+  defp hunk_line_label(%{hunk_indices: [_first, _second | _rest]}), do: ""
 
   defp hunk_line_label(%{line_start: line_start, line_end: line_end})
        when is_integer(line_start) and is_integer(line_end) do

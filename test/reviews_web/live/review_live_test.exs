@@ -283,6 +283,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
                ~s|#packet-section-0-row-0 [id="packet-section-0-row-0--hunk-lib-packet-ex-1-through-2-diff"][phx-hook="DiffRenderer"]|
              )
 
+      refute has_element?(view, "#packet-section-0-row-0 .review-hunk-lines")
       refute has_element?(view, "#packet-section-0-row-1 .review-hunk-card")
 
       refute has_element?(
@@ -540,7 +541,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(changes_view, "#diff-files .review-hunk-viewed-pill", "Viewed")
 
       changes_view
-      |> element("#diff-files button.review-hunk-viewed-button", "Viewed")
+      |> element(~s|#diff-files button.review-hunk-viewed-button[phx-value-hunk_index="1"]|)
       |> render_click()
 
       refute has_element?(changes_view, "#diff-files .review-hunk-viewed-pill", "Viewed")
@@ -556,6 +557,73 @@ defmodule ReviewsWeb.ReviewLiveTest do
                "#packet-section-0 .review-hunk-viewed-pill",
                "Viewed"
              )
+    end
+
+    test "grouped packet hunks can be marked viewed and show partial state", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Grouped viewed",
+          raw_diff: """
+          diff --git a/lib/grouped.ex b/lib/grouped.ex
+          --- a/lib/grouped.ex
+          +++ b/lib/grouped.ex
+          @@ -1 +1 @@
+          -old_one
+          +new_one
+          @@ -8 +8 @@
+          -old_two
+          +new_two
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Grouped hunks",
+                "rows" => [
+                  %{"kind" => "hunk", "path" => "lib/grouped.ex", "hunk_index" => 1},
+                  %{"kind" => "hunk", "path" => "lib/grouped.ex", "hunk_index" => 2}
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      packet_view
+      |> element("#packet-section-0 .review-packet-section-toggle")
+      |> render_click()
+
+      packet_view
+      |> element("#packet-section-0 button", "Mark Viewed")
+      |> render_click()
+
+      assert has_element?(packet_view, "#packet-section-0 .review-hunk-viewed-pill", "Viewed")
+
+      {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
+      assert has_element?(changes_view, "#diff-files .review-hunk-viewed-pill", "Viewed")
+
+      changes_view
+      |> element(~s|#diff-files button.review-hunk-viewed-button[phx-value-hunk_index="1"]|)
+      |> render_click()
+
+      {:ok, packet_view_after_clear, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      packet_view_after_clear
+      |> element("#packet-section-0 .review-packet-section-toggle")
+      |> render_click()
+
+      assert has_element?(
+               packet_view_after_clear,
+               "#packet-section-0 .review-hunk-partial-pill",
+               "Partially viewed"
+             )
+
+      assert has_element?(packet_view_after_clear, "#packet-section-0 button", "Mark Viewed")
     end
 
     test "section decisions persist and later changed sections link to the previous decision", %{

@@ -1235,6 +1235,39 @@ details[open] > summary .review-collapse-icon,
   gap: 10px;
 }
 
+.review-file-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--review-line);
+  border-radius: 8px;
+  background: var(--review-panel);
+  padding: 10px 12px;
+}
+
+.review-file-header-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-file-view-state {
+  color: var(--review-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.review-file-view-state.is-viewed {
+  color: var(--review-add);
+}
+
+.review-file-view-state.is-partial {
+  color: var(--review-warn);
+}
+
 .review-hunk-card {
   overflow: hidden;
   border: 1px solid var(--review-line);
@@ -1244,6 +1277,10 @@ details[open] > summary .review-collapse-icon,
 
 .review-hunk-card.is-viewed {
   border-color: color-mix(in srgb, var(--review-add) 36%, var(--review-line));
+}
+
+.review-hunk-card.is-partially-viewed {
+  border-color: color-mix(in srgb, var(--review-warn) 42%, var(--review-line));
 }
 
 .review-hunk-summary {
@@ -1320,6 +1357,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-hunk-viewed-pill,
+.review-hunk-partial-pill,
 .review-hunk-signin,
 .review-hunk-progress {
   color: var(--review-muted);
@@ -1328,6 +1366,11 @@ details[open] > summary .review-collapse-icon,
 
 .review-hunk-viewed-pill {
   color: var(--review-add);
+  font-weight: 700;
+}
+
+.review-hunk-partial-pill {
+  color: var(--review-warn);
   font-weight: 700;
 }
 

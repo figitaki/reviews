@@ -61,9 +61,12 @@ defmodule Reviews.ReviewHunks do
   def combine_consecutive([hunk]), do: hunk
 
   def combine_consecutive([first | _] = hunks) do
+    viewed_count = Enum.count(hunks, & &1.viewed?)
+
     first
     |> Map.merge(%{
       id: combined_hunk_dom_id(hunks),
+      grouped_hunks: hunks,
       hunk_index: first.hunk_index,
       hunk_indices: Enum.map(hunks, & &1.hunk_index),
       line_start: first.line_start,
@@ -71,7 +74,9 @@ defmodule Reviews.ReviewHunks do
       display_additions: Enum.sum(Enum.map(hunks, & &1.display_additions)),
       display_deletions: Enum.sum(Enum.map(hunks, & &1.display_deletions)),
       display_raw_diff: combine_raw_diffs(hunks),
-      viewed?: Enum.all?(hunks, & &1.viewed?),
+      viewed_count: viewed_count,
+      viewed?: viewed_count == length(hunks),
+      partially_viewed?: viewed_count > 0 && viewed_count < length(hunks),
       grouped?: true
     })
   end

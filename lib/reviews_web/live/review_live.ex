@@ -771,11 +771,15 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp hunk_matches_attrs?(hunk, attrs) do
-    hunk.file_path == attrs.file_path &&
-      hunk.row_ref == attrs.row_ref &&
-      hunk.hunk_fingerprint == attrs.hunk_fingerprint &&
-      hunk.line_start == attrs.line_start &&
-      hunk.line_end == attrs.line_end
+    if Map.has_key?(hunk, :grouped_hunks) do
+      Enum.any?(hunk.grouped_hunks, &hunk_matches_attrs?(&1, attrs))
+    else
+      hunk.file_path == attrs.file_path &&
+        hunk.row_ref == attrs.row_ref &&
+        hunk.hunk_fingerprint == attrs.hunk_fingerprint &&
+        hunk.line_start == attrs.line_start &&
+        hunk.line_end == attrs.line_end
+    end
   end
 
   defp open_preview_hunks(hunks, socket) do
@@ -826,11 +830,12 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp update_hunk_view(socket, params, action) do
-    with {:ok, attrs} <- hunk_attrs_from_params(params),
+    with {:ok, attrs_list} <- hunk_attrs_list_from_params(params),
          %{} = patchset <- socket.assigns.selected_patchset,
          %{} = user <- socket.assigns.current_user,
-         {:ok, _} <- persist_hunk_view(socket, patchset, user, attrs, action) do
+         {:ok, _} <- persist_hunk_views(socket, patchset, user, attrs_list, action) do
       socket = refresh_snapshot!(socket)
+      attrs = List.first(attrs_list)
 
       socket =
         case action do
@@ -847,6 +852,15 @@ defmodule ReviewsWeb.ReviewLive do
     else
       _ -> {:noreply, put_flash(socket, :error, "Could not update hunk.")}
     end
+  end
+
+  defp persist_hunk_views(socket, patchset, user, attrs_list, action) do
+    Enum.reduce_while(attrs_list, {:ok, []}, fn attrs, {:ok, persisted} ->
+      case persist_hunk_view(socket, patchset, user, attrs, action) do
+        {:ok, result} -> {:cont, {:ok, [result | persisted]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
   defp persist_hunk_view(socket, patchset, user, attrs, :viewed) do
@@ -888,6 +902,38 @@ defmodule ReviewsWeb.ReviewLive do
     |> Enum.find_value(fn hunk ->
       if hunk_matches_attrs?(hunk, attrs), do: hunk.id
     end)
+  end
+
+  defp hunk_attrs_list_from_params(%{"hunk_attrs" => encoded} = params)
+       when is_binary(encoded) and encoded != "" do
+    case Jason.decode(encoded) do
+      {:ok, attrs_list} when is_list(attrs_list) ->
+        attrs_list
+        |> Enum.map(&Map.put(&1, "hunk_id", params["hunk_id"]))
+        |> Enum.map(&hunk_attrs_from_params/1)
+        |> collect_hunk_attrs()
+
+      _ ->
+        :error
+    end
+  end
+
+  defp hunk_attrs_list_from_params(params) do
+    case hunk_attrs_from_params(params) do
+      {:ok, attrs} -> {:ok, [attrs]}
+      :error -> :error
+    end
+  end
+
+  defp collect_hunk_attrs(results) do
+    Enum.reduce_while(results, {:ok, []}, fn
+      {:ok, attrs}, {:ok, acc} -> {:cont, {:ok, [attrs | acc]}}
+      :error, _acc -> {:halt, :error}
+    end)
+    |> case do
+      {:ok, attrs} -> {:ok, Enum.reverse(attrs)}
+      :error -> :error
+    end
   end
 
   defp hunk_attrs_from_params(params) do
