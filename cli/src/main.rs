@@ -5,6 +5,7 @@ mod api;
 mod commands;
 mod config;
 mod git;
+mod packet;
 
 #[derive(Parser, Debug)]
 #[command(

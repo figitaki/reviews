@@ -32,6 +32,8 @@ pub struct CreateReviewRequest<'a> {
     pub base_sha: &'a str,
     pub branch_name: &'a str,
     pub raw_diff: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub packet: Option<&'a Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,6 +50,8 @@ pub struct CreatePatchsetRequest<'a> {
     pub base_sha: &'a str,
     pub branch_name: &'a str,
     pub raw_diff: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub packet: Option<&'a Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -196,9 +200,7 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",
         _ => "",
     };
-    Err(anyhow!(
-        "{what} failed: HTTP {status}{hint}\nbody: {body}"
-    ))
+    Err(anyhow!("{what} failed: HTTP {status}{hint}\nbody: {body}"))
 }
 
 #[cfg(test)]
@@ -261,6 +263,7 @@ mod tests {
                 base_sha: "deadbeef",
                 branch_name: "main",
                 raw_diff: "diff --git a/x b/x\n",
+                packet: None,
             })
             .unwrap();
         assert_eq!(resp.slug, "k7m2qz");
@@ -287,6 +290,7 @@ mod tests {
                     base_sha: "cafef00d",
                     branch_name: "main",
                     raw_diff: "diff --git a/x b/x\n",
+                    packet: None,
                 },
             )
             .unwrap();
@@ -311,6 +315,7 @@ mod tests {
                     base_sha: "x",
                     branch_name: "y",
                     raw_diff: "z",
+                    packet: None,
                 },
             )
             .unwrap_err();

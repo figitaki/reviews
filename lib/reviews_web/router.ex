@@ -25,6 +25,7 @@ defmodule ReviewsWeb.Router do
     get "/", PageController, :home
 
     live "/r/:slug", ReviewLive, :show
+    live "/r/:slug/changes", ReviewLive, :changes
     live "/settings", SettingsLive, :edit
   end
 

@@ -73,17 +73,16 @@ impl Config {
                 .with_context(|| format!("could not stat {}", path.display()))?
                 .permissions();
             perms.set_mode(0o600);
-            std::fs::set_permissions(path, perms).with_context(|| {
-                format!("could not set permissions on {}", path.display())
-            })?;
+            std::fs::set_permissions(path, perms)
+                .with_context(|| format!("could not set permissions on {}", path.display()))?;
         }
         Ok(())
     }
 }
 
 pub fn config_path() -> Result<PathBuf> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| anyhow!("could not determine user home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| anyhow!("could not determine user home directory"))?;
     Ok(home.join(".config").join("reviews").join("config.toml"))
 }
 
@@ -95,10 +94,7 @@ mod tests {
     fn roundtrip_toml() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
-        let cfg = Config::new(
-            "http://localhost:4000".into(),
-            "tok_abc123".into(),
-        );
+        let cfg = Config::new("http://localhost:4000".into(), "tok_abc123".into());
         cfg.save_to(&path).unwrap();
         let loaded = Config::load_from(&path).unwrap();
         assert_eq!(cfg, loaded);

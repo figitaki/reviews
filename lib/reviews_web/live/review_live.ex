@@ -15,9 +15,21 @@ defmodule ReviewsWeb.ReviewLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.Accounts
+  alias Reviews.PacketHunkViews
+  alias Reviews.PacketSectionDecisions
+  alias Reviews.ReviewHunks
+  alias Reviews.ReviewNavigation
+  alias Reviews.ReviewPacket
   alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
+  alias ReviewsWeb.ReviewLive.DiffComponents
+  alias ReviewsWeb.ReviewLive.PacketComponents
+  alias ReviewsWeb.ReviewLive.RevisionNavComponents
+
+  @section_auto_open_loc_budget 25
+  @section_auto_open_min_hunk_loc 6
+  @section_auto_open_max_hunk_loc 500
 
   @impl true
   def mount(%{"slug" => slug}, session, socket) do
@@ -45,6 +57,9 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:summary_body, "")
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
+              |> assign(:expanded_file_ids, MapSet.new())
+              |> assign(:expanded_hunk_ids, MapSet.new())
+              |> assign(:expanded_section_ids, MapSet.new())
               |> assign_snapshot(snapshot)
 
             {:ok, socket}
@@ -59,7 +74,21 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_params(_params, _uri, socket), do: {:noreply, socket}
+  def handle_params(params, _uri, socket) do
+    case parse_optional_patchset(params["patchset"]) do
+      {:ok, patchset_number} ->
+        case refresh_snapshot(socket, patchset_number: patchset_number) do
+          {:ok, socket} ->
+            {:noreply, socket}
+
+          {:error, :patchset_not_found} ->
+            {:noreply, put_flash(socket, :error, "Patchset not found.")}
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Patchset not found.")}
+    end
+  end
 
   @impl true
   def handle_event("select_patchset", %{"number" => number}, socket) do
@@ -74,6 +103,26 @@ defmodule ReviewsWeb.ReviewLive do
         {:noreply, socket}
     end
   end
+
+  @impl true
+  def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
+      when status in ["approved", "denied", "ignored"] do
+    with %{} = user <- socket.assigns.current_user,
+         %{} = patchset <- socket.assigns.selected_patchset,
+         {section_index, ""} <- Integer.parse(to_string(index)),
+         %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
+         {:ok, _decision} <- put_section_status(socket, patchset, user, section, status) do
+      {:noreply,
+       socket
+       |> refresh_snapshot!()
+       |> collapse_packet_section(section_index)}
+    else
+      nil -> {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
+      _ -> {:noreply, put_flash(socket, :error, "Could not update section.")}
+    end
+  end
+
+  def handle_event("set_section_status", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("open_publish_modal", _params, socket) do
@@ -101,14 +150,78 @@ defmodule ReviewsWeb.ReviewLive do
     socket = assign(socket, :diff_style, style)
 
     socket =
-      Enum.reduce(socket.assigns.files, socket, fn file, acc ->
-        push_event(acc, "diff_style_updated:#{file.path}", %{style: style})
+      socket
+      |> mounted_diff_paths()
+      |> Enum.reduce(socket, fn file, acc ->
+        push_event(acc, "diff_style_updated:#{file}", %{style: style})
       end)
 
     {:noreply, socket}
   end
 
   def handle_event("select_diff_style", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("toggle_packet_section", %{"section_index" => section_index}, socket) do
+    case parse_int(section_index) do
+      index when is_integer(index) ->
+        if MapSet.member?(socket.assigns.expanded_section_ids, index) do
+          expanded_section_ids = MapSet.delete(socket.assigns.expanded_section_ids, index)
+
+          {:noreply, assign(socket, :expanded_section_ids, expanded_section_ids)}
+        else
+          expanded_section_ids = MapSet.put(socket.assigns.expanded_section_ids, index)
+
+          {:noreply,
+           socket
+           |> assign(:expanded_section_ids, expanded_section_ids)
+           |> auto_open_section_hunks(index)}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_file_diff", %{"file_id" => file_id}, socket) do
+    case parse_int(file_id) do
+      id when is_integer(id) ->
+        expanded_file_ids =
+          if MapSet.member?(socket.assigns.expanded_file_ids, id) do
+            MapSet.delete(socket.assigns.expanded_file_ids, id)
+          else
+            MapSet.put(socket.assigns.expanded_file_ids, id)
+          end
+
+        {:noreply, assign(socket, :expanded_file_ids, expanded_file_ids)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("toggle_hunk_diff", %{"hunk_id" => hunk_id}, socket) do
+    expanded_hunk_ids =
+      if MapSet.member?(socket.assigns.expanded_hunk_ids, hunk_id) do
+        MapSet.delete(socket.assigns.expanded_hunk_ids, hunk_id)
+      else
+        MapSet.put(socket.assigns.expanded_hunk_ids, hunk_id)
+      end
+
+    {:noreply, assign(socket, :expanded_hunk_ids, expanded_hunk_ids)}
+  end
+
+  @impl true
+  def handle_event("mark_hunk_viewed", params, socket) do
+    update_hunk_view(socket, params, :viewed)
+  end
+
+  @impl true
+  def handle_event("mark_hunk_unviewed", params, socket) do
+    update_hunk_view(socket, params, :unviewed)
+  end
 
   @impl true
   def handle_event("save_draft", params, socket) do
@@ -248,6 +361,15 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp parse_int(_), do: nil
 
+  defp parse_optional_patchset(nil), do: {:ok, nil}
+
+  defp parse_optional_patchset(value) do
+    case Integer.parse(to_string(value)) do
+      {n, ""} when n > 0 -> {:ok, n}
+      _ -> :error
+    end
+  end
+
   defp load_current_user(session) do
     case session["current_user_id"] do
       nil ->
@@ -332,29 +454,6 @@ defmodule ReviewsWeb.ReviewLive do
             </script>
           </div>
 
-          <div class="review-patchset" id="patchset-selector" aria-label="Patchset">
-            <button
-              :for={ps <- @patchsets}
-              id={"patchset-#{ps.number}"}
-              type="button"
-              phx-click="select_patchset"
-              phx-value-number={ps.number}
-              aria-pressed={
-                if(@selected_patchset && @selected_patchset.id == ps.id,
-                  do: "true",
-                  else: "false"
-                )
-              }
-              class={[
-                "review-chip focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
-                @selected_patchset && @selected_patchset.id == ps.id &&
-                  "is-active"
-              ]}
-            >
-              v{ps.number}
-            </button>
-          </div>
-
           <button
             id="publish-review-button"
             type="button"
@@ -375,12 +474,67 @@ defmodule ReviewsWeb.ReviewLive do
         </:actions>
 
         <div class="design-main">
+          <% packet = @selected_patchset && @selected_patchset.packet %>
+          <% has_packet = ReviewPacket.present?(packet) %>
+          <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
+          <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
+          <% packet_effort =
+            if has_packet do
+              PacketComponents.packet_effort_for_header(
+                packet,
+                @file_diffs,
+                @hunks_by_path,
+                @packet_section_decisions,
+                @selected_patchset,
+                @patchsets
+              )
+            end %>
+
           <header class="review-header">
-            <h1 class="review-title" translate="no">{@review.title}</h1>
-            <p :if={@review.description || @file_diffs != []} class="review-description">
+            <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
+            <h1
+              id={if(has_packet, do: "review-packet-title", else: "review-title")}
+              class={["review-title", has_packet && "is-packet-title"]}
+              translate="no"
+            >
+              {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
+            </h1>
+            <PacketComponents.markdown
+              :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
+              body={ReviewPacket.text(packet, "summary")}
+              class="review-description review-packet-lede"
+            />
+            <p
+              :if={!has_packet && (@review.description || @file_diffs != [])}
+              class="review-description"
+            >
               {@review.description || review_summary(@file_diffs, @drafts)}
             </p>
+            <div :if={@selected_patchset} class="review-header-meta">
+              <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
+              <span class="review-header-change-stat">
+                <PacketComponents.change_stat
+                  additions={diff_stats.additions}
+                  deletions={diff_stats.deletions}
+                />
+              </span>
+              <span
+                :if={has_packet && packet_effort}
+                class="review-header-estimate"
+                title="Estimated review time"
+              >
+                <strong>{packet_effort.time}</strong>
+                <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
+              </span>
+            </div>
           </header>
+
+          <RevisionNavComponents.revision_nav
+            nav={revision_nav}
+            review={@review}
+            live_action={@live_action}
+            selected_patchset={@selected_patchset}
+          />
 
           <%!-- Patchset-pushed banner --%>
           <div
@@ -394,104 +548,37 @@ defmodule ReviewsWeb.ReviewLive do
             </button>
           </div>
 
+          <PacketComponents.packet
+            :if={has_packet && @live_action != :changes}
+            packet={packet}
+            review={@review}
+            patchsets={@patchsets}
+            section_decisions={@packet_section_decisions}
+            file_diffs={@file_diffs}
+            hunks_by_path={@hunks_by_path}
+            selected_patchset={@selected_patchset}
+            published_threads={@published_threads}
+            drafts={@drafts}
+            current_user={@current_user}
+            diff_style={@diff_style}
+            expanded_section_ids={@expanded_section_ids}
+            expanded_hunk_ids={@expanded_hunk_ids}
+          />
+
           <%!-- Body: sidebar + diff list --%>
-          <div class="rev-shell">
-            <aside id="file-tree" class="rev-sidebar">
-              <ul class="rev-file-list">
-                <li :for={fd <- @file_diffs}>
-                  <a href={"#file-#{fd.id}"} class="rev-file-link">
-                    <span class="flex items-center gap-2 min-w-0">
-                      <.ds_status_mark status={fd.status} />
-                      <span class="rev-file-path truncate" translate="no">{fd.path}</span>
-                    </span>
-                    <span class="rev-file-stats">
-                      <span class="rev-stat-add">+{fd.additions}</span>
-                      <span class="rev-stat-del">-{fd.deletions}</span>
-                    </span>
-                  </a>
-                </li>
-                <li :if={@file_diffs == []}>
-                  <span class="rev-empty">No files in this patchset.</span>
-                </li>
-              </ul>
-
-              <section
-                :if={@open_threads_by_op != []}
-                id="open-threads"
-                class="rev-open-threads"
-                aria-label="Open threads"
-              >
-                <h2 class="rev-open-threads-heading">Open threads</h2>
-                <div :for={{op, threads} <- @open_threads_by_op} class="rev-open-thread-group">
-                  <header class="rev-open-thread-group-header">
-                    <img
-                      :if={op && op.avatar_url}
-                      src={op.avatar_url}
-                      alt=""
-                      width="16"
-                      height="16"
-                      loading="lazy"
-                      class="rdr-avatar"
-                    />
-                    <span>{(op && op.username) || "anonymous"}</span>
-                  </header>
-                  <button
-                    :for={t <- threads}
-                    type="button"
-                    class="rev-open-thread-entry"
-                    phx-click={
-                      JS.dispatch("reviews:scroll-to-anchor",
-                        detail: %{
-                          file_id: file_id_for(@file_diffs, t.file_path),
-                          file_path: t.file_path,
-                          side: t.side,
-                          line_number_hint: anchor_line_hint(t)
-                        }
-                      )
-                    }
-                  >
-                    <span class="rev-open-thread-meta">
-                      <span class="rev-open-thread-path" translate="no">
-                        {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
-                      </span>
-                      <span class="rev-open-thread-snippet">
-                        {ReviewView.first_comment_snippet(t)}
-                      </span>
-                    </span>
-                  </button>
-                </div>
-              </section>
-            </aside>
-
-            <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
-              <article
-                :for={fd <- @file_diffs}
-                id={"file-#{fd.id}"}
-                class="rev-file-card"
-              >
-                <div
-                  id={"diff-#{fd.id}"}
-                  phx-hook="DiffRenderer"
-                  phx-update="ignore"
-                  data-file-id={fd.id}
-                  data-file-path={fd.path}
-                  data-file-status={fd.status}
-                  data-side="new"
-                  data-patchset-number={@selected_patchset.number}
-                  data-raw-diff={fd.raw_diff}
-                  data-threads={threads_json(@published_threads, fd.path)}
-                  data-drafts={drafts_json(@drafts, fd.path, @current_user)}
-                  data-signed-in={if @current_user, do: "true", else: "false"}
-                  data-diff-style={@diff_style}
-                >
-                </div>
-              </article>
-
-              <p :if={@file_diffs == []} class="rev-empty">
-                No files in this patchset.
-              </p>
-            </section>
-          </div>
+          <DiffComponents.diff_shell
+            :if={@live_action == :changes || !has_packet}
+            file_diffs={@file_diffs}
+            open_threads_by_op={@open_threads_by_op}
+            selected_patchset={@selected_patchset}
+            published_threads={@published_threads}
+            drafts={@drafts}
+            current_user={@current_user}
+            diff_style={@diff_style}
+            expanded_file_ids={@expanded_file_ids}
+            expanded_hunk_ids={@expanded_hunk_ids}
+            hunks_by_path={@hunks_by_path}
+          />
         </div>
       </.ds_shell>
 
@@ -631,17 +718,8 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp user_menu(%{current_user: nil} = assigns) do
     ~H"""
-    <a href="/auth/github" class="review-button review-button-secondary gap-2">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 16 16"
-        class="size-4"
-        aria-hidden="true"
-        fill="currentColor"
-      >
-        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-      </svg>
-      Sign in with GitHub
+    <a href="/auth/github" class="review-button review-button-secondary">
+      Sign in
     </a>
     """
   end
@@ -721,24 +799,260 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp user_initials(_), do: "?"
 
+  defp collapse_packet_section(socket, section_index) do
+    expanded_section_ids =
+      socket.assigns[:expanded_section_ids]
+      |> Kernel.||(MapSet.new())
+      |> MapSet.delete(section_index)
+
+    assign(socket, :expanded_section_ids, expanded_section_ids)
+  end
+
+  defp auto_open_section_hunks(socket, section_index) do
+    with %{} = patchset <- socket.assigns.selected_patchset,
+         %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
+      section.rows
+      |> Enum.with_index()
+      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, section_index, &1))
+      |> open_preview_hunks(socket)
+    else
+      _ -> socket
+    end
+  end
+
+  defp auto_open_next_hunks(socket, attrs) do
+    candidates =
+      case next_section_hunks(socket, attrs) do
+        [] -> next_review_hunks(socket, attrs)
+        hunks -> hunks
+      end
+
+    open_preview_hunks(candidates, socket)
+  end
+
+  defp next_section_hunks(socket, %{section_index: section_index} = attrs)
+       when is_integer(section_index) do
+    with %{} = patchset <- socket.assigns.selected_patchset,
+         %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
+      section.rows
+      |> Enum.with_index()
+      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, section_index, &1))
+      |> hunks_after(attrs)
+    else
+      _ -> []
+    end
+  end
+
+  defp next_section_hunks(_socket, _attrs), do: []
+
+  defp next_review_hunks(socket, attrs) do
+    socket.assigns.file_diffs
+    |> Enum.flat_map(fn file -> Map.get(socket.assigns.hunks_by_path, file.path, []) end)
+    |> hunks_after(attrs)
+  end
+
+  defp hunks_after(hunks, attrs) do
+    case Enum.find_index(hunks, &hunk_matches_attrs?(&1, attrs)) do
+      index when is_integer(index) -> Enum.drop(hunks, index + 1)
+      _ -> []
+    end
+  end
+
+  defp hunk_matches_attrs?(hunk, attrs) do
+    hunk.file_path == attrs.file_path &&
+      hunk.row_ref == attrs.row_ref &&
+      hunk.hunk_fingerprint == attrs.hunk_fingerprint &&
+      hunk.line_start == attrs.line_start &&
+      hunk.line_end == attrs.line_end
+  end
+
+  defp open_preview_hunks(hunks, socket) do
+    hunk_ids =
+      hunks
+      |> Enum.reject(& &1.viewed?)
+      |> Enum.reject(&(hunk_display_loc(&1) > @section_auto_open_max_hunk_loc))
+      |> Enum.reduce_while({[], 0}, fn hunk, {ids, spent} ->
+        cost = hunk_preview_cost(hunk)
+
+        if spent == 0 || spent + cost <= @section_auto_open_loc_budget do
+          {:cont, {[hunk.id | ids], spent + cost}}
+        else
+          {:halt, {ids, spent}}
+        end
+      end)
+      |> elem(0)
+
+    assign(
+      socket,
+      :expanded_hunk_ids,
+      MapSet.union(socket.assigns.expanded_hunk_ids, MapSet.new(hunk_ids))
+    )
+  end
+
+  defp section_preview_hunk(hunks_by_path, section_index, {row, row_index}) do
+    if ReviewPacket.text(row, "kind") == "hunk" do
+      case ReviewHunks.for_packet_row(hunks_by_path, row) do
+        nil ->
+          []
+
+        hunk ->
+          [
+            %{
+              hunk
+              | id: PacketComponents.packet_hunk_id(packet_row_id(section_index, row_index), hunk)
+            }
+          ]
+      end
+    else
+      []
+    end
+  end
+
+  defp packet_row_id(section_index, row_index),
+    do: "packet-section-#{section_index}-row-#{row_index}"
+
+  defp hunk_preview_cost(hunk) do
+    hunk
+    |> hunk_display_loc()
+    |> max(@section_auto_open_min_hunk_loc)
+  end
+
+  defp hunk_display_loc(hunk) do
+    hunk
+    |> Map.get(:display_raw_diff, "")
+    |> to_string()
+    |> String.split("\n")
+    |> Enum.count(fn line ->
+      !String.starts_with?(line, ["diff --git", "index ", "--- ", "+++ ", "@@ "]) &&
+        String.trim(line) != ""
+    end)
+  end
+
+  defp update_hunk_view(socket, _params, _action) when is_nil(socket.assigns.current_user) do
+    {:noreply, put_flash(socket, :error, "Sign in to mark hunks viewed.")}
+  end
+
+  defp update_hunk_view(socket, params, action) do
+    with {:ok, attrs} <- hunk_attrs_from_params(params),
+         %{} = patchset <- socket.assigns.selected_patchset,
+         %{} = user <- socket.assigns.current_user,
+         {:ok, _} <- persist_hunk_view(socket, patchset, user, attrs, action) do
+      socket = refresh_snapshot!(socket)
+
+      socket =
+        case action do
+          :viewed ->
+            socket
+            |> collapse_hunk(attrs)
+            |> auto_open_next_hunks(attrs)
+
+          :unviewed ->
+            expand_hunk(socket, attrs)
+        end
+
+      {:noreply, socket}
+    else
+      _ -> {:noreply, put_flash(socket, :error, "Could not update hunk.")}
+    end
+  end
+
+  defp persist_hunk_view(socket, patchset, user, attrs, :viewed) do
+    PacketHunkViews.mark_viewed(socket.assigns.review, patchset, user, attrs)
+  end
+
+  defp persist_hunk_view(socket, _patchset, user, attrs, :unviewed) do
+    PacketHunkViews.clear_viewed(socket.assigns.review, user, attrs)
+  end
+
+  defp collapse_hunk(socket, attrs) do
+    hunk_id = hunk_id_for_attrs(socket, attrs)
+
+    if hunk_id do
+      assign(socket, :expanded_hunk_ids, MapSet.delete(socket.assigns.expanded_hunk_ids, hunk_id))
+    else
+      socket
+    end
+  end
+
+  defp expand_hunk(socket, attrs) do
+    hunk_id = hunk_id_for_attrs(socket, attrs)
+
+    if hunk_id do
+      assign(socket, :expanded_hunk_ids, MapSet.put(socket.assigns.expanded_hunk_ids, hunk_id))
+    else
+      socket
+    end
+  end
+
+  defp hunk_id_for_attrs(_socket, %{hunk_id: hunk_id})
+       when is_binary(hunk_id) and hunk_id != "" do
+    hunk_id
+  end
+
+  defp hunk_id_for_attrs(socket, attrs) do
+    socket.assigns.hunks_by_path
+    |> Map.get(attrs.file_path, [])
+    |> Enum.find_value(fn hunk ->
+      if hunk_matches_attrs?(hunk, attrs), do: hunk.id
+    end)
+  end
+
+  defp hunk_attrs_from_params(params) do
+    with file_path when is_binary(file_path) and file_path != "" <- params["file_path"],
+         row_ref when is_binary(row_ref) and row_ref != "" <- params["row_ref"],
+         fingerprint when is_binary(fingerprint) and fingerprint != "" <-
+           params["hunk_fingerprint"],
+         hunk_index when is_integer(hunk_index) <- parse_int(params["hunk_index"]) do
+      {:ok,
+       %{
+         file_path: file_path,
+         row_ref: row_ref,
+         hunk_fingerprint: fingerprint,
+         hunk_id: blank_to_nil(params["hunk_id"]),
+         hunk_index: hunk_index,
+         line_start: parse_int(params["line_start"]),
+         line_end: parse_int(params["line_end"]),
+         section_index: parse_int(params["section_index"]),
+         section_title: blank_to_nil(params["section_title"])
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  defp blank_to_nil(value) when value in ["", nil], do: nil
+  defp blank_to_nil(value), do: value
+
   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
   defp anchor_line_hint(_), do: nil
 
-  defp file_id_for(file_diffs, file_path) do
-    Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
-  end
-
-  defp threads_json(threads, file_path) do
-    snapshot = %{published_threads: threads}
-    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
-  end
-
-  defp drafts_json(drafts, file_path, viewer) do
-    snapshot = %{drafts: drafts, viewer: viewer}
-    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
-  end
-
   defp assign_snapshot(socket, snapshot) do
+    previous_patchset_id =
+      socket.assigns[:selected_patchset] && socket.assigns.selected_patchset.id
+
+    next_patchset_id = snapshot.selected_patchset && snapshot.selected_patchset.id
+
+    expanded_file_ids =
+      if previous_patchset_id == next_patchset_id do
+        socket.assigns[:expanded_file_ids] || MapSet.new()
+      else
+        MapSet.new()
+      end
+
+    expanded_hunk_ids =
+      if previous_patchset_id == next_patchset_id do
+        socket.assigns[:expanded_hunk_ids] || MapSet.new()
+      else
+        MapSet.new()
+      end
+
+    expanded_section_ids =
+      if previous_patchset_id == next_patchset_id do
+        socket.assigns[:expanded_section_ids] || MapSet.new()
+      else
+        MapSet.new()
+      end
+
     socket
     |> assign(:review_snapshot, snapshot)
     |> assign(:review, snapshot.review)
@@ -746,9 +1060,75 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:selected_patchset, snapshot.selected_patchset)
     |> assign(:files, snapshot.files)
     |> assign(:file_diffs, snapshot.file_diffs)
+    |> assign(:hunks_by_path, snapshot.hunks_by_path)
+    |> assign(:packet_hunk_views, snapshot.packet_hunk_views)
+    |> assign(:expanded_file_ids, expanded_file_ids)
+    |> assign(:expanded_hunk_ids, expanded_hunk_ids)
+    |> assign(:expanded_section_ids, expanded_section_ids)
+    |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
     |> assign(:deciders, snapshot.deciders)
     |> assign(:drafts, snapshot.drafts)
     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
+  end
+
+  defp mounted_diff_paths(socket) do
+    changes_paths =
+      socket.assigns.hunks_by_path
+      |> Enum.flat_map(fn {path, hunks} ->
+        if Enum.any?(hunks, &MapSet.member?(socket.assigns.expanded_hunk_ids, &1.id)) do
+          [path]
+        else
+          []
+        end
+      end)
+
+    packet_paths =
+      socket.assigns.expanded_hunk_ids
+      |> Enum.flat_map(fn hunk_id ->
+        socket.assigns.hunks_by_path
+        |> Enum.find_value([], fn {path, hunks} ->
+          if Enum.any?(hunks, &hunk_id_matches?(hunk_id, &1.id)), do: [path], else: nil
+        end)
+      end)
+
+    Enum.uniq(changes_paths ++ packet_paths)
+  end
+
+  defp hunk_id_matches?(expanded_id, hunk_id) do
+    expanded_id == hunk_id || String.ends_with?(expanded_id, "--#{hunk_id}")
+  end
+
+  defp put_section_status(socket, patchset, user, section, status) do
+    state =
+      PacketSectionDecisions.section_state(
+        section,
+        socket.assigns.packet_section_decisions,
+        patchset,
+        socket.assigns.patchsets
+      )
+
+    cond do
+      state.current && state.current.status == status ->
+        PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
+
+      is_nil(state.current) && state.inherited && state.inherited.status == status ->
+        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
+          section_index: section.index,
+          section_title: section.title,
+          section_fingerprint: section.fingerprint,
+          section_refs: section.refs,
+          status: "pending"
+        })
+
+      true ->
+        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
+          section_index: section.index,
+          section_title: section.title,
+          section_fingerprint: section.fingerprint,
+          section_refs: section.refs,
+          status: status
+        })
+    end
   end
 end
