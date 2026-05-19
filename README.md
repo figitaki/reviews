@@ -19,7 +19,21 @@ The app is Phoenix 1.8 + LiveView, with a React diff island powered by
 For packet-writing guidance and a reusable packet template, see
 [`skills/writing-review-packets/SKILL.md`](skills/writing-review-packets/SKILL.md).
 The companion skills in [`skills/`](skills/) explain the Reviews platform and
-local workflow for agents.
+local workflow for agents. For Codex, Claude, and custom harness integration,
+see [`skills/README.md`](skills/README.md).
+
+## Install The CLI
+
+Released CLI builds are published from `cli-vX.Y.Z` tags. The installer
+downloads the right binary for macOS or Linux and can optionally install the
+repo's agent skills:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/figitaki/reviews/main/install.sh | sh
+```
+
+Use `--with-skills --yes` for non-interactive agent setup, or `--no-skills` for
+binary-only installs.
 
 ## Prereqs
 
@@ -106,6 +120,7 @@ Use `--range HEAD` when pushing current uncommitted work.
 - `cli/` — Rust CLI.
 - `docs/CONTRACTS.md` — REST and hook contracts.
 - `skills/` — repo-local Codex skills for Reviews workflows.
+- `install.sh` — release installer for the CLI and optional agent skills.
 
 ## Tests
 
