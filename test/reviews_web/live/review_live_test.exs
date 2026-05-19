@@ -405,6 +405,42 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, ~s|#revision-nav #patchset-3.has-packet|)
     end
 
+    test "renders published reviewers for anonymous viewers", %{
+      conn: conn,
+      review: review
+    } do
+      {:ok, reviewer} =
+        Accounts.upsert_from_github(%{
+          github_id: 5678,
+          username: "zara",
+          email: "zara@example.com",
+          avatar_url: nil
+        })
+
+      {:ok, _} =
+        Threads.publish_comment(review, reviewer, %{
+          "file_path" => "lib/foo.ex",
+          "side" => "new",
+          "body" => "ship it",
+          "thread_anchor" => %{
+            "granularity" => "line",
+            "line_text" => "  def bar, do: :new",
+            "context_before" => [],
+            "context_after" => [],
+            "line_number_hint" => 2
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      assert has_element?(view, "#decider-stack")
+
+      assert has_element?(
+               view,
+               ~s|#decider-stack .rev-decider[title="zara: reviewed · 1 comment"]|
+             )
+    end
+
     test "does not render the old publish review button", %{conn: conn, review: review} do
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
       refute has_element?(view, "#publish-review-button")

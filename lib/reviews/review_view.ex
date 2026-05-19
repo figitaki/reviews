@@ -25,6 +25,7 @@ defmodule Reviews.ReviewView do
           packet_hunk_views: [map()],
           packet_section_decisions: [map()],
           published_threads: [map()],
+          deciders: [map()],
           viewer: Identity.t() | nil
         }
 
@@ -107,6 +108,7 @@ defmodule Reviews.ReviewView do
       packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
       published_threads: Threads.list_published_threads(review.id),
+      deciders: Threads.list_published_deciders(review.id),
       viewer: viewer
     }
   end

@@ -1,0 +1,114 @@
+/* ----------------------------------------------------------------------------
+   Decider stack: stacked avatars of published reviewers on the review screen.
+   Markup lives in ReviewsWeb.DeciderComponents.
+---------------------------------------------------------------------------- */
+.rev-decider-stack {
+  --decider-overlap: 10px;
+  --decider-color: var(--ds-blue);
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding-inline: 6px 4px;
+}
+
+.rev-decider-stack.is-empty {
+  border: 1px solid var(--ds-line-strong);
+  border-radius: 999px;
+  padding-inline: 10px;
+}
+
+.rev-decider-empty {
+  color: var(--ds-muted);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.rev-decider {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-left: calc(var(--decider-overlap) * -1);
+  border: 2px solid var(--decider-color);
+  border-radius: 999px;
+  background: var(--ds-panel-raised);
+  color: var(--ds-text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  transition:
+    margin-left 160ms ease,
+    transform 160ms ease;
+}
+
+.rev-decider:first-child {
+  margin-left: 0;
+}
+
+.rev-decider-stack:hover .rev-decider,
+.rev-decider-stack:focus-within .rev-decider {
+  margin-left: 2px;
+}
+
+.rev-decider-stack:hover .rev-decider:first-child,
+.rev-decider-stack:focus-within .rev-decider:first-child {
+  margin-left: 0;
+}
+
+.rev-decider:hover,
+.rev-decider:focus-visible {
+  z-index: 2;
+  transform: translateY(-1px);
+}
+
+.rev-decider:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+.rev-decider-avatar,
+.rev-decider-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.rev-decider-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.rev-decider-avatar img {
+  object-fit: cover;
+}
+
+.rev-decider-badge {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ds-panel);
+  border-radius: 999px;
+  background: var(--decider-color);
+  color: var(--ds-bg);
+}
+
+.rev-decider-more {
+  --decider-color: var(--ds-line-strong);
+  color: var(--ds-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rev-decider {
+    transition: none;
+  }
+}

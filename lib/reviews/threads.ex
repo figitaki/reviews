@@ -39,6 +39,41 @@ defmodule Reviews.Threads do
     |> Repo.preload(comments: :author)
   end
 
+  @doc """
+  Published reviewers for the review, collapsed to one entry per author.
+
+  The current schema does not store a review-level approve/deny/ignore yet, so
+  callers should treat these as neutral published-review participants.
+  """
+  def list_published_deciders(review_id) when is_integer(review_id) do
+    from(c in Comment,
+      join: t in assoc(c, :thread),
+      where: t.review_id == ^review_id,
+      group_by: c.author_id,
+      select: {c.author_id, count(c.id), max(c.inserted_at)}
+    )
+    |> Repo.all()
+    |> then(fn rows ->
+      authors_by_id =
+        rows
+        |> Enum.map(&elem(&1, 0))
+        |> then(&Repo.all(from i in Identity, where: i.id in ^&1))
+        |> Map.new(&{&1.id, &1})
+
+      Enum.map(rows, fn {author_id, comment_count, published_at} ->
+        %{
+          author: Map.fetch!(authors_by_id, author_id),
+          decision: "reviewed",
+          comment_count: comment_count,
+          published_at: published_at
+        }
+      end)
+    end)
+    |> Enum.sort_by(fn %{published_at: published_at, author: author} ->
+      {DateTime.to_unix(published_at), String.downcase(author.handle || "")}
+    end)
+  end
+
   ## Commenting
 
   @doc """
