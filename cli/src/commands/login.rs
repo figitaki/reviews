@@ -55,8 +55,6 @@ fn prompt<R: BufRead, W: Write>(stdin: &mut R, stdout: &mut W, msg: &str) -> Res
     write!(stdout, "{msg}")?;
     stdout.flush()?;
     let mut line = String::new();
-    stdin
-        .read_line(&mut line)
-        .context("could not read stdin")?;
+    stdin.read_line(&mut line).context("could not read stdin")?;
     Ok(line)
 }

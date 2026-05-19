@@ -1,0 +1,4636 @@
+diff --git a/assets/css/app.css b/assets/css/app.css
+index 1ee9900..ea0ab32 100644
+--- a/assets/css/app.css
++++ b/assets/css/app.css
+@@ -125,6 +125,8 @@
+    Review surface
+ ---------------------------------------------------------------------------- */
+ .review-page {
++  --review-main-nav-h: 64px;
++  --review-section-sticky-h: 46px;
+   --review-bg: #000;
+   --review-panel: #050505;
+   --review-panel-raised: #0b0b0c;
+@@ -168,12 +170,21 @@
+ }
+ 
+ .review-title {
++  margin: 0;
+   color: var(--review-text);
+   font-size: 15px;
+   font-weight: 600;
+   line-height: 1.35;
+ }
+ 
++.review-title.is-packet-title {
++  max-width: 920px;
++  font-size: 36px;
++  font-weight: 800;
++  letter-spacing: 0;
++  line-height: 1.08;
++}
++
+ .review-description,
+ .review-label,
+ .rev-empty {
+@@ -182,6 +193,57 @@
+   line-height: 1.5;
+ }
+ 
++.review-packet-lede {
++  margin-top: 10px;
++  max-width: 82ch;
++  color: color-mix(in srgb, var(--review-text) 72%, var(--review-muted));
++  font-size: 17px;
++  line-height: 1.5;
++  overflow-wrap: anywhere;
++}
++
++.review-header-meta {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 8px 14px;
++  margin-top: 14px;
++  color: var(--review-muted);
++  font-size: 12px;
++  font-weight: 600;
++}
++
++.review-header-meta > span + span {
++  position: relative;
++}
++
++.review-header-meta > span + span::before {
++  position: absolute;
++  left: -9px;
++  color: var(--review-faint);
++  content: "/";
++}
++
++.review-header-change-stat {
++  display: inline-flex;
++  align-items: center;
++}
++
++.review-header-estimate {
++  display: inline-flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 5px;
++}
++
++.review-header-estimate strong {
++  color: var(--review-muted);
++  font-weight: 750;
++}
++
++.review-header-estimate span {
++  color: var(--review-faint);
++}
++
+ .review-label {
+   display: block;
+   font-weight: 500;
+@@ -223,6 +285,110 @@
+   z-index: 1;
+ }
+ 
++.review-revision-nav {
++  display: grid;
++  gap: 12px;
++  margin: -4px 0 28px;
++  border-block: 1px solid var(--review-line);
++  padding-block: 14px;
++}
++
++.review-revision-row {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 16px;
++}
++
++.review-revision-copy {
++  display: grid;
++  min-width: 0;
++  gap: 3px;
++}
++
++.review-revision-label {
++  color: var(--review-muted);
++  font-size: 11px;
++  font-weight: 700;
++  letter-spacing: 0.06em;
++  line-height: 1;
++  text-transform: uppercase;
++}
++
++.review-revision-title {
++  min-width: 0;
++  color: var(--review-text);
++  font-size: 13px;
++  font-weight: 650;
++  line-height: 1.35;
++  overflow-wrap: anywhere;
++}
++
++.review-revision-controls,
++.review-revision-chip-list {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++}
++
++.review-revision-chip-list {
++  flex-wrap: wrap;
++  justify-content: flex-end;
++}
++
++.review-nav-button,
++.review-revision-chip {
++  display: inline-flex;
++  min-height: 28px;
++  align-items: center;
++  justify-content: center;
++  gap: 6px;
++  border: 1px solid var(--review-line);
++  border-radius: 6px;
++  background: transparent;
++  color: var(--review-muted);
++  font-size: 12px;
++  font-weight: 600;
++  line-height: 1;
++  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
++}
++
++.review-nav-button {
++  padding: 0 9px;
++}
++
++.review-revision-chip {
++  min-width: 30px;
++  padding: 0 8px;
++}
++
++.review-nav-button:hover:not(:disabled),
++.review-revision-chip:hover {
++  border-color: var(--review-line-strong);
++  background: var(--review-hover);
++  color: var(--review-text);
++}
++
++.review-revision-chip.is-active {
++  border-color: var(--review-text);
++  background: var(--review-panel-raised);
++  color: var(--review-text);
++}
++
++.review-revision-chip.has-packet::after {
++  width: 5px;
++  height: 5px;
++  border-radius: 999px;
++  background: currentColor;
++  content: "";
++  opacity: 0.8;
++}
++
++.review-nav-button:disabled {
++  cursor: not-allowed;
++  opacity: 0.35;
++}
++
+ .review-chip,
+ .review-button {
+   display: inline-flex;
+@@ -377,6 +543,570 @@
+   font-size: 13px;
+ }
+ 
++.review-packet {
++  margin-bottom: 32px;
++  color: var(--review-text);
++}
++
++.review-packet-kicker {
++  display: block;
++  margin-bottom: 10px;
++  color: var(--review-muted);
++  font-size: 11px;
++  font-weight: 700;
++  letter-spacing: 0.08em;
++  text-transform: uppercase;
++}
++
++.review-packet-grid {
++  display: grid;
++  gap: 36px;
++}
++
++.review-effort-pill {
++  display: inline-flex;
++  align-items: center;
++  border: 1px solid var(--review-line);
++  border-radius: 999px;
++  padding: 2px 7px;
++  color: var(--review-muted);
++  font-size: 10px;
++  font-weight: 750;
++  letter-spacing: 0.02em;
++  line-height: 1;
++  text-transform: uppercase;
++}
++
++.review-effort-pill.is-light {
++  color: var(--review-faint);
++}
++
++.review-effort-pill.is-moderate {
++  border-color: color-mix(in oklab, var(--ds-blue) 36%, var(--review-line));
++  color: var(--ds-blue);
++}
++
++.review-effort-pill.is-involved,
++.review-effort-pill.is-deep {
++  border-color: color-mix(in oklab, var(--ds-warn) 34%, var(--review-line));
++  background: color-mix(in oklab, var(--ds-warn) 10%, transparent);
++  color: var(--ds-warn);
++}
++
++.review-packet-section {
++  min-width: 0;
++  scroll-margin-top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h) + 18px);
++}
++
++.review-packet-section-summary {
++  position: sticky;
++  top: var(--review-main-nav-h);
++  z-index: 8;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 14px;
++  min-height: var(--review-section-sticky-h);
++  margin-inline: -8px;
++  background: color-mix(in srgb, var(--review-bg) 92%, transparent);
++  padding: 8px;
++  backdrop-filter: blur(16px);
++  list-style: none;
++}
++
++.review-packet-section.is-open .review-packet-section-summary {
++  margin-bottom: 16px;
++}
++
++.review-packet-section.is-decided:not(.is-open) .review-packet-section-summary {
++  color: var(--review-faint);
++}
++
++.review-packet-section-body {
++  display: grid;
++  gap: 14px;
++}
++
++.review-packet-section.is-open .review-packet-section-body {
++  animation: review-packet-section-open 250ms linear 75ms both;
++}
++
++@keyframes review-packet-section-open {
++  from {
++    opacity: 0;
++    transform: translateY(-3px);
++  }
++
++  to {
++    opacity: 1;
++    transform: translateY(0);
++  }
++}
++
++.review-collapse-icon {
++  width: 16px;
++  height: 16px;
++  flex: 0 0 auto;
++  color: var(--review-faint);
++  transition: transform 160ms ease, color 160ms ease;
++}
++
++details[open] > summary .review-collapse-icon,
++.review-packet-section.is-open .review-collapse-icon,
++.rev-file-card.is-open .review-collapse-icon {
++  transform: rotate(180deg);
++  color: var(--review-text);
++}
++
++.review-packet-section-title {
++  margin: 0;
++  color: var(--review-text);
++  font-size: 17px;
++  font-weight: 550;
++  line-height: 1.25;
++}
++
++.review-packet-section-heading {
++  appearance: none;
++  border: 0;
++  background: transparent;
++  color: inherit;
++  cursor: pointer;
++  font: inherit;
++  min-width: 0;
++  padding: 0;
++  text-align: left;
++}
++
++.review-packet-section-title-row {
++  display: flex;
++  min-width: 0;
++  flex-wrap: wrap;
++  align-items: baseline;
++  gap: 6px 10px;
++}
++
++.review-packet-section-estimate {
++  display: inline-flex;
++  align-items: center;
++  gap: 8px;
++  color: var(--review-faint);
++  font-size: 11px;
++  font-weight: 650;
++  line-height: 1.25;
++  white-space: nowrap;
++}
++
++.review-change-stat {
++  display: inline-flex;
++  align-items: baseline;
++  gap: 5px;
++  font-size: 12px;
++  font-weight: 750;
++  line-height: 1;
++}
++
++.review-change-stat-add {
++  color: var(--review-add);
++}
++
++.review-change-stat-del {
++  color: var(--review-del);
++}
++
++.review-change-stat-empty {
++  color: var(--review-faint);
++}
++
++.review-packet-section-summary-text {
++  max-width: 74ch;
++  margin: 8px 0 0;
++  color: var(--review-muted);
++  font-size: 14px;
++  font-weight: 450;
++  line-height: 1.45;
++}
++
++.review-packet-section-summary-text + .review-packet-section-body {
++  margin-top: 18px;
++}
++
++.review-packet-section-controls {
++  display: inline-flex;
++  min-width: 0;
++  flex: 0 0 auto;
++  align-items: center;
++  justify-content: flex-end;
++  gap: 8px;
++}
++
++.review-packet-section-toggle {
++  display: inline-flex;
++  width: 28px;
++  height: 28px;
++  flex: 0 0 auto;
++  cursor: pointer;
++  align-items: center;
++  justify-content: center;
++  border: 1px solid transparent;
++  border-radius: 6px;
++  background: transparent;
++  color: var(--review-muted);
++}
++
++.review-packet-section-toggle:hover {
++  border-color: var(--review-line-strong);
++  background: var(--review-panel-raised);
++  color: var(--review-text);
++}
++
++.review-section-state-pill {
++  display: inline-grid;
++  width: 28px;
++  height: 28px;
++  flex: 0 0 auto;
++  place-items: center;
++  border: 1px solid var(--review-line);
++  border-radius: 999px;
++  color: var(--review-faint);
++  text-decoration: none;
++}
++
++.review-section-state-pill.is-approved {
++  border-color: color-mix(in oklab, var(--color-success) 45%, transparent);
++  background: color-mix(in oklab, var(--color-success) 13%, transparent);
++  color: var(--color-success);
++}
++
++.review-section-state-pill.is-denied {
++  border-color: color-mix(in oklab, var(--color-error) 45%, transparent);
++  background: color-mix(in oklab, var(--color-error) 13%, transparent);
++  color: var(--color-error);
++}
++
++.review-section-state-pill.is-ignored {
++  border-color: var(--review-line);
++  background: var(--review-panel-raised);
++  color: var(--review-faint);
++}
++
++.review-section-state-pill.is-previous {
++  opacity: 0.72;
++}
++
++.review-section-state-pill.is-previous:hover {
++  opacity: 1;
++}
++
++.review-section-transition-icon {
++  width: 14px;
++  height: 14px;
++  flex: 0 0 auto;
++  color: var(--review-faint);
++  opacity: 0.78;
++}
++
++.review-section-state-icon {
++  width: 15px;
++  height: 15px;
++}
++
++.review-packet-section-actions {
++  display: inline-flex;
++  flex: 0 0 auto;
++  flex-wrap: wrap;
++  justify-content: flex-end;
++  gap: 6px;
++}
++
++.review-section-action {
++  --review-section-action-open-width: 84px;
++
++  display: inline-grid;
++  grid-auto-flow: column;
++  grid-auto-columns: max-content;
++  width: 30px;
++  height: 28px;
++  align-items: center;
++  justify-content: center;
++  gap: 0;
++  place-items: center;
++  border: 1px solid var(--review-line);
++  border-radius: 999px;
++  background: transparent;
++  color: var(--review-muted);
++  padding: 0;
++  overflow: hidden;
++  white-space: nowrap;
++  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1) 100ms,
++    gap 420ms cubic-bezier(0.22, 1, 0.36, 1) 100ms,
++    padding 420ms cubic-bezier(0.22, 1, 0.36, 1) 100ms,
++    background-color 220ms ease 80ms, border-color 220ms ease 80ms, color 220ms ease 80ms;
++}
++
++.review-section-action:hover,
++.review-section-action:focus-visible,
++.review-section-action.is-active {
++  width: var(--review-section-action-open-width);
++  gap: 6px;
++  padding: 0 10px 0 8px;
++}
++
++.review-section-action:hover {
++  border-color: var(--review-line-strong);
++  color: var(--review-text);
++}
++
++.review-section-action-label {
++  max-width: 0;
++  overflow: hidden;
++  opacity: 0;
++  font-size: 12px;
++  font-weight: 700;
++  line-height: 1;
++  transition: max-width 360ms cubic-bezier(0.22, 1, 0.36, 1) 120ms, opacity 240ms ease 140ms;
++}
++
++.review-section-action:hover .review-section-action-label,
++.review-section-action:focus-visible .review-section-action-label,
++.review-section-action.is-active .review-section-action-label {
++  max-width: 72px;
++  opacity: 1;
++}
++
++.review-section-action.is-approved {
++  --review-section-action-open-width: 94px;
++
++  border-color: color-mix(in oklab, var(--color-success) 35%, var(--review-line));
++  color: color-mix(in oklab, var(--color-success) 82%, var(--review-muted));
++}
++
++.review-section-action.is-approved:hover,
++.review-section-action.is-approved.is-active {
++  border-color: var(--color-success);
++  background: color-mix(in oklab, var(--color-success) 16%, transparent);
++  color: var(--color-success);
++}
++
++.review-section-action.is-denied {
++  --review-section-action-open-width: 76px;
++
++  border-color: color-mix(in oklab, var(--color-error) 35%, var(--review-line));
++  color: color-mix(in oklab, var(--color-error) 82%, var(--review-muted));
++}
++
++.review-section-action.is-denied:hover,
++.review-section-action.is-denied.is-active {
++  border-color: var(--color-error);
++  background: color-mix(in oklab, var(--color-error) 16%, transparent);
++  color: var(--color-error);
++}
++
++.review-section-action.is-ignored:hover,
++.review-section-action.is-ignored.is-active {
++  border-color: var(--review-line-strong);
++  background: var(--review-panel-raised);
++  color: var(--review-text);
++}
++
++.review-packet-section-signin {
++  color: var(--review-faint);
++  font-size: 12px;
++  font-weight: 600;
++}
++
++@media (max-width: 640px) {
++  .review-packet-section-summary {
++    flex-wrap: wrap;
++    align-items: flex-start;
++    gap: 10px;
++  }
++
++  .review-packet-section-heading {
++    flex: 1 1 calc(100% - 34px);
++  }
++
++  .review-packet-section-controls {
++    order: 2;
++    width: 100%;
++    flex-wrap: wrap;
++    justify-content: flex-start;
++  }
++
++  .review-packet-section-controls .review-collapse-icon {
++    position: absolute;
++    right: 0;
++  }
++}
++
++.review-packet-row-list,
++.review-packet-task-list,
++.review-packet-question-list {
++  display: grid;
++  gap: 24px;
++}
++
++.review-packet-row {
++  min-width: 0;
++}
++
++.review-packet-row.is-markdown {
++  position: sticky;
++  top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h));
++  z-index: 7;
++  margin-inline: -8px;
++  background: color-mix(in srgb, var(--review-bg) 94%, transparent);
++  padding: 8px;
++  backdrop-filter: blur(16px);
++}
++
++.review-packet-point-list {
++  display: grid;
++  gap: 12px;
++}
++
++.review-packet-point {
++  display: grid;
++  grid-template-columns: auto minmax(0, 1fr);
++  gap: 12px;
++  align-items: start;
++}
++
++.review-packet-point-index {
++  display: inline-grid;
++  width: 24px;
++  height: 24px;
++  place-items: center;
++  border-radius: 999px;
++  background: var(--review-panel-raised);
++  color: var(--review-faint);
++  font-size: 12px;
++  font-weight: 750;
++  line-height: 1;
++}
++
++.review-packet-point-body {
++  color: var(--review-text);
++  font-size: 16px;
++  line-height: 1.5;
++}
++
++.review-packet-markdown {
++  color: var(--review-text);
++  line-height: 1.55;
++}
++
++.review-packet-md-heading {
++  margin: 0 0 10px;
++  color: var(--review-text);
++  font-weight: 800;
++  line-height: 1.25;
++}
++
++.review-packet-md-heading.is-h3 {
++  font-size: 18px;
++}
++
++.review-packet-md-heading.is-h4 {
++  font-size: 16px;
++}
++
++.review-packet-md-paragraph {
++  margin: 0;
++}
++
++.review-packet-md-paragraph + .review-packet-md-paragraph,
++.review-packet-md-paragraph + .review-packet-md-list,
++.review-packet-md-list + .review-packet-md-paragraph,
++.review-packet-md-list + .review-packet-md-heading,
++.review-packet-md-heading + .review-packet-md-paragraph,
++.review-packet-md-heading + .review-packet-md-list {
++  margin-top: 10px;
++}
++
++.review-packet-md-list {
++  display: grid;
++  gap: 6px;
++  margin: 0;
++  padding-left: 18px;
++  list-style: disc;
++}
++
++.review-packet-inline-code {
++  border: 1px solid var(--review-line);
++  border-radius: 4px;
++  background: var(--review-panel-raised);
++  padding: 1px 4px;
++  color: var(--review-text);
++  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
++  font-size: 0.9em;
++}
++
++.review-packet-hunk {
++  display: inline-flex;
++  max-width: 100%;
++  align-items: center;
++  gap: 8px;
++  border: 1px solid var(--review-line);
++  border-radius: 8px;
++  background: var(--review-panel-raised);
++  padding: 7px 10px;
++  color: var(--review-text);
++  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
++  font-size: 13px;
++  overflow-wrap: anywhere;
++  transition: border-color 120ms ease, background 120ms ease;
++}
++
++.review-packet-hunk:hover {
++  border-color: var(--review-text);
++  background: var(--review-hover);
++}
++
++.review-packet-hunk.is-unresolved {
++  color: var(--review-faint);
++}
++
++.review-packet-inline-diff {
++  border: 1px solid var(--review-line);
++  border-radius: 8px;
++  background: var(--review-panel-raised);
++  overflow: hidden;
++}
++
++.review-packet-inline-diff .rdr-file {
++  border: 0;
++  border-radius: 0;
++}
++
++.review-packet-task,
++.review-packet-question {
++  display: flex;
++  align-items: flex-start;
++  gap: 10px;
++  line-height: 1.45;
++}
++
++.review-packet-checkbox {
++  margin-top: 3px;
++  width: 15px;
++  height: 15px;
++  flex: 0 0 auto;
++  border: 1px solid var(--review-line-strong);
++  border-radius: 4px;
++  background: var(--review-panel-raised);
++}
++
++.review-packet-question-key {
++  flex: 0 0 auto;
++  border-radius: 999px;
++  background: var(--review-panel-raised);
++  padding: 2px 7px;
++  color: var(--review-muted);
++  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
++  font-size: 12px;
++}
++
+ .review-modal {
+   box-shadow: 0 24px 80px rgb(0 0 0 / 0.6);
+ }
+@@ -472,12 +1202,53 @@
+ }
+ 
+ .rev-file-card {
++  position: relative;
+   overflow: hidden;
+   border: 1px solid var(--review-line-strong);
+   border-radius: 8px;
+   background: var(--review-panel);
+ }
+ 
++.rev-file-summary {
++  position: absolute;
++  z-index: 2;
++  top: 16px;
++  right: 14px;
++  display: inline-flex;
++  width: 28px;
++  height: 28px;
++  cursor: pointer;
++  align-items: center;
++  justify-content: center;
++  border: 1px solid transparent;
++  border-radius: 6px;
++  color: var(--review-muted);
++  list-style: none;
++}
++
++.rev-file-summary:hover {
++  border-color: var(--review-line-strong);
++  background: var(--review-panel-raised);
++  color: var(--review-text);
++}
++
++.rev-file-body {
++  min-width: 0;
++}
++
++.rev-file-card:not(.is-open) {
++  min-height: 60px;
++}
++
++.rev-file-placeholder {
++  display: flex;
++  min-height: 60px;
++  align-items: center;
++  padding: 0 56px 0 18px;
++  color: var(--review-muted);
++  font-size: 13px;
++}
++
+ .rev-file-path {
+   min-width: 0;
+   color: var(--review-text);
+@@ -590,6 +1361,10 @@
+ }
+ 
+ @media (max-width: 768px) {
++  .review-page {
++    --review-main-nav-h: 112px;
++  }
++
+   .review-topbar {
+     flex-wrap: wrap;
+   }
+diff --git a/cli/src/api.rs b/cli/src/api.rs
+index 7cdeb4b..2f6bdc9 100644
+--- a/cli/src/api.rs
++++ b/cli/src/api.rs
+@@ -32,6 +32,8 @@ pub struct CreateReviewRequest<'a> {
+     pub base_sha: &'a str,
+     pub branch_name: &'a str,
+     pub raw_diff: &'a str,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub packet: Option<&'a Value>,
+ }
+ 
+ #[derive(Debug, Clone, Deserialize)]
+@@ -48,6 +50,8 @@ pub struct CreatePatchsetRequest<'a> {
+     pub base_sha: &'a str,
+     pub branch_name: &'a str,
+     pub raw_diff: &'a str,
++    #[serde(skip_serializing_if = "Option::is_none")]
++    pub packet: Option<&'a Value>,
+ }
+ 
+ #[derive(Debug, Clone, Deserialize)]
+@@ -196,9 +200,7 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
+         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",
+         _ => "",
+     };
+-    Err(anyhow!(
+-        "{what} failed: HTTP {status}{hint}\nbody: {body}"
+-    ))
++    Err(anyhow!("{what} failed: HTTP {status}{hint}\nbody: {body}"))
+ }
+ 
+ #[cfg(test)]
+@@ -261,6 +263,7 @@ mod tests {
+                 base_sha: "deadbeef",
+                 branch_name: "main",
+                 raw_diff: "diff --git a/x b/x\n",
++                packet: None,
+             })
+             .unwrap();
+         assert_eq!(resp.slug, "k7m2qz");
+@@ -287,6 +290,7 @@ mod tests {
+                     base_sha: "cafef00d",
+                     branch_name: "main",
+                     raw_diff: "diff --git a/x b/x\n",
++                    packet: None,
+                 },
+             )
+             .unwrap();
+@@ -311,6 +315,7 @@ mod tests {
+                     base_sha: "x",
+                     branch_name: "y",
+                     raw_diff: "z",
++                    packet: None,
+                 },
+             )
+             .unwrap_err();
+diff --git a/cli/src/commands/comment.rs b/cli/src/commands/comment.rs
+index 46e5f4d..be47793 100644
+--- a/cli/src/commands/comment.rs
++++ b/cli/src/commands/comment.rs
+@@ -110,10 +110,7 @@ mod tests {
+ 
+     #[test]
+     fn parse_location_handles_colon_in_filename() {
+-        assert_eq!(
+-            parse_location("a:b:7").unwrap(),
+-            ("a:b".to_string(), 7)
+-        );
++        assert_eq!(parse_location("a:b:7").unwrap(), ("a:b".to_string(), 7));
+     }
+ 
+     #[test]
+diff --git a/cli/src/commands/login.rs b/cli/src/commands/login.rs
+index e50d649..cce8149 100644
+--- a/cli/src/commands/login.rs
++++ b/cli/src/commands/login.rs
+@@ -55,8 +55,6 @@ fn prompt<R: BufRead, W: Write>(stdin: &mut R, stdout: &mut W, msg: &str) -> Res
+     write!(stdout, "{msg}")?;
+     stdout.flush()?;
+     let mut line = String::new();
+-    stdin
+-        .read_line(&mut line)
+-        .context("could not read stdin")?;
++    stdin.read_line(&mut line).context("could not read stdin")?;
+     Ok(line)
+ }
+diff --git a/cli/src/commands/push.rs b/cli/src/commands/push.rs
+index 2ed74de..2dca01f 100644
+--- a/cli/src/commands/push.rs
++++ b/cli/src/commands/push.rs
+@@ -1,10 +1,12 @@
+ use anyhow::{Context, Result};
+ use clap::Args;
+ use std::env;
++use std::path::PathBuf;
+ 
+ use crate::api::{ApiClient, CreatePatchsetRequest, CreateReviewRequest};
+ use crate::config::Config;
+ use crate::git;
++use crate::packet;
+ 
+ #[derive(Args, Debug)]
+ pub struct PushArgs {
+@@ -20,6 +22,10 @@ pub struct PushArgs {
+     #[arg(long)]
+     pub description: Option<String>,
+ 
++    /// Packet file to upload (.md or .json). Defaults to .reviews/<branch>/packet.md, then packet.json.
++    #[arg(long)]
++    pub packet: Option<PathBuf>,
++
+     /// Append a new patchset to an existing review by slug.
+     #[arg(long, value_name = "SLUG")]
+     pub update: Option<String>,
+@@ -29,6 +35,7 @@ pub fn run(args: PushArgs) -> Result<()> {
+     let cfg = Config::load()?;
+     let cwd = env::current_dir().context("could not read current directory")?;
+     let cap = git::capture_diff(&cwd, args.range.as_deref())?;
++    let packet = load_packet_for_push(&cwd, &cap.branch_name, args.packet.as_ref(), &cap.raw_diff)?;
+ 
+     let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
+ 
+@@ -45,12 +52,10 @@ pub fn run(args: PushArgs) -> Result<()> {
+                 base_sha: &cap.base_sha,
+                 branch_name: &cap.branch_name,
+                 raw_diff: &cap.raw_diff,
++                packet: packet.as_ref(),
+             };
+             let resp = client.create_patchset(&slug, &req)?;
+-            println!(
+-                "Patchset {} added to {}",
+-                resp.patchset_number, resp.url
+-            );
++            println!("Patchset {} added to {}", resp.patchset_number, resp.url);
+         }
+         None => {
+             let title = args
+@@ -64,6 +69,7 @@ pub fn run(args: PushArgs) -> Result<()> {
+                 base_sha: &cap.base_sha,
+                 branch_name: &cap.branch_name,
+                 raw_diff: &cap.raw_diff,
++                packet: packet.as_ref(),
+             };
+             let resp = client.create_review(&req)?;
+             println!("Review created: {}", resp.url);
+@@ -73,6 +79,23 @@ pub fn run(args: PushArgs) -> Result<()> {
+     Ok(())
+ }
+ 
++fn load_packet_for_push(
++    cwd: &std::path::Path,
++    branch_name: &str,
++    explicit_path: Option<&PathBuf>,
++    raw_diff: &str,
++) -> Result<Option<serde_json::Value>> {
++    let path = match explicit_path {
++        Some(path) => Some(path.clone()),
++        None => packet::discover_packet(cwd, branch_name),
++    };
++
++    match path {
++        Some(path) => Ok(Some(packet::load_packet_for_diff(&path, raw_diff)?)),
++        None => Ok(None),
++    }
++}
++
+ fn short_sha(sha: &str) -> &str {
+     if sha.len() >= 12 {
+         &sha[..12]
+@@ -80,3 +103,59 @@ fn short_sha(sha: &str) -> &str {
+         sha
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::fs;
++
++    #[test]
++    fn load_packet_for_push_uses_explicit_markdown() {
++        let dir = tempfile::tempdir().unwrap();
++        let packet_path = dir.path().join("packet.md");
++        fs::write(&packet_path, "# Packet\n\nSummary\n\n## Section").unwrap();
++
++        let packet = load_packet_for_push(dir.path(), "main", Some(&packet_path), "")
++            .unwrap()
++            .unwrap();
++
++        assert_eq!(packet["title"], "Packet");
++        assert_eq!(packet["summary"], "Summary");
++    }
++
++    #[test]
++    fn load_packet_for_push_discovers_branch_packet() {
++        let dir = tempfile::tempdir().unwrap();
++        let packet_dir = dir.path().join(".reviews").join("carey__branch");
++        fs::create_dir_all(&packet_dir).unwrap();
++        fs::write(
++            packet_dir.join("packet.md"),
++            "# Branch Packet\n\n## Section",
++        )
++        .unwrap();
++
++        let packet = load_packet_for_push(dir.path(), "carey/branch", None, "")
++            .unwrap()
++            .unwrap();
++
++        assert_eq!(packet["title"], "Branch Packet");
++    }
++
++    #[test]
++    fn load_packet_for_push_allows_missing_default_packet() {
++        let dir = tempfile::tempdir().unwrap();
++        assert!(load_packet_for_push(dir.path(), "main", None, "")
++            .unwrap()
++            .is_none());
++    }
++
++    #[test]
++    fn load_packet_for_push_rejects_malformed_markdown() {
++        let dir = tempfile::tempdir().unwrap();
++        let packet_path = dir.path().join("packet.md");
++        fs::write(&packet_path, "no title").unwrap();
++
++        let err = load_packet_for_push(dir.path(), "main", Some(&packet_path), "").unwrap_err();
++        assert!(format!("{err:#}").contains("# title"));
++    }
++}
+diff --git a/cli/src/commands/show.rs b/cli/src/commands/show.rs
+index 07c154c..a62807d 100644
+--- a/cli/src/commands/show.rs
++++ b/cli/src/commands/show.rs
+@@ -59,9 +59,14 @@ fn resolve_server_and_token(server_override: Option<&str>) -> Result<(String, Op
+ }
+ 
+ fn render_markdown(body: &Value) -> Result<String> {
+-    let obj = body.as_object().ok_or_else(|| anyhow!("response is not a JSON object"))?;
+-
+-    let title = obj.get("title").and_then(Value::as_str).unwrap_or("(untitled)");
++    let obj = body
++        .as_object()
++        .ok_or_else(|| anyhow!("response is not a JSON object"))?;
++
++    let title = obj
++        .get("title")
++        .and_then(Value::as_str)
++        .unwrap_or("(untitled)");
+     let url = obj.get("url").and_then(Value::as_str).unwrap_or("");
+     let description = obj.get("description").and_then(Value::as_str).unwrap_or("");
+ 
+@@ -91,7 +96,10 @@ fn render_markdown(body: &Value) -> Result<String> {
+             .get("branch_name")
+             .and_then(Value::as_str)
+             .unwrap_or("");
+-        let base = selected.get("base_sha").and_then(Value::as_str).unwrap_or("");
++        let base = selected
++            .get("base_sha")
++            .and_then(Value::as_str)
++            .unwrap_or("");
+         out.push_str(&format!("## Patchset v{n}"));
+         if !branch.is_empty() {
+             out.push_str(&format!(" — `{branch}`"));
+@@ -115,9 +123,7 @@ fn render_markdown(body: &Value) -> Result<String> {
+                     "renamed" => "R",
+                     _ => "?",
+                 };
+-                out.push_str(&format!(
+-                    "### {status_letter} `{path}` (+{add} -{del})\n\n"
+-                ));
++                out.push_str(&format!("### {status_letter} `{path}` (+{add} -{del})\n\n"));
+                 let raw = file.get("raw_diff").and_then(Value::as_str).unwrap_or("");
+                 if !raw.is_empty() {
+                     out.push_str("```diff\n");
+@@ -137,7 +143,10 @@ fn render_markdown(body: &Value) -> Result<String> {
+             for t in threads {
+                 let path = t.get("file_path").and_then(Value::as_str).unwrap_or("?");
+                 let line = t.get("line_hint").and_then(Value::as_i64);
+-                let author = t.get("author").and_then(Value::as_str).unwrap_or("anonymous");
++                let author = t
++                    .get("author")
++                    .and_then(Value::as_str)
++                    .unwrap_or("anonymous");
+                 let location = match line {
+                     Some(n) => format!("{path}:{n}"),
+                     None => path.to_string(),
+diff --git a/cli/src/config.rs b/cli/src/config.rs
+index bd72493..3d13419 100644
+--- a/cli/src/config.rs
++++ b/cli/src/config.rs
+@@ -73,17 +73,16 @@ impl Config {
+                 .with_context(|| format!("could not stat {}", path.display()))?
+                 .permissions();
+             perms.set_mode(0o600);
+-            std::fs::set_permissions(path, perms).with_context(|| {
+-                format!("could not set permissions on {}", path.display())
+-            })?;
++            std::fs::set_permissions(path, perms)
++                .with_context(|| format!("could not set permissions on {}", path.display()))?;
+         }
+         Ok(())
+     }
+ }
+ 
+ pub fn config_path() -> Result<PathBuf> {
+-    let home = dirs::home_dir()
+-        .ok_or_else(|| anyhow!("could not determine user home directory"))?;
++    let home =
++        dirs::home_dir().ok_or_else(|| anyhow!("could not determine user home directory"))?;
+     Ok(home.join(".config").join("reviews").join("config.toml"))
+ }
+ 
+@@ -95,10 +94,7 @@ mod tests {
+     fn roundtrip_toml() {
+         let dir = tempfile::tempdir().unwrap();
+         let path = dir.path().join("config.toml");
+-        let cfg = Config::new(
+-            "http://localhost:4000".into(),
+-            "tok_abc123".into(),
+-        );
++        let cfg = Config::new("http://localhost:4000".into(), "tok_abc123".into());
+         cfg.save_to(&path).unwrap();
+         let loaded = Config::load_from(&path).unwrap();
+         assert_eq!(cfg, loaded);
+diff --git a/cli/src/main.rs b/cli/src/main.rs
+index 851925f..fd54150 100644
+--- a/cli/src/main.rs
++++ b/cli/src/main.rs
+@@ -5,6 +5,7 @@ mod api;
+ mod commands;
+ mod config;
+ mod git;
++mod packet;
+ 
+ #[derive(Parser, Debug)]
+ #[command(
+diff --git a/cli/src/packet.rs b/cli/src/packet.rs
+new file mode 100644
+index 0000000..00d99b5
+--- /dev/null
++++ b/cli/src/packet.rs
+@@ -0,0 +1,614 @@
++use anyhow::{anyhow, bail, Context, Result};
++use serde_json::{json, Map, Value};
++use std::collections::{BTreeMap, BTreeSet};
++use std::fs;
++use std::path::{Path, PathBuf};
++
++#[derive(Debug, Clone)]
++struct ParsedMarkdown {
++    title: String,
++    summary: String,
++    sections: Vec<ParsedSection>,
++}
++
++#[derive(Debug, Clone)]
++struct ParsedSection {
++    title: String,
++    content: String,
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
++struct ChangeLine {
++    path: String,
++    hunk_index: usize,
++    row: usize,
++}
++
++#[derive(Debug, Clone)]
++struct DiffHunk {
++    changed_rows: BTreeSet<usize>,
++    row_count: usize,
++}
++
++type DiffIndex = BTreeMap<String, Vec<DiffHunk>>;
++
++pub fn load_packet_for_diff(path: &Path, raw_diff: &str) -> Result<Value> {
++    let body = fs::read_to_string(path)
++        .with_context(|| format!("could not read packet file {}", path.display()))?;
++    let diff = diff_index(raw_diff);
++
++    let packet = match path.extension().and_then(|ext| ext.to_str()) {
++        Some("json") => serde_json::from_str(&body)
++            .with_context(|| format!("could not parse packet JSON {}", path.display()))?,
++        Some("md") | Some("markdown") => parse_markdown(&body)
++            .with_context(|| format!("could not parse packet Markdown {}", path.display()))?,
++        Some(ext) => bail!("unsupported packet extension .{ext}; use .md or .json"),
++        None => bail!("packet file must have a .md or .json extension"),
++    };
++
++    validate_packet(&packet, &diff)
++        .with_context(|| format!("could not validate packet {}", path.display()))?;
++    Ok(packet)
++}
++
++pub fn discover_packet(repo: &Path, branch_name: &str) -> Option<PathBuf> {
++    let dir = repo
++        .join(".reviews")
++        .join(sanitize_branch_name(branch_name));
++    let md = dir.join("packet.md");
++    if md.is_file() {
++        return Some(md);
++    }
++
++    let json = dir.join("packet.json");
++    json.is_file().then_some(json)
++}
++
++fn sanitize_branch_name(branch_name: &str) -> String {
++    let mut out = String::new();
++    for ch in branch_name.chars() {
++        match ch {
++            '/' | '\\' => out.push_str("__"),
++            c if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') => out.push(c),
++            _ => out.push('-'),
++        }
++    }
++    if out.is_empty() {
++        "HEAD".to_string()
++    } else {
++        out
++    }
++}
++
++fn parse_markdown(body: &str) -> Result<Value> {
++    let parsed = split_markdown(body)?;
++    let mut packet = Map::new();
++    packet.insert("format_version".to_string(), json!(1));
++    packet.insert("title".to_string(), json!(parsed.title));
++
++    if !parsed.summary.is_empty() {
++        packet.insert("summary".to_string(), json!(parsed.summary));
++    }
++
++    let sections: Vec<Value> = parsed
++        .sections
++        .into_iter()
++        .map(|section| {
++            let rows = parse_section_rows(&section.content)?;
++            Ok(json!({
++                "title": section.title,
++                "rows": rows
++            }))
++        })
++        .collect::<Result<_>>()?;
++
++    packet.insert("sections".to_string(), Value::Array(sections));
++    Ok(Value::Object(packet))
++}
++
++fn split_markdown(body: &str) -> Result<ParsedMarkdown> {
++    let mut title = None;
++    let mut summary_lines = Vec::new();
++    let mut sections = Vec::new();
++    let mut current_title: Option<String> = None;
++    let mut current_lines = Vec::new();
++
++    for line in body.lines() {
++        if let Some(rest) = line.strip_prefix("# ") {
++            if title.is_some() {
++                bail!("packet Markdown must contain exactly one top-level # title");
++            }
++            title = Some(rest.trim().to_string());
++            continue;
++        }
++
++        if let Some(rest) = line.strip_prefix("## ") {
++            if title.is_none() {
++                bail!("packet Markdown must start with a # title before section headings");
++            }
++
++            if let Some(section_title) = current_title.take() {
++                sections.push(ParsedSection {
++                    title: section_title,
++                    content: trim_join(&current_lines),
++                });
++                current_lines.clear();
++            }
++
++            let section_title = rest.trim();
++            if section_title.is_empty() {
++                bail!("packet section headings cannot be empty");
++            }
++            current_title = Some(section_title.to_string());
++            continue;
++        }
++
++        if title.is_none() {
++            if line.trim().is_empty() {
++                continue;
++            }
++            bail!("packet Markdown must start with a # title");
++        }
++
++        if current_title.is_some() {
++            current_lines.push(line.to_string());
++        } else {
++            summary_lines.push(line.to_string());
++        }
++    }
++
++    if let Some(section_title) = current_title {
++        sections.push(ParsedSection {
++            title: section_title,
++            content: trim_join(&current_lines),
++        });
++    }
++
++    let title = title.ok_or_else(|| anyhow!("packet Markdown must start with a # title"))?;
++    if title.is_empty() {
++        bail!("packet title cannot be empty");
++    }
++
++    Ok(ParsedMarkdown {
++        title,
++        summary: trim_join(&summary_lines),
++        sections,
++    })
++}
++
++fn parse_section_rows(content: &str) -> Result<Vec<Value>> {
++    let mut rows = Vec::new();
++    let mut prose = Vec::new();
++
++    for line in content.lines() {
++        if let Some(rest) = line.trim().strip_prefix("@hunk ") {
++            let body = trim_join(&prose);
++            if !body.is_empty() {
++                rows.push(json!({"kind": "markdown", "body": body}));
++                prose.clear();
++            }
++
++            rows.push(parse_hunk_row(rest.trim())?);
++        } else {
++            prose.push(line.to_string());
++        }
++    }
++
++    let body = trim_join(&prose);
++    if !body.is_empty() {
++        rows.push(json!({"kind": "markdown", "body": body}));
++    }
++
++    Ok(rows)
++}
++
++fn parse_hunk_row(rest: &str) -> Result<Value> {
++    let (path_and_hunk, slice) = match rest.split_once(":L") {
++        Some((left, right)) => (left, Some(right)),
++        None => (rest, None),
++    };
++
++    let (path, hunk) = path_and_hunk.rsplit_once('#').ok_or_else(|| {
++        anyhow!("hunk refs must look like `@hunk path#N` or `@hunk path#N:Lx-Ly`")
++    })?;
++    let path = path.trim();
++    if path.is_empty() {
++        bail!("hunk refs must include a path");
++    }
++
++    let hunk_index = parse_positive_usize(hunk.trim(), "hunk number")?;
++    let mut row = Map::new();
++    row.insert("kind".to_string(), json!("hunk"));
++    row.insert("path".to_string(), json!(path));
++    row.insert("hunk_index".to_string(), json!(hunk_index));
++
++    if let Some(slice) = slice {
++        let (start, end) = slice
++            .split_once("-L")
++            .ok_or_else(|| anyhow!("hunk slices must look like `Lx-Ly`"))?;
++        let start = parse_positive_usize(start.trim(), "slice start")?;
++        let end = parse_positive_usize(end.trim(), "slice end")?;
++        if start > end {
++            bail!("hunk slice start must be <= end");
++        }
++        row.insert("line_start".to_string(), json!(start));
++        row.insert("line_end".to_string(), json!(end));
++    }
++
++    Ok(Value::Object(row))
++}
++
++fn parse_positive_usize(input: &str, label: &str) -> Result<usize> {
++    let value: usize = input
++        .parse()
++        .with_context(|| format!("{label} must be a positive integer"))?;
++    if value == 0 {
++        bail!("{label} must be >= 1");
++    }
++    Ok(value)
++}
++
++fn validate_packet(packet: &Value, diff: &DiffIndex) -> Result<()> {
++    validate_shape(packet)?;
++
++    if diff.is_empty() {
++        return Ok(());
++    }
++
++    let expected = expected_change_lines(diff);
++    if expected.is_empty() {
++        return Ok(());
++    }
++
++    let mut covered = BTreeMap::<ChangeLine, usize>::new();
++
++    for row in packet_hunk_rows(packet) {
++        let path = string_field(row, "path")?;
++        let hunk_index = usize_field(row, "hunk_index")?;
++        let hunks = diff
++            .get(path)
++            .ok_or_else(|| anyhow!("packet references unknown file `{path}`"))?;
++        let hunk = hunks
++            .get(hunk_index - 1)
++            .ok_or_else(|| anyhow!("packet references unknown hunk `{path}#{hunk_index}`"))?;
++
++        let (start, end) = match (
++            optional_usize_field(row, "line_start")?,
++            optional_usize_field(row, "line_end")?,
++        ) {
++            (Some(start), Some(end)) => (start, end),
++            (None, None) => (1, hunk.row_count),
++            _ => bail!("hunk rows must include both line_start and line_end or neither"),
++        };
++
++        if start == 0 || end == 0 || start > end || end > hunk.row_count {
++            bail!(
++                "packet references invalid slice `{path}#{hunk_index}:L{start}-L{end}`; hunk has {} rows",
++                hunk.row_count
++            );
++        }
++
++        for row_number in hunk.changed_rows.range(start..=end) {
++            let key = ChangeLine {
++                path: path.to_string(),
++                hunk_index,
++                row: *row_number,
++            };
++            *covered.entry(key).or_insert(0) += 1;
++        }
++    }
++
++    let covered_lines: BTreeSet<_> = covered.keys().cloned().collect();
++    let missing: Vec<_> = expected.difference(&covered_lines).collect();
++    if let Some(line) = missing.first() {
++        bail!(
++            "packet does not cover changed line `{}`#{}:L{}",
++            line.path,
++            line.hunk_index,
++            line.row
++        );
++    }
++
++    if let Some((line, count)) = covered.iter().find(|(_, count)| **count > 1) {
++        bail!(
++            "packet covers changed line `{}`#{}:L{} more than once ({count} times)",
++            line.path,
++            line.hunk_index,
++            line.row
++        );
++    }
++
++    Ok(())
++}
++
++fn validate_shape(packet: &Value) -> Result<()> {
++    let obj = packet
++        .as_object()
++        .ok_or_else(|| anyhow!("packet must be a JSON object"))?;
++
++    match obj.get("title").and_then(Value::as_str).map(str::trim) {
++        Some(title) if !title.is_empty() => {}
++        _ => bail!("packet title cannot be empty"),
++    }
++
++    let sections = obj
++        .get("sections")
++        .and_then(Value::as_array)
++        .ok_or_else(|| anyhow!("packet must include a sections array"))?;
++
++    for (section_idx, section) in sections.iter().enumerate() {
++        let section = section
++            .as_object()
++            .ok_or_else(|| anyhow!("packet section {} must be an object", section_idx + 1))?;
++        match section.get("title").and_then(Value::as_str).map(str::trim) {
++            Some(title) if !title.is_empty() => {}
++            _ => bail!("packet section {} must include a title", section_idx + 1),
++        }
++        let rows = section
++            .get("rows")
++            .and_then(Value::as_array)
++            .ok_or_else(|| {
++                anyhow!(
++                    "packet section {} must include a rows array",
++                    section_idx + 1
++                )
++            })?;
++        for (row_idx, row) in rows.iter().enumerate() {
++            let kind = row.get("kind").and_then(Value::as_str).ok_or_else(|| {
++                anyhow!(
++                    "packet section {} row {} must include kind",
++                    section_idx + 1,
++                    row_idx + 1
++                )
++            })?;
++            match kind {
++                "markdown" => {
++                    if row.get("body").and_then(Value::as_str).is_none() {
++                        bail!("markdown row must include body");
++                    }
++                }
++                "hunk" => {
++                    string_field(row, "path")?;
++                    usize_field(row, "hunk_index")?;
++                }
++                other => bail!("unknown packet row kind `{other}`"),
++            }
++        }
++    }
++
++    Ok(())
++}
++
++fn packet_hunk_rows(packet: &Value) -> Vec<&Value> {
++    packet
++        .get("sections")
++        .and_then(Value::as_array)
++        .into_iter()
++        .flatten()
++        .flat_map(|section| {
++            section
++                .get("rows")
++                .and_then(Value::as_array)
++                .into_iter()
++                .flatten()
++        })
++        .filter(|row| row.get("kind").and_then(Value::as_str) == Some("hunk"))
++        .collect()
++}
++
++fn string_field<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
++    value
++        .get(key)
++        .and_then(Value::as_str)
++        .filter(|value| !value.trim().is_empty())
++        .ok_or_else(|| anyhow!("hunk rows must include `{key}`"))
++}
++
++fn usize_field(value: &Value, key: &str) -> Result<usize> {
++    value
++        .get(key)
++        .and_then(Value::as_u64)
++        .map(|value| value as usize)
++        .filter(|value| *value > 0)
++        .ok_or_else(|| anyhow!("hunk rows must include positive integer `{key}`"))
++}
++
++fn optional_usize_field(value: &Value, key: &str) -> Result<Option<usize>> {
++    match value.get(key) {
++        Some(v) => v
++            .as_u64()
++            .map(|value| Some(value as usize))
++            .ok_or_else(|| anyhow!("`{key}` must be a positive integer")),
++        None => Ok(None),
++    }
++}
++
++fn expected_change_lines(diff: &DiffIndex) -> BTreeSet<ChangeLine> {
++    let mut expected = BTreeSet::new();
++    for (path, hunks) in diff {
++        for (idx, hunk) in hunks.iter().enumerate() {
++            for row in &hunk.changed_rows {
++                expected.insert(ChangeLine {
++                    path: path.clone(),
++                    hunk_index: idx + 1,
++                    row: *row,
++                });
++            }
++        }
++    }
++    expected
++}
++
++fn diff_index(raw_diff: &str) -> DiffIndex {
++    let mut index = DiffIndex::new();
++    for chunk in raw_diff.split("\ndiff --git ") {
++        let chunk = chunk.strip_prefix("diff --git ").unwrap_or(chunk);
++        let mut lines = chunk.lines();
++        let Some(header) = lines.next() else { continue };
++        let Some(path) = path_from_header(header, chunk) else {
++            continue;
++        };
++        let mut hunks = Vec::new();
++        let mut current: Option<DiffHunk> = None;
++
++        for line in lines {
++            if line.starts_with("@@ ") {
++                if let Some(hunk) = current.take() {
++                    hunks.push(hunk);
++                }
++                current = Some(DiffHunk {
++                    changed_rows: BTreeSet::new(),
++                    row_count: 0,
++                });
++                continue;
++            }
++
++            if let Some(hunk) = current.as_mut() {
++                if line.starts_with('\\') {
++                    continue;
++                }
++                hunk.row_count += 1;
++                if (line.starts_with('+') && !line.starts_with("+++"))
++                    || (line.starts_with('-') && !line.starts_with("---"))
++                {
++                    hunk.changed_rows.insert(hunk.row_count);
++                }
++            }
++        }
++
++        if let Some(hunk) = current {
++            hunks.push(hunk);
++        }
++        if !hunks.is_empty() {
++            index.insert(path, hunks);
++        }
++    }
++    index
++}
++
++fn path_from_header(header: &str, chunk: &str) -> Option<String> {
++    let (_, new_path) = header.strip_prefix("a/")?.split_once(" b/")?;
++    if chunk.contains("\ndeleted file mode") {
++        let (old_path, _) = header.strip_prefix("a/")?.split_once(" b/")?;
++        Some(old_path.to_string())
++    } else {
++        Some(new_path.to_string())
++    }
++}
++
++fn trim_join(lines: &[String]) -> String {
++    lines.join("\n").trim().to_string()
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::fs;
++
++    const DIFF: &str = "diff --git a/lib/a.ex b/lib/a.ex\n--- a/lib/a.ex\n+++ b/lib/a.ex\n@@ -1,3 +1,3 @@\n context\n-old\n+new\n@@ -8,2 +8,3 @@\n other\n+added\n+again\n";
++
++    const PACKET: &str = r#"# Narrative packet
++
++Read this first.
++
++## First section
++This explains the first change.
++
++@hunk lib/a.ex#1:L2-L3
++
++Then the second hunk.
++
++@hunk lib/a.ex#2
++"#;
++
++    #[test]
++    fn parses_sections_with_interleaved_hunk_slices() {
++        let packet = parse_markdown(PACKET).unwrap();
++
++        assert_eq!(packet["format_version"], 1);
++        assert_eq!(packet["title"], "Narrative packet");
++        assert_eq!(packet["summary"], "Read this first.");
++        let sections = packet["sections"].as_array().unwrap();
++        assert_eq!(sections.len(), 1);
++        assert_eq!(sections[0]["title"], "First section");
++        let rows = sections[0]["rows"].as_array().unwrap();
++        assert_eq!(rows.len(), 4);
++        assert_eq!(rows[1]["kind"], "hunk");
++        assert_eq!(rows[1]["path"], "lib/a.ex");
++        assert_eq!(rows[1]["hunk_index"], 1);
++        assert_eq!(rows[1]["line_start"], 2);
++        assert_eq!(rows[1]["line_end"], 3);
++    }
++
++    #[test]
++    fn validates_full_changed_line_coverage() {
++        let packet = parse_markdown(PACKET).unwrap();
++        validate_packet(&packet, &diff_index(DIFF)).unwrap();
++    }
++
++    #[test]
++    fn rejects_missing_changed_line_coverage() {
++        let packet = parse_markdown("# T\n\n## S\n@hunk lib/a.ex#1:L2-L3").unwrap();
++        let err = validate_packet(&packet, &diff_index(DIFF)).unwrap_err();
++        assert!(format!("{err:#}").contains("does not cover changed line"));
++    }
++
++    #[test]
++    fn rejects_duplicate_changed_line_coverage() {
++        let packet = parse_markdown(
++            "# T\n\n## S\n@hunk lib/a.ex#1\n@hunk lib/a.ex#1:L2-L3\n@hunk lib/a.ex#2",
++        )
++        .unwrap();
++        let err = validate_packet(&packet, &diff_index(DIFF)).unwrap_err();
++        assert!(format!("{err:#}").contains("more than once"));
++    }
++
++    #[test]
++    fn rejects_unknown_hunk_refs() {
++        let packet = parse_markdown("# T\n\n## S\n@hunk lib/a.ex#3").unwrap();
++        let err = validate_packet(&packet, &diff_index(DIFF)).unwrap_err();
++        assert!(format!("{err:#}").contains("unknown hunk"));
++    }
++
++    #[test]
++    fn rejects_invalid_slice_ranges() {
++        let packet = parse_markdown("# T\n\n## S\n@hunk lib/a.ex#1:L2-L8").unwrap();
++        let err = validate_packet(&packet, &diff_index(DIFF)).unwrap_err();
++        assert!(format!("{err:#}").contains("invalid slice"));
++    }
++
++    #[test]
++    fn rejects_missing_title() {
++        let err = parse_markdown("## Section\nbody").unwrap_err();
++        assert!(format!("{err:#}").contains("# title"));
++    }
++
++    #[test]
++    fn validates_json_packets() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("packet.json");
++        fs::write(
++            &path,
++            r#"{"format_version":1,"title":"JSON","sections":[{"title":"S","rows":[{"kind":"hunk","path":"lib/a.ex","hunk_index":1},{"kind":"hunk","path":"lib/a.ex","hunk_index":2}]}]}"#,
++        )
++        .unwrap();
++
++        let packet = load_packet_for_diff(&path, DIFF).unwrap();
++        assert_eq!(packet["title"], "JSON");
++    }
++
++    #[test]
++    fn discovers_markdown_before_json() {
++        let dir = tempfile::tempdir().unwrap();
++        let packet_dir = dir.path().join(".reviews").join("carey__packet-prototype");
++        fs::create_dir_all(&packet_dir).unwrap();
++        fs::write(packet_dir.join("packet.json"), "{}").unwrap();
++        fs::write(packet_dir.join("packet.md"), "# T").unwrap();
++
++        let found = discover_packet(dir.path(), "carey/packet-prototype").unwrap();
++        assert_eq!(
++            found.file_name().and_then(|n| n.to_str()),
++            Some("packet.md")
++        );
++    }
++}
+diff --git a/cli/tests/integration.rs b/cli/tests/integration.rs
+index 3cf08b8..90a5910 100644
+--- a/cli/tests/integration.rs
++++ b/cli/tests/integration.rs
+@@ -21,7 +21,10 @@ fn help_prints_usage() {
+ 
+ #[test]
+ fn subcommand_help_works_for_push() {
+-    let out = bin().args(["push", "--help"]).output().expect("push --help");
++    let out = bin()
++        .args(["push", "--help"])
++        .output()
++        .expect("push --help");
+     assert!(out.status.success());
+     let stdout = String::from_utf8_lossy(&out.stdout);
+     assert!(stdout.contains("--range"), "stdout = {stdout}");
+diff --git a/lib/reviews/packet_section_decisions.ex b/lib/reviews/packet_section_decisions.ex
+new file mode 100644
+index 0000000..865992b
+--- /dev/null
++++ b/lib/reviews/packet_section_decisions.ex
+@@ -0,0 +1,149 @@
++defmodule Reviews.PacketSectionDecisions do
++  @moduledoc """
++  Persistence helpers for per-reviewer packet section decisions.
++  """
++  import Ecto.Query, warn: false
++
++  alias Reviews.Accounts.User
++  alias Reviews.Repo
++  alias Reviews.ReviewPacket
++  alias Reviews.Reviews.{PacketSectionDecision, Patchset, Review}
++
++  def list_for_review(%Review{id: review_id}, %User{id: author_id}) do
++    PacketSectionDecision
++    |> where([d], d.review_id == ^review_id and d.author_id == ^author_id)
++    |> order_by([d], asc: d.patchset_id, asc: d.section_index)
++    |> Repo.all()
++  end
++
++  def list_for_review(_review, nil), do: []
++
++  def set_status(%Review{} = review, %Patchset{} = patchset, %User{} = author, attrs) do
++    section_index = attrs.section_index
++
++    base_attrs = %{
++      review_id: review.id,
++      patchset_id: patchset.id,
++      author_id: author.id,
++      section_index: section_index,
++      section_title: attrs.section_title,
++      section_fingerprint: attrs.section_fingerprint,
++      section_refs: attrs.section_refs,
++      status: attrs.status
++    }
++
++    %PacketSectionDecision{}
++    |> PacketSectionDecision.changeset(base_attrs)
++    |> Repo.insert(
++      on_conflict:
++        {:replace,
++         [
++           :section_title,
++           :section_fingerprint,
++           :section_refs,
++           :status,
++           :updated_at
++         ]},
++      conflict_target: [:review_id, :patchset_id, :author_id, :section_index]
++    )
++  end
++
++  def clear_status(%Review{} = review, %Patchset{} = patchset, %User{} = author, section_index) do
++    case Repo.get_by(PacketSectionDecision,
++           review_id: review.id,
++           patchset_id: patchset.id,
++           author_id: author.id,
++           section_index: section_index
++         ) do
++      nil -> {:ok, nil}
++      %PacketSectionDecision{} = decision -> Repo.delete(decision)
++    end
++  end
++
++  def section_state(section, decisions, selected_patchset, patchsets) do
++    patchset_number_by_id = Map.new(patchsets, &{&1.id, &1.number})
++
++    current =
++      Enum.find(decisions, fn decision ->
++        selected_patchset &&
++          decision.patchset_id == selected_patchset.id &&
++          decision.section_index == section.index
++      end)
++
++    inherited =
++      inherited_decision(section, decisions, selected_patchset, patchset_number_by_id)
++
++    effective =
++      case current do
++        %{status: "pending"} -> nil
++        nil -> inherited
++        decision -> decision
++      end
++
++    %{
++      current: current,
++      inherited: inherited,
++      effective: effective,
++      previous:
++        previous_invalidated_decision(
++          section,
++          decisions,
++          selected_patchset,
++          patchset_number_by_id
++        )
++    }
++  end
++
++  defp inherited_decision(_section, _decisions, nil, _numbers), do: nil
++
++  defp inherited_decision(section, decisions, selected_patchset, patchset_number_by_id) do
++    section
++    |> matching_prior_decisions(decisions, selected_patchset, patchset_number_by_id)
++    |> Enum.find(fn decision ->
++      MapSet.new(decision.section_refs || []) == MapSet.new(section.refs)
++    end)
++  end
++
++  defp previous_invalidated_decision(_section, _decisions, nil, _numbers), do: nil
++
++  defp previous_invalidated_decision(section, decisions, selected_patchset, patchset_number_by_id) do
++    current_refs = MapSet.new(section.refs)
++
++    section
++    |> matching_prior_decisions(decisions, selected_patchset, patchset_number_by_id)
++    |> Enum.find(fn decision ->
++      previous_refs = MapSet.new(decision.section_refs || [])
++
++      Map.get(patchset_number_by_id, decision.patchset_id) == selected_patchset.number - 1 &&
++        previous_refs != current_refs
++    end)
++    |> case do
++      nil ->
++        nil
++
++      decision ->
++        %{
++          status: decision.status,
++          patchset_number: Map.fetch!(patchset_number_by_id, decision.patchset_id),
++          section_index: decision.section_index
++        }
++    end
++  end
++
++  defp matching_prior_decisions(section, decisions, selected_patchset, patchset_number_by_id) do
++    current_title = ReviewPacket.normalize_title(section.title)
++    current_refs = MapSet.new(section.refs)
++
++    decisions
++    |> Enum.filter(fn decision ->
++      previous_number = Map.get(patchset_number_by_id, decision.patchset_id)
++      previous_refs = MapSet.new(decision.section_refs || [])
++      title_match = ReviewPacket.normalize_title(decision.section_title) == current_title
++      refs_overlap = MapSet.size(MapSet.intersection(previous_refs, current_refs)) > 0
++
++      previous_number && previous_number < selected_patchset.number &&
++        (title_match || refs_overlap)
++    end)
++    |> Enum.sort_by(&Map.get(patchset_number_by_id, &1.patchset_id), :desc)
++  end
++end
+diff --git a/lib/reviews/review_navigation.ex b/lib/reviews/review_navigation.ex
+new file mode 100644
+index 0000000..0a1c8ce
+--- /dev/null
++++ b/lib/reviews/review_navigation.ex
+@@ -0,0 +1,70 @@
++defmodule Reviews.ReviewNavigation do
++  @moduledoc """
++  Derived read-model helpers for review revisions, packets, and diff stats.
++
++  Patchsets remain the persisted primitive. The UI presents them as linear
++  revisions so each update is a new view over the diff, while packet presence
++  stays metadata on that revision.
++  """
++
++  alias Reviews.{ReviewPacket, Reviews}
++
++  def build(patchsets, selected_patchset) do
++    revisions = Enum.map(patchsets, &revision/1)
++    selected_number = selected_patchset && selected_patchset.number
++
++    selected_index =
++      Enum.find_index(revisions, &(&1.number == selected_number)) ||
++        default_revision_index(revisions)
++
++    %{
++      revisions: revisions,
++      revision_count: length(revisions),
++      current_revision: Enum.at(revisions, selected_index) || empty_revision(),
++      selected_index: selected_index + 1,
++      previous_revision: at_index(revisions, selected_index - 1),
++      next_revision: Enum.at(revisions, selected_index + 1)
++    }
++  end
++
++  def patchset_stats(%{raw_diff: raw_diff}) do
++    raw_diff
++    |> Reviews.parse_diff_files()
++    |> diff_stats_from_files()
++  end
++
++  def diff_stats_from_files(file_diffs) do
++    Enum.reduce(file_diffs, %{files: 0, additions: 0, deletions: 0}, fn file, acc ->
++      %{
++        files: acc.files + 1,
++        additions: acc.additions + Map.get(file, :additions, 0),
++        deletions: acc.deletions + Map.get(file, :deletions, 0)
++      }
++    end)
++  end
++
++  def format_diff_stats(%{files: files, additions: additions, deletions: deletions}) do
++    "#{files} #{plural(files, "file")} · +#{additions} -#{deletions}"
++  end
++
++  defp revision(patchset) do
++    %{
++      number: patchset.number,
++      packet_present: ReviewPacket.present?(patchset.packet),
++      stats: patchset_stats(patchset)
++    }
++  end
++
++  defp empty_revision, do: %{number: nil, packet_present: false, stats: empty_stats()}
++
++  defp empty_stats, do: %{files: 0, additions: 0, deletions: 0}
++
++  defp default_revision_index([]), do: 0
++  defp default_revision_index(revisions), do: length(revisions) - 1
++
++  defp at_index(_items, index) when index < 0, do: nil
++  defp at_index(items, index), do: Enum.at(items, index)
++
++  defp plural(1, word), do: word
++  defp plural(_, word), do: word <> "s"
++end
+diff --git a/lib/reviews/review_packet.ex b/lib/reviews/review_packet.ex
+new file mode 100644
+index 0000000..e4f065a
+--- /dev/null
++++ b/lib/reviews/review_packet.ex
+@@ -0,0 +1,154 @@
++defmodule Reviews.ReviewPacket do
++  @moduledoc """
++  Typed read wrapper around the canonical packet JSON map.
++
++  The current packet shape is title, summary, and narrative sections. Each
++  section owns ordered rows so prose and diff slices can be interleaved.
++  """
++
++  defstruct data: %{}
++
++  @type t :: %__MODULE__{data: map()}
++
++  @text_keys ~w(title summary)
++  @row_keys ~w(sections rows)
++  @atom_key_names @text_keys ++ @row_keys ++ ~w(
++    body
++    format_version
++    hunk_index
++    kind
++    line_end
++    line_start
++    path
++  )
++  @atom_keys Map.new(@atom_key_names, fn key -> {key, String.to_atom(key)} end)
++
++  def new(%__MODULE__{} = packet), do: packet
++  def new(packet) when is_map(packet), do: %__MODULE__{data: packet}
++  def new(_), do: %__MODULE__{data: %{}}
++
++  def present?(packet) do
++    packet = new(packet)
++
++    Enum.any?(@text_keys, &(text(packet, &1) != "")) ||
++      sections(packet) != []
++  end
++
++  def text(packet, key) when is_binary(key) do
++    packet = new(packet)
++
++    case get(packet, key) do
++      value when is_binary(value) -> value
++      value when is_integer(value) -> Integer.to_string(value)
++      _ -> ""
++    end
++  end
++
++  def int(packet, key) when is_binary(key) do
++    packet = new(packet)
++
++    case get(packet, key) do
++      value when is_integer(value) ->
++        value
++
++      value when is_binary(value) ->
++        case Integer.parse(value) do
++          {n, ""} -> n
++          _ -> nil
++        end
++
++      _ ->
++        nil
++    end
++  end
++
++  def rows(packet, key) when is_binary(key) do
++    packet = new(packet)
++
++    case get(packet, key) do
++      rows when is_list(rows) -> Enum.filter(rows, &is_map/1)
++      _ -> []
++    end
++  end
++
++  def sections(packet) do
++    packet
++    |> rows("sections")
++    |> Enum.with_index()
++    |> Enum.map(fn {section, index} ->
++      %{
++        index: index,
++        title: text(section, "title"),
++        fingerprint: section_fingerprint(section, index),
++        refs: section_refs(section),
++        rows: rows(section, "rows")
++      }
++    end)
++  end
++
++  def section_at(packet, index) when is_integer(index) do
++    packet
++    |> sections()
++    |> Enum.find(&(&1.index == index))
++  end
++
++  def raw(%__MODULE__{data: data}), do: data
++  def raw(packet) when is_map(packet), do: packet
++  def raw(_), do: %{}
++
++  def section_fingerprint(section, index) do
++    title = section |> text("title") |> normalize_title()
++    refs = section |> section_refs() |> Enum.join("|")
++
++    :crypto.hash(:sha256, "#{title}\n#{refs}\n#{index}")
++    |> Base.encode16(case: :lower)
++  end
++
++  def normalize_title(title) do
++    title
++    |> to_string()
++    |> String.downcase()
++    |> String.replace(~r/[^a-z0-9]+/, "-")
++    |> String.trim("-")
++  end
++
++  def section_refs(section) when is_map(section) do
++    section
++    |> rows("rows")
++    |> Enum.filter(&(text(&1, "kind") == "hunk"))
++    |> Enum.map(&row_ref/1)
++  end
++
++  def row_ref(row) do
++    path = text(row, "path")
++    hunk_index = int(row, "hunk_index")
++    line_start = int(row, "line_start")
++    line_end = int(row, "line_end")
++
++    cond do
++      path == "" or is_nil(hunk_index) ->
++        ""
++
++      line_start && line_end ->
++        "#{path}##{hunk_index}:L#{line_start}-L#{line_end}"
++
++      true ->
++        "#{path}##{hunk_index}"
++    end
++  end
++
++  defp get(%__MODULE__{data: data}, key) do
++    case Map.fetch(data, key) do
++      {:ok, value} ->
++        value
++
++      :error ->
++        with {:ok, atom_key} <- Map.fetch(@atom_keys, key),
++             {:ok, value} <- Map.fetch(data, atom_key) do
++          value
++        else
++          _ -> nil
++        end
++    end
++  end
++end
+diff --git a/lib/reviews/reviews.ex b/lib/reviews/reviews.ex
+index f25ce2b..33a1d1b 100644
+--- a/lib/reviews/reviews.ex
++++ b/lib/reviews/reviews.ex
+@@ -46,6 +46,7 @@ defmodule Reviews.Reviews do
+     patchset_attrs = %{
+       number: 1,
+       raw_diff: raw_diff,
++      packet: attrs[:packet] || attrs["packet"],
+       base_sha: attrs[:base_sha] || attrs["base_sha"],
+       branch_name: attrs[:branch_name] || attrs["branch_name"],
+       pushed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+@@ -77,6 +78,7 @@ defmodule Reviews.Reviews do
+       review_id: review.id,
+       number: next_number,
+       raw_diff: raw_diff,
++      packet: attrs[:packet] || attrs["packet"],
+       base_sha: attrs[:base_sha] || attrs["base_sha"],
+       branch_name: attrs[:branch_name] || attrs["branch_name"],
+       pushed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+@@ -151,7 +153,7 @@ defmodule Reviews.Reviews do
+   # --- Diff parsing -------------------------------------------------------
+ 
+   @doc """
+-  Returns a list of `%{path, old_path, status, additions, deletions}` parsed
++  Returns a list of `%{path, old_path, status, additions, deletions, raw_diff}` parsed
+   out of a unified `git diff` string. Exposed for the LiveView so it can
+   display +/- counts without re-querying the DB rows. Pure function.
+   """
+@@ -163,11 +165,12 @@ defmodule Reviews.Reviews do
+     # Split on `diff --git ` boundaries, keeping each chunk.
+     raw_diff
+     |> String.split(~r/^diff --git /m, trim: true)
+-    |> Enum.map(&parse_one_file_chunk/1)
++    |> Enum.map(&parse_one_file_chunk("diff --git " <> &1))
+     |> Enum.reject(&is_nil/1)
+   end
+ 
+-  defp parse_one_file_chunk(chunk) do
++  defp parse_one_file_chunk(raw_chunk) do
++    chunk = String.trim_leading(raw_chunk, "diff --git ")
+     lines = String.split(chunk, "\n")
+     header_line = List.first(lines) || ""
+ 
+@@ -192,7 +195,8 @@ defmodule Reviews.Reviews do
+           old_path: if(status in ["renamed", "deleted"], do: old_path),
+           status: status,
+           additions: additions,
+-          deletions: deletions
++          deletions: deletions,
++          raw_diff: raw_chunk
+         }
+     end
+   end
+@@ -227,7 +231,10 @@ defmodule Reviews.Reviews do
+           patchset_id: patchset_id,
+           path: meta.path,
+           old_path: meta.old_path,
+-          status: meta.status
++          status: meta.status,
++          additions: meta.additions,
++          deletions: meta.deletions,
++          raw_diff: meta.raw_diff
+         }
+ 
+         case %File{} |> File.changeset(attrs) |> Repo.insert() do
+diff --git a/lib/reviews/reviews/file.ex b/lib/reviews/reviews/file.ex
+index 7ce1f24..89e13b2 100644
+--- a/lib/reviews/reviews/file.ex
++++ b/lib/reviews/reviews/file.ex
+@@ -18,6 +18,9 @@ defmodule Reviews.Reviews.File do
+     field :path, :string
+     field :old_path, :string
+     field :status, :string
++    field :additions, :integer, default: 0
++    field :deletions, :integer, default: 0
++    field :raw_diff, :string, default: ""
+ 
+     belongs_to :patchset, Reviews.Reviews.Patchset
+ 
+@@ -25,13 +28,15 @@ defmodule Reviews.Reviews.File do
+   end
+ 
+   @required ~w(patchset_id path status)a
+-  @optional ~w(old_path)a
++  @optional ~w(old_path additions deletions raw_diff)a
+ 
+   def changeset(file, attrs) do
+     file
+     |> cast(attrs, @required ++ @optional)
+     |> validate_required(@required)
+     |> validate_inclusion(:status, @statuses)
++    |> validate_number(:additions, greater_than_or_equal_to: 0)
++    |> validate_number(:deletions, greater_than_or_equal_to: 0)
+   end
+ 
+   def statuses, do: @statuses
+diff --git a/lib/reviews/reviews/packet_section_decision.ex b/lib/reviews/reviews/packet_section_decision.ex
+new file mode 100644
+index 0000000..35cf037
+--- /dev/null
++++ b/lib/reviews/reviews/packet_section_decision.ex
+@@ -0,0 +1,41 @@
++defmodule Reviews.Reviews.PacketSectionDecision do
++  @moduledoc """
++  Per-reviewer decision for one packet section in one patchset.
++  """
++  use Ecto.Schema
++  import Ecto.Changeset
++
++  @type t :: %__MODULE__{}
++
++  @statuses ~w(approved denied ignored pending)
++
++  schema "packet_section_decisions" do
++    field :section_index, :integer
++    field :section_title, :string
++    field :section_fingerprint, :string
++    field :section_refs, {:array, :string}, default: []
++    field :status, :string
++
++    belongs_to :review, Reviews.Reviews.Review
++    belongs_to :patchset, Reviews.Reviews.Patchset
++    belongs_to :author, Reviews.Accounts.User
++
++    timestamps(type: :utc_datetime)
++  end
++
++  @required ~w(review_id patchset_id author_id section_index section_title section_fingerprint status)a
++  @optional ~w(section_refs)a
++
++  def changeset(decision, attrs) do
++    decision
++    |> cast(attrs, @required ++ @optional)
++    |> validate_required(@required)
++    |> validate_number(:section_index, greater_than_or_equal_to: 0)
++    |> validate_inclusion(:status, @statuses)
++    |> unique_constraint([:review_id, :patchset_id, :author_id, :section_index],
++      name: :packet_section_decisions_one_per_user_section
++    )
++  end
++
++  def statuses, do: @statuses
++end
+diff --git a/lib/reviews/reviews/patchset.ex b/lib/reviews/reviews/patchset.ex
+index a6c6db6..680254e 100644
+--- a/lib/reviews/reviews/patchset.ex
++++ b/lib/reviews/reviews/patchset.ex
+@@ -16,6 +16,7 @@ defmodule Reviews.Reviews.Patchset do
+     field :number, :integer
+     field :raw_diff, :string
+     field :parsed_diff, :map
++    field :packet, :map
+     field :base_sha, :string
+     field :branch_name, :string
+     field :pushed_at, :utc_datetime
+@@ -27,7 +28,7 @@ defmodule Reviews.Reviews.Patchset do
+   end
+ 
+   @required ~w(review_id number raw_diff)a
+-  @optional ~w(parsed_diff base_sha branch_name pushed_at)a
++  @optional ~w(parsed_diff packet base_sha branch_name pushed_at)a
+ 
+   def changeset(patchset, attrs) do
+     patchset
+diff --git a/lib/reviews/review_view.ex b/lib/reviews/review_view.ex
+index 662aba1..f85909b 100644
+--- a/lib/reviews/review_view.ex
++++ b/lib/reviews/review_view.ex
+@@ -8,6 +8,7 @@ defmodule Reviews.ReviewView do
+   """
+ 
+   alias Reviews.Accounts.User
++  alias Reviews.PacketSectionDecisions
+   alias Reviews.Reviews, as: ReviewsContext
+   alias Reviews.Reviews.{File, Patchset, Review}
+   alias Reviews.Threads
+@@ -18,6 +19,7 @@ defmodule Reviews.ReviewView do
+           selected_patchset: Patchset.t() | nil,
+           files: [File.t()],
+           file_diffs: [map()],
++          packet_section_decisions: [map()],
+           published_threads: [map()],
+           drafts: [map()],
+           viewer: User.t() | nil
+@@ -100,6 +102,7 @@ defmodule Reviews.ReviewView do
+       selected_patchset: selected,
+       files: files,
+       file_diffs: file_diff_meta(files, selected),
++      packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
+       published_threads: Threads.list_published_threads(review.id),
+       drafts: list_drafts(review, viewer),
+       viewer: viewer
+@@ -112,21 +115,40 @@ defmodule Reviews.ReviewView do
+   defp file_diff_meta(_files, nil), do: []
+ 
+   defp file_diff_meta(files, %Patchset{} = selected_patchset) do
+-    raw = selected_patchset.raw_diff || ""
+-    parsed = ReviewsContext.parse_diff_files(raw) |> Enum.into(%{}, &{&1.path, &1})
+-
+     Enum.map(files, fn file ->
+-      meta = Map.get(parsed, file.path, %{additions: 0, deletions: 0})
+-      raw_for_file = ReviewsContext.raw_diff_for_file(selected_patchset, file.path) || ""
++      raw_for_file =
++        if file.raw_diff in [nil, ""] do
++          ReviewsContext.raw_diff_for_file(selected_patchset, file.path) || ""
++        else
++          file.raw_diff
++        end
++
++      {additions, deletions} = file_change_counts(file, raw_for_file)
+ 
+       Map.merge(file_to_map(file), %{
+-        additions: Map.get(meta, :additions, 0),
+-        deletions: Map.get(meta, :deletions, 0),
++        additions: additions,
++        deletions: deletions,
+         raw_diff: raw_for_file
+       })
+     end)
+   end
+ 
++  defp file_change_counts(%File{additions: additions, deletions: deletions}, _raw_for_file)
++       when (is_integer(additions) and additions > 0) or
++              (is_integer(deletions) and deletions > 0) do
++    {additions || 0, deletions || 0}
++  end
++
++  defp file_change_counts(%File{additions: additions, deletions: deletions}, raw_for_file) do
++    case ReviewsContext.parse_diff_files(raw_for_file) do
++      [%{additions: parsed_additions, deletions: parsed_deletions} | _] ->
++        {parsed_additions, parsed_deletions}
++
++      _ ->
++        {additions || 0, deletions || 0}
++    end
++  end
++
+   defp file_to_map(file) do
+     %{
+       id: file.id,
+diff --git a/lib/reviews_web/controllers/api/patchset_controller.ex b/lib/reviews_web/controllers/api/patchset_controller.ex
+index 0761511..2cce1aa 100644
+--- a/lib/reviews_web/controllers/api/patchset_controller.ex
++++ b/lib/reviews_web/controllers/api/patchset_controller.ex
+@@ -20,7 +20,8 @@ defmodule ReviewsWeb.Api.PatchsetController do
+         attrs = %{
+           base_sha: params["base_sha"],
+           branch_name: params["branch_name"],
+-          raw_diff: params["raw_diff"]
++          raw_diff: params["raw_diff"],
++          packet: params["packet"]
+         }
+ 
+         case Reviews.append_patchset(review, attrs) do
+diff --git a/lib/reviews_web/controllers/api/review_controller.ex b/lib/reviews_web/controllers/api/review_controller.ex
+index 5b86c3b..6b51b0c 100644
+--- a/lib/reviews_web/controllers/api/review_controller.ex
++++ b/lib/reviews_web/controllers/api/review_controller.ex
+@@ -12,7 +12,7 @@ defmodule ReviewsWeb.Api.ReviewController do
+   """
+   use ReviewsWeb, :controller
+ 
+-  alias Reviews.ReviewView
++  alias Reviews.{ReviewNavigation, ReviewPacket, ReviewView}
+   alias Reviews.Reviews, as: ReviewsContext
+ 
+   @doc "GET /api/v1/reviews/:slug"
+@@ -62,7 +62,9 @@ defmodule ReviewsWeb.Api.ReviewController do
+       number: ps.number,
+       base_sha: ps.base_sha,
+       branch_name: ps.branch_name,
+-      pushed_at: ps.pushed_at
++      pushed_at: ps.pushed_at,
++      packet_present: ReviewPacket.present?(ps.packet),
++      stats: ReviewNavigation.patchset_stats(ps)
+     }
+   end
+ 
+@@ -74,6 +76,8 @@ defmodule ReviewsWeb.Api.ReviewController do
+       base_sha: ps.base_sha,
+       branch_name: ps.branch_name,
+       pushed_at: ps.pushed_at,
++      packet: ps.packet,
++      stats: ReviewNavigation.patchset_stats(ps),
+       files: Enum.map(ReviewView.file_payloads(snapshot), &render_file/1)
+     }
+   end
+@@ -146,7 +150,8 @@ defmodule ReviewsWeb.Api.ReviewController do
+       description: params["description"],
+       base_sha: params["base_sha"],
+       branch_name: params["branch_name"],
+-      raw_diff: params["raw_diff"]
++      raw_diff: params["raw_diff"],
++      packet: params["packet"]
+     }
+   end
+ 
+diff --git a/lib/reviews_web/live/review_live/diff_components.ex b/lib/reviews_web/live/review_live/diff_components.ex
+new file mode 100644
+index 0000000..dc13537
+--- /dev/null
++++ b/lib/reviews_web/live/review_live/diff_components.ex
+@@ -0,0 +1,158 @@
++defmodule ReviewsWeb.ReviewLive.DiffComponents do
++  @moduledoc false
++  use ReviewsWeb, :html
++
++  alias Reviews.ReviewView
++
++  attr :file_diffs, :list, required: true
++  attr :open_threads_by_op, :list, required: true
++  attr :selected_patchset, :any, required: true
++  attr :published_threads, :list, required: true
++  attr :drafts, :list, required: true
++  attr :current_user, :any, required: true
++  attr :diff_style, :string, required: true
++  attr :expanded_file_ids, :any, required: true
++
++  def diff_shell(assigns) do
++    ~H"""
++    <div class="rev-shell">
++      <aside id="file-tree" class="rev-sidebar">
++        <ul class="rev-file-list">
++          <li :for={fd <- @file_diffs}>
++            <a href={"#file-#{fd.id}"} class="rev-file-link">
++              <span class="flex items-center gap-2 min-w-0">
++                <.ds_status_mark status={fd.status} />
++                <span class="rev-file-path truncate" translate="no">{fd.path}</span>
++              </span>
++              <span class="rev-file-stats">
++                <span class="rev-stat-add">+{fd.additions}</span>
++                <span class="rev-stat-del">-{fd.deletions}</span>
++              </span>
++            </a>
++          </li>
++          <li :if={@file_diffs == []}>
++            <span class="rev-empty">No files in this patchset.</span>
++          </li>
++        </ul>
++
++        <section
++          :if={@open_threads_by_op != []}
++          id="open-threads"
++          class="rev-open-threads"
++          aria-label="Open threads"
++        >
++          <h2 class="rev-open-threads-heading">Open threads</h2>
++          <div :for={{op, threads} <- @open_threads_by_op} class="rev-open-thread-group">
++            <header class="rev-open-thread-group-header">
++              <img
++                :if={op && op.avatar_url}
++                src={op.avatar_url}
++                alt=""
++                width="16"
++                height="16"
++                loading="lazy"
++                class="rdr-avatar"
++              />
++              <span>{(op && op.username) || "anonymous"}</span>
++            </header>
++            <button
++              :for={t <- threads}
++              type="button"
++              class="rev-open-thread-entry"
++              phx-click={
++                JS.dispatch("reviews:scroll-to-anchor",
++                  detail: %{
++                    file_id: file_id_for(@file_diffs, t.file_path),
++                    file_path: t.file_path,
++                    side: t.side,
++                    line_number_hint: anchor_line_hint(t)
++                  }
++                )
++              }
++            >
++              <span class="rev-open-thread-meta">
++                <span class="rev-open-thread-path" translate="no">
++                  {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
++                </span>
++                <span class="rev-open-thread-snippet">
++                  {ReviewView.first_comment_snippet(t)}
++                </span>
++              </span>
++            </button>
++          </div>
++        </section>
++      </aside>
++
++      <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
++        <article
++          :for={fd <- @file_diffs}
++          id={"file-#{fd.id}"}
++          class={["rev-file-card", file_expanded?(@expanded_file_ids, fd.id) && "is-open"]}
++        >
++          <button
++            type="button"
++            class="rev-file-summary"
++            phx-click="toggle_file_diff"
++            phx-value-file_id={fd.id}
++            aria-expanded={file_expanded?(@expanded_file_ids, fd.id)}
++            aria-controls={"diff-file-body-#{fd.id}"}
++          >
++            <span class="sr-only">Toggle {fd.path}</span>
++            <.icon name="hero-chevron-down" class="review-collapse-icon" />
++          </button>
++          <div
++            :if={file_expanded?(@expanded_file_ids, fd.id)}
++            id={"diff-file-body-#{fd.id}"}
++            class="rev-file-body"
++          >
++            <div
++              id={"diff-#{fd.id}"}
++              phx-hook="DiffRenderer"
++              phx-update="ignore"
++              data-file-id={fd.id}
++              data-file-path={fd.path}
++              data-file-status={fd.status}
++              data-side="new"
++              data-patchset-number={@selected_patchset.number}
++              data-raw-diff={fd.raw_diff}
++              data-threads={threads_json(@published_threads, fd.path)}
++              data-drafts={drafts_json(@drafts, fd.path, @current_user)}
++              data-signed-in={if @current_user, do: "true", else: "false"}
++              data-diff-style={@diff_style}
++            >
++            </div>
++          </div>
++          <div :if={!file_expanded?(@expanded_file_ids, fd.id)} class="rev-file-placeholder">
++            <span>Diff deferred until this file is opened.</span>
++          </div>
++        </article>
++
++        <p :if={@file_diffs == []} class="rev-empty">
++          No files in this patchset.
++        </p>
++      </section>
++    </div>
++    """
++  end
++
++  defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
++  defp anchor_line_hint(_), do: nil
++
++  defp file_id_for(file_diffs, file_path) do
++    Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
++  end
++
++  defp file_expanded?(expanded_file_ids, file_id) do
++    MapSet.member?(expanded_file_ids, file_id)
++  end
++
++  defp threads_json(threads, file_path) do
++    snapshot = %{published_threads: threads}
++    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
++  end
++
++  defp drafts_json(drafts, file_path, viewer) do
++    snapshot = %{drafts: drafts, viewer: viewer}
++    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
++  end
++end
+diff --git a/lib/reviews_web/live/review_live.ex b/lib/reviews_web/live/review_live.ex
+index b531394..7d41163 100644
+--- a/lib/reviews_web/live/review_live.ex
++++ b/lib/reviews_web/live/review_live.ex
+@@ -15,9 +15,15 @@ defmodule ReviewsWeb.ReviewLive do
+   use ReviewsWeb, :live_view
+ 
+   alias Reviews.Accounts
++  alias Reviews.PacketSectionDecisions
++  alias Reviews.ReviewNavigation
++  alias Reviews.ReviewPacket
+   alias Reviews.ReviewView
+   alias Reviews.Reviews, as: ReviewsContext
+   alias Reviews.Threads
++  alias ReviewsWeb.ReviewLive.DiffComponents
++  alias ReviewsWeb.ReviewLive.PacketComponents
++  alias ReviewsWeb.ReviewLive.RevisionNavComponents
+ 
+   @impl true
+   def mount(%{"slug" => slug}, session, socket) do
+@@ -45,6 +51,8 @@ defmodule ReviewsWeb.ReviewLive do
+               |> assign(:summary_body, "")
+               |> assign(:banner_message, nil)
+               |> assign(:diff_style, "split")
++              |> assign(:expanded_file_ids, MapSet.new())
++              |> assign(:expanded_section_ids, MapSet.new())
+               |> assign_snapshot(snapshot)
+ 
+             {:ok, socket}
+@@ -59,7 +67,21 @@ defmodule ReviewsWeb.ReviewLive do
+   end
+ 
+   @impl true
+-  def handle_params(_params, _uri, socket), do: {:noreply, socket}
++  def handle_params(params, _uri, socket) do
++    case parse_optional_patchset(params["patchset"]) do
++      {:ok, patchset_number} ->
++        case refresh_snapshot(socket, patchset_number: patchset_number) do
++          {:ok, socket} ->
++            {:noreply, socket}
++
++          {:error, :patchset_not_found} ->
++            {:noreply, put_flash(socket, :error, "Patchset not found.")}
++        end
++
++      :error ->
++        {:noreply, put_flash(socket, :error, "Patchset not found.")}
++    end
++  end
+ 
+   @impl true
+   def handle_event("select_patchset", %{"number" => number}, socket) do
+@@ -75,6 +97,23 @@ defmodule ReviewsWeb.ReviewLive do
+     end
+   end
+ 
++  @impl true
++  def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
++      when status in ["approved", "denied", "ignored"] do
++    with %{} = user <- socket.assigns.current_user,
++         %{} = patchset <- socket.assigns.selected_patchset,
++         {section_index, ""} <- Integer.parse(to_string(index)),
++         %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
++         {:ok, _decision} <- put_section_status(socket, patchset, user, section, status) do
++      {:noreply, refresh_snapshot!(socket)}
++    else
++      nil -> {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
++      _ -> {:noreply, put_flash(socket, :error, "Could not update section.")}
++    end
++  end
++
++  def handle_event("set_section_status", _params, socket), do: {:noreply, socket}
++
+   @impl true
+   def handle_event("open_publish_modal", _params, socket) do
+     {:noreply, assign(socket, :show_publish_modal, true)}
+@@ -101,7 +140,12 @@ defmodule ReviewsWeb.ReviewLive do
+     socket = assign(socket, :diff_style, style)
+ 
+     socket =
+-      Enum.reduce(socket.assigns.files, socket, fn file, acc ->
++      socket.assigns.file_diffs
++      |> Enum.filter(fn file ->
++        MapSet.member?(socket.assigns.expanded_file_ids, file.id) ||
++          packet_diff_path?(socket.assigns.selected_patchset, file.path)
++      end)
++      |> Enum.reduce(socket, fn file, acc ->
+         push_event(acc, "diff_style_updated:#{file.path}", %{style: style})
+       end)
+ 
+@@ -110,6 +154,42 @@ defmodule ReviewsWeb.ReviewLive do
+ 
+   def handle_event("select_diff_style", _params, socket), do: {:noreply, socket}
+ 
++  @impl true
++  def handle_event("toggle_packet_section", %{"section_index" => section_index}, socket) do
++    case parse_int(section_index) do
++      index when is_integer(index) ->
++        expanded_section_ids =
++          if MapSet.member?(socket.assigns.expanded_section_ids, index) do
++            MapSet.delete(socket.assigns.expanded_section_ids, index)
++          else
++            MapSet.put(socket.assigns.expanded_section_ids, index)
++          end
++
++        {:noreply, assign(socket, :expanded_section_ids, expanded_section_ids)}
++
++      _ ->
++        {:noreply, socket}
++    end
++  end
++
++  @impl true
++  def handle_event("toggle_file_diff", %{"file_id" => file_id}, socket) do
++    case parse_int(file_id) do
++      id when is_integer(id) ->
++        expanded_file_ids =
++          if MapSet.member?(socket.assigns.expanded_file_ids, id) do
++            MapSet.delete(socket.assigns.expanded_file_ids, id)
++          else
++            MapSet.put(socket.assigns.expanded_file_ids, id)
++          end
++
++        {:noreply, assign(socket, :expanded_file_ids, expanded_file_ids)}
++
++      _ ->
++        {:noreply, socket}
++    end
++  end
++
+   @impl true
+   def handle_event("save_draft", params, socket) do
+     require Logger
+@@ -248,6 +328,15 @@ defmodule ReviewsWeb.ReviewLive do
+ 
+   defp parse_int(_), do: nil
+ 
++  defp parse_optional_patchset(nil), do: {:ok, nil}
++
++  defp parse_optional_patchset(value) do
++    case Integer.parse(to_string(value)) do
++      {n, ""} when n > 0 -> {:ok, n}
++      _ -> :error
++    end
++  end
++
+   defp load_current_user(session) do
+     case session["current_user_id"] do
+       nil ->
+@@ -332,29 +421,6 @@ defmodule ReviewsWeb.ReviewLive do
+             </script>
+           </div>
+ 
+-          <div class="review-patchset" id="patchset-selector" aria-label="Patchset">
+-            <button
+-              :for={ps <- @patchsets}
+-              id={"patchset-#{ps.number}"}
+-              type="button"
+-              phx-click="select_patchset"
+-              phx-value-number={ps.number}
+-              aria-pressed={
+-                if(@selected_patchset && @selected_patchset.id == ps.id,
+-                  do: "true",
+-                  else: "false"
+-                )
+-              }
+-              class={[
+-                "review-chip focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+-                @selected_patchset && @selected_patchset.id == ps.id &&
+-                  "is-active"
+-              ]}
+-            >
+-              v{ps.number}
+-            </button>
+-          </div>
+-
+           <button
+             id="publish-review-button"
+             type="button"
+@@ -373,13 +439,67 @@ defmodule ReviewsWeb.ReviewLive do
+         </:actions>
+ 
+         <div class="design-main">
++          <% packet = @selected_patchset && @selected_patchset.packet %>
++          <% has_packet = ReviewPacket.present?(packet) %>
++          <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
++          <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
++          <% packet_effort =
++            if has_packet do
++              PacketComponents.packet_effort_for_header(
++                packet,
++                @file_diffs,
++                @packet_section_decisions,
++                @selected_patchset,
++                @patchsets
++              )
++            end %>
++
+           <header class="review-header">
+-            <h1 class="review-title" translate="no">{@review.title}</h1>
+-            <p :if={@review.description || @file_diffs != []} class="review-description">
++            <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
++            <h1
++              id={if(has_packet, do: "review-packet-title", else: "review-title")}
++              class={["review-title", has_packet && "is-packet-title"]}
++              translate="no"
++            >
++              {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
++            </h1>
++            <PacketComponents.markdown
++              :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
++              body={ReviewPacket.text(packet, "summary")}
++              class="review-description review-packet-lede"
++            />
++            <p
++              :if={!has_packet && (@review.description || @file_diffs != [])}
++              class="review-description"
++            >
+               {@review.description || review_summary(@file_diffs, @drafts)}
+             </p>
++            <div :if={@selected_patchset} class="review-header-meta">
++              <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
++              <span class="review-header-change-stat">
++                <PacketComponents.change_stat
++                  additions={diff_stats.additions}
++                  deletions={diff_stats.deletions}
++                />
++              </span>
++              <span
++                :if={has_packet && packet_effort}
++                class="review-header-estimate"
++                title="Estimated review time"
++              >
++                <strong>{packet_effort.time}</strong>
++                <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
++              </span>
++            </div>
+           </header>
+ 
++          <RevisionNavComponents.revision_nav
++            nav={revision_nav}
++            review={@review}
++            live_action={@live_action}
++            selected_patchset={@selected_patchset}
++          />
++
+           <%!-- Patchset-pushed banner --%>
+           <div
+             :if={@banner_message}
+@@ -392,104 +512,33 @@ defmodule ReviewsWeb.ReviewLive do
+             </button>
+           </div>
+ 
++          <PacketComponents.packet
++            :if={has_packet && @live_action != :changes}
++            packet={packet}
++            review={@review}
++            patchsets={@patchsets}
++            section_decisions={@packet_section_decisions}
++            file_diffs={@file_diffs}
++            selected_patchset={@selected_patchset}
++            published_threads={@published_threads}
++            drafts={@drafts}
++            current_user={@current_user}
++            diff_style={@diff_style}
++            expanded_section_ids={@expanded_section_ids}
++          />
++
+           <%!-- Body: sidebar + diff list --%>
+-          <div class="rev-shell">
+-            <aside id="file-tree" class="rev-sidebar">
+-              <ul class="rev-file-list">
+-                <li :for={fd <- @file_diffs}>
+-                  <a href={"#file-#{fd.id}"} class="rev-file-link">
+-                    <span class="flex items-center gap-2 min-w-0">
+-                      <.ds_status_mark status={fd.status} />
+-                      <span class="rev-file-path truncate" translate="no">{fd.path}</span>
+-                    </span>
+-                    <span class="rev-file-stats">
+-                      <span class="rev-stat-add">+{fd.additions}</span>
+-                      <span class="rev-stat-del">-{fd.deletions}</span>
+-                    </span>
+-                  </a>
+-                </li>
+-                <li :if={@file_diffs == []}>
+-                  <span class="rev-empty">No files in this patchset.</span>
+-                </li>
+-              </ul>
+-
+-              <section
+-                :if={@open_threads_by_op != []}
+-                id="open-threads"
+-                class="rev-open-threads"
+-                aria-label="Open threads"
+-              >
+-                <h2 class="rev-open-threads-heading">Open threads</h2>
+-                <div :for={{op, threads} <- @open_threads_by_op} class="rev-open-thread-group">
+-                  <header class="rev-open-thread-group-header">
+-                    <img
+-                      :if={op && op.avatar_url}
+-                      src={op.avatar_url}
+-                      alt=""
+-                      width="16"
+-                      height="16"
+-                      loading="lazy"
+-                      class="rdr-avatar"
+-                    />
+-                    <span>{(op && op.username) || "anonymous"}</span>
+-                  </header>
+-                  <button
+-                    :for={t <- threads}
+-                    type="button"
+-                    class="rev-open-thread-entry"
+-                    phx-click={
+-                      JS.dispatch("reviews:scroll-to-anchor",
+-                        detail: %{
+-                          file_id: file_id_for(@file_diffs, t.file_path),
+-                          file_path: t.file_path,
+-                          side: t.side,
+-                          line_number_hint: anchor_line_hint(t)
+-                        }
+-                      )
+-                    }
+-                  >
+-                    <span class="rev-open-thread-meta">
+-                      <span class="rev-open-thread-path" translate="no">
+-                        {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
+-                      </span>
+-                      <span class="rev-open-thread-snippet">
+-                        {ReviewView.first_comment_snippet(t)}
+-                      </span>
+-                    </span>
+-                  </button>
+-                </div>
+-              </section>
+-            </aside>
+-
+-            <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
+-              <article
+-                :for={fd <- @file_diffs}
+-                id={"file-#{fd.id}"}
+-                class="rev-file-card"
+-              >
+-                <div
+-                  id={"diff-#{fd.id}"}
+-                  phx-hook="DiffRenderer"
+-                  phx-update="ignore"
+-                  data-file-id={fd.id}
+-                  data-file-path={fd.path}
+-                  data-file-status={fd.status}
+-                  data-side="new"
+-                  data-patchset-number={@selected_patchset.number}
+-                  data-raw-diff={fd.raw_diff}
+-                  data-threads={threads_json(@published_threads, fd.path)}
+-                  data-drafts={drafts_json(@drafts, fd.path, @current_user)}
+-                  data-signed-in={if @current_user, do: "true", else: "false"}
+-                  data-diff-style={@diff_style}
+-                >
+-                </div>
+-              </article>
+-
+-              <p :if={@file_diffs == []} class="rev-empty">
+-                No files in this patchset.
+-              </p>
+-            </section>
+-          </div>
++          <DiffComponents.diff_shell
++            :if={@live_action == :changes || !has_packet}
++            file_diffs={@file_diffs}
++            open_threads_by_op={@open_threads_by_op}
++            selected_patchset={@selected_patchset}
++            published_threads={@published_threads}
++            drafts={@drafts}
++            current_user={@current_user}
++            diff_style={@diff_style}
++            expanded_file_ids={@expanded_file_ids}
++          />
+         </div>
+       </.ds_shell>
+ 
+@@ -637,21 +686,26 @@ defmodule ReviewsWeb.ReviewLive do
+   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
+   defp anchor_line_hint(_), do: nil
+ 
+-  defp file_id_for(file_diffs, file_path) do
+-    Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
+-  end
++  defp assign_snapshot(socket, snapshot) do
++    previous_patchset_id =
++      socket.assigns[:selected_patchset] && socket.assigns.selected_patchset.id
+ 
+-  defp threads_json(threads, file_path) do
+-    snapshot = %{published_threads: threads}
+-    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
+-  end
++    next_patchset_id = snapshot.selected_patchset && snapshot.selected_patchset.id
+ 
+-  defp drafts_json(drafts, file_path, viewer) do
+-    snapshot = %{drafts: drafts, viewer: viewer}
+-    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
+-  end
++    expanded_file_ids =
++      if previous_patchset_id == next_patchset_id do
++        socket.assigns[:expanded_file_ids] || MapSet.new()
++      else
++        MapSet.new()
++      end
++
++    expanded_section_ids =
++      if previous_patchset_id == next_patchset_id do
++        socket.assigns[:expanded_section_ids] || MapSet.new()
++      else
++        MapSet.new()
++      end
+ 
+-  defp assign_snapshot(socket, snapshot) do
+     socket
+     |> assign(:review_snapshot, snapshot)
+     |> assign(:review, snapshot.review)
+@@ -659,8 +713,52 @@ defmodule ReviewsWeb.ReviewLive do
+     |> assign(:selected_patchset, snapshot.selected_patchset)
+     |> assign(:files, snapshot.files)
+     |> assign(:file_diffs, snapshot.file_diffs)
++    |> assign(:expanded_file_ids, expanded_file_ids)
++    |> assign(:expanded_section_ids, expanded_section_ids)
++    |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
+     |> assign(:published_threads, snapshot.published_threads)
+     |> assign(:drafts, snapshot.drafts)
+     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
+   end
++
++  defp packet_diff_path?(nil, _path), do: false
++
++  defp packet_diff_path?(patchset, path) do
++    patchset.packet
++    |> ReviewPacket.sections()
++    |> Enum.any?(fn section ->
++      Enum.any?(section.rows, fn row ->
++        ReviewPacket.text(row, "kind") == "hunk" && ReviewPacket.text(row, "path") == path
++      end)
++    end)
++  end
++
++  defp put_section_status(socket, patchset, user, section, status) do
++    state =
++      PacketSectionDecisions.section_state(
++        section,
++        socket.assigns.packet_section_decisions,
++        patchset,
++        socket.assigns.patchsets
++      )
++
++    next_status =
++      if state.effective && state.effective.status == status do
++        "pending"
++      else
++        status
++      end
++
++    if state.current && state.current.status == next_status do
++      PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
++    else
++      PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
++        section_index: section.index,
++        section_title: section.title,
++        section_fingerprint: section.fingerprint,
++        section_refs: section.refs,
++        status: next_status
++      })
++    end
++  end
+ end
+diff --git a/lib/reviews_web/live/review_live/packet_components.ex b/lib/reviews_web/live/review_live/packet_components.ex
+new file mode 100644
+index 0000000..df23a74
+--- /dev/null
++++ b/lib/reviews_web/live/review_live/packet_components.ex
+@@ -0,0 +1,693 @@
++defmodule ReviewsWeb.ReviewLive.PacketComponents do
++  @moduledoc false
++  use ReviewsWeb, :html
++
++  alias Reviews.PacketSectionDecisions
++  alias Reviews.ReviewPacket
++  alias Reviews.ReviewView
++
++  attr :packet, :map, required: true
++  attr :review, :any, required: true
++  attr :patchsets, :list, required: true
++  attr :section_decisions, :list, required: true
++  attr :file_diffs, :list, required: true
++  attr :selected_patchset, :any, required: true
++  attr :published_threads, :list, required: true
++  attr :drafts, :list, required: true
++  attr :current_user, :any, required: true
++  attr :diff_style, :string, required: true
++  attr :expanded_section_ids, :any, required: true
++
++  def packet(assigns) do
++    sections = packet_sections(assigns)
++
++    assigns =
++      assigns
++      |> assign(:sections, sections)
++
++    ~H"""
++    <section id="review-packet" class="review-packet" aria-labelledby="review-packet-title">
++      <div class="review-packet-grid">
++        <article
++          :for={section <- @sections}
++          id={"packet-section-#{section.index}"}
++          class={[
++            "review-packet-section",
++            section.effective_status && "is-decided",
++            section_expanded?(@expanded_section_ids, section.index) && "is-open"
++          ]}
++        >
++          <header class="review-packet-section-summary">
++            <button
++              type="button"
++              class="review-packet-section-heading"
++              phx-click="toggle_packet_section"
++              phx-value-section_index={section.index}
++              aria-expanded={section_expanded?(@expanded_section_ids, section.index)}
++              aria-controls={"packet-section-#{section.index}-body"}
++            >
++              <div class="review-packet-section-title-row">
++                <h3 class="review-packet-section-title">{section.title}</h3>
++                <span
++                  class="review-packet-section-estimate"
++                  title={"Estimated from #{section.estimate.changed_lines} changed lines across #{section.estimate.hunk_count} hunk rows."}
++                >
++                  <.change_stat
++                    additions={section.estimate.additions}
++                    deletions={section.estimate.deletions}
++                  />
++                  {section.estimate.time}
++                  <span class={["review-effort-pill", "is-#{effort_class(section.estimate.effort)}"]}>
++                    {section.estimate.effort}
++                  </span>
++                </span>
++              </div>
++            </button>
++
++            <div class="review-packet-section-controls">
++              <span
++                :if={section.previous}
++                class={[
++                  "review-section-state-pill",
++                  "is-previous",
++                  "is-#{section.previous.status}"
++                ]}
++                title={"Previously #{section.previous.status} in v#{section.previous.patchset_number}"}
++                aria-label={"Previously #{section.previous.status} in version #{section.previous.patchset_number}"}
++              >
++                <.section_status_icon status={section.previous.status} />
++                <span class="sr-only">
++                  Previously {section.previous.status} in v{section.previous.patchset_number}
++                </span>
++              </span>
++
++              <.icon
++                :if={section.previous}
++                name="hero-chevron-right"
++                class="review-section-transition-icon"
++              />
++
++              <div
++                class="review-packet-section-actions"
++                aria-label={"Decision for #{section.title}"}
++              >
++                <%= if @current_user do %>
++                  <button
++                    :for={status <- ~w(approved denied ignored)}
++                    type="button"
++                    class={[
++                      "review-section-action",
++                      section.effective_status == status && "is-active",
++                      "is-#{status}"
++                    ]}
++                    title={section_status_label(status)}
++                    aria-label={section_status_label(status)}
++                    phx-click="set_section_status"
++                    phx-value-section_index={section.index}
++                    phx-value-status={status}
++                  >
++                    <.section_status_icon status={status} />
++                    <span class="review-section-action-label">{section_status_label(status)}</span>
++                  </button>
++                <% else %>
++                  <span class="review-packet-section-signin">Sign in to review</span>
++                <% end %>
++              </div>
++
++              <button
++                type="button"
++                class="review-packet-section-toggle"
++                phx-click="toggle_packet_section"
++                phx-value-section_index={section.index}
++                aria-expanded={section_expanded?(@expanded_section_ids, section.index)}
++                aria-controls={"packet-section-#{section.index}-body"}
++              >
++                <span class="sr-only">Toggle {section.title}</span>
++                <.icon name="hero-chevron-down" class="review-collapse-icon" />
++              </button>
++            </div>
++          </header>
++
++          <p
++            :if={section.summary != "" && !section_expanded?(@expanded_section_ids, section.index)}
++            class="review-packet-section-summary-text"
++          >
++            {section.summary}
++          </p>
++
++          <div
++            :if={section_expanded?(@expanded_section_ids, section.index)}
++            id={"packet-section-#{section.index}-body"}
++            class="review-packet-section-body"
++          >
++            <div class="review-packet-row-list">
++              <.packet_row
++                :for={{row, idx} <- Enum.with_index(section.rows)}
++                row={row}
++                row_id={"packet-section-#{section.index}-row-#{idx}"}
++                file_diffs={@file_diffs}
++                selected_patchset={@selected_patchset}
++                published_threads={@published_threads}
++                drafts={@drafts}
++                current_user={@current_user}
++                diff_style={@diff_style}
++              />
++            </div>
++          </div>
++        </article>
++
++        <section :if={@sections == []} class="review-packet-section">
++          <h3 class="review-packet-section-title">No sections</h3>
++          <p class="review-packet-md-paragraph">This packet does not include narrative sections.</p>
++        </section>
++      </div>
++    </section>
++    """
++  end
++
++  def packet_effort_for_header(
++        packet,
++        file_diffs,
++        section_decisions,
++        selected_patchset,
++        patchsets
++      ) do
++    %{
++      packet: packet,
++      file_diffs: file_diffs,
++      section_decisions: section_decisions,
++      selected_patchset: selected_patchset,
++      patchsets: patchsets
++    }
++    |> packet_sections()
++    |> packet_effort()
++  end
++
++  defp packet_sections(assigns) do
++    selected_patchset = assigns.selected_patchset
++
++    assigns.packet
++    |> ReviewPacket.sections()
++    |> Enum.map(fn section ->
++      state =
++        PacketSectionDecisions.section_state(
++          section,
++          assigns.section_decisions,
++          selected_patchset,
++          assigns.patchsets
++        )
++
++      section
++      |> Map.put(:status, state.current && state.current.status)
++      |> Map.put(:effective_status, state.effective && state.effective.status)
++      |> Map.put(:previous, state.previous)
++      |> Map.put(:summary, section_summary(section))
++      |> Map.put(:estimate, section_estimate(section, assigns.file_diffs))
++    end)
++  end
++
++  defp section_expanded?(expanded_section_ids, section_index) do
++    MapSet.member?(expanded_section_ids, section_index)
++  end
++
++  defp packet_effort(sections) do
++    minutes = Enum.sum(Enum.map(sections, & &1.estimate.minutes))
++    buckets = effort_buckets(sections)
++
++    %{
++      minutes: minutes,
++      remaining_minutes: buckets.pending,
++      time: format_minutes(minutes),
++      remaining_time: format_minutes(buckets.pending),
++      effort: effort_label(minutes),
++      progress_label: progress_label(buckets, minutes)
++    }
++  end
++
++  defp effort_buckets(sections) do
++    Enum.reduce(sections, %{approved: 0, denied: 0, ignored: 0, pending: 0}, fn section, acc ->
++      key =
++        case section.effective_status do
++          "approved" -> :approved
++          "denied" -> :denied
++          "ignored" -> :ignored
++          _ -> :pending
++        end
++
++      Map.update!(acc, key, &(&1 + section.estimate.minutes))
++    end)
++  end
++
++  defp progress_label(buckets, total) do
++    "Approved #{format_minutes(buckets.approved)} of #{format_minutes(total)}; denied #{format_minutes(buckets.denied)}; ignored #{format_minutes(buckets.ignored)}."
++  end
++
++  defp section_summary(section) do
++    section.rows
++    |> Enum.find_value("", fn row ->
++      if ReviewPacket.text(row, "kind") == "markdown" do
++        row
++        |> ReviewPacket.text("body")
++        |> markdown_summary()
++      end
++    end)
++  end
++
++  defp markdown_summary(body) do
++    body
++    |> String.split("\n\n")
++    |> Enum.map(&String.trim/1)
++    |> Enum.reject(&(&1 == ""))
++    |> Enum.find_value("", fn block ->
++      block
++      |> String.split("\n")
++      |> Enum.map(&String.trim/1)
++      |> Enum.reject(&(&1 == "" || String.starts_with?(&1, "#")))
++      |> case do
++        [] -> nil
++        lines -> lines |> Enum.join(" ") |> plain_markdown() |> truncate_summary()
++      end
++    end)
++  end
++
++  defp plain_markdown(text) do
++    text
++    |> String.replace(~r/`([^`]+)`/, "\\1")
++    |> String.replace(~r/\*\*([^*]+)\*\*/, "\\1")
++    |> String.replace(~r/\*([^*]+)\*/, "\\1")
++  end
++
++  defp truncate_summary(text) do
++    text = String.trim(text)
++
++    if String.length(text) > 150 do
++      text |> String.slice(0, 147) |> String.trim_trailing() |> Kernel.<>("...")
++    else
++      text
++    end
++  end
++
++  defp section_estimate(section, file_diffs) do
++    {additions, deletions, hunk_count} =
++      Enum.reduce(section.rows, {0, 0, 0}, fn row, {additions, deletions, hunks} ->
++        if ReviewPacket.text(row, "kind") == "hunk" do
++          file = file_for(file_diffs, ReviewPacket.text(row, "path"))
++
++          raw_diff =
++            packet_row_raw_diff(
++              file,
++              ReviewPacket.int(row, "hunk_index"),
++              ReviewPacket.int(row, "line_start"),
++              ReviewPacket.int(row, "line_end")
++            )
++
++          {row_additions, row_deletions} = changed_line_stats(raw_diff)
++
++          {additions + row_additions, deletions + row_deletions, hunks + 1}
++        else
++          {additions, deletions, hunks}
++        end
++      end)
++
++    changed_lines = additions + deletions
++
++    minutes =
++      changed_lines
++      |> estimate_minutes(hunk_count)
++
++    %{
++      additions: additions,
++      deletions: deletions,
++      changed_lines: changed_lines,
++      hunk_count: hunk_count,
++      minutes: minutes,
++      time: format_minutes(minutes),
++      effort: effort_label(minutes)
++    }
++  end
++
++  defp changed_line_stats(raw_diff) do
++    Enum.reduce(String.split(raw_diff, "\n"), {0, 0}, fn line, {additions, deletions} ->
++      cond do
++        String.starts_with?(line, "+") && !String.starts_with?(line, "+++") ->
++          {additions + 1, deletions}
++
++        String.starts_with?(line, "-") && !String.starts_with?(line, "---") ->
++          {additions, deletions + 1}
++
++        true ->
++          {additions, deletions}
++      end
++    end)
++  end
++
++  defp estimate_minutes(0, 0), do: 1
++
++  defp estimate_minutes(changed_lines, hunk_count) do
++    line_minutes = max(1, ceil(changed_lines / 45))
++    hunk_minutes = div(max(hunk_count - 1, 0), 3)
++    line_minutes + hunk_minutes
++  end
++
++  defp format_minutes(1), do: "1 min"
++  defp format_minutes(minutes) when minutes > 59, do: format_hours(minutes)
++  defp format_minutes(minutes), do: "#{minutes} min"
++
++  defp format_hours(minutes) do
++    half_hour_steps = max(2, round(minutes / 30))
++
++    label =
++      if rem(half_hour_steps, 2) == 0 do
++        "#{div(half_hour_steps, 2)}hr"
++      else
++        "#{div(half_hour_steps, 2)}.5hr"
++      end
++
++    "~" <> label
++  end
++
++  defp effort_label(minutes) when minutes <= 2, do: "Light"
++  defp effort_label(minutes) when minutes <= 6, do: "Moderate"
++  defp effort_label(minutes) when minutes <= 12, do: "Involved"
++  defp effort_label(_minutes), do: "Deep"
++
++  defp effort_class("Light"), do: "light"
++  defp effort_class("Moderate"), do: "moderate"
++  defp effort_class("Involved"), do: "involved"
++  defp effort_class("Deep"), do: "deep"
++  defp effort_class(_), do: "moderate"
++
++  defp section_status_label("approved"), do: "Approve"
++  defp section_status_label("denied"), do: "Deny"
++  defp section_status_label("ignored"), do: "Ignore"
++  defp section_status_label(status), do: status
++
++  attr :additions, :integer, required: true
++  attr :deletions, :integer, required: true
++
++  def change_stat(assigns) do
++    ~H"""
++    <span
++      class="review-change-stat"
++      aria-label={"#{@additions} additions and #{@deletions} deletions"}
++    >
++      <span :if={@additions > 0} class="review-change-stat-add">+{@additions}</span>
++      <span :if={@deletions > 0} class="review-change-stat-del">-{@deletions}</span>
++      <span :if={@additions == 0 && @deletions == 0} class="review-change-stat-empty">±0</span>
++    </span>
++    """
++  end
++
++  attr :status, :string, required: true
++
++  defp section_status_icon(assigns) do
++    assigns =
++      assign(
++        assigns,
++        :icon,
++        case assigns.status do
++          "approved" -> "hero-check"
++          "denied" -> "hero-x-mark"
++          "ignored" -> "hero-minus"
++          _ -> "hero-minus"
++        end
++      )
++
++    ~H"""
++    <.icon name={@icon} class="review-section-state-icon" />
++    """
++  end
++
++  attr :row, :map, required: true
++  attr :row_id, :string, required: true
++  attr :file_diffs, :list, required: true
++  attr :selected_patchset, :any, required: true
++  attr :published_threads, :list, required: true
++  attr :drafts, :list, required: true
++  attr :current_user, :any, required: true
++  attr :diff_style, :string, required: true
++
++  def packet_row(%{row: row} = assigns) do
++    assigns =
++      assigns
++      |> assign(:kind, ReviewPacket.text(row, "kind"))
++      |> assign(:body, ReviewPacket.text(row, "body"))
++      |> assign(:path, ReviewPacket.text(row, "path"))
++      |> assign(:hunk_index, ReviewPacket.int(row, "hunk_index"))
++      |> assign(:line_start, ReviewPacket.int(row, "line_start"))
++      |> assign(:line_end, ReviewPacket.int(row, "line_end"))
++      |> assign(:file, file_for(assigns.file_diffs, ReviewPacket.text(row, "path")))
++
++    assigns =
++      assign(
++        assigns,
++        :raw_diff,
++        packet_row_raw_diff(
++          assigns.file,
++          assigns.hunk_index,
++          assigns.line_start,
++          assigns.line_end
++        )
++      )
++
++    ~H"""
++    <%= cond do %>
++      <% @kind == "hunk" && @file && @raw_diff != "" -> %>
++        <div id={@row_id} class="review-packet-row is-hunk">
++          <div class="review-packet-inline-diff">
++            <div
++              id={"#{@row_id}-diff"}
++              phx-hook="DiffRenderer"
++              phx-update="ignore"
++              data-file-id={"packet-#{@file.id}-#{@row_id}"}
++              data-file-path={@file.path}
++              data-file-status={@file.status}
++              data-side="new"
++              data-patchset-number={@selected_patchset && @selected_patchset.number}
++              data-raw-diff={@raw_diff}
++              data-threads={threads_json(@published_threads, @file.path)}
++              data-drafts={drafts_json(@drafts, @file.path, @current_user)}
++              data-signed-in={if @current_user, do: "true", else: "false"}
++              data-diff-style={@diff_style}
++            >
++            </div>
++          </div>
++        </div>
++      <% @kind == "hunk" -> %>
++        <span id={@row_id} class="review-packet-hunk is-unresolved" translate="no">
++          <.icon name="hero-code-bracket-square" class="size-4" />
++          {ReviewPacket.row_ref(@row)}
++        </span>
++      <% true -> %>
++        <div id={@row_id} class="review-packet-row is-markdown">
++          <.markdown body={@body} class="review-packet-markdown" />
++        </div>
++    <% end %>
++    """
++  end
++
++  defp packet_row_raw_diff(nil, _hunk_index, _line_start, _line_end), do: ""
++
++  defp packet_row_raw_diff(file, hunk_index, line_start, line_end) do
++    slice_raw_diff(file.raw_diff || "", hunk_index, line_start, line_end)
++  end
++
++  defp slice_raw_diff(raw_diff, hunk_index, line_start, line_end)
++       when is_integer(hunk_index) and hunk_index > 0 do
++    lines = String.split(raw_diff, "\n", trim: false)
++    {header_lines, rest} = Enum.split_while(lines, &(not String.starts_with?(&1, "@@ ")))
++
++    {_, selected} =
++      Enum.reduce(rest, {0, []}, fn line, {idx, acc} ->
++        cond do
++          String.starts_with?(line, "@@ ") ->
++            next_idx = idx + 1
++            {next_idx, if(next_idx == hunk_index, do: [line], else: acc)}
++
++          idx == hunk_index ->
++            {idx, acc ++ [line]}
++
++          true ->
++            {idx, acc}
++        end
++      end)
++
++    case selected do
++      [] ->
++        ""
++
++      [hunk_header | hunk_lines] ->
++        hunk_lines = slice_hunk_lines(hunk_lines, line_start, line_end)
++        Enum.join(header_lines ++ [hunk_header | hunk_lines], "\n")
++    end
++  end
++
++  defp slice_raw_diff(_raw_diff, _hunk_index, _line_start, _line_end), do: ""
++
++  defp slice_hunk_lines(lines, nil, nil), do: Enum.reject(lines, &(&1 == ""))
++
++  defp slice_hunk_lines(lines, line_start, line_end)
++       when is_integer(line_start) and is_integer(line_end) do
++    lines
++    |> Enum.reject(&(&1 == ""))
++    |> Enum.slice((line_start - 1)..(line_end - 1))
++  end
++
++  defp slice_hunk_lines(lines, _line_start, _line_end), do: Enum.reject(lines, &(&1 == ""))
++
++  attr :body, :string, required: true
++  attr :class, :string, default: "review-packet-markdown"
++
++  def markdown(assigns) do
++    assigns = assign(assigns, :blocks, markdown_blocks(assigns.body))
++
++    ~H"""
++    <div class={@class}>
++      <%= for block <- @blocks do %>
++        <h3
++          :if={block.kind == :heading && block.level == 3}
++          class="review-packet-md-heading is-h3"
++        >
++          <.inline segments={block.segments} />
++        </h3>
++        <h4
++          :if={block.kind == :heading && block.level == 4}
++          class="review-packet-md-heading is-h4"
++        >
++          <.inline segments={block.segments} />
++        </h4>
++        <ul :if={block.kind == :list} class="review-packet-md-list">
++          <li :for={item <- block.items}>
++            <.inline segments={item} />
++          </li>
++        </ul>
++        <p :if={block.kind == :paragraph} class="review-packet-md-paragraph">
++          <.inline segments={block.segments} />
++        </p>
++      <% end %>
++    </div>
++    """
++  end
++
++  attr :segments, :list, required: true
++
++  def inline(assigns) do
++    ~H"""
++    <%= for segment <- @segments do %>
++      <code :if={segment.kind == :code} class="review-packet-inline-code">{segment.text}</code>
++      <span :if={segment.kind == :text}>{segment.text}</span>
++    <% end %>
++    """
++  end
++
++  defp markdown_blocks(body) when is_binary(body) do
++    body
++    |> String.split("\n")
++    |> parse_markdown_blocks([])
++    |> Enum.reverse()
++  end
++
++  defp markdown_blocks(_), do: []
++
++  defp parse_markdown_blocks([], acc), do: acc
++
++  defp parse_markdown_blocks([line | rest], acc) do
++    trimmed = String.trim(line)
++
++    cond do
++      trimmed == "" ->
++        parse_markdown_blocks(rest, acc)
++
++      heading = markdown_heading(trimmed) ->
++        {level, heading_text} = heading
++
++        parse_markdown_blocks(rest, [
++          %{kind: :heading, level: level, segments: markdown_inline(heading_text)} | acc
++        ])
++
++      markdown_list_item?(trimmed) ->
++        {items, rest} = take_markdown_list([line | rest], [])
++        parse_markdown_blocks(rest, [%{kind: :list, items: items} | acc])
++
++      true ->
++        {paragraph, rest} = take_markdown_paragraph([line | rest], [])
++
++        parse_markdown_blocks(rest, [
++          %{kind: :paragraph, segments: markdown_inline(paragraph)} | acc
++        ])
++    end
++  end
++
++  defp markdown_heading(line) do
++    case Regex.run(~r/^(####|###)\s+(.+)$/, line) do
++      [_, marks, text] -> {String.length(marks), String.trim(text)}
++      _ -> nil
++    end
++  end
++
++  defp markdown_list_item?(line), do: String.starts_with?(line, "- ")
++
++  defp take_markdown_list([], acc), do: {Enum.reverse(acc), []}
++
++  defp take_markdown_list([line | rest], acc) do
++    trimmed = String.trim(line)
++
++    if markdown_list_item?(trimmed) do
++      item =
++        trimmed
++        |> String.replace_prefix("- ", "")
++        |> markdown_inline()
++
++      take_markdown_list(rest, [item | acc])
++    else
++      {Enum.reverse(acc), [line | rest]}
++    end
++  end
++
++  defp take_markdown_paragraph([], acc), do: {trim_paragraph(acc), []}
++
++  defp take_markdown_paragraph([line | rest], acc) do
++    trimmed = String.trim(line)
++
++    cond do
++      trimmed == "" || markdown_heading(trimmed) || markdown_list_item?(trimmed) ->
++        {trim_paragraph(acc), [line | rest]}
++
++      true ->
++        take_markdown_paragraph(rest, [String.trim(line) | acc])
++    end
++  end
++
++  defp trim_paragraph(lines) do
++    lines
++    |> Enum.reverse()
++    |> Enum.join(" ")
++    |> String.trim()
++  end
++
++  defp markdown_inline(text) when is_binary(text) do
++    text
++    |> String.split("`")
++    |> Enum.with_index()
++    |> Enum.reject(fn {part, _idx} -> part == "" end)
++    |> Enum.map(fn {part, idx} ->
++      %{kind: if(rem(idx, 2) == 1, do: :code, else: :text), text: part}
++    end)
++  end
++
++  defp markdown_inline(_), do: []
++
++  defp file_for(file_diffs, path) do
++    Enum.find(file_diffs, &(&1.path == path || &1.old_path == path))
++  end
++
++  defp threads_json(threads, file_path) do
++    snapshot = %{published_threads: threads}
++    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
++  end
++
++  defp drafts_json(drafts, file_path, viewer) do
++    snapshot = %{drafts: drafts, viewer: viewer}
++    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
++  end
++end
+diff --git a/lib/reviews_web/live/review_live/revision_nav_components.ex b/lib/reviews_web/live/review_live/revision_nav_components.ex
+new file mode 100644
+index 0000000..6c269d8
+--- /dev/null
++++ b/lib/reviews_web/live/review_live/revision_nav_components.ex
+@@ -0,0 +1,98 @@
++defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
++  @moduledoc false
++  use ReviewsWeb, :html
++
++  attr :nav, :map, required: true
++  attr :review, :any, required: true
++  attr :live_action, :atom, required: true
++  attr :selected_patchset, :any, required: true
++
++  def revision_nav(assigns) do
++    ~H"""
++    <section
++      :if={@selected_patchset && @nav.revisions != []}
++      id="revision-nav"
++      class="review-revision-nav"
++      aria-label="Review revisions"
++    >
++      <div class="review-revision-row">
++        <div class="review-revision-copy">
++          <span class="review-revision-label">
++            Revision {@nav.selected_index} of {@nav.revision_count}
++          </span>
++          <strong class="review-revision-title">
++            v{@nav.current_revision.number}
++          </strong>
++        </div>
++
++        <div class="review-revision-controls" aria-label="Revision navigation">
++          <.link
++            navigate={revision_mode_path(@review, @selected_patchset, @live_action)}
++            class="review-nav-button"
++          >
++            {if(@live_action == :changes, do: "Packet", else: "Changes")}
++          </.link>
++          <button
++            type="button"
++            class="review-nav-button"
++            phx-click="select_patchset"
++            phx-value-number={@nav.previous_revision && @nav.previous_revision.number}
++            disabled={!@nav.previous_revision}
++            aria-label="Previous revision"
++          >
++            <.icon name="hero-arrow-left" class="size-4" /> Revision
++          </button>
++          <div class="review-revision-chip-list" aria-label="Revisions">
++            <button
++              :for={revision <- @nav.revisions}
++              id={"patchset-#{revision.number}"}
++              type="button"
++              class={[
++                "review-revision-chip",
++                revision.number == @selected_patchset.number && "is-active",
++                revision.packet_present && "has-packet"
++              ]}
++              phx-click="select_patchset"
++              phx-value-number={revision.number}
++              aria-pressed={
++                if(revision.number == @selected_patchset.number, do: "true", else: "false")
++              }
++              title={
++                if(revision.packet_present,
++                  do: "v#{revision.number} has a review packet",
++                  else: "v#{revision.number}"
++                )
++              }
++            >
++              v{revision.number}
++            </button>
++          </div>
++          <button
++            type="button"
++            class="review-nav-button"
++            phx-click="select_patchset"
++            phx-value-number={@nav.next_revision && @nav.next_revision.number}
++            disabled={!@nav.next_revision}
++            aria-label="Next revision"
++          >
++            Revision <.icon name="hero-arrow-right" class="size-4" />
++          </button>
++        </div>
++      </div>
++    </section>
++    """
++  end
++
++  defp revision_mode_path(review, selected_patchset, :changes) do
++    suffix = patchset_query(selected_patchset)
++    "/r/#{review.slug}#{suffix}"
++  end
++
++  defp revision_mode_path(review, selected_patchset, _action) do
++    suffix = patchset_query(selected_patchset)
++    "/r/#{review.slug}/changes#{suffix}"
++  end
++
++  defp patchset_query(nil), do: ""
++  defp patchset_query(%{number: number}), do: "?patchset=#{number}"
++end
+diff --git a/lib/reviews_web/router.ex b/lib/reviews_web/router.ex
+index ec4a6a4..9c35e34 100644
+--- a/lib/reviews_web/router.ex
++++ b/lib/reviews_web/router.ex
+@@ -25,6 +25,7 @@ defmodule ReviewsWeb.Router do
+     get "/", PageController, :home
+ 
+     live "/r/:slug", ReviewLive, :show
++    live "/r/:slug/changes", ReviewLive, :changes
+     live "/settings", SettingsLive, :edit
+   end
+ 
+diff --git a/priv/repo/migrations/20260515004000_add_packet_to_patchsets.exs b/priv/repo/migrations/20260515004000_add_packet_to_patchsets.exs
+new file mode 100644
+index 0000000..18575ce
+--- /dev/null
++++ b/priv/repo/migrations/20260515004000_add_packet_to_patchsets.exs
+@@ -0,0 +1,9 @@
++defmodule Reviews.Repo.Migrations.AddPacketToPatchsets do
++  use Ecto.Migration
++
++  def change do
++    alter table(:patchsets) do
++      add :packet, :map
++    end
++  end
++end
+diff --git a/priv/repo/migrations/20260515120000_create_packet_section_decisions.exs b/priv/repo/migrations/20260515120000_create_packet_section_decisions.exs
+new file mode 100644
+index 0000000..6113346
+--- /dev/null
++++ b/priv/repo/migrations/20260515120000_create_packet_section_decisions.exs
+@@ -0,0 +1,28 @@
++defmodule Reviews.Repo.Migrations.CreatePacketSectionDecisions do
++  use Ecto.Migration
++
++  def change do
++    create table(:packet_section_decisions) do
++      add :review_id, references(:reviews, on_delete: :delete_all), null: false
++      add :patchset_id, references(:patchsets, on_delete: :delete_all), null: false
++      add :author_id, references(:users, on_delete: :delete_all), null: false
++      add :section_index, :integer, null: false
++      add :section_title, :string, null: false
++      add :section_fingerprint, :string, null: false
++      add :section_refs, {:array, :string}, null: false, default: []
++      add :status, :string, null: false
++
++      timestamps(type: :utc_datetime)
++    end
++
++    create index(:packet_section_decisions, [:review_id])
++    create index(:packet_section_decisions, [:patchset_id])
++    create index(:packet_section_decisions, [:author_id])
++
++    create unique_index(
++             :packet_section_decisions,
++             [:review_id, :patchset_id, :author_id, :section_index],
++             name: :packet_section_decisions_one_per_user_section
++           )
++  end
++end
+diff --git a/priv/repo/migrations/20260515233649_add_diff_payload_to_files.exs b/priv/repo/migrations/20260515233649_add_diff_payload_to_files.exs
+new file mode 100644
+index 0000000..655acd6
+--- /dev/null
++++ b/priv/repo/migrations/20260515233649_add_diff_payload_to_files.exs
+@@ -0,0 +1,11 @@
++defmodule Reviews.Repo.Migrations.AddDiffPayloadToFiles do
++  use Ecto.Migration
++
++  def change do
++    alter table(:files) do
++      add :additions, :integer, null: false, default: 0
++      add :deletions, :integer, null: false, default: 0
++      add :raw_diff, :text, null: false, default: ""
++    end
++  end
++end
+diff --git a/test/reviews/review_packet_test.exs b/test/reviews/review_packet_test.exs
+new file mode 100644
+index 0000000..48a3798
+--- /dev/null
++++ b/test/reviews/review_packet_test.exs
+@@ -0,0 +1,55 @@
++defmodule Reviews.ReviewPacketTest do
++  use ExUnit.Case, async: true
++
++  alias Reviews.ReviewPacket
++
++  test "wraps canonical packet JSON with typed accessors" do
++    packet =
++      ReviewPacket.new(%{
++        "title" => "Packet",
++        "summary" => "Read first.",
++        "sections" => [
++          %{
++            "title" => "Walkthrough",
++            "rows" => [
++              %{"kind" => "markdown", "body" => "Start here."},
++              %{"kind" => "hunk", "path" => "lib/foo.ex", "hunk_index" => 1}
++            ]
++          }
++        ]
++      })
++
++    assert ReviewPacket.present?(packet)
++    assert ReviewPacket.text(packet, "title") == "Packet"
++    assert ReviewPacket.text(packet, "summary") == "Read first."
++    assert [%{title: "Walkthrough", rows: rows}] = ReviewPacket.sections(packet)
++    assert [%{"kind" => "markdown"}, %{"kind" => "hunk"}] = rows
++  end
++
++  test "supports locally-built atom-key packet maps without arbitrary atom creation" do
++    packet = %{
++      title: "Packet",
++      sections: [
++        %{
++          title: "Smoke",
++          rows: [
++            %{kind: "markdown", body: "Run smoke test"},
++            "not a row"
++          ]
++        }
++      ]
++    }
++
++    assert ReviewPacket.present?(packet)
++    assert ReviewPacket.text(packet, "title") == "Packet"
++    assert [%{title: "Smoke", rows: [%{body: "Run smoke test"}]}] = ReviewPacket.sections(packet)
++    assert ReviewPacket.text(%{body: "Run smoke test"}, "body") == "Run smoke test"
++  end
++
++  test "handles nil and malformed packet values as empty packets" do
++    refute ReviewPacket.present?(nil)
++    refute ReviewPacket.present?(%{})
++    assert ReviewPacket.text(%{"title" => ["not", "text"]}, "title") == ""
++    assert ReviewPacket.rows(%{"sections" => "not rows"}, "sections") == []
++  end
++end
+diff --git a/test/reviews_web/controllers/api/patchset_controller_test.exs b/test/reviews_web/controllers/api/patchset_controller_test.exs
+new file mode 100644
+index 0000000..055a09a
+--- /dev/null
++++ b/test/reviews_web/controllers/api/patchset_controller_test.exs
+@@ -0,0 +1,58 @@
++defmodule ReviewsWeb.Api.PatchsetControllerTest do
++  use ReviewsWeb.ConnCase, async: true
++
++  alias Reviews.Accounts
++  alias Reviews.Reviews
++
++  setup do
++    {:ok, user} =
++      Accounts.upsert_from_github(%{
++        github_id: 98_765,
++        username: "carey",
++        email: "carey@example.com",
++        avatar_url: nil
++      })
++
++    {:ok, _token, raw} = Accounts.mint_token(user, %{"name" => "test"})
++
++    {:ok, %{review: review}} =
++      Reviews.create_review_with_initial_patchset(user, %{
++        title: "Add foo",
++        base_sha: "deadbeef",
++        branch_name: "carey/foo",
++        raw_diff: "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
++      })
++
++    %{review: review, raw_token: raw}
++  end
++
++  test "stores optional packet JSON on appended patchsets", %{
++    conn: conn,
++    review: review,
++    raw_token: raw
++  } do
++    packet = %{
++      "format_version" => 1,
++      "title" => "Patchset v2 guide",
++      "tasks" => [%{"key" => "smoke", "description" => "Smoke test it"}]
++    }
++
++    body = %{
++      "base_sha" => "cafef00d",
++      "branch_name" => "carey/foo",
++      "raw_diff" => "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+newer\n",
++      "packet" => packet
++    }
++
++    conn =
++      conn
++      |> put_req_header("authorization", "Bearer #{raw}")
++      |> put_req_header("content-type", "application/json")
++      |> post(~p"/api/v1/reviews/#{review.slug}/patchsets", body)
++
++    assert %{"patchset_number" => 2} = json_response(conn, 201)
++
++    conn = get(build_conn(), ~p"/api/v1/reviews/#{review.slug}")
++    assert get_in(json_response(conn, 200), ["selected_patchset", "packet"]) == packet
++  end
++end
+diff --git a/test/reviews_web/controllers/api/review_controller_test.exs b/test/reviews_web/controllers/api/review_controller_test.exs
+index 7715a69..4e649a9 100644
+--- a/test/reviews_web/controllers/api/review_controller_test.exs
++++ b/test/reviews_web/controllers/api/review_controller_test.exs
+@@ -44,6 +44,34 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
+       assert url =~ slug
+     end
+ 
++    test "stores optional packet JSON on the initial patchset", %{conn: conn, raw_token: raw} do
++      packet = %{
++        "format_version" => 1,
++        "title" => "Reviewer guide",
++        "summary" => "Read this first.",
++        "tour" => [%{"kind" => "hunk", "path" => "foo"}]
++      }
++
++      body = %{
++        "title" => "Make user lookup faster",
++        "base_sha" => "deadbeef",
++        "branch_name" => "carey/perf",
++        "raw_diff" => "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n",
++        "packet" => packet
++      }
++
++      conn =
++        conn
++        |> put_req_header("authorization", "Bearer #{raw}")
++        |> put_req_header("content-type", "application/json")
++        |> post(~p"/api/v1/reviews", body)
++
++      %{"slug" => slug} = json_response(conn, 201)
++
++      conn = get(build_conn(), ~p"/api/v1/reviews/#{slug}")
++      assert get_in(json_response(conn, 200), ["selected_patchset", "packet"]) == packet
++    end
++
+     test "rejects requests with no bearer token", %{conn: conn} do
+       conn =
+         conn
+@@ -84,7 +112,12 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
+           description: "Test review",
+           base_sha: "deadbeef",
+           branch_name: "carey/foo",
+-          raw_diff: diff_v1
++          raw_diff: diff_v1,
++          packet: %{
++            "format_version" => 1,
++            "title" => "Packet v1",
++            "summary" => "Initial packet."
++          }
+         })
+ 
+       diff_v2 =
+@@ -111,8 +144,23 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
+       assert body["url"] =~ review.slug
+       assert length(body["patchsets"]) == 2
+ 
++      assert [
++               %{
++                 "number" => 1,
++                 "packet_present" => true,
++                 "stats" => %{"files" => 1, "additions" => 1, "deletions" => 1}
++               },
++               %{
++                 "number" => 2,
++                 "packet_present" => false,
++                 "stats" => %{"files" => 1, "additions" => 1, "deletions" => 1}
++               }
++             ] = body["patchsets"]
++
+       selected = body["selected_patchset"]
+       assert selected["number"] == ps2.number
++      assert selected["packet"] == nil
++      assert selected["stats"] == %{"files" => 1, "additions" => 1, "deletions" => 1}
+       assert is_list(selected["files"])
+       assert length(selected["files"]) == 1
+ 
+@@ -128,6 +176,7 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
+       body = json_response(conn, 200)
+ 
+       assert body["selected_patchset"]["number"] == ps1.number
++      assert body["selected_patchset"]["packet"]["title"] == "Packet v1"
+       [file] = body["selected_patchset"]["files"]
+       assert file["raw_diff"] =~ "+new\n"
+       refute file["raw_diff"] =~ "newer"
+diff --git a/test/reviews_web/live/review_live_test.exs b/test/reviews_web/live/review_live_test.exs
+index 909cfe2..fb25979 100644
+--- a/test/reviews_web/live/review_live_test.exs
++++ b/test/reviews_web/live/review_live_test.exs
+@@ -43,19 +43,230 @@ defmodule ReviewsWeb.ReviewLiveTest do
+   describe "anonymous viewer" do
+     setup :seed!
+ 
+-    test "renders the review screen with file tree + diff hooks", %{conn: conn, review: review} do
+-      {:ok, _view, html} = live(conn, ~p"/r/#{review.slug}")
++    test "renders the review screen with file tree and defers diff hooks", %{
++      conn: conn,
++      review: review
++    } do
++      {:ok, view, html} = live(conn, ~p"/r/#{review.slug}")
+ 
+       assert html =~ "Great change"
+       assert html =~ "lib/foo.ex"
+-      assert html =~ "phx-hook=\"DiffRenderer\""
+-      assert html =~ "data-file-path=\"lib/foo.ex\""
++      refute html =~ "phx-hook=\"DiffRenderer\""
++
++      view
++      |> element("#diff-files button.rev-file-summary", "lib/foo.ex")
++      |> render_click()
++
++      assert has_element?(view, ~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"]|)
++    end
++
++    test "renders a stored review packet above the diff", %{conn: conn, author: author} do
++      {:ok, %{review: packet_review}} =
++        ReviewsCtx.create_review_with_initial_patchset(author, %{
++          title: "Packet change",
++          raw_diff: """
++          diff --git a/lib/packet.ex b/lib/packet.ex
++          --- a/lib/packet.ex
++          +++ b/lib/packet.ex
++          @@ -1 +1 @@
++          -old
++          +new
++          """,
++          packet: %{
++            "format_version" => 1,
++            "title" => "Packet walkthrough",
++            "summary" => "Read this first.",
++            "sections" => [
++              %{
++                "title" => "Main change",
++                "rows" => [
++                  %{
++                    "kind" => "markdown",
++                    "body" =>
++                      "### Main change\nPreserve packet JSON as the server contract.\n\nKeep packet.md editable."
++                  },
++                  %{
++                    "kind" => "hunk",
++                    "path" => "lib/packet.ex",
++                    "hunk_index" => 1,
++                    "line_start" => 1,
++                    "line_end" => 2
++                  },
++                  %{"kind" => "markdown", "body" => "Run the smoke test."}
++                ]
++              }
++            ]
++          }
++        })
++
++      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
++      html = render(view)
++
++      assert has_element?(view, "#review-packet")
++      assert has_element?(view, ".review-title.is-packet-title", "Packet walkthrough")
++      assert has_element?(view, ".review-packet-lede", "Read this first.")
++      assert has_element?(view, ".review-header-estimate", "1 min")
++      assert has_element?(view, ".review-header-change-stat .review-change-stat-add", "+1")
++      assert has_element?(view, ".review-header-change-stat .review-change-stat-del", "-1")
++      assert has_element?(view, "#packet-section-0:not(.is-open)")
++      assert has_element?(view, "#packet-section-0 .review-packet-section-estimate", "Light")
++      assert has_element?(view, "#packet-section-0 .review-change-stat-add", "+1")
++      assert has_element?(view, "#packet-section-0 .review-change-stat-del", "-1")
++
++      assert has_element?(
++               view,
++               "#packet-section-0 > .review-packet-section-summary-text",
++               "Preserve packet JSON as the server contract."
++             )
++
++      refute has_element?(
++               view,
++               "#packet-section-0 .review-packet-section-summary .review-packet-section-summary-text"
++             )
++
++      assert html =~ "Preserve packet JSON as the server contract."
++      refute html =~ "Keep packet.md editable."
++      refute html =~ "Run the smoke test"
++      refute html =~ "### Main change"
++
++      view
++      |> element("#packet-section-0 .review-packet-section-heading", "Main change")
++      |> render_click()
++
++      refute has_element?(view, "#packet-section-0 > .review-packet-section-summary-text")
++
++      assert has_element?(
++               view,
++               ~s|#review-packet [phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
++             )
++
++      assert has_element?(view, "#review-packet .review-packet-md-heading", "Main change")
++      assert has_element?(view, "#review-packet", "Preserve packet JSON as the server contract.")
++
++      view
++      |> element("#diff-style-unified")
++      |> render_click()
++
++      assert has_element?(view, "#packet-section-0.is-open")
++    end
++
++    test "renders linear revision navigation from patchsets", %{
++      conn: conn,
++      author: author
++    } do
++      {:ok, %{review: packet_review}} =
++        ReviewsCtx.create_review_with_initial_patchset(author, %{
++          title: "Revision nav",
++          raw_diff: """
++          diff --git a/lib/one.ex b/lib/one.ex
++          --- a/lib/one.ex
++          +++ b/lib/one.ex
++          @@ -1 +1 @@
++          -old
++          +new
++          """,
++          packet: %{
++            "format_version" => 1,
++            "title" => "First packet",
++            "sections" => []
++          }
++        })
++
++      {:ok, _ps2} =
++        ReviewsCtx.append_patchset(packet_review, %{
++          raw_diff: """
++          diff --git a/lib/two.ex b/lib/two.ex
++          --- a/lib/two.ex
++          +++ b/lib/two.ex
++          @@ -1 +1 @@
++          -old
++          +new
++          """
++        })
++
++      {:ok, _ps3} =
++        ReviewsCtx.append_patchset(packet_review, %{
++          raw_diff: """
++          diff --git a/lib/three.ex b/lib/three.ex
++          --- a/lib/three.ex
++          +++ b/lib/three.ex
++          @@ -1 +1 @@
++          -old
++          +new
++          """,
++          packet: %{
++            "format_version" => 1,
++            "title" => "Second packet",
++            "sections" => []
++          }
++        })
++
++      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
++
++      assert has_element?(view, "#revision-nav", "Revision 3 of 3")
++      assert has_element?(view, "#revision-nav", "v1")
++      assert has_element?(view, "#revision-nav", "v2")
++      assert has_element?(view, "#revision-nav", "v3")
++      assert has_element?(view, ".review-header-meta", "+1 -1")
++      assert has_element?(view, ~s|#revision-nav #patchset-3.is-active|, "v3")
++      assert has_element?(view, ~s|#revision-nav #patchset-1.has-packet|)
++      assert has_element?(view, ~s|#revision-nav #patchset-3.has-packet|)
+     end
+ 
+     test "Publish review button is disabled with no drafts", %{conn: conn, review: review} do
+       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+       assert has_element?(view, "#publish-review-button[disabled]")
+     end
++
++    test "renders the classic diff on the changes route", %{conn: conn, author: author} do
++      {:ok, %{review: packet_review}} =
++        ReviewsCtx.create_review_with_initial_patchset(author, %{
++          title: "Packet change",
++          raw_diff: """
++          diff --git a/lib/packet.ex b/lib/packet.ex
++          --- a/lib/packet.ex
++          +++ b/lib/packet.ex
++          @@ -1 +1 @@
++          -old
++          +new
++          """,
++          packet: %{
++            "format_version" => 1,
++            "title" => "Packet walkthrough",
++            "sections" => [
++              %{
++                "title" => "Main change",
++                "rows" => [
++                  %{"kind" => "hunk", "path" => "lib/packet.ex", "hunk_index" => 1}
++                ]
++              }
++            ]
++          }
++        })
++
++      {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
++      assert has_element?(packet_view, "#review-packet")
++      refute has_element?(packet_view, "#diff-files")
++
++      {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
++      assert has_element?(changes_view, "#diff-files")
++      assert has_element?(changes_view, "#diff-files .rev-file-card:not(.is-open)")
++      assert has_element?(changes_view, "#diff-files button.rev-file-summary", "lib/packet.ex")
++
++      refute has_element?(
++               changes_view,
++               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
++             )
++
++      changes_view
++      |> element("#diff-files button.rev-file-summary", "lib/packet.ex")
++      |> render_click()
++
++      assert has_element?(
++               changes_view,
++               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
++             )
++    end
+   end
+ 
+   describe "signed-in reviewer" do
+@@ -128,5 +339,167 @@ defmodule ReviewsWeb.ReviewLiveTest do
+       assert length(seeded_drafts) == 1
+       assert hd(seeded_drafts).body == "from-hook"
+     end
++
++    test "section decisions persist and later changed sections link to the previous decision", %{
++      conn: conn,
++      author: author
++    } do
++      diff_v1 = """
++      diff --git a/lib/packet.ex b/lib/packet.ex
++      --- a/lib/packet.ex
++      +++ b/lib/packet.ex
++      @@ -1 +1 @@
++      -old
++      +new
++      """
++
++      {:ok, %{review: packet_review}} =
++        ReviewsCtx.create_review_with_initial_patchset(author, %{
++          title: "Packet decision",
++          raw_diff: diff_v1,
++          packet: %{
++            "format_version" => 1,
++            "title" => "Packet walkthrough",
++            "sections" => [
++              %{
++                "title" => "Main change",
++                "rows" => [
++                  %{
++                    "kind" => "hunk",
++                    "path" => "lib/packet.ex",
++                    "hunk_index" => 1,
++                    "line_start" => 1,
++                    "line_end" => 2
++                  }
++                ]
++              }
++            ]
++          }
++        })
++
++      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}?patchset=1")
++      view |> element("#packet-section-0 button", "Approve") |> render_click()
++      assert has_element?(view, "#packet-section-0:not(.is-open)")
++
++      refute has_element?(view, "#packet-section-0 .review-section-state-pill.is-current")
++      assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
++
++      view |> element("#packet-section-0 button", "Approve") |> render_click()
++      assert has_element?(view, "#packet-section-0:not(.is-open)")
++      refute has_element?(view, "#packet-section-0 .review-section-action.is-active")
++
++      view |> element("#packet-section-0 button", "Approve") |> render_click()
++      assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
++
++      {:ok, _ps2} =
++        ReviewsCtx.append_patchset(packet_review, %{
++          raw_diff: """
++          diff --git a/lib/packet.ex b/lib/packet.ex
++          --- a/lib/packet.ex
++          +++ b/lib/packet.ex
++          @@ -1,2 +1,3 @@
++          -old
++          +newer
++          +again
++          """,
++          packet: %{
++            "format_version" => 1,
++            "title" => "Packet walkthrough",
++            "sections" => [
++              %{
++                "title" => "Main change",
++                "rows" => [
++                  %{
++                    "kind" => "hunk",
++                    "path" => "lib/packet.ex",
++                    "hunk_index" => 1,
++                    "line_start" => 1,
++                    "line_end" => 3
++                  }
++                ]
++              }
++            ]
++          }
++        })
++
++      {:ok, latest_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
++      refute has_element?(latest_view, "#packet-section-0 .review-section-action.is-active")
++
++      assert has_element?(
++               latest_view,
++               ~s|#packet-section-0 .review-section-state-pill.is-previous.is-approved[title="Previously approved in v1"]|
++             )
++
++      refute has_element?(
++               latest_view,
++               "#packet-section-0 a.review-section-state-pill.is-previous"
++             )
++
++      assert has_element?(latest_view, "#packet-section-0 .review-section-transition-icon")
++      assert has_element?(latest_view, "#packet-section-0 .review-packet-section-actions")
++      assert has_element?(latest_view, "#packet-section-0:not(.is-open)")
++
++      latest_view |> element("#packet-section-0 button", "Ignore") |> render_click()
++
++      assert has_element?(
++               latest_view,
++               ~s|#packet-section-0 .review-section-state-pill.is-previous.is-approved[title="Previously approved in v1"]|
++             )
++
++      refute has_element?(latest_view, "#packet-section-0 .review-section-state-pill.is-current")
++
++      assert has_element?(
++               latest_view,
++               "#packet-section-0 .review-section-action.is-active",
++               "Ignore"
++             )
++
++      {:ok, _ps3} =
++        ReviewsCtx.append_patchset(packet_review, %{
++          raw_diff: """
++          diff --git a/lib/packet.ex b/lib/packet.ex
++          --- a/lib/packet.ex
++          +++ b/lib/packet.ex
++          @@ -1,2 +1,3 @@
++          -old
++          +newer
++          +again
++          """,
++          packet: %{
++            "format_version" => 1,
++            "title" => "Packet walkthrough",
++            "sections" => [
++              %{
++                "title" => "Main change",
++                "rows" => [
++                  %{
++                    "kind" => "hunk",
++                    "path" => "lib/packet.ex",
++                    "hunk_index" => 1,
++                    "line_start" => 1,
++                    "line_end" => 3
++                  }
++                ]
++              }
++            ]
++          }
++        })
++
++      {:ok, carried_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
++
++      assert has_element?(
++               carried_view,
++               "#packet-section-0 .review-section-action.is-active",
++               "Ignore"
++             )
++
++      refute has_element?(
++               carried_view,
++               "#packet-section-0 .review-section-state-pill.is-previous"
++             )
++
++      carried_view |> element("#packet-section-0 button", "Ignore") |> render_click()
++      refute has_element?(carried_view, "#packet-section-0 .review-section-action.is-active")
++    end
+   end
+ end

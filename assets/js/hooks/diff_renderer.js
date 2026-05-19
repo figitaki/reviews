@@ -107,7 +107,7 @@ const primaryButtonStyle = {
   ...buttonStyle,
   background: colors.text,
   borderColor: colors.text,
-  color: "#050505",
+  color: "var(--ds-bg, #050505)",
 }
 
 const textareaStyle = {
@@ -116,7 +116,7 @@ const textareaStyle = {
   resize: "vertical",
   border: `1px solid ${colors.lineStrong}`,
   borderRadius: 6,
-  background: "#000",
+  background: colors.panel,
   color: "inherit",
   font: "inherit",
   fontFamily: fontStack,
@@ -936,7 +936,18 @@ function FileIsland({
         onLineNumberClick: handleLineNumberClick,
         onTokenClick: handleTokenClick,
       }}
-      style={{ width: "100%" }}
+      style={{
+        width: "100%",
+        colorScheme: "inherit",
+        "--diffs-light-bg": "var(--ds-panel-raised, #fff)",
+        "--diffs-dark-bg": "var(--ds-panel-raised, #000)",
+        "--diffs-light": "var(--ds-text, #000)",
+        "--diffs-dark": "var(--ds-text, #fff)",
+        "--diffs-light-addition-color": "var(--ds-add, #0dbe4e)",
+        "--diffs-dark-addition-color": "var(--ds-add, #5ecc71)",
+        "--diffs-light-deletion-color": "var(--ds-del, #ff2e3f)",
+        "--diffs-dark-deletion-color": "var(--ds-del, #ff6762)",
+      }}
     />
   )
 }

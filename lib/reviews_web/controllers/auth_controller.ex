@@ -14,6 +14,8 @@ defmodule ReviewsWeb.AuthController do
   plug :require_oauth_configured when action in [:request]
   plug Ueberauth
 
+  require Logger
+
   alias Reviews.Accounts
 
   defp require_oauth_configured(conn, _opts) do
@@ -40,7 +42,9 @@ defmodule ReviewsWeb.AuthController do
     |> redirect(to: ~p"/")
   end
 
-  def callback(%{assigns: %{ueberauth_failure: _failure}} = conn, _params) do
+  def callback(%{assigns: %{ueberauth_failure: failure}} = conn, _params) do
+    Logger.warning("GitHub OAuth failed: #{inspect(failure.errors)}")
+
     conn
     |> put_flash(:error, "GitHub authentication failed.")
     |> redirect(to: ~p"/")
