@@ -33,7 +33,7 @@ defmodule Reviews.DemoReview do
         description: packet["summary"],
         raw_diff: raw_diff,
         packet: packet,
-        branch_name: "demo/section-review-performance"
+        branch_name: "demo/structured-markdown-review-packets"
       })
 
     review

@@ -1,24 +1,5 @@
-diff --git a/.github/workflows/fly-review.yml b/.github/workflows/fly-review.yml
-index 68ed27e..672b96d 100644
---- a/.github/workflows/fly-review.yml
-+++ b/.github/workflows/fly-review.yml
-@@ -100,12 +100,14 @@ jobs:
-           PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
-           PREVIEW_GITHUB_CLIENT_ID: ${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}
-           PREVIEW_GITHUB_CLIENT_SECRET: ${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
-+          PREVIEW_API_TOKEN: ${{ secrets.PREVIEW_API_TOKEN }}
-         run: |
-           flyctl secrets set --stage --app "$APP_NAME" \
-             SECRET_KEY_BASE="$PREVIEW_SECRET_KEY_BASE" \
-             DATABASE_URL="$PREVIEW_DATABASE_URL" \
-             GITHUB_CLIENT_ID="$PREVIEW_GITHUB_CLIENT_ID" \
-             GITHUB_CLIENT_SECRET="$PREVIEW_GITHUB_CLIENT_SECRET" \
-+            PREVIEW_API_TOKEN="$PREVIEW_API_TOKEN" \
-             PHX_HOST="$APP_HOST"
- 
-       - name: Deploy preview app
 diff --git a/assets/css/app.css b/assets/css/app.css
-index 1ee9900..cb82690 100644
+index 1ee9900..ea0ab32 100644
 --- a/assets/css/app.css
 +++ b/assets/css/app.css
 @@ -125,6 +125,8 @@
@@ -110,26 +91,10 @@ index 1ee9900..cb82690 100644
  .review-label {
    display: block;
    font-weight: 500;
-@@ -210,171 +272,905 @@
-   border-bottom-left-radius: 6px;
+@@ -223,6 +285,110 @@
+   z-index: 1;
  }
  
--.review-diff-style > .review-chip:last-child {
--  border-top-right-radius: 6px;
--  border-bottom-right-radius: 6px;
-+.review-diff-style > .review-chip:last-child {
-+  border-top-right-radius: 6px;
-+  border-bottom-right-radius: 6px;
-+}
-+
-+.review-diff-style > .review-chip + .review-chip {
-+  border-left-width: 0;
-+}
-+
-+.review-diff-style > .review-chip.is-active {
-+  z-index: 1;
-+}
-+
 +.review-revision-nav {
 +  display: grid;
 +  gap: 12px;
@@ -234,160 +199,13 @@ index 1ee9900..cb82690 100644
 +  opacity: 0.35;
 +}
 +
-+.review-chip,
-+.review-button {
-+  display: inline-flex;
-+  min-height: 32px;
-+  align-items: center;
-+  justify-content: center;
-+  gap: 8px;
-+  border: 1px solid var(--review-line-strong);
-+  border-radius: 6px;
-+  background: #080809;
-+  color: var(--review-text);
-+  font-size: 12px;
-+  font-weight: 550;
-+  line-height: 1;
-+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
-+}
-+
-+.review-chip {
-+  min-height: 28px;
-+  min-width: 34px;
-+  padding: 0 9px;
-+  font-variant-numeric: tabular-nums;
-+}
-+
-+.review-button {
-+  padding: 0 12px;
-+  white-space: nowrap;
-+}
-+
-+.review-chip:hover,
-+.review-button:hover {
-+  background: #141416;
-+  border-color: #5a5a5e;
-+}
-+
-+.review-chip.is-active,
-+.review-button-primary {
-+  background: var(--review-text);
-+  border-color: var(--review-text);
-+  color: #050505;
-+}
-+
-+.review-button-secondary,
-+.review-button-ghost {
-+  background: transparent;
-+}
-+
-+.review-button-ghost {
-+  border-color: transparent;
-+  color: var(--review-muted);
-+}
-+
-+.review-button:disabled {
-+  cursor: not-allowed;
-+  opacity: 0.38;
-+}
-+
-+.review-chip:focus-visible,
-+.review-button:focus-visible,
-+.rev-file-link:focus-visible {
-+  outline: 2px solid var(--review-focus);
-+  outline-offset: 2px;
-+}
-+
-+.review-toast {
-+  display: flex;
-+  align-items: flex-start;
-+  gap: 10px;
-+  min-width: 260px;
-+  max-width: 420px;
-+  padding: 12px 14px;
-+  border: 1px solid var(--review-line-strong);
-+  border-radius: 10px;
-+  background: var(--review-panel-raised);
-+  color: var(--review-text);
-+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-+  font-size: 13px;
-+  line-height: 1.4;
-+}
-+
-+.review-toast-info {
-+  border-left: 3px solid var(--review-add, #25d0a0);
-+}
-+
-+.review-toast-error {
-+  border-left: 3px solid var(--review-del, #ff6b6b);
-+}
-+
-+.review-toast-icon {
-+  margin-top: 2px;
-+  flex: 0 0 auto;
-+  color: var(--review-muted);
-+}
-+
-+.review-toast-info .review-toast-icon {
-+  color: var(--review-add, #25d0a0);
-+}
-+
-+.review-toast-error .review-toast-icon {
-+  color: var(--review-del, #ff6b6b);
-+}
-+
-+.review-toast-body {
-+  flex: 1 1 auto;
-+  min-width: 0;
-+}
-+
-+.review-toast-title {
-+  margin: 0 0 2px 0;
-+  font-weight: 600;
-+}
-+
-+.review-toast-message {
-+  margin: 0;
-+  color: var(--review-text);
-+  word-break: break-word;
-+}
-+
-+.review-toast-close {
-+  flex: 0 0 auto;
-+  display: inline-flex;
-+  align-items: center;
-+  justify-content: center;
-+  width: 22px;
-+  height: 22px;
-+  margin-top: -2px;
-+  padding: 0;
-+  border: none;
-+  border-radius: 4px;
-+  background: transparent;
-+  color: var(--review-muted);
-+  cursor: pointer;
-+}
-+
-+.review-toast-close:hover {
-+  background: rgba(255, 255, 255, 0.06);
-+  color: var(--review-text);
-+}
-+
-+.review-banner,
-+.review-modal,
-+.review-menu,
-+.review-draft-item {
-+  border: 1px solid var(--review-line);
-+  border-radius: 8px;
-+  background: var(--review-panel-raised);
-+  color: var(--review-text);
-+}
-+
-+.review-banner {
-+  padding: 10px 12px;
-+  font-size: 13px;
-+}
-+
+ .review-chip,
+ .review-button {
+   display: inline-flex;
+@@ -377,6 +543,570 @@
+   font-size: 13px;
+ }
+ 
 +.review-packet {
 +  margin-bottom: 32px;
 +  color: var(--review-text);
@@ -453,8 +271,9 @@ index 1ee9900..cb82690 100644
 +  gap: 14px;
 +  min-height: var(--review-section-sticky-h);
 +  margin-inline: -8px;
-+  background: var(--review-bg);
++  background: color-mix(in srgb, var(--review-bg) 92%, transparent);
 +  padding: 8px;
++  backdrop-filter: blur(16px);
 +  list-style: none;
 +}
 +
@@ -730,282 +549,135 @@ index 1ee9900..cb82690 100644
 +  border-color: var(--color-success);
 +  background: color-mix(in oklab, var(--color-success) 16%, transparent);
 +  color: var(--color-success);
- }
- 
--.review-diff-style > .review-chip + .review-chip {
--  border-left-width: 0;
++}
++
 +.review-section-action.is-denied {
 +  --review-section-action-open-width: 76px;
 +
 +  border-color: color-mix(in oklab, var(--color-error) 35%, var(--review-line));
 +  color: color-mix(in oklab, var(--color-error) 82%, var(--review-muted));
- }
- 
--.review-diff-style > .review-chip.is-active {
--  z-index: 1;
++}
++
 +.review-section-action.is-denied:hover,
 +.review-section-action.is-denied.is-active {
 +  border-color: var(--color-error);
 +  background: color-mix(in oklab, var(--color-error) 16%, transparent);
 +  color: var(--color-error);
- }
- 
--.review-chip,
--.review-button {
--  display: inline-flex;
--  min-height: 32px;
--  align-items: center;
--  justify-content: center;
--  gap: 8px;
--  border: 1px solid var(--review-line-strong);
--  border-radius: 6px;
--  background: #080809;
++}
++
 +.review-section-action.is-ignored:hover,
 +.review-section-action.is-ignored.is-active {
 +  border-color: var(--review-line-strong);
 +  background: var(--review-panel-raised);
-   color: var(--review-text);
--  font-size: 12px;
--  font-weight: 550;
--  line-height: 1;
--  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
- }
- 
--.review-chip {
--  min-height: 28px;
--  min-width: 34px;
--  padding: 0 9px;
--  font-variant-numeric: tabular-nums;
++  color: var(--review-text);
++}
++
 +.review-packet-section-signin {
 +  color: var(--review-faint);
 +  font-size: 12px;
 +  font-weight: 600;
- }
- 
--.review-button {
--  padding: 0 12px;
--  white-space: nowrap;
++}
++
 +@media (max-width: 640px) {
-+  .review-revision-nav {
-+    margin-bottom: 24px;
-+  }
-+
-+  .review-revision-row {
-+    display: grid;
-+    gap: 10px;
-+  }
-+
-+  .review-revision-copy {
-+    grid-template-columns: auto auto;
-+    align-items: baseline;
-+    justify-content: start;
-+    gap: 8px;
-+  }
-+
-+  .review-revision-label {
-+    font-size: 10px;
-+  }
-+
-+  .review-revision-controls {
-+    width: 100%;
-+    min-width: 0;
-+    overflow-x: auto;
-+    padding-bottom: 3px;
-+    scrollbar-width: none;
-+  }
-+
-+  .review-revision-controls::-webkit-scrollbar {
-+    display: none;
-+  }
-+
-+  .review-revision-chip-list {
-+    flex: 0 0 auto;
-+    flex-wrap: nowrap;
-+    justify-content: flex-start;
-+  }
-+
-+  .review-nav-button,
-+  .review-revision-chip {
-+    flex: 0 0 auto;
-+  }
-+
-+  .review-nav-button-label {
-+    display: none;
-+  }
-+
-+  .review-section-action.is-active {
-+    width: 30px;
-+    gap: 0;
-+    padding: 0;
-+  }
-+
-+  .review-section-action.is-active .review-section-action-label {
-+    max-width: 0;
-+    opacity: 0;
-+  }
-+
 +  .review-packet-section-summary {
-+    display: grid;
-+    grid-template-columns: minmax(0, 1fr) auto;
-+    align-items: start;
++    flex-wrap: wrap;
++    align-items: flex-start;
 +    gap: 10px;
 +  }
 +
 +  .review-packet-section-heading {
-+    min-width: 0;
++    flex: 1 1 calc(100% - 34px);
 +  }
 +
 +  .review-packet-section-controls {
-+    width: auto;
++    order: 2;
++    width: 100%;
 +    flex-wrap: wrap;
-+    justify-content: flex-end;
-+    justify-self: end;
++    justify-content: flex-start;
 +  }
 +
 +  .review-packet-section-controls .review-collapse-icon {
-+    position: static;
++    position: absolute;
++    right: 0;
 +  }
- }
- 
--.review-chip:hover,
--.review-button:hover {
--  background: #141416;
--  border-color: #5a5a5e;
++}
++
 +.review-packet-row-list,
 +.review-packet-task-list,
 +.review-packet-question-list {
 +  display: grid;
 +  gap: 24px;
- }
- 
--.review-chip.is-active,
--.review-button-primary {
--  background: var(--review-text);
--  border-color: var(--review-text);
--  color: #050505;
++}
++
 +.review-packet-row {
 +  min-width: 0;
- }
- 
--.review-button-secondary,
--.review-button-ghost {
--  background: transparent;
++}
++
 +.review-packet-row.is-markdown {
 +  position: sticky;
 +  top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h));
 +  z-index: 7;
 +  margin-inline: -8px;
-+  min-height: 64px;
-+  overflow: hidden;
-+  border-bottom: 1px solid var(--review-line);
-+  background: var(--review-bg);
++  background: color-mix(in srgb, var(--review-bg) 94%, transparent);
 +  padding: 8px;
- }
- 
--.review-button-ghost {
--  border-color: transparent;
--  color: var(--review-muted);
-+.review-packet-row.is-markdown .review-packet-markdown {
-+  display: -webkit-box;
-+  overflow: hidden;
-+  -webkit-box-orient: vertical;
-+  -webkit-line-clamp: 2;
- }
- 
--.review-button:disabled {
--  cursor: not-allowed;
--  opacity: 0.38;
++  backdrop-filter: blur(16px);
++}
++
 +.review-packet-point-list {
 +  display: grid;
 +  gap: 12px;
- }
- 
--.review-chip:focus-visible,
--.review-button:focus-visible,
--.rev-file-link:focus-visible {
--  outline: 2px solid var(--review-focus);
--  outline-offset: 2px;
++}
++
 +.review-packet-point {
 +  display: grid;
 +  grid-template-columns: auto minmax(0, 1fr);
 +  gap: 12px;
 +  align-items: start;
- }
- 
--.review-toast {
--  display: flex;
--  align-items: flex-start;
--  gap: 10px;
--  min-width: 260px;
--  max-width: 420px;
--  padding: 12px 14px;
--  border: 1px solid var(--review-line-strong);
--  border-radius: 10px;
++}
++
 +.review-packet-point-index {
 +  display: inline-grid;
 +  width: 24px;
 +  height: 24px;
 +  place-items: center;
 +  border-radius: 999px;
-   background: var(--review-panel-raised);
--  color: var(--review-text);
--  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
--  font-size: 13px;
--  line-height: 1.4;
++  background: var(--review-panel-raised);
 +  color: var(--review-faint);
 +  font-size: 12px;
 +  font-weight: 750;
 +  line-height: 1;
- }
- 
--.review-toast-info {
--  border-left: 3px solid var(--review-add, #25d0a0);
++}
++
 +.review-packet-point-body {
 +  color: var(--review-text);
 +  font-size: 16px;
 +  line-height: 1.5;
- }
- 
--.review-toast-error {
--  border-left: 3px solid var(--review-del, #ff6b6b);
++}
++
 +.review-packet-markdown {
 +  color: var(--review-text);
 +  line-height: 1.55;
- }
- 
--.review-toast-icon {
--  margin-top: 2px;
--  flex: 0 0 auto;
--  color: var(--review-muted);
++}
++
 +.review-packet-md-heading {
 +  margin: 0 0 10px;
 +  color: var(--review-text);
 +  font-weight: 800;
 +  line-height: 1.25;
- }
- 
--.review-toast-info .review-toast-icon {
--  color: var(--review-add, #25d0a0);
++}
++
 +.review-packet-md-heading.is-h3 {
 +  font-size: 18px;
- }
- 
--.review-toast-error .review-toast-icon {
--  color: var(--review-del, #ff6b6b);
++}
++
 +.review-packet-md-heading.is-h4 {
 +  font-size: 16px;
- }
- 
--.review-toast-body {
--  flex: 1 1 auto;
--  min-width: 0;
++}
++
 +.review-packet-md-paragraph {
 +  margin: 0;
- }
- 
--.review-toast-title {
--  margin: 0 0 2px 0;
--  font-weight: 600;
++}
++
 +.review-packet-md-paragraph + .review-packet-md-paragraph,
 +.review-packet-md-paragraph + .review-packet-md-list,
 +.review-packet-md-list + .review-packet-md-paragraph,
@@ -1013,13 +685,12 @@ index 1ee9900..cb82690 100644
 +.review-packet-md-heading + .review-packet-md-paragraph,
 +.review-packet-md-heading + .review-packet-md-list {
 +  margin-top: 10px;
- }
- 
--.review-toast-message {
++}
++
 +.review-packet-md-list {
 +  display: grid;
 +  gap: 6px;
-   margin: 0;
++  margin: 0;
 +  padding-left: 18px;
 +  list-style: disc;
 +}
@@ -1029,28 +700,15 @@ index 1ee9900..cb82690 100644
 +  border-radius: 4px;
 +  background: var(--review-panel-raised);
 +  padding: 1px 4px;
-   color: var(--review-text);
--  word-break: break-word;
++  color: var(--review-text);
 +  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 +  font-size: 0.9em;
- }
- 
--.review-toast-close {
--  flex: 0 0 auto;
++}
++
 +.review-packet-hunk {
-   display: inline-flex;
++  display: inline-flex;
 +  max-width: 100%;
-   align-items: center;
--  justify-content: center;
--  width: 22px;
--  height: 22px;
--  margin-top: -2px;
--  padding: 0;
--  border: none;
--  border-radius: 4px;
--  background: transparent;
--  color: var(--review-muted);
--  cursor: pointer;
++  align-items: center;
 +  gap: 8px;
 +  border: 1px solid var(--review-line);
 +  border-radius: 8px;
@@ -1061,35 +719,24 @@ index 1ee9900..cb82690 100644
 +  font-size: 13px;
 +  overflow-wrap: anywhere;
 +  transition: border-color 120ms ease, background 120ms ease;
- }
- 
--.review-toast-close:hover {
--  background: rgba(255, 255, 255, 0.06);
--  color: var(--review-text);
++}
++
 +.review-packet-hunk:hover {
 +  border-color: var(--review-text);
 +  background: var(--review-hover);
- }
- 
--.review-banner,
--.review-modal,
--.review-menu,
--.review-draft-item {
++}
++
 +.review-packet-hunk.is-unresolved {
 +  color: var(--review-faint);
 +}
 +
 +.review-packet-inline-diff {
-   border: 1px solid var(--review-line);
-   border-radius: 8px;
-   background: var(--review-panel-raised);
--  color: var(--review-text);
++  border: 1px solid var(--review-line);
++  border-radius: 8px;
++  background: var(--review-panel-raised);
 +  overflow: hidden;
- }
- 
--.review-banner {
--  padding: 10px 12px;
--  font-size: 13px;
++}
++
 +.review-packet-inline-diff .rdr-file {
 +  border: 0;
 +  border-radius: 0;
@@ -1121,10 +768,12 @@ index 1ee9900..cb82690 100644
 +  color: var(--review-muted);
 +  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 +  font-size: 12px;
- }
- 
++}
++
  .review-modal {
-@@ -472,12 +1268,53 @@
+   box-shadow: 0 24px 80px rgb(0 0 0 / 0.6);
+ }
+@@ -472,12 +1202,53 @@
  }
  
  .rev-file-card {
@@ -1178,42 +827,17 @@ index 1ee9900..cb82690 100644
  .rev-file-path {
    min-width: 0;
    color: var(--review-text);
-@@ -590,6 +1427,22 @@
+@@ -590,6 +1361,10 @@
  }
  
  @media (max-width: 768px) {
 +  .review-page {
-+    --review-main-nav-h: 64px;
-+  }
-+
-+  .review-packet-row.is-markdown {
-+    position: static;
-+    min-height: 0;
-+    border-bottom: 0;
-+  }
-+
-+  .review-packet-row.is-markdown .review-packet-markdown {
-+    display: block;
-+    overflow: visible;
-+    -webkit-line-clamp: unset;
++    --review-main-nav-h: 112px;
 +  }
 +
    .review-topbar {
      flex-wrap: wrap;
    }
-@@ -1820,7 +2673,12 @@
-     padding: 52px 0 44px;
-   }
- 
-+  .design-wrap {
-+    width: min(1440px, calc(100vw - 16px));
-+  }
-+
-   .design-main {
-+    width: min(1440px, calc(100vw - 32px));
-     padding-bottom: 80px;
-   }
- 
 diff --git a/cli/src/api.rs b/cli/src/api.rs
 index 7cdeb4b..2f6bdc9 100644
 --- a/cli/src/api.rs
@@ -2187,65 +1811,6 @@ index 3cf08b8..90a5910 100644
      assert!(out.status.success());
      let stdout = String::from_utf8_lossy(&out.stdout);
      assert!(stdout.contains("--range"), "stdout = {stdout}");
-diff --git a/docs/PREVIEW_ENVS.md b/docs/PREVIEW_ENVS.md
-index eec8270..8cb905c 100644
---- a/docs/PREVIEW_ENVS.md
-+++ b/docs/PREVIEW_ENVS.md
-@@ -115,24 +115,50 @@ Under **Settings → Secrets and variables → Actions**:
- | `FLY_API_TOKEN`                 | Same token as production CI (`fly auth token`)        |
- | `PREVIEW_SECRET_KEY_BASE`       | Output of `mix phx.gen.secret`                        |
- | `PREVIEW_DATABASE_URL`          | Full `postgres://...` URL for the shared preview DB   |
-+| `PREVIEW_API_TOKEN`             | A bearer token of your choice (e.g. `rev_$(openssl rand -hex 24)`). Used to bootstrap a synthetic "preview" user — see "Pushing diffs to a preview" below. |
- | `PREVIEW_GITHUB_CLIENT_ID`      | _(optional — leave unset to skip OAuth on previews)_  |
- | `PREVIEW_GITHUB_CLIENT_SECRET`  | _(optional — leave unset to skip OAuth on previews)_  |
- 
- ---
- 
-+## Pushing diffs to a preview
-+
-+GitHub OAuth doesn't work on per-PR hostnames, so there's no UI path to
-+mint an API token on a preview app. Instead, every preview boots with
-+a synthetic `preview` user seeded by
-+`Reviews.Release.seed_preview_user/0`, with an API token derived from
-+the `PREVIEW_API_TOKEN` secret above.
-+
-+To use it:
-+
-+```sh
-+reviews login
-+# server_url: https://reviews-pr-42.fly.dev
-+# api_token:  <the same string you put in PREVIEW_API_TOKEN>
-+
-+reviews push
-+```
-+
-+The seeding step is a no-op in production (the prod app has no
-+`PREVIEW_API_TOKEN` env var), so the synthetic user only exists on
-+previews.
-+
-+---
-+
- ## How a PR flows through
- 
- 1. **PR opened** by a maintainer/collaborator → workflow fires →
-    if a `preview` Environment with required reviewers is configured,
--   waits for approval → `superfly/fly-pr-review-apps` creates app
--   `reviews-pr-<N>`, sets secrets, and runs `fly deploy`. The release
--   command in `fly.toml` runs migrations against the shared preview DB.
-+   waits for approval → `flyctl apps create` makes `reviews-pr-<N>`,
-+   `flyctl secrets set --stage` writes config, and `flyctl deploy
-+   --remote-only` builds the image on Fly's builders. The release
-+   command in `fly.toml` runs migrations and seeds the preview user.
- 
- 2. **Subsequent pushes** → workflow re-runs → app redeploys with the
-    new HEAD.
- 
- 3. **PR closed (merged or not)** → workflow fires the close path →
--   `superfly/fly-pr-review-apps` destroys the Fly app.
-+   `flyctl apps destroy` removes the Fly app.
- 
- ---
- 
 diff --git a/lib/reviews/packet_section_decisions.ex b/lib/reviews/packet_section_decisions.ex
 new file mode 100644
 index 0000000..865992b
@@ -2401,86 +1966,6 @@ index 0000000..865992b
 +    |> Enum.sort_by(&Map.get(patchset_number_by_id, &1.patchset_id), :desc)
 +  end
 +end
-diff --git a/lib/reviews/release.ex b/lib/reviews/release.ex
-index 50585cc..b2cd721 100644
---- a/lib/reviews/release.ex
-+++ b/lib/reviews/release.ex
-@@ -6,6 +6,10 @@ defmodule Reviews.Release do
- 
-   @app :reviews
- 
-+  @preview_github_id 0
-+  @preview_username "preview"
-+  @preview_token_name "preview-bootstrap"
-+
-   def migrate do
-     load_app()
- 
-@@ -19,6 +23,64 @@ defmodule Reviews.Release do
-     {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :down, to: version))
-   end
- 
-+  @doc """
-+  Seeds a synthetic "preview" user with an API token derived from the
-+  `PREVIEW_API_TOKEN` env var, so the CLI can `reviews login` against a
-+  preview app without going through GitHub OAuth (which doesn't work on
-+  per-PR hostnames). No-op if the env var is unset — production deploys
-+  set no `PREVIEW_API_TOKEN`, so this only takes effect on preview apps.
-+
-+  Idempotent: re-running with the same token is a no-op; rotating the
-+  token inserts a new row alongside the old one.
-+  """
-+  def seed_preview_user do
-+    load_app()
-+
-+    case System.get_env("PREVIEW_API_TOKEN") do
-+      nil ->
-+        :ok
-+
-+      "" ->
-+        :ok
-+
-+      raw ->
-+        for repo <- repos() do
-+          {:ok, _, _} = Ecto.Migrator.with_repo(repo, fn _ -> seed_preview_token(raw) end)
-+        end
-+
-+        :ok
-+    end
-+  end
-+
-+  @doc """
-+  Inserts (or no-ops) the synthetic preview user + token. Assumes the
-+  repo is already running — `seed_preview_user/0` is the release-time
-+  entrypoint that handles starting it via `Ecto.Migrator.with_repo/2`.
-+  Exposed for tests.
-+  """
-+  def seed_preview_token(raw) when is_binary(raw) do
-+    user =
-+      Reviews.Repo.get_by(Reviews.Accounts.User, github_id: @preview_github_id) ||
-+        Reviews.Repo.insert!(%Reviews.Accounts.User{
-+          github_id: @preview_github_id,
-+          username: @preview_username
-+        })
-+
-+    hash = :crypto.hash(:sha256, raw)
-+
-+    Reviews.Repo.insert!(
-+      %Reviews.Accounts.ApiToken{
-+        user_id: user.id,
-+        token_hash: hash,
-+        name: @preview_token_name
-+      },
-+      on_conflict: :nothing,
-+      conflict_target: :token_hash
-+    )
-+
-+    :ok
-+  end
-+
-   defp repos do
-     Application.fetch_env!(@app, :ecto_repos)
-   end
 diff --git a/lib/reviews/review_navigation.ex b/lib/reviews/review_navigation.ex
 new file mode 100644
 index 0000000..0a1c8ce
@@ -2717,82 +2202,6 @@ index 0000000..e4f065a
 +    end
 +  end
 +end
-diff --git a/lib/reviews/review_view.ex b/lib/reviews/review_view.ex
-index 662aba1..f85909b 100644
---- a/lib/reviews/review_view.ex
-+++ b/lib/reviews/review_view.ex
-@@ -8,6 +8,7 @@ defmodule Reviews.ReviewView do
-   """
- 
-   alias Reviews.Accounts.User
-+  alias Reviews.PacketSectionDecisions
-   alias Reviews.Reviews, as: ReviewsContext
-   alias Reviews.Reviews.{File, Patchset, Review}
-   alias Reviews.Threads
-@@ -18,6 +19,7 @@ defmodule Reviews.ReviewView do
-           selected_patchset: Patchset.t() | nil,
-           files: [File.t()],
-           file_diffs: [map()],
-+          packet_section_decisions: [map()],
-           published_threads: [map()],
-           drafts: [map()],
-           viewer: User.t() | nil
-@@ -100,6 +102,7 @@ defmodule Reviews.ReviewView do
-       selected_patchset: selected,
-       files: files,
-       file_diffs: file_diff_meta(files, selected),
-+      packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
-       published_threads: Threads.list_published_threads(review.id),
-       drafts: list_drafts(review, viewer),
-       viewer: viewer
-@@ -112,21 +115,40 @@ defmodule Reviews.ReviewView do
-   defp file_diff_meta(_files, nil), do: []
- 
-   defp file_diff_meta(files, %Patchset{} = selected_patchset) do
--    raw = selected_patchset.raw_diff || ""
--    parsed = ReviewsContext.parse_diff_files(raw) |> Enum.into(%{}, &{&1.path, &1})
--
-     Enum.map(files, fn file ->
--      meta = Map.get(parsed, file.path, %{additions: 0, deletions: 0})
--      raw_for_file = ReviewsContext.raw_diff_for_file(selected_patchset, file.path) || ""
-+      raw_for_file =
-+        if file.raw_diff in [nil, ""] do
-+          ReviewsContext.raw_diff_for_file(selected_patchset, file.path) || ""
-+        else
-+          file.raw_diff
-+        end
-+
-+      {additions, deletions} = file_change_counts(file, raw_for_file)
- 
-       Map.merge(file_to_map(file), %{
--        additions: Map.get(meta, :additions, 0),
--        deletions: Map.get(meta, :deletions, 0),
-+        additions: additions,
-+        deletions: deletions,
-         raw_diff: raw_for_file
-       })
-     end)
-   end
- 
-+  defp file_change_counts(%File{additions: additions, deletions: deletions}, _raw_for_file)
-+       when (is_integer(additions) and additions > 0) or
-+              (is_integer(deletions) and deletions > 0) do
-+    {additions || 0, deletions || 0}
-+  end
-+
-+  defp file_change_counts(%File{additions: additions, deletions: deletions}, raw_for_file) do
-+    case ReviewsContext.parse_diff_files(raw_for_file) do
-+      [%{additions: parsed_additions, deletions: parsed_deletions} | _] ->
-+        {parsed_additions, parsed_deletions}
-+
-+      _ ->
-+        {additions || 0, deletions || 0}
-+    end
-+  end
-+
-   defp file_to_map(file) do
-     %{
-       id: file.id,
 diff --git a/lib/reviews/reviews.ex b/lib/reviews/reviews.ex
 index f25ce2b..33a1d1b 100644
 --- a/lib/reviews/reviews.ex
@@ -2958,6 +2367,82 @@ index a6c6db6..680254e 100644
  
    def changeset(patchset, attrs) do
      patchset
+diff --git a/lib/reviews/review_view.ex b/lib/reviews/review_view.ex
+index 662aba1..f85909b 100644
+--- a/lib/reviews/review_view.ex
++++ b/lib/reviews/review_view.ex
+@@ -8,6 +8,7 @@ defmodule Reviews.ReviewView do
+   """
+ 
+   alias Reviews.Accounts.User
++  alias Reviews.PacketSectionDecisions
+   alias Reviews.Reviews, as: ReviewsContext
+   alias Reviews.Reviews.{File, Patchset, Review}
+   alias Reviews.Threads
+@@ -18,6 +19,7 @@ defmodule Reviews.ReviewView do
+           selected_patchset: Patchset.t() | nil,
+           files: [File.t()],
+           file_diffs: [map()],
++          packet_section_decisions: [map()],
+           published_threads: [map()],
+           drafts: [map()],
+           viewer: User.t() | nil
+@@ -100,6 +102,7 @@ defmodule Reviews.ReviewView do
+       selected_patchset: selected,
+       files: files,
+       file_diffs: file_diff_meta(files, selected),
++      packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
+       published_threads: Threads.list_published_threads(review.id),
+       drafts: list_drafts(review, viewer),
+       viewer: viewer
+@@ -112,21 +115,40 @@ defmodule Reviews.ReviewView do
+   defp file_diff_meta(_files, nil), do: []
+ 
+   defp file_diff_meta(files, %Patchset{} = selected_patchset) do
+-    raw = selected_patchset.raw_diff || ""
+-    parsed = ReviewsContext.parse_diff_files(raw) |> Enum.into(%{}, &{&1.path, &1})
+-
+     Enum.map(files, fn file ->
+-      meta = Map.get(parsed, file.path, %{additions: 0, deletions: 0})
+-      raw_for_file = ReviewsContext.raw_diff_for_file(selected_patchset, file.path) || ""
++      raw_for_file =
++        if file.raw_diff in [nil, ""] do
++          ReviewsContext.raw_diff_for_file(selected_patchset, file.path) || ""
++        else
++          file.raw_diff
++        end
++
++      {additions, deletions} = file_change_counts(file, raw_for_file)
+ 
+       Map.merge(file_to_map(file), %{
+-        additions: Map.get(meta, :additions, 0),
+-        deletions: Map.get(meta, :deletions, 0),
++        additions: additions,
++        deletions: deletions,
+         raw_diff: raw_for_file
+       })
+     end)
+   end
+ 
++  defp file_change_counts(%File{additions: additions, deletions: deletions}, _raw_for_file)
++       when (is_integer(additions) and additions > 0) or
++              (is_integer(deletions) and deletions > 0) do
++    {additions || 0, deletions || 0}
++  end
++
++  defp file_change_counts(%File{additions: additions, deletions: deletions}, raw_for_file) do
++    case ReviewsContext.parse_diff_files(raw_for_file) do
++      [%{additions: parsed_additions, deletions: parsed_deletions} | _] ->
++        {parsed_additions, parsed_deletions}
++
++      _ ->
++        {additions || 0, deletions || 0}
++    end
++  end
++
+   defp file_to_map(file) do
+     %{
+       id: file.id,
 diff --git a/lib/reviews_web/controllers/api/patchset_controller.ex b/lib/reviews_web/controllers/api/patchset_controller.ex
 index 0761511..2cce1aa 100644
 --- a/lib/reviews_web/controllers/api/patchset_controller.ex
@@ -3015,541 +2500,6 @@ index 5b86c3b..6b51b0c 100644
      }
    end
  
-diff --git a/lib/reviews_web/controllers/auth_controller.ex b/lib/reviews_web/controllers/auth_controller.ex
-index 138f8b6..e50a245 100644
---- a/lib/reviews_web/controllers/auth_controller.ex
-+++ b/lib/reviews_web/controllers/auth_controller.ex
-@@ -14,6 +14,8 @@ defmodule ReviewsWeb.AuthController do
-   plug :require_oauth_configured when action in [:request]
-   plug Ueberauth
- 
-+  require Logger
-+
-   alias Reviews.Accounts
- 
-   defp require_oauth_configured(conn, _opts) do
-@@ -40,7 +42,9 @@ defmodule ReviewsWeb.AuthController do
-     |> redirect(to: ~p"/")
-   end
- 
--  def callback(%{assigns: %{ueberauth_failure: _failure}} = conn, _params) do
-+  def callback(%{assigns: %{ueberauth_failure: failure}} = conn, _params) do
-+    Logger.warning("GitHub OAuth failed: #{inspect(failure.errors)}")
-+
-     conn
-     |> put_flash(:error, "GitHub authentication failed.")
-     |> redirect(to: ~p"/")
-diff --git a/lib/reviews_web/live/review_live.ex b/lib/reviews_web/live/review_live.ex
-index b531394..96384e2 100644
---- a/lib/reviews_web/live/review_live.ex
-+++ b/lib/reviews_web/live/review_live.ex
-@@ -15,9 +15,15 @@ defmodule ReviewsWeb.ReviewLive do
-   use ReviewsWeb, :live_view
- 
-   alias Reviews.Accounts
-+  alias Reviews.PacketSectionDecisions
-+  alias Reviews.ReviewNavigation
-+  alias Reviews.ReviewPacket
-   alias Reviews.ReviewView
-   alias Reviews.Reviews, as: ReviewsContext
-   alias Reviews.Threads
-+  alias ReviewsWeb.ReviewLive.DiffComponents
-+  alias ReviewsWeb.ReviewLive.PacketComponents
-+  alias ReviewsWeb.ReviewLive.RevisionNavComponents
- 
-   @impl true
-   def mount(%{"slug" => slug}, session, socket) do
-@@ -45,6 +51,8 @@ defmodule ReviewsWeb.ReviewLive do
-               |> assign(:summary_body, "")
-               |> assign(:banner_message, nil)
-               |> assign(:diff_style, "split")
-+              |> assign(:expanded_file_ids, MapSet.new())
-+              |> assign(:expanded_section_ids, MapSet.new())
-               |> assign_snapshot(snapshot)
- 
-             {:ok, socket}
-@@ -59,7 +67,21 @@ defmodule ReviewsWeb.ReviewLive do
-   end
- 
-   @impl true
--  def handle_params(_params, _uri, socket), do: {:noreply, socket}
-+  def handle_params(params, _uri, socket) do
-+    case parse_optional_patchset(params["patchset"]) do
-+      {:ok, patchset_number} ->
-+        case refresh_snapshot(socket, patchset_number: patchset_number) do
-+          {:ok, socket} ->
-+            {:noreply, socket}
-+
-+          {:error, :patchset_not_found} ->
-+            {:noreply, put_flash(socket, :error, "Patchset not found.")}
-+        end
-+
-+      :error ->
-+        {:noreply, put_flash(socket, :error, "Patchset not found.")}
-+    end
-+  end
- 
-   @impl true
-   def handle_event("select_patchset", %{"number" => number}, socket) do
-@@ -75,6 +97,26 @@ defmodule ReviewsWeb.ReviewLive do
-     end
-   end
- 
-+  @impl true
-+  def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
-+      when status in ["approved", "denied", "ignored"] do
-+    with %{} = user <- socket.assigns.current_user,
-+         %{} = patchset <- socket.assigns.selected_patchset,
-+         {section_index, ""} <- Integer.parse(to_string(index)),
-+         %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
-+         {:ok, _decision} <- put_section_status(socket, patchset, user, section, status) do
-+      {:noreply,
-+       socket
-+       |> refresh_snapshot!()
-+       |> collapse_packet_section(section_index)}
-+    else
-+      nil -> {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
-+      _ -> {:noreply, put_flash(socket, :error, "Could not update section.")}
-+    end
-+  end
-+
-+  def handle_event("set_section_status", _params, socket), do: {:noreply, socket}
-+
-   @impl true
-   def handle_event("open_publish_modal", _params, socket) do
-     {:noreply, assign(socket, :show_publish_modal, true)}
-@@ -101,7 +143,12 @@ defmodule ReviewsWeb.ReviewLive do
-     socket = assign(socket, :diff_style, style)
- 
-     socket =
--      Enum.reduce(socket.assigns.files, socket, fn file, acc ->
-+      socket.assigns.file_diffs
-+      |> Enum.filter(fn file ->
-+        MapSet.member?(socket.assigns.expanded_file_ids, file.id) ||
-+          packet_diff_path?(socket.assigns.selected_patchset, file.path)
-+      end)
-+      |> Enum.reduce(socket, fn file, acc ->
-         push_event(acc, "diff_style_updated:#{file.path}", %{style: style})
-       end)
- 
-@@ -110,6 +157,42 @@ defmodule ReviewsWeb.ReviewLive do
- 
-   def handle_event("select_diff_style", _params, socket), do: {:noreply, socket}
- 
-+  @impl true
-+  def handle_event("toggle_packet_section", %{"section_index" => section_index}, socket) do
-+    case parse_int(section_index) do
-+      index when is_integer(index) ->
-+        expanded_section_ids =
-+          if MapSet.member?(socket.assigns.expanded_section_ids, index) do
-+            MapSet.delete(socket.assigns.expanded_section_ids, index)
-+          else
-+            MapSet.put(socket.assigns.expanded_section_ids, index)
-+          end
-+
-+        {:noreply, assign(socket, :expanded_section_ids, expanded_section_ids)}
-+
-+      _ ->
-+        {:noreply, socket}
-+    end
-+  end
-+
-+  @impl true
-+  def handle_event("toggle_file_diff", %{"file_id" => file_id}, socket) do
-+    case parse_int(file_id) do
-+      id when is_integer(id) ->
-+        expanded_file_ids =
-+          if MapSet.member?(socket.assigns.expanded_file_ids, id) do
-+            MapSet.delete(socket.assigns.expanded_file_ids, id)
-+          else
-+            MapSet.put(socket.assigns.expanded_file_ids, id)
-+          end
-+
-+        {:noreply, assign(socket, :expanded_file_ids, expanded_file_ids)}
-+
-+      _ ->
-+        {:noreply, socket}
-+    end
-+  end
-+
-   @impl true
-   def handle_event("save_draft", params, socket) do
-     require Logger
-@@ -248,6 +331,15 @@ defmodule ReviewsWeb.ReviewLive do
- 
-   defp parse_int(_), do: nil
- 
-+  defp parse_optional_patchset(nil), do: {:ok, nil}
-+
-+  defp parse_optional_patchset(value) do
-+    case Integer.parse(to_string(value)) do
-+      {n, ""} when n > 0 -> {:ok, n}
-+      _ -> :error
-+    end
-+  end
-+
-   defp load_current_user(session) do
-     case session["current_user_id"] do
-       nil ->
-@@ -332,29 +424,6 @@ defmodule ReviewsWeb.ReviewLive do
-             </script>
-           </div>
- 
--          <div class="review-patchset" id="patchset-selector" aria-label="Patchset">
--            <button
--              :for={ps <- @patchsets}
--              id={"patchset-#{ps.number}"}
--              type="button"
--              phx-click="select_patchset"
--              phx-value-number={ps.number}
--              aria-pressed={
--                if(@selected_patchset && @selected_patchset.id == ps.id,
--                  do: "true",
--                  else: "false"
--                )
--              }
--              class={[
--                "review-chip focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
--                @selected_patchset && @selected_patchset.id == ps.id &&
--                  "is-active"
--              ]}
--            >
--              v{ps.number}
--            </button>
--          </div>
--
-           <button
-             id="publish-review-button"
-             type="button"
-@@ -373,13 +442,67 @@ defmodule ReviewsWeb.ReviewLive do
-         </:actions>
- 
-         <div class="design-main">
-+          <% packet = @selected_patchset && @selected_patchset.packet %>
-+          <% has_packet = ReviewPacket.present?(packet) %>
-+          <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
-+          <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
-+          <% packet_effort =
-+            if has_packet do
-+              PacketComponents.packet_effort_for_header(
-+                packet,
-+                @file_diffs,
-+                @packet_section_decisions,
-+                @selected_patchset,
-+                @patchsets
-+              )
-+            end %>
-+
-           <header class="review-header">
--            <h1 class="review-title" translate="no">{@review.title}</h1>
--            <p :if={@review.description || @file_diffs != []} class="review-description">
-+            <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
-+            <h1
-+              id={if(has_packet, do: "review-packet-title", else: "review-title")}
-+              class={["review-title", has_packet && "is-packet-title"]}
-+              translate="no"
-+            >
-+              {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
-+            </h1>
-+            <PacketComponents.markdown
-+              :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
-+              body={ReviewPacket.text(packet, "summary")}
-+              class="review-description review-packet-lede"
-+            />
-+            <p
-+              :if={!has_packet && (@review.description || @file_diffs != [])}
-+              class="review-description"
-+            >
-               {@review.description || review_summary(@file_diffs, @drafts)}
-             </p>
-+            <div :if={@selected_patchset} class="review-header-meta">
-+              <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
-+              <span class="review-header-change-stat">
-+                <PacketComponents.change_stat
-+                  additions={diff_stats.additions}
-+                  deletions={diff_stats.deletions}
-+                />
-+              </span>
-+              <span
-+                :if={has_packet && packet_effort}
-+                class="review-header-estimate"
-+                title="Estimated review time"
-+              >
-+                <strong>{packet_effort.time}</strong>
-+                <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
-+              </span>
-+            </div>
-           </header>
- 
-+          <RevisionNavComponents.revision_nav
-+            nav={revision_nav}
-+            review={@review}
-+            live_action={@live_action}
-+            selected_patchset={@selected_patchset}
-+          />
-+
-           <%!-- Patchset-pushed banner --%>
-           <div
-             :if={@banner_message}
-@@ -392,104 +515,33 @@ defmodule ReviewsWeb.ReviewLive do
-             </button>
-           </div>
- 
-+          <PacketComponents.packet
-+            :if={has_packet && @live_action != :changes}
-+            packet={packet}
-+            review={@review}
-+            patchsets={@patchsets}
-+            section_decisions={@packet_section_decisions}
-+            file_diffs={@file_diffs}
-+            selected_patchset={@selected_patchset}
-+            published_threads={@published_threads}
-+            drafts={@drafts}
-+            current_user={@current_user}
-+            diff_style={@diff_style}
-+            expanded_section_ids={@expanded_section_ids}
-+          />
-+
-           <%!-- Body: sidebar + diff list --%>
--          <div class="rev-shell">
--            <aside id="file-tree" class="rev-sidebar">
--              <ul class="rev-file-list">
--                <li :for={fd <- @file_diffs}>
--                  <a href={"#file-#{fd.id}"} class="rev-file-link">
--                    <span class="flex items-center gap-2 min-w-0">
--                      <.ds_status_mark status={fd.status} />
--                      <span class="rev-file-path truncate" translate="no">{fd.path}</span>
--                    </span>
--                    <span class="rev-file-stats">
--                      <span class="rev-stat-add">+{fd.additions}</span>
--                      <span class="rev-stat-del">-{fd.deletions}</span>
--                    </span>
--                  </a>
--                </li>
--                <li :if={@file_diffs == []}>
--                  <span class="rev-empty">No files in this patchset.</span>
--                </li>
--              </ul>
--
--              <section
--                :if={@open_threads_by_op != []}
--                id="open-threads"
--                class="rev-open-threads"
--                aria-label="Open threads"
--              >
--                <h2 class="rev-open-threads-heading">Open threads</h2>
--                <div :for={{op, threads} <- @open_threads_by_op} class="rev-open-thread-group">
--                  <header class="rev-open-thread-group-header">
--                    <img
--                      :if={op && op.avatar_url}
--                      src={op.avatar_url}
--                      alt=""
--                      width="16"
--                      height="16"
--                      loading="lazy"
--                      class="rdr-avatar"
--                    />
--                    <span>{(op && op.username) || "anonymous"}</span>
--                  </header>
--                  <button
--                    :for={t <- threads}
--                    type="button"
--                    class="rev-open-thread-entry"
--                    phx-click={
--                      JS.dispatch("reviews:scroll-to-anchor",
--                        detail: %{
--                          file_id: file_id_for(@file_diffs, t.file_path),
--                          file_path: t.file_path,
--                          side: t.side,
--                          line_number_hint: anchor_line_hint(t)
--                        }
--                      )
--                    }
--                  >
--                    <span class="rev-open-thread-meta">
--                      <span class="rev-open-thread-path" translate="no">
--                        {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
--                      </span>
--                      <span class="rev-open-thread-snippet">
--                        {ReviewView.first_comment_snippet(t)}
--                      </span>
--                    </span>
--                  </button>
--                </div>
--              </section>
--            </aside>
--
--            <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
--              <article
--                :for={fd <- @file_diffs}
--                id={"file-#{fd.id}"}
--                class="rev-file-card"
--              >
--                <div
--                  id={"diff-#{fd.id}"}
--                  phx-hook="DiffRenderer"
--                  phx-update="ignore"
--                  data-file-id={fd.id}
--                  data-file-path={fd.path}
--                  data-file-status={fd.status}
--                  data-side="new"
--                  data-patchset-number={@selected_patchset.number}
--                  data-raw-diff={fd.raw_diff}
--                  data-threads={threads_json(@published_threads, fd.path)}
--                  data-drafts={drafts_json(@drafts, fd.path, @current_user)}
--                  data-signed-in={if @current_user, do: "true", else: "false"}
--                  data-diff-style={@diff_style}
--                >
--                </div>
--              </article>
--
--              <p :if={@file_diffs == []} class="rev-empty">
--                No files in this patchset.
--              </p>
--            </section>
--          </div>
-+          <DiffComponents.diff_shell
-+            :if={@live_action == :changes || !has_packet}
-+            file_diffs={@file_diffs}
-+            open_threads_by_op={@open_threads_by_op}
-+            selected_patchset={@selected_patchset}
-+            published_threads={@published_threads}
-+            drafts={@drafts}
-+            current_user={@current_user}
-+            diff_style={@diff_style}
-+            expanded_file_ids={@expanded_file_ids}
-+          />
-         </div>
-       </.ds_shell>
- 
-@@ -575,17 +627,8 @@ defmodule ReviewsWeb.ReviewLive do
- 
-   defp user_menu(%{current_user: nil} = assigns) do
-     ~H"""
--    <a href="/auth/github" class="review-button review-button-secondary gap-2">
--      <svg
--        xmlns="http://www.w3.org/2000/svg"
--        viewBox="0 0 16 16"
--        class="size-4"
--        aria-hidden="true"
--        fill="currentColor"
--      >
--        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
--      </svg>
--      Sign in with GitHub
-+    <a href="/auth/github" class="review-button review-button-secondary">
-+      Sign in
-     </a>
-     """
-   end
-@@ -634,24 +677,38 @@ defmodule ReviewsWeb.ReviewLive do
-   defp plural(1, word), do: word
-   defp plural(_, word), do: word <> "s"
- 
-+  defp collapse_packet_section(socket, section_index) do
-+    expanded_section_ids =
-+      socket.assigns[:expanded_section_ids]
-+      |> Kernel.||(MapSet.new())
-+      |> MapSet.delete(section_index)
-+
-+    assign(socket, :expanded_section_ids, expanded_section_ids)
-+  end
-+
-   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
-   defp anchor_line_hint(_), do: nil
- 
--  defp file_id_for(file_diffs, file_path) do
--    Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
--  end
-+  defp assign_snapshot(socket, snapshot) do
-+    previous_patchset_id =
-+      socket.assigns[:selected_patchset] && socket.assigns.selected_patchset.id
- 
--  defp threads_json(threads, file_path) do
--    snapshot = %{published_threads: threads}
--    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
--  end
-+    next_patchset_id = snapshot.selected_patchset && snapshot.selected_patchset.id
- 
--  defp drafts_json(drafts, file_path, viewer) do
--    snapshot = %{drafts: drafts, viewer: viewer}
--    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
--  end
-+    expanded_file_ids =
-+      if previous_patchset_id == next_patchset_id do
-+        socket.assigns[:expanded_file_ids] || MapSet.new()
-+      else
-+        MapSet.new()
-+      end
-+
-+    expanded_section_ids =
-+      if previous_patchset_id == next_patchset_id do
-+        socket.assigns[:expanded_section_ids] || MapSet.new()
-+      else
-+        MapSet.new()
-+      end
- 
--  defp assign_snapshot(socket, snapshot) do
-     socket
-     |> assign(:review_snapshot, snapshot)
-     |> assign(:review, snapshot.review)
-@@ -659,8 +716,56 @@ defmodule ReviewsWeb.ReviewLive do
-     |> assign(:selected_patchset, snapshot.selected_patchset)
-     |> assign(:files, snapshot.files)
-     |> assign(:file_diffs, snapshot.file_diffs)
-+    |> assign(:expanded_file_ids, expanded_file_ids)
-+    |> assign(:expanded_section_ids, expanded_section_ids)
-+    |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
-     |> assign(:published_threads, snapshot.published_threads)
-     |> assign(:drafts, snapshot.drafts)
-     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
-   end
-+
-+  defp packet_diff_path?(nil, _path), do: false
-+
-+  defp packet_diff_path?(patchset, path) do
-+    patchset.packet
-+    |> ReviewPacket.sections()
-+    |> Enum.any?(fn section ->
-+      Enum.any?(section.rows, fn row ->
-+        ReviewPacket.text(row, "kind") == "hunk" && ReviewPacket.text(row, "path") == path
-+      end)
-+    end)
-+  end
-+
-+  defp put_section_status(socket, patchset, user, section, status) do
-+    state =
-+      PacketSectionDecisions.section_state(
-+        section,
-+        socket.assigns.packet_section_decisions,
-+        patchset,
-+        socket.assigns.patchsets
-+      )
-+
-+    cond do
-+      state.current && state.current.status == status ->
-+        PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
-+
-+      is_nil(state.current) && state.inherited && state.inherited.status == status ->
-+        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
-+          section_index: section.index,
-+          section_title: section.title,
-+          section_fingerprint: section.fingerprint,
-+          section_refs: section.refs,
-+          status: "pending"
-+        })
-+
-+      true ->
-+        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
-+          section_index: section.index,
-+          section_title: section.title,
-+          section_fingerprint: section.fingerprint,
-+          section_refs: section.refs,
-+          status: status
-+        })
-+    end
-+  end
- end
 diff --git a/lib/reviews_web/live/review_live/diff_components.ex b/lib/reviews_web/live/review_live/diff_components.ex
 new file mode 100644
 index 0000000..dc13537
@@ -3714,6 +2664,478 @@ index 0000000..dc13537
 +    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
 +  end
 +end
+diff --git a/lib/reviews_web/live/review_live.ex b/lib/reviews_web/live/review_live.ex
+index b531394..7d41163 100644
+--- a/lib/reviews_web/live/review_live.ex
++++ b/lib/reviews_web/live/review_live.ex
+@@ -15,9 +15,15 @@ defmodule ReviewsWeb.ReviewLive do
+   use ReviewsWeb, :live_view
+ 
+   alias Reviews.Accounts
++  alias Reviews.PacketSectionDecisions
++  alias Reviews.ReviewNavigation
++  alias Reviews.ReviewPacket
+   alias Reviews.ReviewView
+   alias Reviews.Reviews, as: ReviewsContext
+   alias Reviews.Threads
++  alias ReviewsWeb.ReviewLive.DiffComponents
++  alias ReviewsWeb.ReviewLive.PacketComponents
++  alias ReviewsWeb.ReviewLive.RevisionNavComponents
+ 
+   @impl true
+   def mount(%{"slug" => slug}, session, socket) do
+@@ -45,6 +51,8 @@ defmodule ReviewsWeb.ReviewLive do
+               |> assign(:summary_body, "")
+               |> assign(:banner_message, nil)
+               |> assign(:diff_style, "split")
++              |> assign(:expanded_file_ids, MapSet.new())
++              |> assign(:expanded_section_ids, MapSet.new())
+               |> assign_snapshot(snapshot)
+ 
+             {:ok, socket}
+@@ -59,7 +67,21 @@ defmodule ReviewsWeb.ReviewLive do
+   end
+ 
+   @impl true
+-  def handle_params(_params, _uri, socket), do: {:noreply, socket}
++  def handle_params(params, _uri, socket) do
++    case parse_optional_patchset(params["patchset"]) do
++      {:ok, patchset_number} ->
++        case refresh_snapshot(socket, patchset_number: patchset_number) do
++          {:ok, socket} ->
++            {:noreply, socket}
++
++          {:error, :patchset_not_found} ->
++            {:noreply, put_flash(socket, :error, "Patchset not found.")}
++        end
++
++      :error ->
++        {:noreply, put_flash(socket, :error, "Patchset not found.")}
++    end
++  end
+ 
+   @impl true
+   def handle_event("select_patchset", %{"number" => number}, socket) do
+@@ -75,6 +97,23 @@ defmodule ReviewsWeb.ReviewLive do
+     end
+   end
+ 
++  @impl true
++  def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
++      when status in ["approved", "denied", "ignored"] do
++    with %{} = user <- socket.assigns.current_user,
++         %{} = patchset <- socket.assigns.selected_patchset,
++         {section_index, ""} <- Integer.parse(to_string(index)),
++         %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
++         {:ok, _decision} <- put_section_status(socket, patchset, user, section, status) do
++      {:noreply, refresh_snapshot!(socket)}
++    else
++      nil -> {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
++      _ -> {:noreply, put_flash(socket, :error, "Could not update section.")}
++    end
++  end
++
++  def handle_event("set_section_status", _params, socket), do: {:noreply, socket}
++
+   @impl true
+   def handle_event("open_publish_modal", _params, socket) do
+     {:noreply, assign(socket, :show_publish_modal, true)}
+@@ -101,7 +140,12 @@ defmodule ReviewsWeb.ReviewLive do
+     socket = assign(socket, :diff_style, style)
+ 
+     socket =
+-      Enum.reduce(socket.assigns.files, socket, fn file, acc ->
++      socket.assigns.file_diffs
++      |> Enum.filter(fn file ->
++        MapSet.member?(socket.assigns.expanded_file_ids, file.id) ||
++          packet_diff_path?(socket.assigns.selected_patchset, file.path)
++      end)
++      |> Enum.reduce(socket, fn file, acc ->
+         push_event(acc, "diff_style_updated:#{file.path}", %{style: style})
+       end)
+ 
+@@ -110,6 +154,42 @@ defmodule ReviewsWeb.ReviewLive do
+ 
+   def handle_event("select_diff_style", _params, socket), do: {:noreply, socket}
+ 
++  @impl true
++  def handle_event("toggle_packet_section", %{"section_index" => section_index}, socket) do
++    case parse_int(section_index) do
++      index when is_integer(index) ->
++        expanded_section_ids =
++          if MapSet.member?(socket.assigns.expanded_section_ids, index) do
++            MapSet.delete(socket.assigns.expanded_section_ids, index)
++          else
++            MapSet.put(socket.assigns.expanded_section_ids, index)
++          end
++
++        {:noreply, assign(socket, :expanded_section_ids, expanded_section_ids)}
++
++      _ ->
++        {:noreply, socket}
++    end
++  end
++
++  @impl true
++  def handle_event("toggle_file_diff", %{"file_id" => file_id}, socket) do
++    case parse_int(file_id) do
++      id when is_integer(id) ->
++        expanded_file_ids =
++          if MapSet.member?(socket.assigns.expanded_file_ids, id) do
++            MapSet.delete(socket.assigns.expanded_file_ids, id)
++          else
++            MapSet.put(socket.assigns.expanded_file_ids, id)
++          end
++
++        {:noreply, assign(socket, :expanded_file_ids, expanded_file_ids)}
++
++      _ ->
++        {:noreply, socket}
++    end
++  end
++
+   @impl true
+   def handle_event("save_draft", params, socket) do
+     require Logger
+@@ -248,6 +328,15 @@ defmodule ReviewsWeb.ReviewLive do
+ 
+   defp parse_int(_), do: nil
+ 
++  defp parse_optional_patchset(nil), do: {:ok, nil}
++
++  defp parse_optional_patchset(value) do
++    case Integer.parse(to_string(value)) do
++      {n, ""} when n > 0 -> {:ok, n}
++      _ -> :error
++    end
++  end
++
+   defp load_current_user(session) do
+     case session["current_user_id"] do
+       nil ->
+@@ -332,29 +421,6 @@ defmodule ReviewsWeb.ReviewLive do
+             </script>
+           </div>
+ 
+-          <div class="review-patchset" id="patchset-selector" aria-label="Patchset">
+-            <button
+-              :for={ps <- @patchsets}
+-              id={"patchset-#{ps.number}"}
+-              type="button"
+-              phx-click="select_patchset"
+-              phx-value-number={ps.number}
+-              aria-pressed={
+-                if(@selected_patchset && @selected_patchset.id == ps.id,
+-                  do: "true",
+-                  else: "false"
+-                )
+-              }
+-              class={[
+-                "review-chip focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+-                @selected_patchset && @selected_patchset.id == ps.id &&
+-                  "is-active"
+-              ]}
+-            >
+-              v{ps.number}
+-            </button>
+-          </div>
+-
+           <button
+             id="publish-review-button"
+             type="button"
+@@ -373,13 +439,67 @@ defmodule ReviewsWeb.ReviewLive do
+         </:actions>
+ 
+         <div class="design-main">
++          <% packet = @selected_patchset && @selected_patchset.packet %>
++          <% has_packet = ReviewPacket.present?(packet) %>
++          <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
++          <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
++          <% packet_effort =
++            if has_packet do
++              PacketComponents.packet_effort_for_header(
++                packet,
++                @file_diffs,
++                @packet_section_decisions,
++                @selected_patchset,
++                @patchsets
++              )
++            end %>
++
+           <header class="review-header">
+-            <h1 class="review-title" translate="no">{@review.title}</h1>
+-            <p :if={@review.description || @file_diffs != []} class="review-description">
++            <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
++            <h1
++              id={if(has_packet, do: "review-packet-title", else: "review-title")}
++              class={["review-title", has_packet && "is-packet-title"]}
++              translate="no"
++            >
++              {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
++            </h1>
++            <PacketComponents.markdown
++              :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
++              body={ReviewPacket.text(packet, "summary")}
++              class="review-description review-packet-lede"
++            />
++            <p
++              :if={!has_packet && (@review.description || @file_diffs != [])}
++              class="review-description"
++            >
+               {@review.description || review_summary(@file_diffs, @drafts)}
+             </p>
++            <div :if={@selected_patchset} class="review-header-meta">
++              <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
++              <span class="review-header-change-stat">
++                <PacketComponents.change_stat
++                  additions={diff_stats.additions}
++                  deletions={diff_stats.deletions}
++                />
++              </span>
++              <span
++                :if={has_packet && packet_effort}
++                class="review-header-estimate"
++                title="Estimated review time"
++              >
++                <strong>{packet_effort.time}</strong>
++                <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
++              </span>
++            </div>
+           </header>
+ 
++          <RevisionNavComponents.revision_nav
++            nav={revision_nav}
++            review={@review}
++            live_action={@live_action}
++            selected_patchset={@selected_patchset}
++          />
++
+           <%!-- Patchset-pushed banner --%>
+           <div
+             :if={@banner_message}
+@@ -392,104 +512,33 @@ defmodule ReviewsWeb.ReviewLive do
+             </button>
+           </div>
+ 
++          <PacketComponents.packet
++            :if={has_packet && @live_action != :changes}
++            packet={packet}
++            review={@review}
++            patchsets={@patchsets}
++            section_decisions={@packet_section_decisions}
++            file_diffs={@file_diffs}
++            selected_patchset={@selected_patchset}
++            published_threads={@published_threads}
++            drafts={@drafts}
++            current_user={@current_user}
++            diff_style={@diff_style}
++            expanded_section_ids={@expanded_section_ids}
++          />
++
+           <%!-- Body: sidebar + diff list --%>
+-          <div class="rev-shell">
+-            <aside id="file-tree" class="rev-sidebar">
+-              <ul class="rev-file-list">
+-                <li :for={fd <- @file_diffs}>
+-                  <a href={"#file-#{fd.id}"} class="rev-file-link">
+-                    <span class="flex items-center gap-2 min-w-0">
+-                      <.ds_status_mark status={fd.status} />
+-                      <span class="rev-file-path truncate" translate="no">{fd.path}</span>
+-                    </span>
+-                    <span class="rev-file-stats">
+-                      <span class="rev-stat-add">+{fd.additions}</span>
+-                      <span class="rev-stat-del">-{fd.deletions}</span>
+-                    </span>
+-                  </a>
+-                </li>
+-                <li :if={@file_diffs == []}>
+-                  <span class="rev-empty">No files in this patchset.</span>
+-                </li>
+-              </ul>
+-
+-              <section
+-                :if={@open_threads_by_op != []}
+-                id="open-threads"
+-                class="rev-open-threads"
+-                aria-label="Open threads"
+-              >
+-                <h2 class="rev-open-threads-heading">Open threads</h2>
+-                <div :for={{op, threads} <- @open_threads_by_op} class="rev-open-thread-group">
+-                  <header class="rev-open-thread-group-header">
+-                    <img
+-                      :if={op && op.avatar_url}
+-                      src={op.avatar_url}
+-                      alt=""
+-                      width="16"
+-                      height="16"
+-                      loading="lazy"
+-                      class="rdr-avatar"
+-                    />
+-                    <span>{(op && op.username) || "anonymous"}</span>
+-                  </header>
+-                  <button
+-                    :for={t <- threads}
+-                    type="button"
+-                    class="rev-open-thread-entry"
+-                    phx-click={
+-                      JS.dispatch("reviews:scroll-to-anchor",
+-                        detail: %{
+-                          file_id: file_id_for(@file_diffs, t.file_path),
+-                          file_path: t.file_path,
+-                          side: t.side,
+-                          line_number_hint: anchor_line_hint(t)
+-                        }
+-                      )
+-                    }
+-                  >
+-                    <span class="rev-open-thread-meta">
+-                      <span class="rev-open-thread-path" translate="no">
+-                        {t.file_path}<span :if={anchor_line_hint(t)}>:{anchor_line_hint(t)}</span>
+-                      </span>
+-                      <span class="rev-open-thread-snippet">
+-                        {ReviewView.first_comment_snippet(t)}
+-                      </span>
+-                    </span>
+-                  </button>
+-                </div>
+-              </section>
+-            </aside>
+-
+-            <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
+-              <article
+-                :for={fd <- @file_diffs}
+-                id={"file-#{fd.id}"}
+-                class="rev-file-card"
+-              >
+-                <div
+-                  id={"diff-#{fd.id}"}
+-                  phx-hook="DiffRenderer"
+-                  phx-update="ignore"
+-                  data-file-id={fd.id}
+-                  data-file-path={fd.path}
+-                  data-file-status={fd.status}
+-                  data-side="new"
+-                  data-patchset-number={@selected_patchset.number}
+-                  data-raw-diff={fd.raw_diff}
+-                  data-threads={threads_json(@published_threads, fd.path)}
+-                  data-drafts={drafts_json(@drafts, fd.path, @current_user)}
+-                  data-signed-in={if @current_user, do: "true", else: "false"}
+-                  data-diff-style={@diff_style}
+-                >
+-                </div>
+-              </article>
+-
+-              <p :if={@file_diffs == []} class="rev-empty">
+-                No files in this patchset.
+-              </p>
+-            </section>
+-          </div>
++          <DiffComponents.diff_shell
++            :if={@live_action == :changes || !has_packet}
++            file_diffs={@file_diffs}
++            open_threads_by_op={@open_threads_by_op}
++            selected_patchset={@selected_patchset}
++            published_threads={@published_threads}
++            drafts={@drafts}
++            current_user={@current_user}
++            diff_style={@diff_style}
++            expanded_file_ids={@expanded_file_ids}
++          />
+         </div>
+       </.ds_shell>
+ 
+@@ -637,21 +686,26 @@ defmodule ReviewsWeb.ReviewLive do
+   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
+   defp anchor_line_hint(_), do: nil
+ 
+-  defp file_id_for(file_diffs, file_path) do
+-    Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
+-  end
++  defp assign_snapshot(socket, snapshot) do
++    previous_patchset_id =
++      socket.assigns[:selected_patchset] && socket.assigns.selected_patchset.id
+ 
+-  defp threads_json(threads, file_path) do
+-    snapshot = %{published_threads: threads}
+-    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
+-  end
++    next_patchset_id = snapshot.selected_patchset && snapshot.selected_patchset.id
+ 
+-  defp drafts_json(drafts, file_path, viewer) do
+-    snapshot = %{drafts: drafts, viewer: viewer}
+-    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
+-  end
++    expanded_file_ids =
++      if previous_patchset_id == next_patchset_id do
++        socket.assigns[:expanded_file_ids] || MapSet.new()
++      else
++        MapSet.new()
++      end
++
++    expanded_section_ids =
++      if previous_patchset_id == next_patchset_id do
++        socket.assigns[:expanded_section_ids] || MapSet.new()
++      else
++        MapSet.new()
++      end
+ 
+-  defp assign_snapshot(socket, snapshot) do
+     socket
+     |> assign(:review_snapshot, snapshot)
+     |> assign(:review, snapshot.review)
+@@ -659,8 +713,52 @@ defmodule ReviewsWeb.ReviewLive do
+     |> assign(:selected_patchset, snapshot.selected_patchset)
+     |> assign(:files, snapshot.files)
+     |> assign(:file_diffs, snapshot.file_diffs)
++    |> assign(:expanded_file_ids, expanded_file_ids)
++    |> assign(:expanded_section_ids, expanded_section_ids)
++    |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
+     |> assign(:published_threads, snapshot.published_threads)
+     |> assign(:drafts, snapshot.drafts)
+     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
+   end
++
++  defp packet_diff_path?(nil, _path), do: false
++
++  defp packet_diff_path?(patchset, path) do
++    patchset.packet
++    |> ReviewPacket.sections()
++    |> Enum.any?(fn section ->
++      Enum.any?(section.rows, fn row ->
++        ReviewPacket.text(row, "kind") == "hunk" && ReviewPacket.text(row, "path") == path
++      end)
++    end)
++  end
++
++  defp put_section_status(socket, patchset, user, section, status) do
++    state =
++      PacketSectionDecisions.section_state(
++        section,
++        socket.assigns.packet_section_decisions,
++        patchset,
++        socket.assigns.patchsets
++      )
++
++    next_status =
++      if state.effective && state.effective.status == status do
++        "pending"
++      else
++        status
++      end
++
++    if state.current && state.current.status == next_status do
++      PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
++    else
++      PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
++        section_index: section.index,
++        section_title: section.title,
++        section_fingerprint: section.fingerprint,
++        section_refs: section.refs,
++        status: next_status
++      })
++    end
++  end
+ end
 diff --git a/lib/reviews_web/live/review_live/packet_components.ex b/lib/reviews_web/live/review_live/packet_components.ex
 new file mode 100644
 index 0000000..df23a74
@@ -4415,10 +3837,10 @@ index 0000000..df23a74
 +end
 diff --git a/lib/reviews_web/live/review_live/revision_nav_components.ex b/lib/reviews_web/live/review_live/revision_nav_components.ex
 new file mode 100644
-index 0000000..390e2bf
+index 0000000..6c269d8
 --- /dev/null
 +++ b/lib/reviews_web/live/review_live/revision_nav_components.ex
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,98 @@
 +defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
 +  @moduledoc false
 +  use ReviewsWeb, :html
@@ -4461,8 +3883,7 @@ index 0000000..390e2bf
 +            disabled={!@nav.previous_revision}
 +            aria-label="Previous revision"
 +          >
-+            <.icon name="hero-arrow-left" class="size-4" />
-+            <span class="review-nav-button-label">Revision</span>
++            <.icon name="hero-arrow-left" class="size-4" /> Revision
 +          </button>
 +          <div class="review-revision-chip-list" aria-label="Revisions">
 +            <button
@@ -4497,8 +3918,7 @@ index 0000000..390e2bf
 +            disabled={!@nav.next_revision}
 +            aria-label="Next revision"
 +          >
-+            <span class="review-nav-button-label">Revision</span>
-+            <.icon name="hero-arrow-right" class="size-4" />
++            Revision <.icon name="hero-arrow-right" class="size-4" />
 +          </button>
 +        </div>
 +      </div>
@@ -4594,61 +4014,6 @@ index 0000000..655acd6
 +      add :additions, :integer, null: false, default: 0
 +      add :deletions, :integer, null: false, default: 0
 +      add :raw_diff, :text, null: false, default: ""
-+    end
-+  end
-+end
-diff --git a/rel/overlays/bin/migrate b/rel/overlays/bin/migrate
-index 2995179..58c935f 100755
---- a/rel/overlays/bin/migrate
-+++ b/rel/overlays/bin/migrate
-@@ -1,3 +1,4 @@
- #!/bin/sh
- cd -P -- "$(dirname -- "$0")"
--exec ./reviews eval Reviews.Release.migrate
-+./reviews eval Reviews.Release.migrate
-+exec ./reviews eval Reviews.Release.seed_preview_user
-diff --git a/test/reviews/release_test.exs b/test/reviews/release_test.exs
-new file mode 100644
-index 0000000..b67d96d
---- /dev/null
-+++ b/test/reviews/release_test.exs
-@@ -0,0 +1,39 @@
-+defmodule Reviews.ReleaseTest do
-+  use Reviews.DataCase, async: true
-+
-+  alias Reviews.Accounts
-+  alias Reviews.Release
-+
-+  describe "seed_preview_token/1" do
-+    test "creates the preview user + token on first call, then authenticates" do
-+      raw = "rev_test_preview_token_aaa"
-+
-+      assert :ok = Release.seed_preview_token(raw)
-+      assert {:ok, user} = Accounts.authenticate_token(raw)
-+      assert user.username == "preview"
-+      assert user.github_id == 0
-+    end
-+
-+    test "is idempotent — second call with the same token is a no-op" do
-+      raw = "rev_test_preview_token_bbb"
-+
-+      assert :ok = Release.seed_preview_token(raw)
-+      assert :ok = Release.seed_preview_token(raw)
-+
-+      [%{username: "preview"}] = Repo.all(Reviews.Accounts.User)
-+      [_one_token] = Repo.all(Reviews.Accounts.ApiToken)
-+    end
-+
-+    test "rotation adds a new token without losing the user" do
-+      assert :ok = Release.seed_preview_token("rev_test_old")
-+      assert :ok = Release.seed_preview_token("rev_test_new")
-+
-+      [%{username: "preview"}] = Repo.all(Reviews.Accounts.User)
-+      tokens = Repo.all(Reviews.Accounts.ApiToken)
-+      assert length(tokens) == 2
-+
-+      assert {:ok, _} = Accounts.authenticate_token("rev_test_old")
-+      assert {:ok, _} = Accounts.authenticate_token("rev_test_new")
 +    end
 +  end
 +end
@@ -4863,7 +4228,7 @@ index 7715a69..4e649a9 100644
        assert file["raw_diff"] =~ "+new\n"
        refute file["raw_diff"] =~ "newer"
 diff --git a/test/reviews_web/live/review_live_test.exs b/test/reviews_web/live/review_live_test.exs
-index 909cfe2..c83fbda 100644
+index 909cfe2..fb25979 100644
 --- a/test/reviews_web/live/review_live_test.exs
 +++ b/test/reviews_web/live/review_live_test.exs
 @@ -43,19 +43,230 @@ defmodule ReviewsWeb.ReviewLiveTest do
@@ -5101,7 +4466,7 @@ index 909cfe2..c83fbda 100644
    end
  
    describe "signed-in reviewer" do
-@@ -128,5 +339,170 @@ defmodule ReviewsWeb.ReviewLiveTest do
+@@ -128,5 +339,167 @@ defmodule ReviewsWeb.ReviewLiveTest do
        assert length(seeded_drafts) == 1
        assert hd(seeded_drafts).body == "from-hook"
      end
@@ -5144,9 +4509,6 @@ index 909cfe2..c83fbda 100644
 +        })
 +
 +      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}?patchset=1")
-+      view |> element("#packet-section-0 .review-packet-section-toggle") |> render_click()
-+      assert has_element?(view, "#packet-section-0.is-open")
-+
 +      view |> element("#packet-section-0 button", "Approve") |> render_click()
 +      assert has_element?(view, "#packet-section-0:not(.is-open)")
 +
