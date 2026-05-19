@@ -116,6 +116,26 @@ defmodule Reviews.ReviewViewTest do
     assert [%{body: "private draft"}] = thread.comments
   end
 
+  test "includes one published decider per reviewer" do
+    author = user!("author")
+    other = user!("other")
+    %{review: review} = review_with_patchsets!(author)
+
+    {:ok, _} = Threads.save_draft(review, author, draft_params("first"))
+    {:ok, _} = Threads.save_draft(review, author, draft_params("second"))
+    {:ok, _} = Threads.save_draft(review, other, draft_params("third"))
+
+    {:ok, _} = Threads.publish_all_drafts(review, author, summary: "looks good")
+    {:ok, _} = Threads.publish_all_drafts(review, other)
+
+    assert {:ok, snapshot} = ReviewView.get_snapshot_by_slug(review.slug, nil)
+
+    assert [
+             %{author: %{username: "carey-author"}, decision: "reviewed", comment_count: 2},
+             %{author: %{username: "carey-other"}, decision: "reviewed", comment_count: 1}
+           ] = snapshot.deciders
+  end
+
   test "returns explicit errors for missing reviews and patchsets" do
     author = user!("author")
     %{review: review} = review_with_patchsets!(author)

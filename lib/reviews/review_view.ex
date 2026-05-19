@@ -19,6 +19,7 @@ defmodule Reviews.ReviewView do
           files: [File.t()],
           file_diffs: [map()],
           published_threads: [map()],
+          deciders: [map()],
           drafts: [map()],
           viewer: User.t() | nil
         }
@@ -101,6 +102,7 @@ defmodule Reviews.ReviewView do
       files: files,
       file_diffs: file_diff_meta(files, selected),
       published_threads: Threads.list_published_threads(review.id),
+      deciders: Threads.list_published_deciders(review.id),
       drafts: list_drafts(review, viewer),
       viewer: viewer
     }

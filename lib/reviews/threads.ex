@@ -79,6 +79,71 @@ defmodule Reviews.Threads do
     )
   end
 
+  @doc """
+  Published reviewers for the review, collapsed to one entry per author.
+
+  The current schema does not store approve/deny/ignore yet, so callers should
+  treat these as neutral published-review participants.
+  """
+  def list_published_deciders(review_id) when is_integer(review_id) do
+    comment_rows =
+      Repo.all(
+        from c in Comment,
+          join: t in assoc(c, :thread),
+          where: c.state == "published" and t.review_id == ^review_id,
+          select: {c.author_id, c.published_at, c.inserted_at}
+      )
+
+    summaries =
+      Repo.all(
+        from s in ReviewSummary,
+          where: s.review_id == ^review_id and s.state == "published",
+          preload: [:author]
+      )
+
+    author_ids =
+      (Enum.map(comment_rows, &elem(&1, 0)) ++ Enum.map(summaries, & &1.author_id))
+      |> Enum.uniq()
+
+    users_by_id =
+      Repo.all(from u in User, where: u.id in ^author_ids)
+      |> Map.new(&{&1.id, &1})
+
+    summary_by_author = Map.new(summaries, &{&1.author_id, &1})
+
+    comment_counts =
+      comment_rows
+      |> Enum.frequencies_by(fn {author_id, _, _} -> author_id end)
+
+    latest_by_author =
+      comment_rows
+      |> Enum.reduce(%{}, fn {author_id, published_at, inserted_at}, acc ->
+        Map.update(acc, author_id, published_at || inserted_at, fn existing ->
+          latest_datetime(existing, published_at || inserted_at)
+        end)
+      end)
+
+    author_ids
+    |> Enum.map(fn author_id ->
+      summary = Map.get(summary_by_author, author_id)
+
+      %{
+        author: Map.fetch!(users_by_id, author_id),
+        decision: "reviewed",
+        summary: summary && summary.body,
+        comment_count: Map.get(comment_counts, author_id, 0),
+        published_at:
+          latest_datetime(
+            Map.get(latest_by_author, author_id),
+            summary && (summary.published_at || summary.inserted_at)
+          )
+      }
+    end)
+    |> Enum.sort_by(fn %{published_at: published_at, author: author} ->
+      {published_at || ~U[1970-01-01 00:00:00Z], String.downcase(author.username || "")}
+    end)
+  end
+
   ## Drafting
 
   @doc """
@@ -424,6 +489,23 @@ defmodule Reviews.Threads do
     case String.trim(value) do
       "" -> nil
       trimmed -> trimmed
+    end
+  end
+
+  defp latest_datetime(nil, value), do: value
+  defp latest_datetime(value, nil), do: value
+
+  defp latest_datetime(%DateTime{} = left, %DateTime{} = right) do
+    case DateTime.compare(left, right) do
+      :lt -> right
+      _ -> left
+    end
+  end
+
+  defp latest_datetime(%NaiveDateTime{} = left, %NaiveDateTime{} = right) do
+    case NaiveDateTime.compare(left, right) do
+      :lt -> right
+      _ -> left
     end
   end
 

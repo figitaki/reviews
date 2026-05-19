@@ -52,6 +52,41 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert html =~ "data-file-path=\"lib/foo.ex\""
     end
 
+    test "renders published reviewers for anonymous viewers", %{
+      conn: conn,
+      review: review
+    } do
+      {:ok, reviewer} =
+        Accounts.upsert_from_github(%{
+          github_id: 5678,
+          username: "zara",
+          email: "zara@example.com",
+          avatar_url: nil
+        })
+
+      {:ok, _} =
+        Threads.save_draft(review, reviewer, %{
+          "file_path" => "lib/foo.ex",
+          "side" => "new",
+          "body" => "ship it",
+          "thread_anchor" => %{
+            "granularity" => "line",
+            "line_text" => "  def bar, do: :new",
+            "context_before" => [],
+            "context_after" => [],
+            "line_number_hint" => 2
+          }
+        })
+
+      {:ok, _} = Threads.publish_all_drafts(review, reviewer, summary: "works for me")
+
+      {:ok, _view, html} = live(conn, ~p"/r/#{review.slug}")
+
+      assert html =~ "id=\"decider-stack\""
+      assert html =~ "zara: reviewed"
+      assert html =~ "works for me"
+    end
+
     test "Publish review button is disabled with no drafts", %{conn: conn, review: review} do
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
       assert has_element?(view, "#publish-review-button[disabled]")
