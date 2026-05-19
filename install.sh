@@ -15,7 +15,7 @@ Usage:
   install.sh [options]
 
 Options:
-  --version <version>     Install a specific CLI version, e.g. 0.1.0 or cli-v0.1.0.
+  --version <version>     Install a specific CLI version, e.g. 0.0.1-alpha.0 or cli-v0.0.1-alpha.0.
   --install-dir <dir>     Install the reviews binary into <dir>.
   --with-skills           Also install packaged Reviews agent skills.
   --no-skills             Do not install agent skills.
