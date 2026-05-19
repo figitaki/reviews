@@ -3,6 +3,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   use ReviewsWeb, :html
 
   alias Reviews.PacketSectionDecisions
+  alias Reviews.ReviewHunks
   alias Reviews.ReviewPacket
   alias Reviews.ReviewView
 
@@ -11,12 +12,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :patchsets, :list, required: true
   attr :section_decisions, :list, required: true
   attr :file_diffs, :list, required: true
+  attr :hunks_by_path, :map, required: true
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
   attr :drafts, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
   attr :expanded_section_ids, :any, required: true
+  attr :expanded_hunk_ids, :any, required: true
 
   def packet(assigns) do
     sections = packet_sections(assigns)
@@ -24,6 +27,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     assigns =
       assigns
       |> assign(:sections, sections)
+      |> assign(:file_labels, file_labels(assigns.file_diffs))
 
     ~H"""
     <section id="review-packet" class="review-packet" aria-labelledby="review-packet-title">
@@ -55,11 +59,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                   <.change_stat
                     additions={section.estimate.additions}
                     deletions={section.estimate.deletions}
-                  />
-                  {section.estimate.time}
-                  <span class={["review-effort-pill", "is-#{effort_class(section.estimate.effort)}"]}>
-                    {section.estimate.effort}
-                  </span>
+                  /> ~{section.estimate.time}
                 </span>
               </div>
             </button>
@@ -151,6 +151,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 drafts={@drafts}
                 current_user={@current_user}
                 diff_style={@diff_style}
+                hunks_by_path={@hunks_by_path}
+                expanded_hunk_ids={@expanded_hunk_ids}
+                section_title={section.title}
+                file_label={Map.get(@file_labels, ReviewPacket.text(row, "path"))}
               />
             </div>
           </div>
@@ -168,6 +172,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   def packet_effort_for_header(
         packet,
         file_diffs,
+        hunks_by_path,
         section_decisions,
         selected_patchset,
         patchsets
@@ -175,6 +180,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     %{
       packet: packet,
       file_diffs: file_diffs,
+      hunks_by_path: hunks_by_path,
       section_decisions: section_decisions,
       selected_patchset: selected_patchset,
       patchsets: patchsets
@@ -202,7 +208,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> Map.put(:effective_status, state.effective && state.effective.status)
       |> Map.put(:previous, state.previous)
       |> Map.put(:summary, section_summary(section))
-      |> Map.put(:estimate, section_estimate(section, assigns.file_diffs))
+      |> Map.put(:estimate, section_estimate(section, assigns.hunks_by_path))
     end)
   end
 
@@ -287,25 +293,55 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     end
   end
 
-  defp section_estimate(section, file_diffs) do
-    {additions, deletions, hunk_count} =
-      Enum.reduce(section.rows, {0, 0, 0}, fn row, {additions, deletions, hunks} ->
+  def file_labels(file_diffs) do
+    paths = Enum.map(file_diffs, & &1.path)
+
+    Map.new(paths, fn path ->
+      {path, shortest_unique_suffix(path, paths)}
+    end)
+  end
+
+  defp shortest_unique_suffix(path, paths) do
+    parts = String.split(path || "", "/", trim: true)
+    max_depth = max(length(parts), 1)
+
+    1..max_depth
+    |> Enum.find_value(Path.basename(path || ""), fn depth ->
+      candidate = suffix(parts, depth)
+
+      if Enum.count(paths, &(suffix(String.split(&1 || "", "/", trim: true), depth) == candidate)) ==
+           1 do
+        candidate
+      end
+    end)
+  end
+
+  defp suffix([], _depth), do: ""
+
+  defp suffix(parts, depth) do
+    parts
+    |> Enum.take(-depth)
+    |> Enum.join("/")
+  end
+
+  defp section_estimate(section, hunks_by_path) do
+    {additions, deletions, hunk_count, viewed_count} =
+      Enum.reduce(section.rows, {0, 0, 0, 0}, fn row, {additions, deletions, hunks, viewed} ->
         if ReviewPacket.text(row, "kind") == "hunk" do
-          file = file_for(file_diffs, ReviewPacket.text(row, "path"))
+          case ReviewHunks.for_packet_row(hunks_by_path, row) do
+            nil ->
+              {additions, deletions, hunks, viewed}
 
-          raw_diff =
-            packet_row_raw_diff(
-              file,
-              ReviewPacket.int(row, "hunk_index"),
-              ReviewPacket.int(row, "line_start"),
-              ReviewPacket.int(row, "line_end")
-            )
-
-          {row_additions, row_deletions} = changed_line_stats(raw_diff)
-
-          {additions + row_additions, deletions + row_deletions, hunks + 1}
+            hunk ->
+              {
+                additions + hunk.display_additions,
+                deletions + hunk.display_deletions,
+                hunks + 1,
+                viewed + if(hunk.viewed?, do: 1, else: 0)
+              }
+          end
         else
-          {additions, deletions, hunks}
+          {additions, deletions, hunks, viewed}
         end
       end)
 
@@ -320,25 +356,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       deletions: deletions,
       changed_lines: changed_lines,
       hunk_count: hunk_count,
+      viewed_count: viewed_count,
       minutes: minutes,
       time: format_minutes(minutes),
       effort: effort_label(minutes)
     }
-  end
-
-  defp changed_line_stats(raw_diff) do
-    Enum.reduce(String.split(raw_diff, "\n"), {0, 0}, fn line, {additions, deletions} ->
-      cond do
-        String.starts_with?(line, "+") && !String.starts_with?(line, "+++") ->
-          {additions + 1, deletions}
-
-        String.starts_with?(line, "-") && !String.starts_with?(line, "---") ->
-          {additions, deletions + 1}
-
-        true ->
-          {additions, deletions}
-      end
-    end)
   end
 
   defp estimate_minutes(0, 0), do: 1
@@ -370,12 +392,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp effort_label(minutes) when minutes <= 6, do: "Moderate"
   defp effort_label(minutes) when minutes <= 12, do: "Involved"
   defp effort_label(_minutes), do: "Deep"
-
-  defp effort_class("Light"), do: "light"
-  defp effort_class("Moderate"), do: "moderate"
-  defp effort_class("Involved"), do: "involved"
-  defp effort_class("Deep"), do: "deep"
-  defp effort_class(_), do: "moderate"
 
   defp section_status_label("approved"), do: "Approve"
   defp section_status_label("denied"), do: "Deny"
@@ -426,6 +442,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :drafts, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
+  attr :hunks_by_path, :map, required: true
+  attr :expanded_hunk_ids, :any, required: true
+  attr :section_title, :string, default: nil
+  attr :file_label, :string, default: nil
 
   def packet_row(%{row: row} = assigns) do
     assigns =
@@ -437,41 +457,27 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> assign(:line_start, ReviewPacket.int(row, "line_start"))
       |> assign(:line_end, ReviewPacket.int(row, "line_end"))
       |> assign(:file, file_for(assigns.file_diffs, ReviewPacket.text(row, "path")))
-
-    assigns =
-      assign(
-        assigns,
-        :raw_diff,
-        packet_row_raw_diff(
-          assigns.file,
-          assigns.hunk_index,
-          assigns.line_start,
-          assigns.line_end
-        )
-      )
+      |> assign(:hunk, ReviewHunks.for_packet_row(assigns.hunks_by_path, row))
+      |> assign(:section_index, section_index_from_row_id(assigns.row_id))
 
     ~H"""
     <%= cond do %>
-      <% @kind == "hunk" && @file && @raw_diff != "" -> %>
+      <% @kind == "hunk" && @file && @hunk -> %>
         <div id={@row_id} class="review-packet-row is-hunk">
-          <div class="review-packet-inline-diff">
-            <div
-              id={"#{@row_id}-diff"}
-              phx-hook="DiffRenderer"
-              phx-update="ignore"
-              data-file-id={"packet-#{@file.id}-#{@row_id}"}
-              data-file-path={@file.path}
-              data-file-status={@file.status}
-              data-side="new"
-              data-patchset-number={@selected_patchset && @selected_patchset.number}
-              data-raw-diff={@raw_diff}
-              data-threads={threads_json(@published_threads, @file.path)}
-              data-drafts={drafts_json(@drafts, @file.path, @current_user)}
-              data-signed-in={if @current_user, do: "true", else: "false"}
-              data-diff-style={@diff_style}
-            >
-            </div>
-          </div>
+          <.hunk_card
+            hunk={@hunk}
+            hunk_id={@hunk.id}
+            file={@file}
+            selected_patchset={@selected_patchset}
+            published_threads={@published_threads}
+            drafts={@drafts}
+            current_user={@current_user}
+            diff_style={@diff_style}
+            expanded_hunk_ids={@expanded_hunk_ids}
+            section_index={@section_index}
+            section_title={@section_title}
+            file_label={@file_label}
+          />
         </div>
       <% @kind == "hunk" -> %>
         <span id={@row_id} class="review-packet-hunk is-unresolved" translate="no">
@@ -479,61 +485,147 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           {ReviewPacket.row_ref(@row)}
         </span>
       <% true -> %>
-        <div id={@row_id} class="review-packet-row is-markdown">
+        <div id={@row_id} class="review-packet-row is-markdown" phx-hook="StickyProse">
           <.markdown body={@body} class="review-packet-markdown" />
         </div>
     <% end %>
     """
   end
 
-  defp packet_row_raw_diff(nil, _hunk_index, _line_start, _line_end), do: ""
+  attr :hunk, :map, required: true
+  attr :hunk_id, :string, required: true
+  attr :file, :map, required: true
+  attr :selected_patchset, :any, required: true
+  attr :published_threads, :list, required: true
+  attr :drafts, :list, required: true
+  attr :current_user, :any, required: true
+  attr :diff_style, :string, required: true
+  attr :expanded_hunk_ids, :any, required: true
+  attr :section_index, :integer, default: nil
+  attr :section_title, :string, default: nil
+  attr :file_label, :string, default: nil
 
-  defp packet_row_raw_diff(file, hunk_index, line_start, line_end) do
-    slice_raw_diff(file.raw_diff || "", hunk_index, line_start, line_end)
+  def hunk_card(assigns) do
+    assigns =
+      assigns
+      |> assign(:expanded?, MapSet.member?(assigns.expanded_hunk_ids, assigns.hunk_id))
+      |> assign(:viewed?, assigns.hunk.viewed?)
+      |> assign(:title, hunk_title(assigns.hunk, Map.get(assigns, :file_label)))
+      |> assign(:details, hunk_details(assigns.hunk))
+
+    ~H"""
+    <article class={["review-hunk-card", @expanded? && "is-open", @viewed? && "is-viewed"]}>
+      <header class="review-hunk-summary">
+        <button
+          type="button"
+          class="review-hunk-toggle"
+          phx-click="toggle_hunk_diff"
+          phx-value-hunk_id={@hunk_id}
+          aria-expanded={@expanded?}
+          aria-controls={"#{@hunk_id}-body"}
+          title={@details}
+        >
+          <.icon name="hero-chevron-down" class="review-collapse-icon" />
+          <span class="review-hunk-title">
+            <span class="review-hunk-filename">{@title.file}</span>
+            <span class="review-hunk-separator">·</span>
+            <span class="review-hunk-index">{@title.hunk}</span>
+            <span :if={@title.lines != ""} class="review-hunk-separator">·</span>
+            <span :if={@title.lines != ""} class="review-hunk-lines">{@title.lines}</span>
+          </span>
+        </button>
+
+        <div class="review-hunk-meta">
+          <button
+            :if={@current_user && !@viewed?}
+            type="button"
+            class="review-button review-button-ghost review-hunk-action"
+            phx-click="mark_hunk_viewed"
+            phx-value-file_path={@hunk.file_path}
+            phx-value-row_ref={@hunk.row_ref}
+            phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
+            phx-value-hunk_index={@hunk.hunk_index}
+            phx-value-line_start={@hunk.line_start}
+            phx-value-line_end={@hunk.line_end}
+            phx-value-section_index={@section_index}
+            phx-value-section_title={@section_title}
+          >
+            Mark Viewed
+          </button>
+          <button
+            :if={@current_user && @viewed?}
+            type="button"
+            class="review-hunk-viewed-pill review-hunk-viewed-button"
+            phx-click="mark_hunk_unviewed"
+            phx-value-file_path={@hunk.file_path}
+            phx-value-row_ref={@hunk.row_ref}
+            phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
+            phx-value-hunk_index={@hunk.hunk_index}
+            phx-value-line_start={@hunk.line_start}
+            phx-value-line_end={@hunk.line_end}
+            phx-value-section_index={@section_index}
+            phx-value-section_title={@section_title}
+            title="Mark unviewed"
+          >
+            Viewed
+          </button>
+          <span :if={!@current_user && @viewed?} class="review-hunk-viewed-pill">Viewed</span>
+          <span :if={!@current_user} class="review-hunk-signin">Sign in to save viewed state</span>
+        </div>
+      </header>
+
+      <div :if={@expanded?} id={"#{@hunk_id}-body"} class="review-hunk-body">
+        <div class="review-packet-inline-diff">
+          <div
+            id={"#{@hunk_id}-diff"}
+            phx-hook="DiffRenderer"
+            phx-update="ignore"
+            data-file-id={"hunk-#{@file.id}-#{@hunk_id}"}
+            data-file-path={@file.path}
+            data-file-status={@file.status}
+            data-side="new"
+            data-patchset-number={@selected_patchset && @selected_patchset.number}
+            data-raw-diff={@hunk.display_raw_diff}
+            data-threads={threads_json(@published_threads, @file.path)}
+            data-drafts={drafts_json(@drafts, @file.path, @current_user)}
+            data-signed-in={if @current_user, do: "true", else: "false"}
+            data-diff-style={@diff_style}
+          >
+          </div>
+        </div>
+      </div>
+    </article>
+    """
   end
 
-  defp slice_raw_diff(raw_diff, hunk_index, line_start, line_end)
-       when is_integer(hunk_index) and hunk_index > 0 do
-    lines = String.split(raw_diff, "\n", trim: false)
-    {header_lines, rest} = Enum.split_while(lines, &(not String.starts_with?(&1, "@@ ")))
-
-    {_, selected} =
-      Enum.reduce(rest, {0, []}, fn line, {idx, acc} ->
-        cond do
-          String.starts_with?(line, "@@ ") ->
-            next_idx = idx + 1
-            {next_idx, if(next_idx == hunk_index, do: [line], else: acc)}
-
-          idx == hunk_index ->
-            {idx, acc ++ [line]}
-
-          true ->
-            {idx, acc}
-        end
-      end)
-
-    case selected do
-      [] ->
-        ""
-
-      [hunk_header | hunk_lines] ->
-        hunk_lines = slice_hunk_lines(hunk_lines, line_start, line_end)
-        Enum.join(header_lines ++ [hunk_header | hunk_lines], "\n")
-    end
+  defp hunk_title(hunk, file_label) do
+    %{
+      file: file_label || Path.basename(hunk.file_path || ""),
+      hunk: "hunk #{hunk.hunk_index}",
+      lines: hunk_line_label(hunk)
+    }
   end
 
-  defp slice_raw_diff(_raw_diff, _hunk_index, _line_start, _line_end), do: ""
-
-  defp slice_hunk_lines(lines, nil, nil), do: Enum.reject(lines, &(&1 == ""))
-
-  defp slice_hunk_lines(lines, line_start, line_end)
+  defp hunk_line_label(%{line_start: line_start, line_end: line_end})
        when is_integer(line_start) and is_integer(line_end) do
-    lines
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.slice((line_start - 1)..(line_end - 1))
+    "L#{line_start}-L#{line_end}"
   end
 
-  defp slice_hunk_lines(lines, _line_start, _line_end), do: Enum.reject(lines, &(&1 == ""))
+  defp hunk_line_label(%{hunk_header: hunk_header}) when is_binary(hunk_header), do: hunk_header
+  defp hunk_line_label(_hunk), do: ""
+
+  defp hunk_details(hunk) do
+    line_ref =
+      cond do
+        hunk.line_start && hunk.line_end -> "L#{hunk.line_start}-L#{hunk.line_end}"
+        hunk.hunk_header != "" -> hunk.hunk_header
+        true -> "line range unavailable"
+      end
+
+    stats = "#{hunk.display_additions} additions, #{hunk.display_deletions} deletions"
+
+    "#{hunk.file_path} · hunk #{hunk.hunk_index} · #{line_ref} · #{stats}"
+  end
 
   attr :body, :string, required: true
   attr :class, :string, default: "review-packet-markdown"
@@ -679,6 +771,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   defp file_for(file_diffs, path) do
     Enum.find(file_diffs, &(&1.path == path || &1.old_path == path))
+  end
+
+  defp section_index_from_row_id(row_id) do
+    case Regex.run(~r/^packet-section-(\d+)-row-\d+$/, row_id) do
+      [_, index] -> String.to_integer(index)
+      _ -> nil
+    end
   end
 
   defp threads_json(threads, file_path) do

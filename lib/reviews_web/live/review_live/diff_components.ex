@@ -3,6 +3,7 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
   use ReviewsWeb, :html
 
   alias Reviews.ReviewView
+  alias ReviewsWeb.ReviewLive.PacketComponents
 
   attr :file_diffs, :list, required: true
   attr :open_threads_by_op, :list, required: true
@@ -12,8 +13,12 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
   attr :expanded_file_ids, :any, required: true
+  attr :expanded_hunk_ids, :any, required: true
+  attr :hunks_by_path, :map, required: true
 
   def diff_shell(assigns) do
+    assigns = assign(assigns, :file_labels, PacketComponents.file_labels(assigns.file_diffs))
+
     ~H"""
     <div class="rev-shell">
       <aside id="file-tree" class="rev-sidebar">
@@ -83,49 +88,25 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
         </section>
       </aside>
 
-      <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
-        <article
-          :for={fd <- @file_diffs}
-          id={"file-#{fd.id}"}
-          class={["rev-file-card", file_expanded?(@expanded_file_ids, fd.id) && "is-open"]}
-        >
-          <button
-            type="button"
-            class="rev-file-summary"
-            phx-click="toggle_file_diff"
-            phx-value-file_id={fd.id}
-            aria-expanded={file_expanded?(@expanded_file_ids, fd.id)}
-            aria-controls={"diff-file-body-#{fd.id}"}
-          >
-            <span class="sr-only">Toggle {fd.path}</span>
-            <.icon name="hero-chevron-down" class="review-collapse-icon" />
-          </button>
-          <div
-            :if={file_expanded?(@expanded_file_ids, fd.id)}
-            id={"diff-file-body-#{fd.id}"}
-            class="rev-file-body"
-          >
-            <div
-              id={"diff-#{fd.id}"}
-              phx-hook="DiffRenderer"
-              phx-update="ignore"
-              data-file-id={fd.id}
-              data-file-path={fd.path}
-              data-file-status={fd.status}
-              data-side="new"
-              data-patchset-number={@selected_patchset.number}
-              data-raw-diff={fd.raw_diff}
-              data-threads={threads_json(@published_threads, fd.path)}
-              data-drafts={drafts_json(@drafts, fd.path, @current_user)}
-              data-signed-in={if @current_user, do: "true", else: "false"}
-              data-diff-style={@diff_style}
-            >
-            </div>
-          </div>
-          <div :if={!file_expanded?(@expanded_file_ids, fd.id)} class="rev-file-placeholder">
-            <span>Diff deferred until this file is opened.</span>
-          </div>
-        </article>
+      <section :if={@selected_patchset} id="diff-files" class="review-hunk-list min-w-0">
+        <div :for={fd <- @file_diffs} id={"file-#{fd.id}"} class="review-file-hunks">
+          <PacketComponents.hunk_card
+            :for={hunk <- Map.get(@hunks_by_path, fd.path, [])}
+            hunk={hunk}
+            hunk_id={hunk.id}
+            file={fd}
+            selected_patchset={@selected_patchset}
+            published_threads={@published_threads}
+            drafts={@drafts}
+            current_user={@current_user}
+            diff_style={@diff_style}
+            expanded_hunk_ids={@expanded_hunk_ids}
+            file_label={Map.get(@file_labels, fd.path)}
+          />
+          <p :if={Map.get(@hunks_by_path, fd.path, []) == []} class="rev-empty">
+            No hunks in {fd.path}.
+          </p>
+        </div>
 
         <p :if={@file_diffs == []} class="rev-empty">
           No files in this patchset.
@@ -140,19 +121,5 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
 
   defp file_id_for(file_diffs, file_path) do
     Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
-  end
-
-  defp file_expanded?(expanded_file_ids, file_id) do
-    MapSet.member?(expanded_file_ids, file_id)
-  end
-
-  defp threads_json(threads, file_path) do
-    snapshot = %{published_threads: threads}
-    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
-  end
-
-  defp drafts_json(drafts, file_path, viewer) do
-    snapshot = %{drafts: drafts, viewer: viewer}
-    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
   end
 end

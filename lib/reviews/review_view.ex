@@ -8,7 +8,9 @@ defmodule Reviews.ReviewView do
   """
 
   alias Reviews.Accounts.User
+  alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
+  alias Reviews.ReviewHunks
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.{File, Patchset, Review}
   alias Reviews.Threads
@@ -19,6 +21,8 @@ defmodule Reviews.ReviewView do
           selected_patchset: Patchset.t() | nil,
           files: [File.t()],
           file_diffs: [map()],
+          hunks_by_path: map(),
+          packet_hunk_views: [map()],
           packet_section_decisions: [map()],
           published_threads: [map()],
           drafts: [map()],
@@ -96,12 +100,18 @@ defmodule Reviews.ReviewView do
   end
 
   defp build_snapshot(review, patchsets, selected, files, viewer) do
+    packet_hunk_views = PacketHunkViews.list_for_review(review, viewer)
+    file_diffs = file_diff_meta(files, selected)
+    hunks_by_path = ReviewHunks.for_files(file_diffs, packet_hunk_views)
+
     %{
       review: review,
       patchsets: patchsets,
       selected_patchset: selected,
       files: files,
-      file_diffs: file_diff_meta(files, selected),
+      file_diffs: file_diffs,
+      hunks_by_path: hunks_by_path,
+      packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
       published_threads: Threads.list_published_threads(review.id),
       drafts: list_drafts(review, viewer),
