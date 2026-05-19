@@ -53,15 +53,11 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert html =~ "lib/foo.ex"
       refute html =~ "phx-hook=\"DiffRenderer\""
 
-      view
-      |> element("#diff-files button.rev-file-summary", "lib/foo.ex")
-      |> render_click()
-
-      assert has_element?(view, "#diff-files .review-hunk-card", "lib/foo.ex")
+      assert has_element?(view, "#diff-files .review-hunk-card")
       refute has_element?(view, ~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"]|)
 
       view
-      |> element("#diff-files .review-hunk-toggle", "lib/foo.ex")
+      |> element(~s|#diff-files .review-hunk-toggle[title^="lib/foo.ex"]|)
       |> render_click()
 
       assert has_element?(view, ~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"]|)
@@ -143,15 +139,6 @@ defmodule ReviewsWeb.ReviewLiveTest do
       refute has_element?(view, "#packet-section-0 > .review-packet-section-summary-text")
 
       assert has_element?(view, "#review-packet .review-hunk-card", "lib/packet.ex")
-
-      refute has_element?(
-               view,
-               ~s|#review-packet [phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
-             )
-
-      view
-      |> element("#review-packet .review-hunk-toggle", "lib/packet.ex")
-      |> render_click()
 
       assert has_element?(
                view,
@@ -268,8 +255,20 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
       assert has_element?(changes_view, "#diff-files")
-      assert has_element?(changes_view, "#diff-files .rev-file-card:not(.is-open)")
-      assert has_element?(changes_view, "#diff-files button.rev-file-summary", "lib/packet.ex")
+      refute has_element?(changes_view, "#diff-files .rev-file-card")
+      refute has_element?(changes_view, "#diff-files .rev-file-placeholder")
+
+      assert has_element?(
+               changes_view,
+               ~s|#diff-files .review-hunk-toggle[title^="lib/packet.ex"]|
+             )
+
+      refute has_element?(
+               changes_view,
+               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
+             )
+
+      assert has_element?(changes_view, "#diff-files .review-hunk-card")
 
       refute has_element?(
                changes_view,
@@ -277,18 +276,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       changes_view
-      |> element("#diff-files button.rev-file-summary", "lib/packet.ex")
-      |> render_click()
-
-      assert has_element?(changes_view, "#diff-files .review-hunk-card", "lib/packet.ex")
-
-      refute has_element?(
-               changes_view,
-               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
-             )
-
-      changes_view
-      |> element("#diff-files .review-hunk-toggle", "lib/packet.ex")
+      |> element(~s|#diff-files .review-hunk-toggle[title^="lib/packet.ex"]|)
       |> render_click()
 
       assert has_element?(
@@ -404,25 +392,19 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#packet-section-0 .review-packet-section-toggle")
       |> render_click()
 
-      assert has_element?(packet_view, "#packet-section-0 .review-hunk-progress", "0/1 viewed")
-
       packet_view
       |> element("#packet-section-0 button", "Mark Viewed")
       |> render_click()
 
-      assert has_element?(packet_view, "#packet-section-0 .review-hunk-progress", "1/1 viewed")
       assert has_element?(packet_view, "#packet-section-0 .review-hunk-viewed-pill", "Viewed")
+      refute has_element?(packet_view, ~s|#packet-section-0 [phx-hook="DiffRenderer"]|)
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
-
-      changes_view
-      |> element("#diff-files button.rev-file-summary", "lib/packet.ex")
-      |> render_click()
 
       assert has_element?(changes_view, "#diff-files .review-hunk-viewed-pill", "Viewed")
 
       changes_view
-      |> element("#diff-files button", "Mark Unviewed")
+      |> element("#diff-files button.review-hunk-viewed-button", "Viewed")
       |> render_click()
 
       refute has_element?(changes_view, "#diff-files .review-hunk-viewed-pill", "Viewed")
@@ -433,10 +415,10 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#packet-section-0 .review-packet-section-toggle")
       |> render_click()
 
-      assert has_element?(
+      refute has_element?(
                packet_view_after_clear,
-               "#packet-section-0 .review-hunk-progress",
-               "0/1 viewed"
+               "#packet-section-0 .review-hunk-viewed-pill",
+               "Viewed"
              )
     end
 

@@ -2,13 +2,20 @@ import Config
 
 # Configure your database
 config :reviews, Reviews.Repo,
-  username: "warbler",
-  password: "",
-  socket_dir: "/tmp",
+  username: System.get_env("POSTGRES_USER", "warbler"),
+  password: System.get_env("POSTGRES_PASSWORD", ""),
   database: "reviews_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
+
+if System.get_env("POSTGRES_HOST") do
+  config :reviews, Reviews.Repo,
+    hostname: System.get_env("POSTGRES_HOST"),
+    port: String.to_integer(System.get_env("POSTGRES_PORT", "5432"))
+else
+  config :reviews, Reviews.Repo, socket_dir: "/tmp"
+end
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

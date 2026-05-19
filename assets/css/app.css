@@ -127,6 +127,38 @@
 .review-page {
   --review-main-nav-h: 64px;
   --review-section-sticky-h: 46px;
+  --review-bg: #f7f7f5;
+  --review-panel: #fff;
+  --review-panel-raised: #fbfbf8;
+  --review-line: #deded8;
+  --review-line-strong: #bdbdb5;
+  --review-text: #111;
+  --review-muted: #5f5f59;
+  --review-faint: #8a8a82;
+  --review-hover: #efefeb;
+  --review-add: #0f9f78;
+  --review-del: #c7354f;
+  --review-focus: #111;
+  --ds-bg: var(--review-bg);
+  --ds-panel: var(--review-panel);
+  --ds-panel-raised: var(--review-panel-raised);
+  --ds-line: var(--review-line);
+  --ds-line-strong: var(--review-line-strong);
+  --ds-text: var(--review-text);
+  --ds-muted: var(--review-muted);
+  --ds-faint: var(--review-faint);
+  --ds-hover: var(--review-hover);
+  --ds-add: var(--review-add);
+  --ds-del: var(--review-del);
+  --ds-blue: #315a83;
+  --ds-warn: #946200;
+
+  color-scheme: light;
+  background: var(--review-bg);
+  color: var(--review-text);
+}
+
+[data-theme="dark"] .review-page {
   --review-bg: #000;
   --review-panel: #050505;
   --review-panel-raised: #0b0b0c;
@@ -153,8 +185,39 @@
   --ds-blue: #7bb7ff;
   --ds-warn: #ffd166;
 
-  background: var(--review-bg);
-  color: var(--review-text);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .review-page {
+    --review-bg: #000;
+    --review-panel: #050505;
+    --review-panel-raised: #0b0b0c;
+    --review-line: #242426;
+    --review-line-strong: #3a3a3d;
+    --review-text: #f5f5f5;
+    --review-muted: #a3a3a3;
+    --review-faint: #707073;
+    --review-hover: #111113;
+    --review-add: #25d0a0;
+    --review-del: #ff5f76;
+    --review-focus: #fff;
+    --ds-bg: var(--review-bg);
+    --ds-panel: var(--review-panel);
+    --ds-panel-raised: var(--review-panel-raised);
+    --ds-line: var(--review-line);
+    --ds-line-strong: var(--review-line-strong);
+    --ds-text: var(--review-text);
+    --ds-muted: var(--review-muted);
+    --ds-faint: var(--review-faint);
+    --ds-hover: var(--review-hover);
+    --ds-add: var(--review-add);
+    --ds-del: var(--review-del);
+    --ds-blue: #7bb7ff;
+    --ds-warn: #ffd166;
+
+    color-scheme: dark;
+  }
 }
 
 .review-topbar {
@@ -398,7 +461,7 @@
   gap: 8px;
   border: 1px solid var(--review-line-strong);
   border-radius: 6px;
-  background: #080809;
+  background: var(--review-panel);
   color: var(--review-text);
   font-size: 12px;
   font-weight: 550;
@@ -420,15 +483,15 @@
 
 .review-chip:hover,
 .review-button:hover {
-  background: #141416;
-  border-color: #5a5a5e;
+  background: var(--review-hover);
+  border-color: var(--review-line-strong);
 }
 
 .review-chip.is-active,
 .review-button-primary {
   background: var(--review-text);
   border-color: var(--review-text);
-  color: #050505;
+  color: var(--review-bg);
 }
 
 .review-button-secondary,
@@ -560,7 +623,7 @@
 
 .review-packet-grid {
   display: grid;
-  gap: 36px;
+  gap: 52px;
 }
 
 .review-effort-pill {
@@ -609,12 +672,12 @@
   min-height: var(--review-section-sticky-h);
   margin-inline: -8px;
   background: var(--review-bg);
-  padding: 8px;
+  padding: 14px 8px 2px;
   list-style: none;
 }
 
 .review-packet-section.is-open .review-packet-section-summary {
-  margin-bottom: 16px;
+  margin-bottom: 4px;
 }
 
 .review-packet-section.is-decided:not(.is-open) .review-packet-section-summary {
@@ -651,8 +714,8 @@
 }
 
 details[open] > summary .review-collapse-icon,
-.review-packet-section.is-open .review-collapse-icon,
-.rev-file-card.is-open .review-collapse-icon {
+.review-packet-section.is-open > .review-packet-section-summary .review-packet-section-toggle .review-collapse-icon,
+.rev-file-card.is-open > .rev-file-summary .review-collapse-icon {
   transform: rotate(180deg);
   color: var(--review-text);
 }
@@ -1000,7 +1063,7 @@ details[open] > summary .review-collapse-icon,
 .review-packet-task-list,
 .review-packet-question-list {
   display: grid;
-  gap: 24px;
+  gap: 16px;
 }
 
 .review-packet-row {
@@ -1008,22 +1071,38 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-row.is-markdown {
+  --review-sticky-prose-cover-h: calc((1em * 1.55 * 2) + 16px);
+
   position: sticky;
   top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h));
   z-index: 7;
   margin-inline: -8px;
-  min-height: 64px;
-  overflow: hidden;
-  border-bottom: 1px solid var(--review-line);
-  background: var(--review-bg);
+  overflow: visible;
+  border-bottom: 1px solid transparent;
   padding: 8px;
+}
+
+.review-packet-row.is-markdown::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 auto;
+  height: 100%;
+  background: var(--review-bg);
+}
+
+.review-packet-row.is-markdown.is-stuck::before {
+  height: var(--review-sticky-prose-cover-h);
+  border-bottom: 1px solid var(--review-line);
 }
 
 .review-packet-row.is-markdown .review-packet-markdown {
   display: -webkit-box;
+  max-height: calc(1em * 1.55 * 2);
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-height: 1.55;
 }
 
 .review-packet-point-list {
@@ -1134,9 +1213,9 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-inline-diff {
-  border: 1px solid var(--review-line);
-  border-radius: 8px;
-  background: var(--review-panel-raised);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
 }
 
@@ -1149,6 +1228,11 @@ details[open] > summary .review-collapse-icon,
   display: grid;
   gap: 10px;
   padding: 12px;
+}
+
+.review-file-hunks {
+  display: grid;
+  gap: 10px;
 }
 
 .review-hunk-card {
@@ -1167,18 +1251,20 @@ details[open] > summary .review-collapse-icon,
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  padding: 8px;
+  padding: 6px;
 }
 
 .review-hunk-toggle {
   display: inline-flex;
   min-width: 0;
-  min-height: 34px;
+  min-height: 30px;
   align-items: center;
   gap: 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
+  padding-block: 0;
+  padding-inline-start: 4px;
   color: var(--review-text);
   cursor: pointer;
   font: inherit;
@@ -1194,19 +1280,37 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-hunk-title {
+  display: inline-flex;
   min-width: 0;
+  align-items: baseline;
+  gap: 7px;
   overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.review-hunk-filename {
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in oklab, var(--review-text) 76%, transparent);
+  font-weight: 450;
+  text-overflow: ellipsis;
+}
+
+.review-hunk-index,
+.review-hunk-separator {
+  flex: 0 0 auto;
+  color: var(--review-faint);
+  font-weight: 450;
 }
 
 .review-hunk-lines {
   flex: 0 0 auto;
   color: var(--review-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-weight: 500;
 }
 
 .review-hunk-meta {
@@ -1225,6 +1329,32 @@ details[open] > summary .review-collapse-icon,
 .review-hunk-viewed-pill {
   color: var(--review-add);
   font-weight: 700;
+}
+
+.review-hunk-viewed-button {
+  min-height: 28px;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  transition:
+    color 0.15s ease,
+    text-decoration-color 0.15s ease;
+}
+
+.review-hunk-viewed-button:hover,
+.review-hunk-viewed-button:focus-visible {
+  color: var(--review-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.review-hunk-viewed-button:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--review-focus) 70%, transparent);
+  outline-offset: 3px;
 }
 
 .review-hunk-action {
@@ -1529,7 +1659,12 @@ details[open] > summary .review-collapse-icon,
     border-bottom: 0;
   }
 
+  .review-packet-row.is-markdown::before {
+    content: none;
+  }
+
   .review-packet-row.is-markdown .review-packet-markdown {
+    max-height: none;
     display: block;
     overflow: visible;
     -webkit-line-clamp: unset;
@@ -2451,18 +2586,13 @@ details[open] > summary .review-collapse-icon,
   gap: 8px;
   border: 1px solid var(--ds-line-strong);
   border-radius: 6px;
-  background: #080809;
+  background: var(--ds-panel);
   color: var(--ds-text);
   font: inherit;
   font-size: 12px;
   font-weight: 650;
   line-height: 1;
   transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
-}
-
-[data-theme="light"] .ds-button,
-[data-theme="light"] .ds-chip {
-  background: var(--ds-panel);
 }
 
 .ds-button {

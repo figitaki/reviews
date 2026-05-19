@@ -27,6 +27,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     assigns =
       assigns
       |> assign(:sections, sections)
+      |> assign(:file_labels, file_labels(assigns.file_diffs))
 
     ~H"""
     <section id="review-packet" class="review-packet" aria-labelledby="review-packet-title">
@@ -58,14 +59,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                   <.change_stat
                     additions={section.estimate.additions}
                     deletions={section.estimate.deletions}
-                  />
-                  {section.estimate.time}
-                  <span class="review-hunk-progress">
-                    {section.estimate.viewed_count}/{section.estimate.hunk_count} viewed
-                  </span>
-                  <span class={["review-effort-pill", "is-#{effort_class(section.estimate.effort)}"]}>
-                    {section.estimate.effort}
-                  </span>
+                  /> ~{section.estimate.time}
                 </span>
               </div>
             </button>
@@ -160,6 +154,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 hunks_by_path={@hunks_by_path}
                 expanded_hunk_ids={@expanded_hunk_ids}
                 section_title={section.title}
+                file_label={Map.get(@file_labels, ReviewPacket.text(row, "path"))}
               />
             </div>
           </div>
@@ -298,6 +293,37 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     end
   end
 
+  def file_labels(file_diffs) do
+    paths = Enum.map(file_diffs, & &1.path)
+
+    Map.new(paths, fn path ->
+      {path, shortest_unique_suffix(path, paths)}
+    end)
+  end
+
+  defp shortest_unique_suffix(path, paths) do
+    parts = String.split(path || "", "/", trim: true)
+    max_depth = max(length(parts), 1)
+
+    1..max_depth
+    |> Enum.find_value(Path.basename(path || ""), fn depth ->
+      candidate = suffix(parts, depth)
+
+      if Enum.count(paths, &(suffix(String.split(&1 || "", "/", trim: true), depth) == candidate)) ==
+           1 do
+        candidate
+      end
+    end)
+  end
+
+  defp suffix([], _depth), do: ""
+
+  defp suffix(parts, depth) do
+    parts
+    |> Enum.take(-depth)
+    |> Enum.join("/")
+  end
+
   defp section_estimate(section, hunks_by_path) do
     {additions, deletions, hunk_count, viewed_count} =
       Enum.reduce(section.rows, {0, 0, 0, 0}, fn row, {additions, deletions, hunks, viewed} ->
@@ -367,12 +393,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp effort_label(minutes) when minutes <= 12, do: "Involved"
   defp effort_label(_minutes), do: "Deep"
 
-  defp effort_class("Light"), do: "light"
-  defp effort_class("Moderate"), do: "moderate"
-  defp effort_class("Involved"), do: "involved"
-  defp effort_class("Deep"), do: "deep"
-  defp effort_class(_), do: "moderate"
-
   defp section_status_label("approved"), do: "Approve"
   defp section_status_label("denied"), do: "Deny"
   defp section_status_label("ignored"), do: "Ignore"
@@ -425,6 +445,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :hunks_by_path, :map, required: true
   attr :expanded_hunk_ids, :any, required: true
   attr :section_title, :string, default: nil
+  attr :file_label, :string, default: nil
 
   def packet_row(%{row: row} = assigns) do
     assigns =
@@ -455,6 +476,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             expanded_hunk_ids={@expanded_hunk_ids}
             section_index={@section_index}
             section_title={@section_title}
+            file_label={@file_label}
           />
         </div>
       <% @kind == "hunk" -> %>
@@ -463,7 +485,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           {ReviewPacket.row_ref(@row)}
         </span>
       <% true -> %>
-        <div id={@row_id} class="review-packet-row is-markdown">
+        <div id={@row_id} class="review-packet-row is-markdown" phx-hook="StickyProse">
           <.markdown body={@body} class="review-packet-markdown" />
         </div>
     <% end %>
@@ -481,12 +503,15 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :expanded_hunk_ids, :any, required: true
   attr :section_index, :integer, default: nil
   attr :section_title, :string, default: nil
+  attr :file_label, :string, default: nil
 
   def hunk_card(assigns) do
     assigns =
       assigns
       |> assign(:expanded?, MapSet.member?(assigns.expanded_hunk_ids, assigns.hunk_id))
       |> assign(:viewed?, assigns.hunk.viewed?)
+      |> assign(:title, hunk_title(assigns.hunk, Map.get(assigns, :file_label)))
+      |> assign(:details, hunk_details(assigns.hunk))
 
     ~H"""
     <article class={["review-hunk-card", @expanded? && "is-open", @viewed? && "is-viewed"]}>
@@ -498,23 +523,19 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           phx-value-hunk_id={@hunk_id}
           aria-expanded={@expanded?}
           aria-controls={"#{@hunk_id}-body"}
+          title={@details}
         >
           <.icon name="hero-chevron-down" class="review-collapse-icon" />
-          <span class="review-hunk-title" translate="no">
-            {@hunk.file_path} · hunk {@hunk.hunk_index}
-          </span>
-          <span class="review-hunk-lines">
-            <%= if @hunk.line_start && @hunk.line_end do %>
-              L{@hunk.line_start}-L{@hunk.line_end}
-            <% else %>
-              {@hunk.hunk_header}
-            <% end %>
+          <span class="review-hunk-title">
+            <span class="review-hunk-filename">{@title.file}</span>
+            <span class="review-hunk-separator">·</span>
+            <span class="review-hunk-index">{@title.hunk}</span>
+            <span :if={@title.lines != ""} class="review-hunk-separator">·</span>
+            <span :if={@title.lines != ""} class="review-hunk-lines">{@title.lines}</span>
           </span>
         </button>
 
         <div class="review-hunk-meta">
-          <.change_stat additions={@hunk.display_additions} deletions={@hunk.display_deletions} />
-          <span :if={@viewed?} class="review-hunk-viewed-pill">Viewed</span>
           <button
             :if={@current_user && !@viewed?}
             type="button"
@@ -534,7 +555,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           <button
             :if={@current_user && @viewed?}
             type="button"
-            class="review-button review-button-ghost review-hunk-action"
+            class="review-hunk-viewed-pill review-hunk-viewed-button"
             phx-click="mark_hunk_unviewed"
             phx-value-file_path={@hunk.file_path}
             phx-value-row_ref={@hunk.row_ref}
@@ -544,9 +565,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-line_end={@hunk.line_end}
             phx-value-section_index={@section_index}
             phx-value-section_title={@section_title}
+            title="Mark unviewed"
           >
-            Mark Unviewed
+            Viewed
           </button>
+          <span :if={!@current_user && @viewed?} class="review-hunk-viewed-pill">Viewed</span>
           <span :if={!@current_user} class="review-hunk-signin">Sign in to save viewed state</span>
         </div>
       </header>
@@ -573,6 +596,35 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       </div>
     </article>
     """
+  end
+
+  defp hunk_title(hunk, file_label) do
+    %{
+      file: file_label || Path.basename(hunk.file_path || ""),
+      hunk: "hunk #{hunk.hunk_index}",
+      lines: hunk_line_label(hunk)
+    }
+  end
+
+  defp hunk_line_label(%{line_start: line_start, line_end: line_end})
+       when is_integer(line_start) and is_integer(line_end) do
+    "L#{line_start}-L#{line_end}"
+  end
+
+  defp hunk_line_label(%{hunk_header: hunk_header}) when is_binary(hunk_header), do: hunk_header
+  defp hunk_line_label(_hunk), do: ""
+
+  defp hunk_details(hunk) do
+    line_ref =
+      cond do
+        hunk.line_start && hunk.line_end -> "L#{hunk.line_start}-L#{hunk.line_end}"
+        hunk.hunk_header != "" -> hunk.hunk_header
+        true -> "line range unavailable"
+      end
+
+    stats = "#{hunk.display_additions} additions, #{hunk.display_deletions} deletions"
+
+    "#{hunk.file_path} · hunk #{hunk.hunk_index} · #{line_ref} · #{stats}"
   end
 
   attr :body, :string, required: true

@@ -17,6 +17,8 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
   attr :hunks_by_path, :map, required: true
 
   def diff_shell(assigns) do
+    assigns = assign(assigns, :file_labels, PacketComponents.file_labels(assigns.file_diffs))
+
     ~H"""
     <div class="rev-shell">
       <aside id="file-tree" class="rev-sidebar">
@@ -86,50 +88,25 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
         </section>
       </aside>
 
-      <section :if={@selected_patchset} id="diff-files" class="space-y-6 min-w-0">
-        <article
-          :for={fd <- @file_diffs}
-          id={"file-#{fd.id}"}
-          class={["rev-file-card", file_expanded?(@expanded_file_ids, fd.id) && "is-open"]}
-        >
-          <button
-            type="button"
-            class="rev-file-summary"
-            phx-click="toggle_file_diff"
-            phx-value-file_id={fd.id}
-            aria-expanded={file_expanded?(@expanded_file_ids, fd.id)}
-            aria-controls={"diff-file-body-#{fd.id}"}
-          >
-            <span class="sr-only">Toggle {fd.path}</span>
-            <.icon name="hero-chevron-down" class="review-collapse-icon" />
-          </button>
-          <div
-            :if={file_expanded?(@expanded_file_ids, fd.id)}
-            id={"diff-file-body-#{fd.id}"}
-            class="rev-file-body"
-          >
-            <div class="review-hunk-list">
-              <PacketComponents.hunk_card
-                :for={hunk <- Map.get(@hunks_by_path, fd.path, [])}
-                hunk={hunk}
-                hunk_id={hunk.id}
-                file={fd}
-                selected_patchset={@selected_patchset}
-                published_threads={@published_threads}
-                drafts={@drafts}
-                current_user={@current_user}
-                diff_style={@diff_style}
-                expanded_hunk_ids={@expanded_hunk_ids}
-              />
-              <p :if={Map.get(@hunks_by_path, fd.path, []) == []} class="rev-empty">
-                No hunks in this file.
-              </p>
-            </div>
-          </div>
-          <div :if={!file_expanded?(@expanded_file_ids, fd.id)} class="rev-file-placeholder">
-            <span>Diff deferred until this file is opened.</span>
-          </div>
-        </article>
+      <section :if={@selected_patchset} id="diff-files" class="review-hunk-list min-w-0">
+        <div :for={fd <- @file_diffs} id={"file-#{fd.id}"} class="review-file-hunks">
+          <PacketComponents.hunk_card
+            :for={hunk <- Map.get(@hunks_by_path, fd.path, [])}
+            hunk={hunk}
+            hunk_id={hunk.id}
+            file={fd}
+            selected_patchset={@selected_patchset}
+            published_threads={@published_threads}
+            drafts={@drafts}
+            current_user={@current_user}
+            diff_style={@diff_style}
+            expanded_hunk_ids={@expanded_hunk_ids}
+            file_label={Map.get(@file_labels, fd.path)}
+          />
+          <p :if={Map.get(@hunks_by_path, fd.path, []) == []} class="rev-empty">
+            No hunks in {fd.path}.
+          </p>
+        </div>
 
         <p :if={@file_diffs == []} class="rev-empty">
           No files in this patchset.
@@ -144,9 +121,5 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
 
   defp file_id_for(file_diffs, file_path) do
     Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
-  end
-
-  defp file_expanded?(expanded_file_ids, file_id) do
-    MapSet.member?(expanded_file_ids, file_id)
   end
 end
