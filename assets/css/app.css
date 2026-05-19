@@ -1105,6 +1105,35 @@ details[open] > summary .review-collapse-icon,
   line-height: 1.55;
 }
 
+.review-packet-row.is-markdown.is-annotation {
+  position: static;
+  z-index: auto;
+  margin: 8px 0 -8px;
+  overflow: visible;
+  border-bottom: 0;
+  padding: 2px 0;
+}
+
+.review-packet-row.is-markdown.is-annotation::before {
+  content: none;
+}
+
+.review-packet-row.is-markdown.is-annotation .review-packet-markdown {
+  display: block;
+  max-height: none;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-height: 1.45;
+}
+
+.review-packet-row.is-markdown.is-annotation .review-packet-md-heading {
+  margin: 0;
+  color: var(--review-muted);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .review-packet-point-list {
   display: grid;
   gap: 12px;

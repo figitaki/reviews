@@ -2,6 +2,7 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
   @moduledoc false
   use ReviewsWeb, :html
 
+  alias Reviews.ReviewHunks
   alias Reviews.ReviewView
   alias ReviewsWeb.ReviewLive.PacketComponents
 
@@ -92,28 +93,10 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
         <div :for={fd <- @file_diffs} id={"file-#{fd.id}"} class="review-file-hunks">
           <% file_hunks = Map.get(@hunks_by_path, fd.path, []) %>
           <% file_state = file_view_state(file_hunks) %>
-          <header class="review-file-header">
-            <span class="flex items-center gap-2 min-w-0">
-              <.ds_status_mark status={fd.status} />
-              <span class="rev-file-path truncate" translate="no">{fd.path}</span>
-            </span>
-            <span class="review-file-header-meta">
-              <span class={[
-                "review-file-view-state",
-                "is-#{file_state.status}"
-              ]}>
-                {file_state.label}
-              </span>
-              <span class="rev-file-stats">
-                <span class="rev-stat-add">+{fd.additions}</span>
-                <span class="rev-stat-del">-{fd.deletions}</span>
-              </span>
-            </span>
-          </header>
           <PacketComponents.hunk_card
-            :for={hunk <- file_hunks}
-            hunk={hunk}
-            hunk_id={hunk.id}
+            :if={file_hunks != []}
+            hunk={file_hunk(file_hunks)}
+            hunk_id={file_diff_id(fd)}
             file={fd}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
@@ -121,8 +104,10 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
             current_user={@current_user}
             diff_style={@diff_style}
             expanded_hunk_ids={@expanded_hunk_ids}
-            file_label={Map.get(@file_labels, fd.path)}
-            show_file_label?={false}
+            file_label={Map.get(@file_labels, fd.path) || fd.path}
+            show_hunk_label?={false}
+            view_state={file_state}
+            class="is-file-diff"
           />
           <p :if={file_hunks == []} class="rev-empty">
             No hunks in {fd.path}.
@@ -143,6 +128,10 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
   defp file_id_for(file_diffs, file_path) do
     Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)
   end
+
+  defp file_hunk(hunks), do: ReviewHunks.combine_consecutive(hunks)
+
+  defp file_diff_id(file), do: "file-diff-#{file.id}"
 
   defp file_view_state([]), do: %{status: "empty", label: "No hunks"}
 

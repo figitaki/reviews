@@ -255,6 +255,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         row
         |> ReviewPacket.text("body")
         |> markdown_summary()
+        |> blank_to_nil()
       end
     end)
   end
@@ -282,6 +283,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     |> String.replace(~r/\*\*([^*]+)\*\*/, "\\1")
     |> String.replace(~r/\*([^*]+)\*/, "\\1")
   end
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
 
   defp truncate_summary(text) do
     text = String.trim(text)
@@ -452,6 +456,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       assigns
       |> assign(:kind, ReviewPacket.text(row, "kind"))
       |> assign(:body, ReviewPacket.text(row, "body"))
+      |> assign(:annotation?, annotation_markdown?(ReviewPacket.text(row, "body")))
       |> assign(:path, ReviewPacket.text(row, "path"))
       |> assign(:hunk_index, ReviewPacket.int(row, "hunk_index"))
       |> assign(:line_start, ReviewPacket.int(row, "line_start"))
@@ -485,12 +490,26 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           {ReviewPacket.row_ref(@row)}
         </span>
       <% true -> %>
-        <div id={@row_id} class="review-packet-row is-markdown" phx-hook="StickyProse">
+        <div
+          id={@row_id}
+          class={["review-packet-row is-markdown", @annotation? && "is-annotation"]}
+          phx-hook={if(@annotation?, do: nil, else: "StickyProse")}
+        >
           <.markdown body={@body} class="review-packet-markdown" />
         </div>
     <% end %>
     """
   end
+
+  defp annotation_markdown?(body) when is_binary(body) do
+    body
+    |> String.split("\n", trim: true)
+    |> List.first("")
+    |> String.trim()
+    |> String.starts_with?("### ")
+  end
+
+  defp annotation_markdown?(_body), do: false
 
   def packet_hunk_id(row_id, hunk) do
     "#{row_id}--#{hunk.id}"
@@ -642,6 +661,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :file_label, :string, default: nil
   attr :grouped?, :boolean, default: false
   attr :show_file_label?, :boolean, default: true
+  attr :show_hunk_label?, :boolean, default: true
+  attr :view_state, :any, default: nil
+  attr :class, :string, default: nil
 
   def hunk_card(assigns) do
     assigns =
@@ -651,7 +673,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> assign(:partially_viewed?, Map.get(assigns.hunk, :partially_viewed?, false))
       |> assign(
         :title,
-        hunk_title(assigns.hunk, Map.get(assigns, :file_label), assigns.show_file_label?)
+        hunk_title(
+          assigns.hunk,
+          Map.get(assigns, :file_label),
+          assigns.show_file_label?,
+          assigns.show_hunk_label?
+        )
       )
       |> assign(:details, hunk_details(assigns.hunk))
       |> assign(:hunk_attrs_json, hunk_attrs_json(assigns.hunk))
@@ -659,6 +686,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     ~H"""
     <article class={[
       "review-hunk-card",
+      @class,
       @expanded? && "is-open",
       @viewed? && "is-viewed",
       @partially_viewed? && "is-partially-viewed"
@@ -676,14 +704,23 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           <.icon name="hero-chevron-down" class="review-collapse-icon" />
           <span class="review-hunk-title">
             <span :if={@title.file != ""} class="review-hunk-filename">{@title.file}</span>
-            <span :if={@title.file != ""} class="review-hunk-separator">·</span>
-            <span class="review-hunk-index">{@title.hunk}</span>
-            <span :if={@title.lines != ""} class="review-hunk-separator">·</span>
+            <span :if={@title.file != "" && @title.hunk != ""} class="review-hunk-separator">·</span>
+            <span :if={@title.hunk != ""} class="review-hunk-index">{@title.hunk}</span>
+            <span :if={@title.hunk != "" && @title.lines != ""} class="review-hunk-separator">·</span>
             <span :if={@title.lines != ""} class="review-hunk-lines">{@title.lines}</span>
           </span>
         </button>
 
         <div class="review-hunk-meta">
+          <span
+            :if={@view_state}
+            class={[
+              "review-file-view-state",
+              "is-#{@view_state.status}"
+            ]}
+          >
+            {@view_state.label}
+          </span>
           <button
             :if={@current_user && !@viewed?}
             type="button"
@@ -775,11 +812,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     }
   end
 
-  defp hunk_title(hunk, file_label, show_file_label?) do
+  defp hunk_title(hunk, file_label, show_file_label?, show_hunk_label?) do
     %{
       file: if(show_file_label?, do: file_label || Path.basename(hunk.file_path || ""), else: ""),
-      hunk: hunk_index_label(hunk),
-      lines: hunk_line_label(hunk)
+      hunk: if(show_hunk_label?, do: hunk_index_label(hunk), else: ""),
+      lines: if(show_hunk_label?, do: hunk_line_label(hunk), else: "")
     }
   end
 

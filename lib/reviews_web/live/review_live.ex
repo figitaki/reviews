@@ -29,6 +29,7 @@ defmodule ReviewsWeb.ReviewLive do
   @section_auto_open_loc_budget 25
   @section_auto_open_min_hunk_loc 6
   @section_auto_open_max_hunk_loc 500
+  @single_section_auto_open_line_limit 100
 
   @impl true
   def mount(%{"slug" => slug}, session, socket) do
@@ -978,18 +979,16 @@ defmodule ReviewsWeb.ReviewLive do
         MapSet.new()
       end
 
-    expanded_hunk_ids =
-      if previous_patchset_id == next_patchset_id do
-        socket.assigns[:expanded_hunk_ids] || MapSet.new()
-      else
-        MapSet.new()
-      end
+    default_expansion = default_expanded_packet_state(snapshot)
 
-    expanded_section_ids =
+    {expanded_hunk_ids, expanded_section_ids} =
       if previous_patchset_id == next_patchset_id do
-        socket.assigns[:expanded_section_ids] || MapSet.new()
+        {
+          socket.assigns[:expanded_hunk_ids] || default_expansion.hunk_ids,
+          socket.assigns[:expanded_section_ids] || default_expansion.section_ids
+        }
       else
-        MapSet.new()
+        {default_expansion.hunk_ids, default_expansion.section_ids}
       end
 
     socket
@@ -1012,10 +1011,13 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp mounted_diff_paths(socket) do
     changes_paths =
-      socket.assigns.hunks_by_path
-      |> Enum.flat_map(fn {path, hunks} ->
-        if Enum.any?(hunks, &MapSet.member?(socket.assigns.expanded_hunk_ids, &1.id)) do
-          [path]
+      socket.assigns.file_diffs
+      |> Enum.flat_map(fn file ->
+        hunks = Map.get(socket.assigns.hunks_by_path, file.path, [])
+
+        if MapSet.member?(socket.assigns.expanded_hunk_ids, file_diff_id(file)) ||
+             Enum.any?(hunks, &MapSet.member?(socket.assigns.expanded_hunk_ids, &1.id)) do
+          [file.path]
         else
           []
         end
@@ -1032,6 +1034,41 @@ defmodule ReviewsWeb.ReviewLive do
 
     Enum.uniq(changes_paths ++ packet_paths)
   end
+
+  defp default_expanded_packet_state(%{selected_patchset: nil}) do
+    %{section_ids: MapSet.new(), hunk_ids: MapSet.new()}
+  end
+
+  defp default_expanded_packet_state(snapshot) do
+    sections = ReviewPacket.sections(snapshot.selected_patchset.packet || %{})
+
+    section_ids =
+      case sections do
+        [section] ->
+          if section_changed_lines(section, snapshot.hunks_by_path) <
+               @single_section_auto_open_line_limit do
+            MapSet.new([section.index])
+          else
+            MapSet.new()
+          end
+
+        _ ->
+          MapSet.new()
+      end
+
+    %{section_ids: section_ids, hunk_ids: MapSet.new()}
+  end
+
+  defp section_changed_lines(section, hunks_by_path) do
+    section
+    |> PacketComponents.packet_units(hunks_by_path)
+    |> Enum.flat_map(&section_preview_hunk/1)
+    |> Enum.reduce(0, fn hunk, changed_lines ->
+      changed_lines + hunk.display_additions + hunk.display_deletions
+    end)
+  end
+
+  defp file_diff_id(file), do: "file-diff-#{file.id}"
 
   defp hunk_id_matches?(expanded_id, hunk_id) do
     expanded_id == hunk_id || String.ends_with?(expanded_id, "--#{hunk_id}")
