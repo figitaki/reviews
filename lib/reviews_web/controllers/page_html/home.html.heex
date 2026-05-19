@@ -12,9 +12,9 @@
 
       <div class="design-main">
         <.ds_page_header
-          eyebrow="0.0.1-alpha.0"
-          title="Reviews Turns Any Git Diff Into A Shareable Review."
-          description="Install the CLI, push a branch, and get a review URL with patchsets, review packets, and draft comments kept together for humans and agents."
+          eyebrow="Code review workspace"
+          title="Reviews Keeps Patchsets, Diffs, And Comments In One Place."
+          description="A review surface for agents and humans to inspect arbitrary diffs, carry comments across patchsets, and publish decisions with the full context still visible."
         >
           <:actions>
             <.link navigate={~p"/r/demo-review"} class="ds-button is-primary">
@@ -25,52 +25,6 @@
             </.link>
           </:actions>
         </.ds_page_header>
-
-        <.ds_section
-          id="install"
-          eyebrow="Distribution"
-          title="One Command Installs The Alpha CLI."
-          description="Reviews starts from your terminal. The CLI uploads the current branch to the hosted service or your local Phoenix server."
-        >
-          <div class="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
-            <.ds_card class="min-w-0">
-              <div class="space-y-4">
-                <div>
-                  <h3>Install, Login, Push</h3>
-                  <p>
-                    The alpha release is versioned as v0.0.1-alpha.0 so we can ship the
-                    distribution path before claiming API stability.
-                  </p>
-                </div>
-                <div
-                  class="rounded-lg border border-white/10 bg-black/30 p-4 font-mono text-sm leading-7 text-white/80"
-                  translate="no"
-                >
-                  <div>
-                    $ curl -fsSL https://raw.githubusercontent.com/figitaki/reviews/main/install.sh | sh
-                  </div>
-                  <div>$ reviews login</div>
-                  <div>$ reviews push --title "Review this change"</div>
-                </div>
-              </div>
-            </.ds_card>
-
-            <.ds_card>
-              <div class="flex items-start gap-3">
-                <span class="rounded-lg border border-white/10 bg-white/5 p-2 text-white/80">
-                  <.icon name="hero-key" class="size-5" />
-                </span>
-                <div>
-                  <h3>Hosted Or Local</h3>
-                  <p>
-                    Point `reviews login` at the hosted alpha or at `http://localhost:4000`
-                    when you are running Reviews yourself.
-                  </p>
-                </div>
-              </div>
-            </.ds_card>
-          </div>
-        </.ds_section>
 
         <.ds_section
           id="review-workflow"
@@ -87,7 +41,7 @@
                 <div>
                   <h3>Inspect Diffs</h3>
                   <p>
-                    Browse file changes, hunk context, and line-level discussion in a focused,
+                    Browse file changes, hunk context, and line-level discussion in a single dark,
                     code-first workspace.
                   </p>
                 </div>
@@ -128,39 +82,36 @@
 
         <.ds_section
           id="cli-workflow"
-          eyebrow="Agent Handoff"
-          title="End A Coding Session With A Review Prompt."
-          description="Reviews gives Codex and teammates the same artifact: a URL with the diff, packet context, patchset history, and comment surface."
+          eyebrow="CLI Workflow"
+          title="Push Any Git Diff Into A Shareable Review."
+          description="Reviews is not tied to a hosting provider. The local CLI turns the current branch into a review URL that agents or teammates can open immediately."
         >
           <div class="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
             <.ds_card class="min-w-0">
               <div class="space-y-4">
                 <div>
-                  <h3>Prompt For The Next Pass</h3>
+                  <h3>From Checkout To Review Link</h3>
                   <p>
-                    Drop this at the end of a session that already has the Reviews skills loaded.
+                    Run the command in any repository, share the generated URL, and keep sending
+                    patchsets as the work changes.
                   </p>
                 </div>
                 <div
                   class="rounded-lg border border-white/10 bg-black/30 p-4 font-mono text-sm leading-7 text-white/80"
                   translate="no"
                 >
-                  <div>Use the Reviews skills already loaded in this session.</div>
-                  <div>
-                    Push the current branch, open the review URL, inspect the diff and packet,
-                  </div>
-                  <div>
-                    leave draft comments, then publish the review when the pass is complete.
-                  </div>
+                  <div>$ reviews push</div>
+                  <div class="text-emerald-300">http://localhost:4000/r/demo-review</div>
+                  <div>$ reviews push --update demo-review</div>
                 </div>
               </div>
             </.ds_card>
 
             <.ds_card>
-              <h3>Built For Follow-Up Patchsets</h3>
+              <h3>Agent And Human Friendly</h3>
               <p>
-                Generated code, hand-written fixes, and follow-up edits all land in the same review
-                history through <code translate="no">reviews push --update &lt;slug&gt;</code>.
+                The workflow treats generated code, hand-written patches, and follow-up edits the
+                same way: a patchset history, a diff surface, and comments ready to publish.
               </p>
               <div class="mt-5 flex flex-wrap gap-2 text-sm">
                 <span class="rounded-full border border-white/10 px-3 py-1" translate="no">
@@ -178,24 +129,24 @@
 
         <.ds_section
           id="system-direction"
-          eyebrow="Release Cadence"
-          title="Changelog First, Releases Next."
-          description="The first alpha establishes the version baseline, install story, and release notes before regular tagged releases start flowing."
+          eyebrow="Design System Direction"
+          title="The Interface Favors Dense, Calm Review Work."
+          description="Shared product primitives keep navigation, actions, cards, and review states consistent without making the page feel like a marketing surface."
         >
           <div class="grid gap-4 md:grid-cols-2">
             <.ds_card>
-              <h3>Alpha Baseline</h3>
+              <h3>Dark By Default</h3>
               <p>
-                Version `0.0.1-alpha.0` marks the CLI, hosted app, OAuth token flow, patchsets, and
-                review packets as the first public baseline.
+                Spacious sections, restrained contrast, and compact controls keep attention on file
+                paths, code blocks, and reviewer intent.
               </p>
             </.ds_card>
 
             <.ds_card>
-              <h3>Release Notes Stay Close</h3>
+              <h3>Built For Repeated Review</h3>
               <p>
-                `CHANGELOG.md` now tracks what ships, what is deferred, and what should be called
-                out when the next tag is cut.
+                The same components used here frame the sample review, settings, and future review
+                states so common actions stay predictable.
               </p>
             </.ds_card>
           </div>

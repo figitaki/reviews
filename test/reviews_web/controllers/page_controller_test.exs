@@ -5,7 +5,7 @@ defmodule ReviewsWeb.PageControllerTest do
     conn = get(conn, ~p"/")
     html = html_response(conn, 200)
 
-    assert html =~ "Reviews Turns Any Git Diff"
+    assert html =~ "Reviews Keeps Patchsets"
     assert html =~ "Open Demo Review"
   end
 end

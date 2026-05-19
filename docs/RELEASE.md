@@ -21,40 +21,9 @@ You need (one-time):
   host the public mirror and run Actions.
 - Access to create GitHub OAuth Apps under that same org/user.
 
-## 2. Versioning, tags, and changelog
-
-Reviews starts public release tracking at `0.0.1-alpha.0`. Use semver
-prerelease tags until the CLI contract, hosted service, and install assets are
-stable enough for a non-alpha release.
-
-Before cutting a release:
-
-1. Update the version in `mix.exs`, `cli/Cargo.toml`, `cli/Cargo.lock`, and
-   `assets/package.json`.
-2. Add the user-facing changes to `CHANGELOG.md`.
-3. Tag the CLI and server release separately:
-
-   ```sh
-   git tag cli-v0.0.1-alpha.0
-   git tag server-v0.0.1-alpha.0
-   git push origin cli-v0.0.1-alpha.0 server-v0.0.1-alpha.0
-   ```
-
-The `release-cli.yml` workflow publishes GitHub release assets named:
-
-- `reviews-cli-<version>-linux-x64.tar.gz`
-- `reviews-cli-<version>-linux-arm64.tar.gz`
-- `reviews-cli-<version>-macos-x64.tar.gz`
-- `reviews-cli-<version>-macos-arm64.tar.gz`
-
-Each archive contains a `reviews` binary at its root plus `LICENSE`,
-`README.md`, `install.sh`, and packaged `skills/`. The one-command installer
-looks up the latest `cli-v*` release by default, or a specific tag when passed
-`--version`.
-
 ---
 
-## 3. Create the production GitHub OAuth App
+## 2. Create the production GitHub OAuth App
 
 The local-dev OAuth app (the one whose credentials live in `.env.local`) points
 its callback at `http://localhost:4000/auth/github/callback`, which won't work
@@ -117,7 +86,7 @@ curl -sI https://reviews-dev.fly.dev/ | head -1   # expect: HTTP/2 200
 
 ---
 
-## 4. Other required Fly secrets
+## 3. Other required Fly secrets
 
 Beyond the GitHub OAuth pair, the app needs:
 
@@ -144,7 +113,7 @@ fly secrets list -a reviews-dev
 
 ---
 
-## 5. Mirror the repo to GitHub
+## 4. Mirror the repo to GitHub
 
 Origin stays at the private soft-serve (`ssh://git.internal/reviews.git`). We
 add GitHub as a one-way push mirror so Actions can run on it.
@@ -203,7 +172,7 @@ with write access to the mirror repo.)
 
 ---
 
-## 6. GitHub Actions: test + deploy
+## 5. GitHub Actions: test + deploy
 
 The workflow at `.github/workflows/ci.yml` runs on every push and PR:
 
@@ -237,7 +206,7 @@ traffic.
 
 ---
 
-## 7. Manual deploy (escape hatch)
+## 6. Manual deploy (escape hatch)
 
 If CI is wedged or you need to push a hotfix from your laptop:
 
@@ -251,7 +220,7 @@ just runs it from a clean checkout with the API token.
 
 ---
 
-## 8. Rollback
+## 7. Rollback
 
 ```sh
 fly releases -a reviews-dev               # find the release you want
@@ -264,7 +233,7 @@ need to ship a forward-fix migration instead — don't roll back blindly.
 
 ---
 
-## 9. Custom domain (when ready)
+## 8. Custom domain (when ready)
 
 Pointing `reviews.yourdomain.com` at the Fly app:
 
@@ -280,7 +249,7 @@ mismatch error.
 
 ---
 
-## 10. Troubleshooting
+## 9. Troubleshooting
 
 **Deploy build fails at `mix assets.deploy` with `Could not resolve "phoenix-colocated/reviews"`:**
 The Dockerfile must run `mix compile` _before_ `mix assets.deploy` so

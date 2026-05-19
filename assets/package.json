@@ -1,6 +1,6 @@
 {
   "name": "reviews-assets",
-  "version": "0.0.1-alpha.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Front-end assets for the Reviews app. React island for @pierre/diffs is mounted via the DiffRenderer Phoenix LiveView hook.",
   "dependencies": {

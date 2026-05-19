@@ -6,8 +6,6 @@ shareable review surface before, during, or outside a GitHub PR workflow.
 The app is Phoenix 1.8 + LiveView, with a React diff island powered by
 `@pierre/diffs`, and a Rust CLI (`reviews push`) for uploading diffs.
 
-Current alpha version: `0.0.1-alpha.0`.
-
 ## What It Provides
 
 - Link-based reviews for any uploaded diff.
@@ -26,9 +24,9 @@ see [`skills/README.md`](skills/README.md).
 
 ## Install The CLI
 
-Released CLI builds are published from `cli-vX.Y.Z` tags. The first alpha CLI
-tag is `cli-v0.0.1-alpha.0`. The installer downloads the right binary for macOS
-or Linux and can optionally install the repo's agent skills:
+Released CLI builds are published from `cli-vX.Y.Z` tags. The installer
+downloads the right binary for macOS or Linux and can optionally install the
+repo's agent skills:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/figitaki/reviews/main/install.sh | sh
@@ -36,38 +34,6 @@ curl -fsSL https://raw.githubusercontent.com/figitaki/reviews/main/install.sh | 
 
 Use `--with-skills --yes` for non-interactive agent setup, or `--no-skills` for
 binary-only installs.
-
-Then connect it to a Reviews server:
-
-```sh
-reviews login
-```
-
-For the hosted alpha, use `https://reviews-dev.fly.dev` as the server URL and
-mint an API token from `/settings`.
-
-## Getting Started
-
-```sh
-cd path/to/any/git-checkout
-reviews push --title "Review this change"
-```
-
-The CLI prints a review URL. Share that URL with a teammate or an agent. As the
-branch changes, add a new patchset to the same review:
-
-```sh
-reviews push --update <slug>
-```
-
-At the end of a Codex session, a useful handoff prompt is:
-
-```text
-Use the Reviews skills already loaded in this session. Push the current branch
-to Reviews, open the generated review URL, inspect the diff and review packet,
-leave draft comments for any correctness or UX issues, then publish the review
-when the pass is complete.
-```
 
 ## Prereqs
 
@@ -153,7 +119,6 @@ Use `--range HEAD` when pushing current uncommitted work.
 - `assets/js/hooks/diff_renderer.js` — React diff island LiveView hook.
 - `cli/` — Rust CLI.
 - `docs/CONTRACTS.md` — REST and hook contracts.
-- `CHANGELOG.md` — release notes, starting with `0.0.1-alpha.0`.
 - `skills/` — repo-local Codex skills for Reviews workflows.
 - `install.sh` — release installer for the CLI and optional agent skills.
 
