@@ -725,7 +725,8 @@ defmodule ReviewsWeb.ReviewLive do
     with %{} = patchset <- socket.assigns.selected_patchset,
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
       section.rows
-      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, &1))
+      |> Enum.with_index()
+      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, section_index, &1))
       |> open_preview_hunks(socket)
     else
       _ -> socket
@@ -747,7 +748,8 @@ defmodule ReviewsWeb.ReviewLive do
     with %{} = patchset <- socket.assigns.selected_patchset,
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
       section.rows
-      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, &1))
+      |> Enum.with_index()
+      |> Enum.flat_map(&section_preview_hunk(socket.assigns.hunks_by_path, section_index, &1))
       |> hunks_after(attrs)
     else
       _ -> []
@@ -772,7 +774,9 @@ defmodule ReviewsWeb.ReviewLive do
   defp hunk_matches_attrs?(hunk, attrs) do
     hunk.file_path == attrs.file_path &&
       hunk.row_ref == attrs.row_ref &&
-      hunk.hunk_fingerprint == attrs.hunk_fingerprint
+      hunk.hunk_fingerprint == attrs.hunk_fingerprint &&
+      hunk.line_start == attrs.line_start &&
+      hunk.line_end == attrs.line_end
   end
 
   defp open_preview_hunks(hunks, socket) do
@@ -798,16 +802,27 @@ defmodule ReviewsWeb.ReviewLive do
     )
   end
 
-  defp section_preview_hunk(hunks_by_path, row) do
+  defp section_preview_hunk(hunks_by_path, section_index, {row, row_index}) do
     if ReviewPacket.text(row, "kind") == "hunk" do
       case ReviewHunks.for_packet_row(hunks_by_path, row) do
-        nil -> []
-        hunk -> [hunk]
+        nil ->
+          []
+
+        hunk ->
+          [
+            %{
+              hunk
+              | id: PacketComponents.packet_hunk_id(packet_row_id(section_index, row_index), hunk)
+            }
+          ]
       end
     else
       []
     end
   end
+
+  defp packet_row_id(section_index, row_index),
+    do: "packet-section-#{section_index}-row-#{row_index}"
 
   defp hunk_preview_cost(hunk) do
     hunk
@@ -863,12 +878,7 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp collapse_hunk(socket, attrs) do
-    hunk_id =
-      socket.assigns.hunks_by_path
-      |> Map.get(attrs.file_path, [])
-      |> Enum.find_value(fn hunk ->
-        if hunk_matches_attrs?(hunk, attrs), do: hunk.id
-      end)
+    hunk_id = hunk_id_for_attrs(socket, attrs)
 
     if hunk_id do
       assign(socket, :expanded_hunk_ids, MapSet.delete(socket.assigns.expanded_hunk_ids, hunk_id))
@@ -878,18 +888,26 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp expand_hunk(socket, attrs) do
-    hunk_id =
-      socket.assigns.hunks_by_path
-      |> Map.get(attrs.file_path, [])
-      |> Enum.find_value(fn hunk ->
-        if hunk_matches_attrs?(hunk, attrs), do: hunk.id
-      end)
+    hunk_id = hunk_id_for_attrs(socket, attrs)
 
     if hunk_id do
       assign(socket, :expanded_hunk_ids, MapSet.put(socket.assigns.expanded_hunk_ids, hunk_id))
     else
       socket
     end
+  end
+
+  defp hunk_id_for_attrs(_socket, %{hunk_id: hunk_id})
+       when is_binary(hunk_id) and hunk_id != "" do
+    hunk_id
+  end
+
+  defp hunk_id_for_attrs(socket, attrs) do
+    socket.assigns.hunks_by_path
+    |> Map.get(attrs.file_path, [])
+    |> Enum.find_value(fn hunk ->
+      if hunk_matches_attrs?(hunk, attrs), do: hunk.id
+    end)
   end
 
   defp hunk_attrs_from_params(params) do
@@ -903,6 +921,7 @@ defmodule ReviewsWeb.ReviewLive do
          file_path: file_path,
          row_ref: row_ref,
          hunk_fingerprint: fingerprint,
+         hunk_id: blank_to_nil(params["hunk_id"]),
          hunk_index: hunk_index,
          line_start: parse_int(params["line_start"]),
          line_end: parse_int(params["line_end"]),
@@ -981,11 +1000,15 @@ defmodule ReviewsWeb.ReviewLive do
       |> Enum.flat_map(fn hunk_id ->
         socket.assigns.hunks_by_path
         |> Enum.find_value([], fn {path, hunks} ->
-          if Enum.any?(hunks, &(&1.id == hunk_id)), do: [path], else: nil
+          if Enum.any?(hunks, &hunk_id_matches?(hunk_id, &1.id)), do: [path], else: nil
         end)
       end)
 
     Enum.uniq(changes_paths ++ packet_paths)
+  end
+
+  defp hunk_id_matches?(expanded_id, hunk_id) do
+    expanded_id == hunk_id || String.ends_with?(expanded_id, "--#{hunk_id}")
   end
 
   defp put_section_status(socket, patchset, user, section, status) do

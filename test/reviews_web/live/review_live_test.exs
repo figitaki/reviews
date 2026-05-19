@@ -160,6 +160,77 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#packet-section-0.is-open")
     end
 
+    test "packet rows that slice the same hunk get independent UI ids", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Packet slices",
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1,2 +1,2 @@
+          -old_one
+          +new_one
+          -old_two
+          +new_two
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Split hunk",
+                "rows" => [
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1,
+                    "line_start" => 1,
+                    "line_end" => 2
+                  },
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1,
+                    "line_start" => 3,
+                    "line_end" => 4
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      view
+      |> element("#packet-section-0 .review-packet-section-heading", "Split hunk")
+      |> render_click()
+
+      assert has_element?(
+               view,
+               ~s|#packet-section-0-row-0 .review-hunk-toggle[phx-value-hunk_id="packet-section-0-row-0--hunk-lib-packet-ex-1"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#packet-section-0-row-1 .review-hunk-toggle[phx-value-hunk_id="packet-section-0-row-1--hunk-lib-packet-ex-1"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#packet-section-0-row-0 [id="packet-section-0-row-0--hunk-lib-packet-ex-1-diff"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#packet-section-0-row-1 [id="packet-section-0-row-1--hunk-lib-packet-ex-1-diff"]|
+             )
+    end
+
     test "renders linear revision navigation from patchsets", %{
       conn: conn,
       author: author

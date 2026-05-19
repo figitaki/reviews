@@ -467,7 +467,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         <div id={@row_id} class="review-packet-row is-hunk">
           <.hunk_card
             hunk={@hunk}
-            hunk_id={@hunk.id}
+            hunk_id={packet_hunk_id(@row_id, @hunk)}
             file={@file}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
@@ -491,6 +491,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </div>
     <% end %>
     """
+  end
+
+  def packet_hunk_id(row_id, hunk) do
+    "#{row_id}--#{hunk.id}"
   end
 
   attr :hunk, :map, required: true
@@ -545,6 +549,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-file_path={@hunk.file_path}
             phx-value-row_ref={@hunk.row_ref}
             phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
+            phx-value-hunk_id={@hunk_id}
             phx-value-hunk_index={@hunk.hunk_index}
             phx-value-line_start={@hunk.line_start}
             phx-value-line_end={@hunk.line_end}
@@ -561,6 +566,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-file_path={@hunk.file_path}
             phx-value-row_ref={@hunk.row_ref}
             phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
+            phx-value-hunk_id={@hunk_id}
             phx-value-hunk_index={@hunk.hunk_index}
             phx-value-line_start={@hunk.line_start}
             phx-value-line_end={@hunk.line_end}
