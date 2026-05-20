@@ -30,7 +30,7 @@ defmodule ReviewsWeb.ReviewLive do
   @section_auto_open_min_hunk_loc 6
   @section_auto_open_max_hunk_loc 500
   @single_section_auto_open_line_limit 100
-  @section_expand_all_line_limit 500
+  @section_expand_all_line_limit 1000
   @section_expand_all_file_limit 25
 
   @impl true
