@@ -653,8 +653,8 @@
 .review-packet-nav {
   display: flex;
   flex-direction: column;
-  height: min(520px, calc(100vh - var(--review-main-nav-h) - 32px));
-  min-height: 220px;
+  max-height: calc(100vh - var(--review-main-nav-h) - 32px);
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -701,14 +701,18 @@
 .review-packet-nav-list {
   display: flex;
   min-height: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   flex-direction: column;
   padding: 8px;
 }
 
 .review-packet-nav-tree {
   min-height: 0;
-  flex: 1 1 auto;
+  height: min(
+    calc(var(--review-packet-nav-rows, 1) * var(--review-packet-nav-row-h, 28px)),
+    calc(100vh - var(--review-main-nav-h) - 86px)
+  );
+  flex: 0 1 auto;
 }
 
 .review-packet-nav-tree file-tree-container {
@@ -1116,7 +1120,14 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-packet-nav {
-    height: 260px;
+    max-height: 260px;
+  }
+
+  .review-packet-nav-tree {
+    height: min(
+      calc(var(--review-packet-nav-rows, 1) * var(--review-packet-nav-row-h, 28px)),
+      220px
+    );
   }
 
   .review-revision-nav {

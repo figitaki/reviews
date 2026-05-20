@@ -124,6 +124,16 @@ const pathSignature = paths => paths.join("\n")
 const expandedSectionPaths = sections => (sections || [])
   .filter(section => section.expanded)
   .map(section => section.path)
+const visibleRowCount = (sections, paths) => {
+  const allPaths = paths || []
+
+  return (sections || []).reduce((count, section) => {
+    if (!section.expanded) return count + 1
+
+    const childCount = allPaths.filter(path => path.startsWith(section.path) && path !== section.path).length
+    return count + 1 + childCount
+  }, 0)
+}
 
 const textLabel = text => {
   const label = document.createElement("span")
@@ -162,9 +172,11 @@ const PacketNavTree = {
     const paths = nav.paths || []
     const signature = pathSignature(paths)
 
+    this.paths = paths
     this.sections = sectionMap(nav.sections)
     this.targets = nav.targets || {}
     this.stats = nav.stats || {}
+    this.updateTreeHeight(nav.sections, paths)
 
     if (paths.length === 0) {
       this.destroyTree()
@@ -183,6 +195,20 @@ const PacketNavTree = {
 
     this.syncSectionExpansion(nav.sections)
     this.scheduleStatDecorations()
+  },
+
+  updateTreeHeight(sections, paths) {
+    const rows = Math.max(1, visibleRowCount(sections, paths))
+    this.el.style.setProperty("--review-packet-nav-rows", rows)
+  },
+
+  updateTreeHeightFromTree() {
+    const sections = [...(this.sections || new Map()).values()].map(section => ({
+      ...section,
+      expanded: this.tree?.getItem(section.path)?.isExpanded?.() === true,
+    }))
+
+    this.updateTreeHeight(sections, this.paths || [])
   },
 
   destroyTree() {
@@ -232,6 +258,8 @@ const PacketNavTree = {
         this.sectionExpansion.set(path, expanded)
         this.pushEvent("toggle_packet_section", {section_index: section.section_index})
       }
+
+      this.updateTreeHeightFromTree()
     })
 
     this.tree.render({containerWrapper: this.el})
