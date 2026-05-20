@@ -19,149 +19,165 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :diff_style, :string, required: true
   attr :expanded_section_ids, :any, required: true
   attr :expanded_hunk_ids, :any, required: true
+  attr :show_packet_outline, :boolean, default: true
 
   def packet(assigns) do
     sections = packet_sections(assigns)
+    file_labels = file_labels(assigns.file_diffs)
 
     assigns =
       assigns
       |> assign(:sections, sections)
-      |> assign(:file_labels, file_labels(assigns.file_diffs))
+      |> assign(:file_labels, file_labels)
+      |> assign(
+        :packet_nav,
+        packet_nav(sections, assigns.hunks_by_path, file_labels, assigns.expanded_section_ids)
+      )
 
     ~H"""
     <section id="review-packet" class="review-packet" aria-labelledby="review-packet-title">
-      <div class="review-packet-grid">
-        <article
-          :for={section <- @sections}
-          id={"packet-section-#{section.index}"}
-          class={[
-            "review-packet-section",
-            section.effective_status && "is-decided",
-            section_expanded?(@expanded_section_ids, section.index) && "is-open"
-          ]}
+      <div class={["review-packet-shell", !@show_packet_outline && "is-outline-hidden"]}>
+        <aside
+          :if={@show_packet_outline}
+          class="review-packet-nav-panel"
+          aria-label="Review packet navigation"
         >
-          <header class="review-packet-section-summary">
-            <button
-              type="button"
-              class="review-packet-section-heading"
-              phx-click="toggle_packet_section"
-              phx-value-section_index={section.index}
-              aria-expanded={section_expanded?(@expanded_section_ids, section.index)}
-              aria-controls={"packet-section-#{section.index}-body"}
-            >
-              <div class="review-packet-section-title-row">
-                <h3 class="review-packet-section-title">{section.title}</h3>
-                <span
-                  class="review-packet-section-estimate"
-                  title={"Estimated from #{section.estimate.changed_lines} changed lines across #{section.estimate.hunk_count} hunk rows."}
-                >
-                  {section.estimate.effort}
-                  <.change_stat
-                    additions={section.estimate.additions}
-                    deletions={section.estimate.deletions}
-                  /> ~{section.estimate.time}
-                </span>
-              </div>
-            </button>
+          <.packet_nav nav={@packet_nav} />
+        </aside>
 
-            <div class="review-packet-section-controls">
-              <span
-                :if={section.previous}
-                class={[
-                  "review-section-state-pill",
-                  "is-previous",
-                  "is-#{section.previous.status}"
-                ]}
-                title={"Previously #{section.previous.status} in v#{section.previous.patchset_number}"}
-                aria-label={"Previously #{section.previous.status} in version #{section.previous.patchset_number}"}
-              >
-                <.section_status_icon status={section.previous.status} />
-                <span class="sr-only">
-                  Previously {section.previous.status} in v{section.previous.patchset_number}
-                </span>
-              </span>
-
-              <.icon
-                :if={section.previous}
-                name="hero-chevron-right"
-                class="review-section-transition-icon"
-              />
-
-              <div
-                class="review-packet-section-actions"
-                aria-label={"Decision for #{section.title}"}
-              >
-                <%= if @current_user do %>
-                  <button
-                    :for={status <- ~w(approved denied ignored)}
-                    type="button"
-                    class={[
-                      "review-section-action",
-                      section.effective_status == status && "is-active",
-                      "is-#{status}"
-                    ]}
-                    title={section_status_label(status)}
-                    aria-label={section_status_label(status)}
-                    phx-click="set_section_status"
-                    phx-value-section_index={section.index}
-                    phx-value-status={status}
-                  >
-                    <.section_status_icon status={status} />
-                    <span class="review-section-action-label">{section_status_label(status)}</span>
-                  </button>
-                <% else %>
-                  <span class="review-packet-section-signin">Sign in to review</span>
-                <% end %>
-              </div>
-
+        <div class="review-packet-grid">
+          <article
+            :for={section <- @sections}
+            id={"packet-section-#{section.index}"}
+            class={[
+              "review-packet-section",
+              section.effective_status && "is-decided",
+              section_expanded?(@expanded_section_ids, section.index) && "is-open"
+            ]}
+          >
+            <header class="review-packet-section-summary">
               <button
                 type="button"
-                class="review-packet-section-toggle"
+                class="review-packet-section-heading"
                 phx-click="toggle_packet_section"
                 phx-value-section_index={section.index}
                 aria-expanded={section_expanded?(@expanded_section_ids, section.index)}
                 aria-controls={"packet-section-#{section.index}-body"}
               >
-                <span class="sr-only">Toggle {section.title}</span>
-                <.icon name="hero-chevron-down" class="review-collapse-icon" />
+                <div class="review-packet-section-title-row">
+                  <h3 class="review-packet-section-title">{section.title}</h3>
+                  <span
+                    class="review-packet-section-estimate"
+                    title={"Estimated from #{section.estimate.changed_lines} changed lines across #{section.estimate.hunk_count} hunk rows."}
+                  >
+                    {section.estimate.effort}
+                    <.change_stat
+                      additions={section.estimate.additions}
+                      deletions={section.estimate.deletions}
+                    /> ~{section.estimate.time}
+                  </span>
+                </div>
               </button>
+
+              <div class="review-packet-section-controls">
+                <span
+                  :if={section.previous}
+                  class={[
+                    "review-section-state-pill",
+                    "is-previous",
+                    "is-#{section.previous.status}"
+                  ]}
+                  title={"Previously #{section.previous.status} in v#{section.previous.patchset_number}"}
+                  aria-label={"Previously #{section.previous.status} in version #{section.previous.patchset_number}"}
+                >
+                  <.section_status_icon status={section.previous.status} />
+                  <span class="sr-only">
+                    Previously {section.previous.status} in v{section.previous.patchset_number}
+                  </span>
+                </span>
+
+                <.icon
+                  :if={section.previous}
+                  name="hero-chevron-right"
+                  class="review-section-transition-icon"
+                />
+
+                <div
+                  class="review-packet-section-actions"
+                  aria-label={"Decision for #{section.title}"}
+                >
+                  <%= if @current_user do %>
+                    <button
+                      :for={status <- ~w(approved denied ignored)}
+                      type="button"
+                      class={[
+                        "review-section-action",
+                        section.effective_status == status && "is-active",
+                        "is-#{status}"
+                      ]}
+                      title={section_status_label(status)}
+                      aria-label={section_status_label(status)}
+                      phx-click="set_section_status"
+                      phx-value-section_index={section.index}
+                      phx-value-status={status}
+                    >
+                      <.section_status_icon status={status} />
+                      <span class="review-section-action-label">{section_status_label(status)}</span>
+                    </button>
+                  <% else %>
+                    <span class="review-packet-section-signin">Sign in to review</span>
+                  <% end %>
+                </div>
+
+                <button
+                  type="button"
+                  class="review-packet-section-toggle"
+                  phx-click="toggle_packet_section"
+                  phx-value-section_index={section.index}
+                  aria-expanded={section_expanded?(@expanded_section_ids, section.index)}
+                  aria-controls={"packet-section-#{section.index}-body"}
+                >
+                  <span class="sr-only">Toggle {section.title}</span>
+                  <.icon name="hero-chevron-down" class="review-collapse-icon" />
+                </button>
+              </div>
+            </header>
+
+            <p
+              :if={section.summary != "" && !section_expanded?(@expanded_section_ids, section.index)}
+              class="review-packet-section-summary-text"
+            >
+              {section.summary}
+            </p>
+
+            <div
+              :if={section_expanded?(@expanded_section_ids, section.index)}
+              id={"packet-section-#{section.index}-body"}
+              class="review-packet-section-body"
+            >
+              <div class="review-packet-row-list">
+                <.packet_unit
+                  :for={unit <- packet_units(section, @hunks_by_path)}
+                  unit={unit}
+                  file_diffs={@file_diffs}
+                  selected_patchset={@selected_patchset}
+                  published_threads={@published_threads}
+                  current_user={@current_user}
+                  diff_style={@diff_style}
+                  hunks_by_path={@hunks_by_path}
+                  expanded_hunk_ids={@expanded_hunk_ids}
+                  section_title={section.title}
+                  file_labels={@file_labels}
+                />
+              </div>
             </div>
-          </header>
+          </article>
 
-          <p
-            :if={section.summary != "" && !section_expanded?(@expanded_section_ids, section.index)}
-            class="review-packet-section-summary-text"
-          >
-            {section.summary}
-          </p>
-
-          <div
-            :if={section_expanded?(@expanded_section_ids, section.index)}
-            id={"packet-section-#{section.index}-body"}
-            class="review-packet-section-body"
-          >
-            <div class="review-packet-row-list">
-              <.packet_unit
-                :for={unit <- packet_units(section, @hunks_by_path)}
-                unit={unit}
-                file_diffs={@file_diffs}
-                selected_patchset={@selected_patchset}
-                published_threads={@published_threads}
-                current_user={@current_user}
-                diff_style={@diff_style}
-                hunks_by_path={@hunks_by_path}
-                expanded_hunk_ids={@expanded_hunk_ids}
-                section_title={section.title}
-                file_labels={@file_labels}
-              />
-            </div>
-          </div>
-        </article>
-
-        <section :if={@sections == []} class="review-packet-section">
-          <h3 class="review-packet-section-title">No sections</h3>
-          <p class="review-packet-md-paragraph">This packet does not include narrative sections.</p>
-        </section>
+          <section :if={@sections == []} class="review-packet-section">
+            <h3 class="review-packet-section-title">No sections</h3>
+            <p class="review-packet-md-paragraph">This packet does not include narrative sections.</p>
+          </section>
+        </div>
       </div>
     </section>
     """
@@ -227,6 +243,183 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       progress_label: progress_label(buckets, minutes)
     }
   end
+
+  attr :nav, :map, required: true
+
+  def packet_nav(assigns) do
+    ~H"""
+    <nav id="review-packet-nav" class="review-packet-nav" aria-label="Packet outline">
+      <div class="review-packet-nav-header">
+        <span>Packet Outline</span>
+        <button
+          type="button"
+          class="review-packet-nav-hide"
+          phx-click="toggle_packet_outline"
+          title="Hide packet outline"
+          aria-label="Hide packet outline"
+        >
+          <.icon name="hero-x-mark" class="size-4" />
+        </button>
+      </div>
+
+      <div class="review-packet-nav-list">
+        <div
+          :if={@nav.paths != []}
+          id="review-packet-nav-tree"
+          class="review-packet-nav-tree"
+          phx-hook="PacketNavTree"
+          phx-update="ignore"
+          data-nav={Jason.encode!(@nav)}
+        >
+        </div>
+
+        <p :if={@nav.paths == []} class="review-packet-nav-empty">
+          No diff hunks in this packet.
+        </p>
+      </div>
+    </nav>
+    """
+  end
+
+  defp packet_nav(sections, hunks_by_path, file_labels, expanded_section_ids) do
+    file_hunk_counts = file_hunk_counts(hunks_by_path)
+
+    Enum.reduce(sections, %{paths: [], sections: [], stats: %{}, targets: %{}}, fn section, acc ->
+      section_path = nav_segment(section.title)
+      section_tree_path = directory_nav_path(section_path)
+
+      section_target = %{
+        id: "packet-section-#{section.index}",
+        section_index: section.index,
+        type: "section"
+      }
+
+      section_units = packet_units(section, hunks_by_path)
+
+      {items, paths, targets} =
+        section_units
+        |> Enum.with_index()
+        |> Enum.reduce({[], [], %{section_tree_path => section_target}}, fn {unit, unit_index},
+                                                                            {items, paths,
+                                                                             targets} ->
+          case packet_nav_unit(section_path, unit, unit_index, file_labels, file_hunk_counts) do
+            nil ->
+              {items, paths, targets}
+
+            {path, target, item} ->
+              {[item | items], [path | paths], Map.put(targets, path, target)}
+          end
+        end)
+
+      section_paths =
+        if paths == [] do
+          [section_tree_path]
+        else
+          Enum.reverse(paths)
+        end
+
+      %{
+        sections:
+          acc.sections ++
+            [
+              %{
+                path: section_tree_path,
+                title: section.title,
+                section_index: section.index,
+                expanded: section_expanded?(expanded_section_ids, section.index)
+              }
+            ],
+        paths: acc.paths ++ section_paths,
+        stats:
+          Map.merge(
+            acc.stats,
+            Map.new(
+              items,
+              &{&1.path, Map.take(&1, [:additions, :deletions, :hunk_index_label, :label])}
+            )
+          ),
+        targets:
+          acc.targets
+          |> Map.merge(targets)
+          |> Map.put(section_tree_path, section_target)
+      }
+    end)
+  end
+
+  defp packet_nav_unit(
+         section_path,
+         %{kind: :hunk_group, row_id: row_id, hunk: hunk},
+         unit_index,
+         file_labels,
+         file_hunk_counts
+       ) do
+    label =
+      [
+        hunk_nav_label(hunk, file_labels),
+        nav_hunk_index_label(hunk, file_hunk_counts)
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join(" ")
+
+    path =
+      [
+        section_path,
+        "#{nav_segment(label)} #{unit_index + 1}.packet-hunk"
+      ]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join("/")
+
+    target = %{id: row_id, section_index: section_index_from_row_id(row_id), type: "hunk"}
+
+    item = %{
+      label: hunk_nav_label(hunk, file_labels),
+      hunk_index_label: nav_hunk_index_label(hunk, file_hunk_counts),
+      path: path,
+      additions: hunk.display_additions,
+      deletions: hunk.display_deletions,
+      target: target,
+      type: "hunk"
+    }
+
+    {path, target, item}
+  end
+
+  defp packet_nav_unit(_section_path, _unit, _unit_index, _file_labels, _file_hunk_counts),
+    do: nil
+
+  defp hunk_nav_label(hunk, file_labels) do
+    Map.get(file_labels, hunk.file_path) || Path.basename(hunk.file_path || "")
+  end
+
+  defp nav_hunk_index_label(hunk, file_hunk_counts) do
+    if Map.get(file_hunk_counts, hunk.file_path, 1) > 1 do
+      nav_hunk_index(hunk)
+    end
+  end
+
+  defp nav_hunk_index(%{hunk_indices: [first | _] = indices}) when length(indices) > 1 do
+    "#{first}-#{List.last(indices)}"
+  end
+
+  defp nav_hunk_index(hunk), do: to_string(hunk.hunk_index)
+
+  defp file_hunk_counts(hunks_by_path) do
+    Map.new(hunks_by_path, fn {path, hunks} -> {path, length(hunks)} end)
+  end
+
+  defp nav_segment(value) do
+    value
+    |> to_string()
+    |> String.replace("/", "／")
+    |> String.replace(~r/[\x00-\x1F]/, " ")
+    |> String.trim()
+    |> case do
+      "" -> "Untitled"
+      segment -> segment
+    end
+  end
+
+  defp directory_nav_path(path), do: String.trim_trailing(path, "/") <> "/"
 
   defp effort_buckets(sections) do
     Enum.reduce(sections, %{approved: 0, denied: 0, ignored: 0, pending: 0}, fn section, acc ->
@@ -447,6 +640,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :expanded_hunk_ids, :any, required: true
   attr :section_title, :string, default: nil
   attr :file_label, :string, default: nil
+  attr :show_hunk_label?, :boolean, default: true
 
   def packet_row(%{row: row} = assigns) do
     assigns =
@@ -478,6 +672,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             section_index={@section_index}
             section_title={@section_title}
             file_label={@file_label}
+            show_hunk_label?={@show_hunk_label?}
           />
         </div>
       <% @kind == "hunk" -> %>
@@ -595,6 +790,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> assign(:grouped?, unit.grouped?)
       |> assign(:section_index, section_index_from_row_id(unit.row_id))
       |> assign(:file_label, Map.get(assigns.file_labels, ReviewPacket.text(row, "path")))
+      |> assign(
+        :show_hunk_label?,
+        show_hunk_label?(assigns.hunks_by_path, ReviewPacket.text(row, "path"))
+      )
 
     ~H"""
     <div id={@row_id} class="review-packet-row is-hunk" data-packet-row-ids={Enum.join(@row_ids, " ")}>
@@ -611,6 +810,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         section_title={@section_title}
         file_label={@file_label}
         grouped?={@grouped?}
+        show_hunk_label?={@show_hunk_label?}
       />
     </div>
     """
@@ -622,6 +822,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> assign(:row, row)
       |> assign(:row_id, row_id)
       |> assign(:file_label, Map.get(assigns.file_labels, ReviewPacket.text(row, "path")))
+      |> assign(
+        :show_hunk_label?,
+        show_hunk_label?(assigns.hunks_by_path, ReviewPacket.text(row, "path"))
+      )
 
     ~H"""
     <.packet_row
@@ -636,8 +840,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       expanded_hunk_ids={@expanded_hunk_ids}
       section_title={@section_title}
       file_label={@file_label}
+      show_hunk_label?={@show_hunk_label?}
     />
     """
+  end
+
+  defp show_hunk_label?(hunks_by_path, path) do
+    length(Map.get(hunks_by_path, path, [])) > 1
   end
 
   attr :hunk, :map, required: true
@@ -683,7 +892,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       @viewed? && "is-viewed",
       @partially_viewed? && "is-partially-viewed"
     ]}>
-      <header class="review-hunk-summary">
+      <header id={"#{@hunk_id}-summary"} class="review-hunk-summary" phx-hook="StickyHunkHeader">
         <button
           type="button"
           class="review-hunk-toggle"
@@ -704,6 +913,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </button>
 
         <div class="review-hunk-meta">
+          <span class="review-hunk-line-stat">
+            <.change_stat additions={@hunk.display_additions} deletions={@hunk.display_deletions} />
+          </span>
           <span
             :if={@view_state}
             class={[
@@ -813,6 +1025,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp hunk_index_label(hunk), do: "hunk #{hunk.hunk_index}"
 
   defp hunk_line_label(%{hunk_indices: [_first, _second | _rest]}), do: ""
+
+  defp hunk_line_label(%{partial_line_range?: false}), do: ""
 
   defp hunk_line_label(%{line_start: line_start, line_end: line_end})
        when is_integer(line_start) and is_integer(line_end) do

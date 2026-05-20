@@ -15,7 +15,7 @@ defmodule Reviews.ReviewHunks do
 
   def for_file(%{path: path, raw_diff: raw_diff} = file, views \\ []) do
     raw_diff
-    |> parse_hunks(path || file.old_path || "")
+    |> parse_hunks(path || file.old_path || "", file.status)
     |> Enum.map(&Map.put(&1, :viewed?, PacketHunkViews.viewed?(views, &1)))
   end
 
@@ -34,15 +34,16 @@ defmodule Reviews.ReviewHunks do
       line_end = ReviewPacket.int(row, "line_end")
       display_raw_diff = slice_hunk(hunk, line_start, line_end)
       {additions, deletions} = changed_line_stats(display_raw_diff)
+      partial_line_range? = partial_line_range?(hunk, line_start, line_end)
 
-      %{
-        hunk
-        | display_raw_diff: display_raw_diff,
-          display_additions: additions,
-          display_deletions: deletions,
-          line_start: line_start || hunk.line_start,
-          line_end: line_end || hunk.line_end
-      }
+      Map.merge(hunk, %{
+        display_raw_diff: display_raw_diff,
+        display_additions: additions,
+        display_deletions: deletions,
+        partial_line_range?: partial_line_range?,
+        line_start: line_start || hunk.line_start,
+        line_end: line_end || hunk.line_end
+      })
     end
   end
 
@@ -81,7 +82,7 @@ defmodule Reviews.ReviewHunks do
     })
   end
 
-  defp parse_hunks(raw_diff, file_path) when is_binary(raw_diff) do
+  defp parse_hunks(raw_diff, file_path, status) when is_binary(raw_diff) do
     lines = String.split(raw_diff, "\n", trim: false)
     {header_lines, rest} = Enum.split_while(lines, &(not String.starts_with?(&1, "@@ ")))
     header = Enum.join(header_lines, "\n")
@@ -92,7 +93,7 @@ defmodule Reviews.ReviewHunks do
     |> Enum.map(fn {lines, index} ->
       raw = Enum.join(header_lines ++ lines, "\n")
       {additions, deletions} = changed_line_stats(raw)
-      {line_start, line_end} = hunk_line_range(List.first(lines))
+      {line_start, line_end} = hunk_line_range(List.first(lines), status)
 
       %{
         id: hunk_dom_id(file_path, index),
@@ -114,7 +115,7 @@ defmodule Reviews.ReviewHunks do
     end)
   end
 
-  defp parse_hunks(_raw_diff, _file_path), do: []
+  defp parse_hunks(_raw_diff, _file_path, _status), do: []
 
   defp chunk_hunks(lines) do
     {chunks, current} =
@@ -161,6 +162,13 @@ defmodule Reviews.ReviewHunks do
 
   defp slice_hunk(hunk, _line_start, _line_end), do: hunk.raw_diff
 
+  defp partial_line_range?(hunk, line_start, line_end)
+       when is_integer(line_start) and is_integer(line_end) do
+    line_start != hunk.line_start || line_end != hunk.line_end
+  end
+
+  defp partial_line_range?(_hunk, _line_start, _line_end), do: false
+
   defp changed_line_stats(raw_diff) do
     Enum.reduce(String.split(raw_diff, "\n"), {0, 0}, fn line, {additions, deletions} ->
       cond do
@@ -199,8 +207,18 @@ defmodule Reviews.ReviewHunks do
     |> Enum.reject(&(&1 == ""))
   end
 
-  defp hunk_line_range(header) when is_binary(header) do
-    case Regex.run(~r/@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/, header) do
+  defp hunk_line_range(header, "deleted") when is_binary(header) do
+    hunk_line_range_with(header, ~r/@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@/)
+  end
+
+  defp hunk_line_range(header, _status) when is_binary(header) do
+    hunk_line_range_with(header, ~r/@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/)
+  end
+
+  defp hunk_line_range(_header, _status), do: {nil, nil}
+
+  defp hunk_line_range_with(header, regex) do
+    case Regex.run(regex, header) do
       [_, start, count] ->
         start = String.to_integer(start)
         count = String.to_integer(count)
@@ -214,8 +232,6 @@ defmodule Reviews.ReviewHunks do
         {nil, nil}
     end
   end
-
-  defp hunk_line_range(_), do: {nil, nil}
 
   defp fingerprint(text) do
     :crypto.hash(:sha256, text)

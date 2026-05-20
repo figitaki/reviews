@@ -16,6 +16,7 @@ defmodule Reviews.Accounts.User do
     field :username, :string
     field :avatar_url, :string
     field :email, :string
+    field :preferences, :map, default: %{}
 
     has_many :api_tokens, Reviews.Accounts.ApiToken
 

@@ -36,6 +36,18 @@ defmodule Reviews.Accounts do
     end
   end
 
+  def get_user_preference(%User{} = user, key, default \\ nil) do
+    Map.get(user.preferences || %{}, to_string(key), default)
+  end
+
+  def put_user_preference(%User{} = user, key, value) do
+    preferences = Map.put(user.preferences || %{}, to_string(key), value)
+
+    user
+    |> Ecto.Changeset.change(preferences: preferences)
+    |> Repo.update()
+  end
+
   ## API tokens
 
   @token_prefix "rev_"

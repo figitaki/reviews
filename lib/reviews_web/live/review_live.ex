@@ -30,7 +30,7 @@ defmodule ReviewsWeb.ReviewLive do
   @section_auto_open_min_hunk_loc 6
   @section_auto_open_max_hunk_loc 500
   @single_section_auto_open_line_limit 100
-  @section_expand_all_line_limit 500
+  @section_expand_all_line_limit 1000
   @section_expand_all_file_limit 25
 
   @impl true
@@ -60,6 +60,7 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:expanded_file_ids, MapSet.new())
               |> assign(:expanded_hunk_ids, MapSet.new())
               |> assign(:expanded_section_ids, MapSet.new())
+              |> assign(:show_packet_outline, packet_outline_visible?(current_user))
               |> assign_snapshot(snapshot)
 
             {:ok, socket}
@@ -147,6 +148,18 @@ defmodule ReviewsWeb.ReviewLive do
   def handle_event("select_diff_style", _params, socket), do: {:noreply, socket}
 
   @impl true
+  def handle_event("toggle_packet_outline", _params, socket) do
+    show_packet_outline = !socket.assigns.show_packet_outline
+
+    socket =
+      socket
+      |> assign(:show_packet_outline, show_packet_outline)
+      |> persist_packet_outline_preference(show_packet_outline)
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("toggle_packet_section", %{"section_index" => section_index}, socket) do
     case parse_int(section_index) do
       index when is_integer(index) ->
@@ -169,6 +182,26 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event(
+        "packet_nav_jump",
+        %{"section_index" => section_index, "target_id" => target_id},
+        socket
+      ) do
+    socket =
+      case parse_int(section_index) do
+        index when is_integer(index) ->
+          socket
+          |> assign(:expanded_section_ids, MapSet.put(socket.assigns.expanded_section_ids, index))
+          |> auto_open_section_hunks(index)
+
+        _ ->
+          socket
+      end
+
+    {:noreply, push_event(socket, "packet_nav_jump", %{id: target_id})}
+  end
+
+  @impl true
   def handle_event("toggle_file_diff", %{"file_id" => file_id}, socket) do
     case parse_int(file_id) do
       id when is_integer(id) ->
@@ -188,14 +221,27 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("toggle_hunk_diff", %{"hunk_id" => hunk_id}, socket) do
-    expanded_hunk_ids =
+    collapsing? = MapSet.member?(socket.assigns.expanded_hunk_ids, hunk_id)
+
+    socket =
       if MapSet.member?(socket.assigns.expanded_hunk_ids, hunk_id) do
-        MapSet.delete(socket.assigns.expanded_hunk_ids, hunk_id)
+        assign(
+          socket,
+          :expanded_hunk_ids,
+          MapSet.delete(socket.assigns.expanded_hunk_ids, hunk_id)
+        )
       else
-        MapSet.put(socket.assigns.expanded_hunk_ids, hunk_id)
+        assign(socket, :expanded_hunk_ids, MapSet.put(socket.assigns.expanded_hunk_ids, hunk_id))
       end
 
-    {:noreply, assign(socket, :expanded_hunk_ids, expanded_hunk_ids)}
+    socket =
+      if collapsing? do
+        scroll_to_collapsed_hunk(socket, hunk_id)
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -326,6 +372,27 @@ defmodule ReviewsWeb.ReviewLive do
 
       _ ->
         nil
+    end
+  end
+
+  defp packet_outline_visible?(nil), do: true
+
+  defp packet_outline_visible?(user) do
+    Accounts.get_user_preference(user, :packet_outline_visible, true)
+  end
+
+  defp persist_packet_outline_preference(socket, _show_packet_outline)
+       when is_nil(socket.assigns.current_user),
+       do: socket
+
+  defp persist_packet_outline_preference(socket, show_packet_outline) do
+    case Accounts.put_user_preference(
+           socket.assigns.current_user,
+           :packet_outline_visible,
+           show_packet_outline
+         ) do
+      {:ok, user} -> assign(socket, :current_user, user)
+      {:error, _changeset} -> socket
     end
   end
 
@@ -460,6 +527,8 @@ defmodule ReviewsWeb.ReviewLive do
             review={@review}
             live_action={@live_action}
             selected_patchset={@selected_patchset}
+            has_packet={has_packet && @live_action != :changes}
+            show_packet_outline={@show_packet_outline}
           />
 
           <%!-- Patchset-pushed banner --%>
@@ -488,6 +557,7 @@ defmodule ReviewsWeb.ReviewLive do
             diff_style={@diff_style}
             expanded_section_ids={@expanded_section_ids}
             expanded_hunk_ids={@expanded_hunk_ids}
+            show_packet_outline={@show_packet_outline}
           />
 
           <%!-- Body: sidebar + diff list --%>
@@ -752,10 +822,16 @@ defmodule ReviewsWeb.ReviewLive do
     hunk_id = hunk_id_for_attrs(socket, attrs)
 
     if hunk_id do
-      assign(socket, :expanded_hunk_ids, MapSet.delete(socket.assigns.expanded_hunk_ids, hunk_id))
+      socket
+      |> assign(:expanded_hunk_ids, MapSet.delete(socket.assigns.expanded_hunk_ids, hunk_id))
+      |> scroll_to_collapsed_hunk(hunk_id)
     else
       socket
     end
+  end
+
+  defp scroll_to_collapsed_hunk(socket, hunk_id) do
+    push_event(socket, "hunk_collapsed", %{id: "#{hunk_id}-summary"})
   end
 
   defp expand_hunk(socket, attrs) do

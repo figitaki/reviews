@@ -6,6 +6,8 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
   attr :review, :any, required: true
   attr :live_action, :atom, required: true
   attr :selected_patchset, :any, required: true
+  attr :has_packet, :boolean, default: false
+  attr :show_packet_outline, :boolean, default: true
 
   def revision_nav(assigns) do
     ~H"""
@@ -17,12 +19,22 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
     >
       <div class="review-revision-row">
         <div class="review-revision-copy">
-          <span class="review-revision-label">
-            Revision {@nav.selected_index} of {@nav.revision_count}
-          </span>
-          <strong class="review-revision-title">
-            v{@nav.current_revision.number}
-          </strong>
+          <div class="review-revision-copy-main">
+            <span class="review-revision-label">
+              Revision {@nav.selected_index} of {@nav.revision_count}
+            </span>
+            <strong class="review-revision-title">
+              v{@nav.current_revision.number}
+            </strong>
+          </div>
+          <button
+            :if={@has_packet && !@show_packet_outline}
+            type="button"
+            class="review-nav-button review-outline-toggle"
+            phx-click="toggle_packet_outline"
+          >
+            <.icon name="hero-book-open" class="size-4" /> Show outline
+          </button>
         </div>
 
         <div class="review-revision-controls" aria-label="Revision navigation">

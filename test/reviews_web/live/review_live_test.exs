@@ -523,6 +523,60 @@ defmodule ReviewsWeb.ReviewLiveTest do
       %{conn: conn}
     end
 
+    test "packet outline visibility is saved to the signed-in user's preferences", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Packet outline preference",
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1 +1 @@
+          -old
+          +new
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      assert has_element?(view, "#review-packet-nav")
+      refute has_element?(view, ".review-outline-toggle")
+
+      view
+      |> element("#review-packet-nav .review-packet-nav-hide")
+      |> render_click()
+
+      refute has_element?(view, "#review-packet-nav")
+      assert has_element?(view, ".review-outline-toggle", "Show outline")
+
+      author = Accounts.get_user!(author.id)
+      assert Accounts.get_user_preference(author, :packet_outline_visible, true) == false
+
+      {:ok, next_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      refute has_element?(next_view, "#review-packet-nav")
+      assert has_element?(next_view, ".review-outline-toggle", "Show outline")
+    end
+
     test "comments are visible immediately once created", %{
       conn: conn,
       author: author,
@@ -630,6 +684,50 @@ defmodule ReviewsWeb.ReviewLiveTest do
                "#packet-section-0 .review-hunk-viewed-pill",
                "Viewed"
              )
+    end
+
+    test "deleted file hunks can be marked viewed", %{conn: conn, author: author} do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Deleted packet hunk viewed",
+          raw_diff: """
+          diff --git a/lib/deleted.ex b/lib/deleted.ex
+          deleted file mode 100644
+          index 3b18e51..0000000
+          --- a/lib/deleted.ex
+          +++ /dev/null
+          @@ -1,2 +0,0 @@
+          -old_one
+          -old_two
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Deleted file",
+                "rows" => [
+                  %{"kind" => "hunk", "path" => "lib/deleted.ex", "hunk_index" => 1}
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      packet_view
+      |> element("#packet-section-0 button", "Mark Viewed")
+      |> render_click()
+
+      assert has_element?(packet_view, "#packet-section-0 .review-hunk-viewed-pill", "Viewed")
+      refute render(packet_view) =~ "Could not update hunk."
+
+      [viewed] = PacketHunkViews.list_for_review(packet_review, author)
+      assert viewed.file_path == "lib/deleted.ex"
+      assert viewed.hunk_index == 1
+      assert viewed.line_start == 1
+      assert viewed.line_end == 2
     end
 
     test "grouped packet hunks can be marked viewed and show partial state", %{
