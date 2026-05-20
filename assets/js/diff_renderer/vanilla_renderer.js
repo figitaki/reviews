@@ -14,6 +14,15 @@ import {
 
 const VIRTUAL_LINE_THRESHOLD = 1500
 const VIRTUAL_BYTE_THRESHOLD = 200 * 1024
+const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
+  :host {
+    --diffs-font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --diffs-header-font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --diffs-font-size: 13px;
+    --diffs-line-height: 20px;
+    --diffs-font-features: "liga" 0, "calt" 0;
+  }
+`
 
 function currentPierreTheme() {
   const explicit = document.documentElement.dataset.theme
@@ -216,6 +225,7 @@ export class VanillaDiffRenderer {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
+      unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS,
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
       onLineNumberClick: (props) => this.handleLineNumberClick(props),
       onTokenClick: (props) => this.handleTokenClick(props),
