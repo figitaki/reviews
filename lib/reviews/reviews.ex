@@ -252,7 +252,7 @@ defmodule Reviews.Reviews do
   @doc """
   Returns the raw chunk for a single file inside a patchset (the substring
   between two `diff --git` markers). Used by the LiveView to pass per-file
-  diff payloads to the React island so each file mounts independently.
+  diff payloads to the Pierre renderer so each file mounts independently.
   """
   @spec raw_diff_for_file(Patchset.t(), String.t()) :: String.t() | nil
   def raw_diff_for_file(%Patchset{raw_diff: nil}, _path), do: nil

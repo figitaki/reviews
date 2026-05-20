@@ -2,14 +2,11 @@ defmodule ReviewsWeb.ReviewLiveTest do
   use ReviewsWeb.ConnCase
 
   import Phoenix.LiveViewTest
-  import Ecto.Query, only: [from: 2]
 
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
   alias Reviews.Reviews, as: ReviewsCtx
-  alias Reviews.Repo
   alias Reviews.Threads
-  alias Reviews.Threads.Comment
 
   defp seed!(_) do
     {:ok, author} =
@@ -408,9 +405,9 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, ~s|#revision-nav #patchset-3.has-packet|)
     end
 
-    test "Publish review button is disabled with no drafts", %{conn: conn, review: review} do
+    test "does not render the old publish review button", %{conn: conn, review: review} do
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
-      assert has_element?(view, "#publish-review-button[disabled]")
+      refute has_element?(view, "#publish-review-button")
     end
 
     test "renders the classic diff on the changes route", %{conn: conn, author: author} do
@@ -526,13 +523,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
       %{conn: conn}
     end
 
-    test "publishing drafts marks them published and shows toast", %{
+    test "comments are visible immediately once created", %{
       conn: conn,
       author: author,
       review: review
     } do
       {:ok, _} =
-        Threads.save_draft(review, author, %{
+        Threads.publish_comment(review, author, %{
           "file_path" => "lib/foo.ex",
           "side" => "new",
           "body" => "what about :renamed?",
@@ -547,30 +544,20 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
 
-      # Publish button should be enabled with 1 draft and reflect the count.
-      refute has_element?(view, "#publish-review-button[disabled]")
-      assert render(view) =~ "Publish (1)"
+      refute has_element?(view, "#publish-review-button")
 
-      # Open the modal, then publish.
-      view |> element("#publish-review-button") |> render_click()
-      assert render(view) =~ "Overall review summary"
-
-      view |> element("button", "Publish 1 comment") |> render_click()
-
-      # Comment is now published.
       [thread] = Threads.list_published_threads(review.id)
       [comment] = thread.comments
-      assert comment.state == "published"
       assert comment.body == "what about :renamed?"
     end
 
-    test "save_draft event persists via Threads.save_draft", %{
+    test "create_comment event persists immediately via Threads.publish_comment", %{
       conn: conn,
       review: review
     } do
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
 
-      render_hook(view, "save_draft", %{
+      render_hook(view, "create_comment", %{
         "file_path" => "lib/foo.ex",
         "side" => "new",
         "body" => "from-hook",
@@ -583,10 +570,9 @@ defmodule ReviewsWeb.ReviewLiveTest do
         }
       })
 
-      seeded_drafts = Repo.all(from c in Comment, where: c.state == "draft")
-
-      assert length(seeded_drafts) == 1
-      assert hd(seeded_drafts).body == "from-hook"
+      assert [thread] = Threads.list_published_threads(review.id)
+      assert [comment] = thread.comments
+      assert comment.body == "from-hook"
     end
 
     test "hunk viewed state is shared between packet and changes views", %{

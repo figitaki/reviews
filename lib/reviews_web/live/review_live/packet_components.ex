@@ -15,7 +15,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :hunks_by_path, :map, required: true
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
-  attr :drafts, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
   attr :expanded_section_ids, :any, required: true
@@ -148,7 +147,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 file_diffs={@file_diffs}
                 selected_patchset={@selected_patchset}
                 published_threads={@published_threads}
-                drafts={@drafts}
                 current_user={@current_user}
                 diff_style={@diff_style}
                 hunks_by_path={@hunks_by_path}
@@ -443,7 +441,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :file_diffs, :list, required: true
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
-  attr :drafts, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
   attr :hunks_by_path, :map, required: true
@@ -475,7 +472,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             file={@file}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
-            drafts={@drafts}
             current_user={@current_user}
             diff_style={@diff_style}
             expanded_hunk_ids={@expanded_hunk_ids}
@@ -579,7 +575,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :file_diffs, :list, required: true
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
-  attr :drafts, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
   attr :hunks_by_path, :map, required: true
@@ -609,7 +604,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         file={@file}
         selected_patchset={@selected_patchset}
         published_threads={@published_threads}
-        drafts={@drafts}
         current_user={@current_user}
         diff_style={@diff_style}
         expanded_hunk_ids={@expanded_hunk_ids}
@@ -636,7 +630,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       file_diffs={@file_diffs}
       selected_patchset={@selected_patchset}
       published_threads={@published_threads}
-      drafts={@drafts}
       current_user={@current_user}
       diff_style={@diff_style}
       hunks_by_path={@hunks_by_path}
@@ -652,7 +645,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :file, :map, required: true
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
-  attr :drafts, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
   attr :expanded_hunk_ids, :any, required: true
@@ -761,11 +753,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           <span :if={@current_user && @partially_viewed?} class="review-hunk-partial-pill">
             Partially viewed
           </span>
-          <span :if={!@current_user && @viewed?} class="review-hunk-viewed-pill">Viewed</span>
-          <span :if={!@current_user && @partially_viewed?} class="review-hunk-partial-pill">
-            Partially viewed
-          </span>
-          <span :if={!@current_user} class="review-hunk-signin">Sign in to save viewed state</span>
         </div>
       </header>
 
@@ -782,7 +769,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             data-patchset-number={@selected_patchset && @selected_patchset.number}
             data-raw-diff={@hunk.display_raw_diff}
             data-threads={threads_json(@published_threads, @file.path)}
-            data-drafts={drafts_json(@drafts, @file.path, @current_user)}
             data-signed-in={if @current_user, do: "true", else: "false"}
             data-diff-style={@diff_style}
           >
@@ -996,10 +982,5 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp threads_json(threads, file_path) do
     snapshot = %{published_threads: threads}
     Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
-  end
-
-  defp drafts_json(drafts, file_path, viewer) do
-    snapshot = %{drafts: drafts, viewer: viewer}
-    Jason.encode!(ReviewView.draft_payloads_for_file(snapshot, file_path))
   end
 end

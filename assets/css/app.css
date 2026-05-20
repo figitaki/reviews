@@ -1401,7 +1401,6 @@ details[open] > summary .review-collapse-icon,
 
 .review-hunk-viewed-pill,
 .review-hunk-partial-pill,
-.review-hunk-signin,
 .review-hunk-progress {
   color: var(--review-muted);
   font-size: 12px;
@@ -1737,6 +1736,10 @@ details[open] > summary .review-collapse-icon,
 @media (max-width: 768px) {
   .review-page {
     --review-main-nav-h: 64px;
+  }
+
+  .review-hunk-summary {
+    position: static;
   }
 
   .review-packet-row.is-markdown {

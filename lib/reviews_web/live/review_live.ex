@@ -4,9 +4,9 @@ defmodule ReviewsWeb.ReviewLive do
   commenting requires a signed-in user (enforced at event-handler time).
 
   Layout:
-    * sticky top bar: title + author + patchset selector + publish button
+    * sticky top bar: title + author + patchset selector
     * sticky left sidebar: file tree with +/- counts
-    * main column: one React island per file, mounted by `DiffRenderer`
+    * main column: one vanilla Pierre renderer per file, mounted by `DiffRenderer`
 
   PubSub:
     * subscribes to `"review:<slug>"`
@@ -55,8 +55,6 @@ defmodule ReviewsWeb.ReviewLive do
               socket
               |> assign(:page_title, review.title)
               |> assign(:current_user, current_user)
-              |> assign(:show_publish_modal, false)
-              |> assign(:summary_body, "")
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
               |> assign(:expanded_file_ids, MapSet.new())
@@ -125,21 +123,6 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   def handle_event("set_section_status", _params, socket), do: {:noreply, socket}
-
-  @impl true
-  def handle_event("open_publish_modal", _params, socket) do
-    {:noreply, assign(socket, :show_publish_modal, true)}
-  end
-
-  @impl true
-  def handle_event("close_publish_modal", _params, socket) do
-    {:noreply, assign(socket, :show_publish_modal, false)}
-  end
-
-  @impl true
-  def handle_event("update_summary", %{"summary" => body}, socket) do
-    {:noreply, assign(socket, :summary_body, body)}
-  end
 
   @impl true
   def handle_event("dismiss_banner", _params, socket) do
@@ -226,7 +209,7 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_event("save_draft", params, socket) do
+  def handle_event("create_comment", params, socket) do
     require Logger
 
     case socket.assigns.current_user do
@@ -234,55 +217,13 @@ defmodule ReviewsWeb.ReviewLive do
         {:noreply, put_flash(socket, :error, "Sign in to leave a comment.")}
 
       author ->
-        case Threads.save_draft(socket.assigns.review, author, params) do
+        case Threads.publish_comment(socket.assigns.review, author, params) do
           {:ok, _} ->
             {:noreply, push_threads_for_file(socket, params["file_path"])}
 
           {:error, reason} ->
-            Logger.warning("save_draft failed: #{inspect(reason)}")
-            {:noreply, put_flash(socket, :error, "Could not save draft.")}
-        end
-    end
-  end
-
-  @impl true
-  def handle_event("delete_draft", %{"comment_id" => comment_id}, socket) do
-    case {socket.assigns.current_user, parse_int(comment_id)} do
-      {nil, _} ->
-        {:noreply, socket}
-
-      {_, nil} ->
-        {:noreply, socket}
-
-      {author, id} ->
-        _ = Threads.delete_draft(id, author)
-        # We don't know which file the draft belonged to without re-querying,
-        # so push a refresh to every file in the current patchset.
-        {:noreply, push_threads_for_all_files(socket)}
-    end
-  end
-
-  @impl true
-  def handle_event("publish_review", _params, socket) do
-    case socket.assigns.current_user do
-      nil ->
-        {:noreply, put_flash(socket, :error, "Sign in to publish your review.")}
-
-      author ->
-        opts = [summary: socket.assigns.summary_body]
-
-        case Threads.publish_all_drafts(socket.assigns.review, author, opts) do
-          {:ok, _} ->
-            {:noreply,
-             socket
-             |> assign(:show_publish_modal, false)
-             |> assign(:summary_body, "")
-             |> put_flash(:info, "Review published.")
-             |> refresh_snapshot!()
-             |> push_threads_for_all_files()}
-
-          {:error, _reason} ->
-            {:noreply, put_flash(socket, :error, "Could not publish.")}
+            Logger.warning("create_comment failed: #{inspect(reason)}")
+            {:noreply, put_flash(socket, :error, "Could not save comment.")}
         end
     end
   end
@@ -332,8 +273,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp threads_for_file_payload(socket, file_path) do
     %{
-      threads: ReviewView.thread_payloads_for_file(socket.assigns.review_snapshot, file_path),
-      drafts: ReviewView.draft_payloads_for_file(socket.assigns.review_snapshot, file_path)
+      threads: ReviewView.thread_payloads_for_file(socket.assigns.review_snapshot, file_path)
     }
   end
 
@@ -456,20 +396,6 @@ defmodule ReviewsWeb.ReviewLive do
             </script>
           </div>
 
-          <button
-            id="publish-review-button"
-            type="button"
-            class="review-button review-button-primary"
-            phx-click="open_publish_modal"
-            disabled={@drafts == []}
-          >
-            <%= if @drafts == [] do %>
-              Publish
-            <% else %>
-              Publish ({length(@drafts)})
-            <% end %>
-          </button>
-
           <.user_menu current_user={@current_user} />
         </:actions>
 
@@ -508,7 +434,7 @@ defmodule ReviewsWeb.ReviewLive do
               :if={!has_packet && (@review.description || @file_diffs != [])}
               class="review-description"
             >
-              {@review.description || review_summary(@file_diffs, @drafts)}
+              {@review.description || review_summary(@file_diffs)}
             </p>
             <div :if={@selected_patchset} class="review-header-meta">
               <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
@@ -558,7 +484,6 @@ defmodule ReviewsWeb.ReviewLive do
             hunks_by_path={@hunks_by_path}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
-            drafts={@drafts}
             current_user={@current_user}
             diff_style={@diff_style}
             expanded_section_ids={@expanded_section_ids}
@@ -572,7 +497,6 @@ defmodule ReviewsWeb.ReviewLive do
             open_threads_by_op={@open_threads_by_op}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
-            drafts={@drafts}
             current_user={@current_user}
             diff_style={@diff_style}
             expanded_file_ids={@expanded_file_ids}
@@ -581,81 +505,6 @@ defmodule ReviewsWeb.ReviewLive do
           />
         </div>
       </.ds_shell>
-
-      <%!-- Publish modal (Daisy) --%>
-      <dialog id="publish-modal" class={["modal", @show_publish_modal && "modal-open"]}>
-        <div class="modal-box review-modal max-w-2xl">
-          <h3 class="review-modal-title">Publish Review</h3>
-          <p class="review-description mt-1">
-            {length(@drafts)} draft{if length(@drafts) != 1, do: "s"} will go live for everyone with the link.
-          </p>
-
-          <ul id="draft-list" class="my-4 space-y-2 max-h-72 overflow-y-auto">
-            <li
-              :for={draft <- @drafts}
-              id={"draft-#{draft.comment.id}"}
-              class="review-draft-item flex gap-2 items-start"
-            >
-              <div class="flex-1 min-w-0">
-                <p class="rev-file-path truncate" translate="no">
-                  {draft.thread.file_path}<span :if={anchor_line_hint(draft.thread)}>:{anchor_line_hint(draft.thread)}</span>
-                </p>
-                <p class="mt-1 whitespace-pre-wrap">{draft.comment.body}</p>
-              </div>
-              <button
-                type="button"
-                class="review-button review-button-ghost"
-                phx-click="delete_draft"
-                phx-value-comment_id={draft.comment.id}
-              >
-                Remove
-              </button>
-            </li>
-            <li :if={@drafts == []} class="rev-empty">
-              No drafts yet.
-            </li>
-          </ul>
-
-          <form phx-change="update_summary">
-            <label class="form-control">
-              <span class="review-label mb-2">Overall review summary (optional)</span>
-              <textarea
-                id="summary-textarea"
-                name="summary"
-                rows="3"
-                class="review-textarea"
-                placeholder="Optional summary that ships with the published drafts…"
-              >{@summary_body}</textarea>
-            </label>
-          </form>
-
-          <div class="modal-action">
-            <button
-              type="button"
-              class="review-button review-button-ghost"
-              phx-click="close_publish_modal"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="review-button review-button-primary"
-              phx-click="publish_review"
-              disabled={@drafts == []}
-            >
-              Publish {length(@drafts)} comment{if length(@drafts) != 1, do: "s"}
-            </button>
-          </div>
-        </div>
-        <button
-          type="button"
-          class="modal-backdrop"
-          phx-click="close_publish_modal"
-          aria-label="Close dialog"
-        >
-          <span class="sr-only">Close</span>
-        </button>
-      </dialog>
     </div>
     """
   end
@@ -704,11 +553,10 @@ defmodule ReviewsWeb.ReviewLive do
     """
   end
 
-  defp review_summary(file_diffs, drafts) do
+  defp review_summary(file_diffs) do
     file_count = length(file_diffs)
-    draft_count = length(drafts)
 
-    "#{file_count} changed #{plural(file_count, "file")} · #{draft_count} #{plural(draft_count, "draft")}"
+    "#{file_count} changed #{plural(file_count, "file")}"
   end
 
   defp plural(1, word), do: word
@@ -991,9 +839,6 @@ defmodule ReviewsWeb.ReviewLive do
   defp blank_to_nil(value) when value in ["", nil], do: nil
   defp blank_to_nil(value), do: value
 
-  defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
-  defp anchor_line_hint(_), do: nil
-
   defp assign_snapshot(socket, snapshot) do
     previous_patchset_id =
       socket.assigns[:selected_patchset] && socket.assigns.selected_patchset.id
@@ -1033,7 +878,6 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:expanded_section_ids, expanded_section_ids)
     |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
-    |> assign(:drafts, snapshot.drafts)
     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
   end
 

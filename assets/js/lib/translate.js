@@ -1,7 +1,7 @@
 // Translation between server-side `side` ("old" | "new") and the diff library's
 // `annotationSide` ("deletions" | "additions"). The translator runs exactly
-// twice per round-trip — once when grouping incoming threads/drafts into
-// line annotations, once when shipping a save_draft payload back — and never
+// twice per round-trip — once when grouping incoming threads into line
+// annotations, once when shipping a create_comment payload back — and never
 // leaks into bubble components or pushEvent payloads.
 
 import { Anchor, Annotation } from "../schemas.js"
@@ -16,21 +16,19 @@ export const annotationSideToSide = (side) =>
 const annotationKey = (item) =>
   `${sideToAnnotationSide(item.side)}:${item.anchor.line_number_hint}`
 
-// (Thread[], Draft[]) -> Annotation[]
-// Groups threads and drafts by (annotationSide, lineNumber) so PatchDiff
-// can attach them to the right rendered line via lineAnnotations.
-export function threadsAndDraftsToAnnotations(threads, drafts) {
+// Thread[] -> Annotation[]
+// Groups threads by (annotationSide, lineNumber) so Pierre Diffs can attach
+// them to the right rendered line via lineAnnotations.
+export function threadsToAnnotations(threads) {
   const threadGroups = groupBy(threads, annotationKey)
-  const draftGroups = groupBy(drafts, annotationKey)
 
-  return [...keyUnion(threadGroups, draftGroups)].map((key) => {
+  return [...keyUnion(threadGroups)].map((key) => {
     const [side, lineNumber] = key.split(":")
     return Annotation.parse({
       side,
       lineNumber: Number(lineNumber),
       metadata: {
         threads: threadGroups.get(key) ?? [],
-        drafts: draftGroups.get(key) ?? [],
       },
     })
   })
@@ -39,7 +37,7 @@ export function threadsAndDraftsToAnnotations(threads, drafts) {
 // composerToAnchor(composer) -> Anchor
 // Builds the wire-format `thread_anchor` from the composer's local state,
 // branching on `composer.kind`. Token-range composers carry the substring
-// offsets reported by <PatchDiff>'s onTokenClick; line composers just pin
+// offsets reported by the diff renderer's onTokenClick; line composers just pin
 // to the line number. `Anchor.parse(...)` runs as a tripwire — if the
 // composer state somehow falls outside the schema (missing selection_text
 // on a token composer, etc.) we fail loudly here instead of sending bogus

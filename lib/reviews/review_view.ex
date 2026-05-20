@@ -25,7 +25,6 @@ defmodule Reviews.ReviewView do
           packet_hunk_views: [map()],
           packet_section_decisions: [map()],
           published_threads: [map()],
-          drafts: [map()],
           viewer: User.t() | nil
         }
 
@@ -63,12 +62,6 @@ defmodule Reviews.ReviewView do
     threads
     |> Enum.filter(&(&1.file_path == file_path))
     |> Enum.map(&thread_to_payload/1)
-  end
-
-  def draft_payloads_for_file(%{drafts: drafts, viewer: viewer}, file_path) do
-    drafts
-    |> Enum.filter(&(&1.thread.file_path == file_path))
-    |> Enum.map(&draft_to_payload(&1, viewer))
   end
 
   @doc """
@@ -114,13 +107,9 @@ defmodule Reviews.ReviewView do
       packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
       published_threads: Threads.list_published_threads(review.id),
-      drafts: list_drafts(review, viewer),
       viewer: viewer
     }
   end
-
-  defp list_drafts(_review, nil), do: []
-  defp list_drafts(review, %User{} = viewer), do: Threads.list_drafts_for(review, viewer)
 
   defp file_diff_meta(_files, nil), do: []
 
@@ -187,20 +176,6 @@ defmodule Reviews.ReviewView do
             updated_at: encode_dt(c.updated_at)
           }
         end)
-    }
-  end
-
-  defp draft_to_payload(%{thread: thread, comment: comment}, viewer) do
-    %{
-      id: comment.id,
-      thread_id: thread.id,
-      file_path: thread.file_path,
-      side: thread.side,
-      anchor: thread.anchor,
-      body: comment.body,
-      author: user_to_payload(viewer),
-      inserted_at: encode_dt(comment.inserted_at),
-      updated_at: encode_dt(comment.updated_at)
     }
   end
 

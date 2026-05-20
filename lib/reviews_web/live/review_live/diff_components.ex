@@ -10,7 +10,6 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
   attr :open_threads_by_op, :list, required: true
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
-  attr :drafts, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
   attr :expanded_file_ids, :any, required: true
@@ -100,7 +99,6 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
             file={fd}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
-            drafts={@drafts}
             current_user={@current_user}
             diff_style={@diff_style}
             expanded_hunk_ids={@expanded_hunk_ids}

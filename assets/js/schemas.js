@@ -1,11 +1,11 @@
 // Wire-format contracts for the Reviews diff renderer.
 //
-// Mirrors `lib/reviews/review_view.ex` (thread_to_payload / draft_to_payload)
-// and the `save_draft` / `delete_draft` LiveView events. Validation happens at
-// every boundary the JS island sees: the per-file `data-threads` / `data-drafts`
-// JSON read on mount, the `threads_updated:<file>` server-pushed payloads, and
-// the pushEvent payloads we send back. Wire-format drift fails loudly here
-// rather than silently mis-rendering.
+// Mirrors `lib/reviews/review_view.ex` (thread_to_payload) and the
+// `create_comment` LiveView event. Validation happens at every boundary the JS
+// island sees: the per-file `data-threads` JSON read on mount, the
+// `threads_updated:<file>` server-pushed payloads, and the pushEvent payloads
+// we send back. Wire-format drift fails loudly here rather than silently
+// mis-rendering.
 
 import { z } from "zod"
 
@@ -63,21 +63,7 @@ export const Thread = z.object({
   comments: z.array(Comment),
 })
 
-export const Draft = z.object({
-  id: z.number(),
-  thread_id: z.number().nullable(),
-  file_path: z.string(),
-  side: Side,
-  anchor: Anchor,
-  body: z.string(),
-  author: Author,
-  inserted_at: z.string().nullable().optional(),
-  updated_at: z.string().nullable().optional(),
-})
-
-// Outgoing pushEvent payloads — server-side LiveView is authoritative for
-// these shapes (see Reviews.Threads.save_draft / delete_draft).
-export const SaveDraftPayload = z.object({
+export const CreateCommentPayload = z.object({
   file_path: z.string(),
   side: Side,
   body: z.string().min(1),
@@ -86,12 +72,8 @@ export const SaveDraftPayload = z.object({
   line_text: z.string().optional(),
 })
 
-export const DeleteDraftPayload = z.object({
-  comment_id: z.number(),
-})
-
 // Client-internal annotation shape — NOT a wire format. This is what we feed
-// PatchDiff via `lineAnnotations`. `side` is the library's terminology
+// Pierre Diffs via `lineAnnotations`. `side` is the library's terminology
 // (additions/deletions); see `lib/translate.js` for the translation.
 export const AnnotationSide = z.enum(["additions", "deletions"])
 
@@ -100,6 +82,5 @@ export const Annotation = z.object({
   lineNumber: z.number().int().positive(),
   metadata: z.object({
     threads: z.array(Thread).default([]),
-    drafts: z.array(Draft).default([]),
   }),
 })

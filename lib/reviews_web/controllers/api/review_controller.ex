@@ -107,7 +107,7 @@ defmodule ReviewsWeb.Api.ReviewController do
           %{
             body: c.body,
             author: author_username,
-            published_at: c.published_at
+            inserted_at: c.inserted_at
           }
         end)
     }
