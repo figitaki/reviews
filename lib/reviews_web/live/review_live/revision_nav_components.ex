@@ -19,12 +19,14 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
     >
       <div class="review-revision-row">
         <div class="review-revision-copy">
-          <span class="review-revision-label">
-            Revision {@nav.selected_index} of {@nav.revision_count}
-          </span>
-          <strong class="review-revision-title">
-            v{@nav.current_revision.number}
-          </strong>
+          <div class="review-revision-copy-main">
+            <span class="review-revision-label">
+              Revision {@nav.selected_index} of {@nav.revision_count}
+            </span>
+            <strong class="review-revision-title">
+              v{@nav.current_revision.number}
+            </strong>
+          </div>
           <button
             :if={@has_packet && !@show_packet_outline}
             type="button"

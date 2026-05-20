@@ -368,9 +368,14 @@
 .review-revision-copy {
   display: flex;
   min-width: 0;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 3px 10px;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-revision-copy-main {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
 }
 
 .review-revision-label {
@@ -392,6 +397,8 @@
 }
 
 .review-outline-toggle {
+  align-self: center;
+  flex: 0 0 auto;
   min-height: 26px;
   padding-inline: 8px;
 }
@@ -1122,6 +1129,7 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-revision-copy {
+    flex-wrap: wrap;
     gap: 8px;
   }
 

@@ -28,9 +28,9 @@ const treeStyles = `
     --trees-fg-override: var(--review-muted);
     --trees-fg-muted-override: var(--review-faint);
     --trees-accent-override: var(--review-blue, #7bb7ff);
-    --trees-selected-bg-override: color-mix(in oklab, var(--review-text) 10%, transparent);
-    --trees-selected-fg-override: var(--review-text);
-    --trees-selected-focused-border-color-override: var(--review-blue, #7bb7ff);
+    --trees-selected-bg-override: transparent;
+    --trees-selected-fg-override: var(--review-muted);
+    --trees-selected-focused-border-color-override: transparent;
     --trees-focus-ring-color-override: var(--review-blue, #7bb7ff);
     --trees-font-family-override: inherit;
     --trees-font-size-override: 12px;
@@ -50,6 +50,10 @@ const treeStyles = `
 
   button[data-type="item"]:hover {
     border-color: var(--review-line);
+  }
+
+  button[data-type="item"][aria-selected="true"] {
+    background: transparent;
   }
 
   button[data-item-type="folder"] [data-item-section="content"] {
@@ -134,7 +138,6 @@ const PacketNavTree = {
   mounted() {
     this.pathsSignature = null
     this.suppressExpansionEvents = false
-    this.selectionJump = null
     this.updateTree()
   },
 
@@ -212,11 +215,6 @@ const PacketNavTree = {
         return text ? {text, title: "Lines changed"} : null
       },
       unsafeCSS: treeStyles,
-      onSelectionChange: selectedPaths => {
-        const path = selectedPaths[selectedPaths.length - 1]
-        this.selectionJump = {path, at: window.performance.now()}
-        this.jumpToPath(path)
-      },
     })
 
     this.unsubscribe = this.tree.subscribe(() => {
@@ -248,18 +246,35 @@ const PacketNavTree = {
     const root = this.tree?.getFileTreeContainer()?.shadowRoot
     if (!root) return
 
+    const onPointerDown = event => {
+      if (event.button !== 0) return
+      if (!event.target?.closest?.('[data-type="item"]')) return
+
+      event.preventDefault()
+    }
+
     const onClick = event => {
       const row = event.target?.closest?.('[data-type="item"]')
       const path = row?.getAttribute?.("data-item-path")
-      const now = window.performance.now()
+      if (!path) return
 
-      if (this.selectionJump?.path === path && now - this.selectionJump.at < 50) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+
+      if (row.getAttribute("data-item-type") === "folder") {
+        this.tree?.getItem(path)?.toggle?.()
+        return
+      }
 
       this.jumpToPath(path)
     }
 
-    root.addEventListener("click", onClick)
-    this.detachTreeClick = () => root.removeEventListener("click", onClick)
+    root.addEventListener("pointerdown", onPointerDown, true)
+    root.addEventListener("click", onClick, true)
+    this.detachTreeClick = () => {
+      root.removeEventListener("pointerdown", onPointerDown, true)
+      root.removeEventListener("click", onClick, true)
+    }
   },
 
   jumpToPath(path) {

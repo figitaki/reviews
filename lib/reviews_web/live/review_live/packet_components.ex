@@ -162,7 +162,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                   file_diffs={@file_diffs}
                   selected_patchset={@selected_patchset}
                   published_threads={@published_threads}
-                  drafts={@drafts}
                   current_user={@current_user}
                   diff_style={@diff_style}
                   hunks_by_path={@hunks_by_path}

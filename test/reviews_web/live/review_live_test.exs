@@ -523,6 +523,60 @@ defmodule ReviewsWeb.ReviewLiveTest do
       %{conn: conn}
     end
 
+    test "packet outline visibility is saved to the signed-in user's preferences", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Packet outline preference",
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1 +1 @@
+          -old
+          +new
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      assert has_element?(view, "#review-packet-nav")
+      refute has_element?(view, ".review-outline-toggle")
+
+      view
+      |> element("#review-packet-nav .review-packet-nav-hide")
+      |> render_click()
+
+      refute has_element?(view, "#review-packet-nav")
+      assert has_element?(view, ".review-outline-toggle", "Show outline")
+
+      author = Accounts.get_user!(author.id)
+      assert Accounts.get_user_preference(author, :packet_outline_visible, true) == false
+
+      {:ok, next_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      refute has_element?(next_view, "#review-packet-nav")
+      assert has_element?(next_view, ".review-outline-toggle", "Show outline")
+    end
+
     test "comments are visible immediately once created", %{
       conn: conn,
       author: author,

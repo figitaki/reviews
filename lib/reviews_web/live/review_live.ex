@@ -60,7 +60,7 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:expanded_file_ids, MapSet.new())
               |> assign(:expanded_hunk_ids, MapSet.new())
               |> assign(:expanded_section_ids, MapSet.new())
-              |> assign(:show_packet_outline, true)
+              |> assign(:show_packet_outline, packet_outline_visible?(current_user))
               |> assign_snapshot(snapshot)
 
             {:ok, socket}
@@ -149,7 +149,14 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("toggle_packet_outline", _params, socket) do
-    {:noreply, assign(socket, :show_packet_outline, !socket.assigns.show_packet_outline)}
+    show_packet_outline = !socket.assigns.show_packet_outline
+
+    socket =
+      socket
+      |> assign(:show_packet_outline, show_packet_outline)
+      |> persist_packet_outline_preference(show_packet_outline)
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -365,6 +372,27 @@ defmodule ReviewsWeb.ReviewLive do
 
       _ ->
         nil
+    end
+  end
+
+  defp packet_outline_visible?(nil), do: true
+
+  defp packet_outline_visible?(user) do
+    Accounts.get_user_preference(user, :packet_outline_visible, true)
+  end
+
+  defp persist_packet_outline_preference(socket, _show_packet_outline)
+       when is_nil(socket.assigns.current_user),
+       do: socket
+
+  defp persist_packet_outline_preference(socket, show_packet_outline) do
+    case Accounts.put_user_preference(
+           socket.assigns.current_user,
+           :packet_outline_visible,
+           show_packet_outline
+         ) do
+      {:ok, user} -> assign(socket, :current_user, user)
+      {:error, _changeset} -> socket
     end
   end
 
