@@ -632,6 +632,50 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
     end
 
+    test "deleted file hunks can be marked viewed", %{conn: conn, author: author} do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Deleted packet hunk viewed",
+          raw_diff: """
+          diff --git a/lib/deleted.ex b/lib/deleted.ex
+          deleted file mode 100644
+          index 3b18e51..0000000
+          --- a/lib/deleted.ex
+          +++ /dev/null
+          @@ -1,2 +0,0 @@
+          -old_one
+          -old_two
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Deleted file",
+                "rows" => [
+                  %{"kind" => "hunk", "path" => "lib/deleted.ex", "hunk_index" => 1}
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      packet_view
+      |> element("#packet-section-0 button", "Mark Viewed")
+      |> render_click()
+
+      assert has_element?(packet_view, "#packet-section-0 .review-hunk-viewed-pill", "Viewed")
+      refute render(packet_view) =~ "Could not update hunk."
+
+      [viewed] = PacketHunkViews.list_for_review(packet_review, author)
+      assert viewed.file_path == "lib/deleted.ex"
+      assert viewed.hunk_index == 1
+      assert viewed.line_start == 1
+      assert viewed.line_end == 2
+    end
+
     test "grouped packet hunks can be marked viewed and show partial state", %{
       conn: conn,
       author: author

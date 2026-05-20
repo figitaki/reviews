@@ -25,19 +25,127 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/reviews"
 import topbar from "../vendor/topbar"
 import DiffRenderer from "./hooks/diff_renderer"
+import PacketNavTree from "./hooks/packet_nav_tree"
+import StickyHunkHeader from "./hooks/sticky_hunk_header"
 import StickyProse from "./hooks/sticky_prose"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, DiffRenderer, StickyProse},
+  hooks: {...colocatedHooks, DiffRenderer, PacketNavTree, StickyHunkHeader, StickyProse},
 })
 
 // Show progress bar on live navigation and form submits
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
+
+const cssPx = (el, property) => {
+  const styles = window.getComputedStyle(el)
+  const value = Number.parseFloat(styles.getPropertyValue(property) || styles[property])
+  return Number.isFinite(value) ? value : 0
+}
+
+const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+let scrollAnimationFrame = null
+
+const scrollToTop = top => {
+  if (scrollAnimationFrame) window.cancelAnimationFrame(scrollAnimationFrame)
+
+  if (prefersReducedMotion()) {
+    window.scrollTo({top, behavior: "auto"})
+    return
+  }
+
+  const start = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0
+  const distance = top - start
+
+  if (Math.abs(distance) < 2) {
+    window.scrollTo({top, behavior: "auto"})
+    return
+  }
+
+  const duration = Math.min(220, Math.max(120, Math.abs(distance) * 0.18))
+  const startedAt = window.performance.now()
+
+  const tick = now => {
+    const progress = Math.min(1, (now - startedAt) / duration)
+    const eased = 1 - Math.pow(1 - progress, 3)
+
+    window.scrollTo({top: start + distance * eased, behavior: "auto"})
+
+    if (progress < 1) {
+      scrollAnimationFrame = window.requestAnimationFrame(tick)
+    } else {
+      scrollAnimationFrame = null
+    }
+  }
+
+  scrollAnimationFrame = window.requestAnimationFrame(tick)
+}
+
+const targetScrollOffset = target => {
+  const hunkHeader = target.matches(".review-hunk-summary")
+    ? target
+    : target.querySelector?.(".review-hunk-summary") || target.closest(".review-hunk-card")?.querySelector(".review-hunk-summary")
+
+  if (hunkHeader) return cssPx(hunkHeader, "top") + 8
+
+  const scrollMarginTop = Number.parseFloat(window.getComputedStyle(target).scrollMarginTop)
+  if (Number.isFinite(scrollMarginTop) && scrollMarginTop > 0) return scrollMarginTop
+
+  const reviewPage = target.closest(".review-page") || document.documentElement
+
+  if (target.closest(".review-packet-section")) return cssPx(reviewPage, "--review-main-nav-h") + 8
+
+  return 16
+}
+
+const scrollToReviewTarget = (target, {highlight = false} = {}) => {
+  if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1")
+
+  const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0
+  const top = Math.max(0, target.getBoundingClientRect().top + scrollTop - targetScrollOffset(target))
+
+  scrollToTop(top)
+  target.focus({preventScroll: true})
+
+  if (!highlight) return
+
+  target.classList.remove("is-packet-nav-target")
+  void target.offsetWidth
+  target.classList.add("is-packet-nav-target")
+  window.setTimeout(() => target.classList.remove("is-packet-nav-target"), 1200)
+}
+
+const scrollToReviewTargetId = (id, options = {}, attempts = 12) => {
+  const target = document.getElementById(id)
+
+  if (target) {
+    scrollToReviewTarget(target, options)
+    return
+  }
+
+  if (attempts <= 0) return
+
+  window.requestAnimationFrame(() => scrollToReviewTargetId(id, options, attempts - 1))
+}
+
+window.addEventListener("phx:packet_nav_jump", ({detail}) => {
+  if (!detail?.id) return
+
+  window.requestAnimationFrame(() => scrollToReviewTargetId(detail.id, {highlight: true}))
+})
+
+window.addEventListener("phx:hunk_collapsed", ({detail}) => {
+  if (!detail?.id) return
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => scrollToReviewTargetId(detail.id))
+  })
+})
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
