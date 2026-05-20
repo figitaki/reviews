@@ -95,7 +95,7 @@ defmodule Reviews.DesignSystem do
 
   @states [
     %{icon: "hero-document-magnifying-glass", title: "Empty", body: "No files in this patchset."},
-    %{icon: "hero-wifi", title: "Offline", body: "Keep drafts local until LiveView reconnects."},
+    %{icon: "hero-wifi", title: "Offline", body: "Reconnect before posting comments."},
     %{
       icon: "hero-lock-closed",
       title: "Read only",

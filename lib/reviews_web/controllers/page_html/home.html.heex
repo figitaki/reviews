@@ -14,7 +14,7 @@
         <.ds_page_header
           eyebrow="CLI distribution"
           title="Reviews Turns Any Git Diff Into A Shareable Review."
-          description="Install the CLI, push a branch, and get a review URL with patchsets, review packets, and draft comments kept together for humans and agents."
+          description="Install the CLI, push a branch, and get a review URL with patchsets, review packets, and code comments kept together for humans and agents."
         >
           <:actions>
             <.link navigate={~p"/r/demo-review"} class="ds-button is-primary">
@@ -100,10 +100,10 @@
                   <.icon name="hero-chat-bubble-left-right" class="size-5" />
                 </span>
                 <div>
-                  <h3>Draft Comments</h3>
+                  <h3>Inline Comments</h3>
                   <p>
-                    Keep reviewer notes private until the batch is ready, then publish the review
-                    as one coherent pass.
+                    Leave focused comments on changed lines or tokens as you review; every comment
+                    is visible immediately to anyone with the link.
                   </p>
                 </div>
               </div>
@@ -150,7 +150,7 @@
                     Push the current branch, open the review URL, inspect the diff and packet,
                   </div>
                   <div>
-                    leave draft comments, then publish the review when the pass is complete.
+                    leave comments on the code, then push follow-up patchsets as needed.
                   </div>
                 </div>
               </div>

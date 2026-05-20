@@ -46,7 +46,7 @@ defmodule Reviews.ReviewViewTest do
     %{review: review, ps1: ps1, ps2: ps2}
   end
 
-  defp draft_params(body) do
+  defp comment_params(body) do
     %{
       "file_path" => "foo",
       "side" => "new",
@@ -70,7 +70,6 @@ defmodule Reviews.ReviewViewTest do
     assert snapshot.review.id == review.id
     assert snapshot.selected_patchset.id == ps2.id
     assert length(snapshot.patchsets) == 2
-    assert snapshot.drafts == []
 
     assert [%{path: "foo", additions: 1, deletions: 1, raw_diff: raw_diff}] =
              snapshot.file_diffs
@@ -91,29 +90,20 @@ defmodule Reviews.ReviewViewTest do
     refute raw_diff =~ "newer"
   end
 
-  test "includes only the signed-in viewer's drafts while published threads are shared" do
+  test "includes comments as shared published threads immediately" do
     author = user!("author")
     other = user!("other")
     %{review: review} = review_with_patchsets!(author)
 
-    {:ok, _} = Threads.save_draft(review, author, draft_params("private draft"))
+    {:ok, _} = Threads.publish_comment(review, author, comment_params("visible comment"))
 
     assert {:ok, anonymous_snapshot} = ReviewView.get_snapshot_by_slug(review.slug, nil)
-    assert anonymous_snapshot.drafts == []
-    assert anonymous_snapshot.published_threads == []
+    assert [anonymous_thread] = anonymous_snapshot.published_threads
+    assert [%{body: "visible comment"}] = anonymous_thread.comments
 
     assert {:ok, other_snapshot} = ReviewView.get_snapshot_by_slug(review.slug, other)
-    assert other_snapshot.drafts == []
-
-    assert {:ok, author_snapshot} = ReviewView.get_snapshot_by_slug(review.slug, author)
-    assert [%{comment: %{body: "private draft"}}] = author_snapshot.drafts
-
-    {:ok, _} = Threads.publish_all_drafts(review, author)
-
-    assert {:ok, published_snapshot} = ReviewView.get_snapshot_by_slug(review.slug, other)
-    assert published_snapshot.drafts == []
-    assert [thread] = published_snapshot.published_threads
-    assert [%{body: "private draft"}] = thread.comments
+    assert [thread] = other_snapshot.published_threads
+    assert [%{body: "visible comment"}] = thread.comments
   end
 
   test "returns explicit errors for missing reviews and patchsets" do

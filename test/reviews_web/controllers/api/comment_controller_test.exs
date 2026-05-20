@@ -62,7 +62,6 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
       assert thread.file_path == "foo"
       assert [comment] = thread.comments
       assert comment.body == "looks good"
-      assert comment.state == "published"
     end
 
     test "publishes a token-range anchored comment",
