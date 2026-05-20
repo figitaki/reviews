@@ -17,28 +17,27 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
   attr :hunks_by_path, :map, required: true
 
   def diff_shell(assigns) do
-    assigns = assign(assigns, :file_labels, PacketComponents.file_labels(assigns.file_diffs))
+    assigns =
+      assigns
+      |> assign(:file_labels, PacketComponents.file_labels(assigns.file_diffs))
+      |> assign(:file_tree_nav, file_tree_nav(assigns.file_diffs))
 
     ~H"""
     <div class="rev-shell">
       <aside id="file-tree" class="rev-sidebar">
-        <ul class="rev-file-list">
-          <li :for={fd <- @file_diffs}>
-            <a href={"#file-#{fd.id}"} class="rev-file-link">
-              <span class="flex items-center gap-2 min-w-0">
-                <.ds_status_mark status={fd.status} />
-                <span class="rev-file-path truncate" translate="no">{fd.path}</span>
-              </span>
-              <span class="rev-file-stats">
-                <span class="rev-stat-add">+{fd.additions}</span>
-                <span class="rev-stat-del">-{fd.deletions}</span>
-              </span>
-            </a>
-          </li>
-          <li :if={@file_diffs == []}>
-            <span class="rev-empty">No files in this patchset.</span>
-          </li>
-        </ul>
+        <div
+          :if={@file_tree_nav.paths != []}
+          id="changes-file-tree"
+          class="rev-file-tree"
+          phx-hook="ChangesFileTree"
+          phx-update="ignore"
+          data-nav={Jason.encode!(@file_tree_nav)}
+        >
+        </div>
+
+        <p :if={@file_tree_nav.paths == []} class="rev-empty rev-file-tree-empty">
+          No files in this patchset.
+        </p>
 
         <section
           :if={@open_threads_by_op != []}
@@ -130,6 +129,40 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
   defp file_hunk(hunks), do: ReviewHunks.combine_consecutive(hunks)
 
   defp file_diff_id(file), do: "file-diff-#{file.id}"
+
+  defp file_tree_nav(file_diffs) do
+    %{
+      paths: Enum.map(file_diffs, & &1.path),
+      row_count: file_tree_row_count(file_diffs),
+      stats:
+        Map.new(file_diffs, fn file ->
+          {file.path,
+           %{additions: file.additions, deletions: file.deletions, status: file.status}}
+        end),
+      targets:
+        Map.new(file_diffs, fn file ->
+          {file.path, %{id: "file-#{file.id}", path: file.path}}
+        end)
+    }
+  end
+
+  defp file_tree_row_count(file_diffs) do
+    file_diffs
+    |> Enum.flat_map(fn file -> file_tree_path_prefixes(file.path) end)
+    |> MapSet.new()
+    |> MapSet.size()
+  end
+
+  defp file_tree_path_prefixes(path) do
+    parts = path |> to_string() |> String.split("/", trim: true)
+
+    if parts == [] do
+      []
+    else
+      1..length(parts)
+      |> Enum.map(fn count -> parts |> Enum.take(count) |> Enum.join("/") end)
+    end
+  end
 
   defp file_view_state([]), do: %{status: "empty", label: "No hunks"}
 
