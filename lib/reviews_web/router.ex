@@ -22,7 +22,7 @@ defmodule ReviewsWeb.Router do
   scope "/", ReviewsWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", HomeLive, :index
 
     live "/r/:slug", ReviewLive, :show
     live "/r/:slug/changes", ReviewLive, :changes

@@ -1,0 +1,887 @@
+/* ============================================================================
+   Reviews — landing page styles
+   ============================================================================
+   Two layers:
+   1. Generic landing chrome (`.l-*`) — topbar, install snippet, wrap, grid,
+      footer. Reusable across landing-style pages.
+   2. The homepage's hero + numbered chapters + scroll-driven workflow demo
+      (`.home-*`). Page-specific.
+
+   Both consume tokens from tokens.css and components from components.css.
+============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   Landing chrome (.l-*)
+---------------------------------------------------------------------------- */
+.l-page {
+  background: var(--ds-bg);
+  color: var(--ds-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+.l-page a:focus-visible,
+.l-page button:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.l-wrap {
+  width: min(1240px, calc(100vw - 32px));
+  margin: 0 auto;
+}
+
+.l-wrap-narrow {
+  width: min(960px, calc(100vw - 32px));
+  margin: 0 auto;
+}
+
+/* Top bar — same metrics as the product's review-topbar */
+.l-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--ds-bg) 88%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--ds-line);
+}
+
+.l-topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: var(--review-main-nav-h);
+}
+
+.l-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.l-brand-mark-svg {
+  width: 26px;
+  height: 26px;
+  color: var(--ds-text);
+}
+
+.l-nav-user {
+  gap: 8px;
+}
+
+.l-nav-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid var(--ds-line);
+}
+
+.l-nav-signin {
+  margin-left: 4px;
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* Install snippet — looks like a terminal line */
+.l-install {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--ds-line);
+  border-radius: 8px;
+  background: var(--ds-panel);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.l-install-prompt {
+  display: inline-grid;
+  place-items: center;
+  padding: 0 12px;
+  border-right: 1px solid var(--ds-line);
+  color: var(--ds-add);
+  background: var(--ds-panel-raised);
+  font-size: 12px;
+  font-weight: 700;
+  user-select: none;
+}
+
+.l-install-cmd {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  color: var(--ds-text);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+.l-install-cmd::-webkit-scrollbar { display: none; }
+
+.l-install-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 0;
+  border-left: 1px solid var(--ds-line);
+  background: var(--ds-panel);
+  color: var(--ds-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease;
+}
+.l-install-copy:hover { color: var(--ds-text); background: var(--ds-hover); }
+.l-install-copy.is-copied { color: var(--ds-add); }
+
+/* Footer */
+.l-footer {
+  border-top: 1px solid var(--ds-line);
+  padding: 28px 0;
+  color: var(--ds-faint);
+  font-size: 12px;
+}
+.l-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.l-footer a {
+  color: var(--ds-muted);
+  text-decoration: none;
+  margin-left: 18px;
+}
+.l-footer a:hover { color: var(--ds-text); }
+
+.l-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ds-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.l-eyebrow::before {
+  content: "";
+  width: 18px;
+  height: 1px;
+  background: var(--ds-line-strong);
+}
+
+/* 48×48 grid background — the one texture used in the product. */
+.l-grid-bg {
+  background-image:
+    linear-gradient(to right,  var(--ds-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--ds-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+}
+.l-grid-bg-fade {
+  -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%);
+          mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%);
+}
+
+/* ----------------------------------------------------------------------------
+   Homepage hero (above the fold)
+---------------------------------------------------------------------------- */
+.home-hero {
+  position: relative;
+  padding: 96px 0 80px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.home-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right,  var(--ds-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--ds-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.55;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 36%, #000 28%, transparent 70%);
+          mask-image: radial-gradient(ellipse at 50% 36%, #000 28%, transparent 70%);
+  pointer-events: none;
+}
+
+.home-hero-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.home-hero h1 {
+  margin: 0;
+  font-size: clamp(56px, 9vw, 124px);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.025em;
+  color: var(--ds-text);
+}
+
+.home-hero-lede {
+  max-width: 60ch;
+  margin: 4px auto 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--ds-text) 70%, var(--ds-muted));
+  text-wrap: pretty;
+}
+
+.home-hero-lede strong {
+  color: var(--ds-text);
+  font-weight: 600;
+}
+
+.home-hero-install {
+  width: 100%;
+  max-width: 640px;
+  margin-top: 14px;
+}
+
+/* ----------------------------------------------------------------------------
+   Narrative flow (below the fold) — two-column grid with sticky packet rail
+---------------------------------------------------------------------------- */
+.home-flow {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 64px;
+  align-items: stretch;
+  width: min(1320px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 32px 0 240px;
+}
+
+/* The last chapter (Revise) needs enough breathing room below it that the
+   reader can actually scroll it into the viewport's vertical center —
+   otherwise the demo's stepper gets stuck on the second-to-last chapter
+   when the page hits its scroll limit. */
+.home-chapter:last-of-type {
+  padding-bottom: 120px;
+}
+
+.home-flow-prose {
+  min-width: 0;
+}
+
+.home-flow-rail {
+  min-width: 0;
+  /* The rail is the second grid cell, stretched to the full height of the
+     prose column. Sticky positioning lives on the inner wrapper so the
+     packet preview stays pinned through every chapter while the cell
+     anchors the scrollable parent. */
+}
+
+.home-flow-rail > .home-demo {
+  position: sticky;
+  top: calc(var(--review-main-nav-h) + 24px);
+}
+
+.home-chapter {
+  padding: 120px 0;
+  border-top: 1px solid var(--ds-line);
+}
+
+.home-chapter:first-child {
+  border-top: 0;
+  padding-top: 40px;
+}
+
+.home-chapter-num {
+  display: inline-block;
+  margin-bottom: 24px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ds-faint);
+  text-transform: uppercase;
+}
+
+.home-chapter-num .pad {
+  color: var(--ds-line-strong);
+}
+
+.home-chapter h2 {
+  margin: 0 0 22px;
+  font-size: clamp(32px, 2.8vw, 44px);
+  font-weight: 750;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ds-text);
+  max-width: 14ch;
+  text-wrap: balance;
+}
+
+.home-chapter h2 .accent-add { color: var(--ds-add); }
+.home-chapter h2 .accent-del { color: var(--ds-del); }
+
+.home-chapter p {
+  margin: 0;
+  max-width: 30ch;
+  color: color-mix(in srgb, var(--ds-text) 70%, var(--ds-muted));
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.home-chapter p .add {
+  color: var(--ds-add);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.92em;
+}
+.home-chapter p .del {
+  color: var(--ds-del);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.92em;
+}
+
+/* ----------------------------------------------------------------------------
+   Workflow demo — the morphing packet preview that sits next to the chapters
+   on wide screens, stacks under them on narrow.
+---------------------------------------------------------------------------- */
+.home-demo-rail {
+  position: relative;
+}
+
+.home-demo-sticky {
+  position: sticky;
+  top: calc(var(--review-main-nav-h) + 24px);
+}
+
+.home-demo-frame {
+  border: 1px solid var(--ds-line);
+  border-radius: 12px;
+  background: var(--ds-panel);
+  overflow: hidden;
+}
+
+.home-demo-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ds-line);
+  background: var(--ds-panel-raised);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ds-faint);
+}
+
+.home-demo-titlebar .dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.home-demo-titlebar .dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--ds-line-strong);
+  display: inline-block;
+}
+
+.home-demo-path {
+  color: var(--ds-muted);
+}
+
+.home-demo-path .slash {
+  color: var(--ds-faint);
+  margin: 0 4px;
+}
+
+.home-demo-rev {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ds-muted);
+}
+
+.home-demo-rev .pip {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ds-add);
+  transition: background-color 280ms ease;
+}
+
+.home-demo[data-step="push"] .home-demo-rev .pip {
+  background: var(--ds-blue);
+}
+
+.home-demo-body {
+  padding: 28px 28px 24px;
+}
+
+.home-demo-eyebrow {
+  color: var(--ds-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.home-demo-title {
+  margin: 0 0 12px;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.08;
+  color: var(--ds-text);
+  letter-spacing: -0.01em;
+}
+
+.home-demo-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ds-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--ds-line);
+  flex-wrap: wrap;
+}
+
+.home-demo-stats .sep { color: var(--ds-faint); }
+.home-demo-stats .num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  transition: opacity 320ms ease;
+}
+.home-demo-stats .add { color: var(--ds-add); }
+.home-demo-stats .del { color: var(--ds-del); }
+
+.home-demo-section {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--ds-line);
+}
+.home-demo-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.home-demo-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.home-demo-section-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.home-demo-section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 550;
+  color: var(--ds-text);
+}
+
+.home-demo-section-meta {
+  color: var(--ds-faint);
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.home-demo-section-desc {
+  margin: 8px 0 0;
+  color: var(--ds-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 64ch;
+}
+
+.home-demo-section-tail {
+  margin-top: 14px;
+}
+
+/* Carryover marker — "approved in v1" */
+.home-demo-carryover {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--ds-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.home-demo-carryover::before {
+  content: "↳";
+  color: var(--ds-add);
+  font-family: var(--font-mono);
+}
+
+/* Reprompt card — appears between steps 3 and 4 */
+.home-demo-reprompt {
+  display: grid;
+  gap: 8px;
+  margin: 14px 28px 24px;
+  border: 1px solid var(--ds-line);
+  border-radius: 8px;
+  background: var(--ds-bg);
+  padding: 12px 14px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 320ms ease, transform 320ms ease;
+  pointer-events: none;
+}
+
+.home-demo[data-step="reprompt"] .home-demo-reprompt,
+.home-demo[data-step="revise"] .home-demo-reprompt {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.home-demo-reprompt-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ds-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.home-demo-reprompt-head::before {
+  content: "@";
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--ds-panel-raised);
+  color: var(--ds-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.home-demo-reprompt-body {
+  color: var(--ds-text);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.home-demo-reprompt-cmd {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ds-add);
+}
+
+/* Push diff illustration — the manifesto's wall-of-diff → packet.md graphic */
+.home-diff-illo {
+  margin-top: 20px;
+  border: 1px solid var(--ds-line);
+  border-radius: 8px;
+  background: var(--ds-panel);
+  padding: 16px 20px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ds-muted);
+}
+
+.home-diff-illo .line {
+  display: flex;
+  gap: 12px;
+}
+
+.home-diff-illo .gutter {
+  color: var(--ds-faint);
+  width: 3ch;
+  text-align: right;
+  user-select: none;
+}
+
+.home-diff-illo .add-row {
+  background: color-mix(in oklab, var(--ds-add) 10%, transparent);
+  padding: 0 6px;
+  margin: 0 -6px;
+  border-radius: 3px;
+  color: var(--ds-text);
+}
+
+.home-diff-illo .del-row {
+  background: color-mix(in oklab, var(--ds-del) 10%, transparent);
+  padding: 0 6px;
+  margin: 0 -6px;
+  border-radius: 3px;
+  color: var(--ds-text);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--ds-del) 60%, transparent);
+}
+
+.home-diff-illo .ctx { color: var(--ds-muted); }
+
+/* ----------------------------------------------------------------------------
+   Decision actions — three state-pills and three action ovals share the same
+   row. The pill of the active decision collapses, the matching action button
+   expands. The state class (is-approved / is-denied / is-pending) on the
+   section drives which one wins.
+---------------------------------------------------------------------------- */
+.home-demo-section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.home-demo-section-actions .r-state-pill {
+  flex: 0 0 auto;
+  transition: opacity 240ms ease, width 360ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-width 240ms ease, padding 240ms ease;
+}
+
+.home-demo-section-actions .r-action {
+  flex: 0 0 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 0;
+  opacity: 0;
+  border-width: 0;
+  padding: 0;
+  pointer-events: none;
+  transition: opacity 280ms ease, width 360ms cubic-bezier(0.22, 1, 0.36, 1),
+              padding 360ms cubic-bezier(0.22, 1, 0.36, 1), border-width 240ms ease;
+}
+
+/* When the section has a decision, the matching pill collapses */
+.home-demo-section.is-approved .home-demo-section-actions .r-state-pill.kind-approve,
+.home-demo-section.is-denied .home-demo-section-actions .r-state-pill.kind-deny,
+.home-demo-section.is-ignored .home-demo-section-actions .r-state-pill.kind-ignore {
+  width: 0;
+  opacity: 0;
+  border-width: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+/* …and the matching action expands */
+.home-demo-section.is-approved .home-demo-section-actions .r-action.is-approved,
+.home-demo-section.is-denied .home-demo-section-actions .r-action.is-denied,
+.home-demo-section.is-ignored .home-demo-section-actions .r-action.is-ignored {
+  width: auto;
+  opacity: 1;
+  border-width: 1px;
+  padding: 0 10px 0 8px;
+  pointer-events: auto;
+}
+
+/* ----------------------------------------------------------------------------
+   Section 1's diff card — collapsed by default; the LV adds `.is-expanded`
+   to the section during :review and :reprompt, which animates it open.
+   Stays collapsed on :push (initial state) and :revise (resolution).
+---------------------------------------------------------------------------- */
+.home-demo-section-diff-wrap {
+  margin-top: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 520ms cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 320ms ease,
+              margin-top 360ms ease;
+}
+
+.home-demo-section.is-expanded .home-demo-section-diff-wrap {
+  max-height: 720px;
+  opacity: 1;
+  margin-top: 12px;
+  transition: max-height 520ms cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 320ms ease 60ms,
+              margin-top 360ms ease;
+}
+
+/* ----------------------------------------------------------------------------
+   Inline comment annotation — sits between two diff rows. Hidden by default,
+   appears during :review and :reprompt, gone in :push and :revise.
+---------------------------------------------------------------------------- */
+.home-demo-comment-row {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 360ms cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 280ms ease;
+}
+
+.home-demo[data-step="review"] .home-demo-comment-row,
+.home-demo[data-step="reprompt"] .home-demo-comment-row {
+  max-height: 180px;
+  opacity: 1;
+}
+
+.home-demo-comment {
+  margin: 8px 12px 8px 92px;
+  border: 1px solid var(--ds-line-strong);
+  border-left: 3px solid var(--ds-blue);
+  border-radius: 8px;
+  background: var(--ds-panel-raised);
+  padding: 10px 12px;
+}
+
+.home-demo-comment-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--ds-muted);
+}
+
+.home-demo-comment-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--ds-blue) 24%, transparent);
+  color: var(--ds-blue);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.home-demo-comment-author {
+  color: var(--ds-text);
+  font-weight: 650;
+}
+
+.home-demo-comment-on {
+  color: var(--ds-faint);
+  font-family: var(--font-mono);
+}
+
+.home-demo-comment-body {
+  margin: 0;
+  color: var(--ds-text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.home-demo-comment-body code {
+  border: 1px solid var(--ds-line);
+  border-radius: 3px;
+  background: var(--ds-panel);
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* ----------------------------------------------------------------------------
+   v2 stats — only visible during :revise
+---------------------------------------------------------------------------- */
+.home-demo-stats .num.is-v2 { display: none; }
+.home-demo[data-step="revise"] .home-demo-stats .num.is-v1 { display: none; }
+.home-demo[data-step="revise"] .home-demo-stats .num.is-v2 { display: inline; }
+
+/* ----------------------------------------------------------------------------
+   Carryover marker — appears in :revise for sections marked is-carried
+---------------------------------------------------------------------------- */
+.home-demo-carryover {
+  display: none;
+}
+.home-demo[data-step="revise"] .home-demo-section.is-carried .home-demo-carryover {
+  display: inline-flex;
+}
+
+/* ----------------------------------------------------------------------------
+   Staggered sequencing inside :review
+   ----------------------------------------------------------------------------
+   When the user enters :review, three things should happen in order:
+
+     1. The reviewer's comment fades in     (t = 0)
+     2. Section 1 transitions to "Denied"   (t = 600ms)
+     3. Section 2 transitions to "Approved" (t = 1200ms)
+
+   We achieve this by adding transition-delay to the elements whose final
+   visual state should appear later than the comment. The delays apply only
+   while [data-step="review"] is active — :reprompt and :revise drop them so
+   the user doesn't see another wait on later transitions.
+---------------------------------------------------------------------------- */
+.home-demo[data-step="review"] .home-demo-section.is-section-1 .r-action.is-denied,
+.home-demo[data-step="review"] .home-demo-section.is-section-1 .r-state-pill.kind-deny {
+  transition-delay: 600ms;
+}
+
+.home-demo[data-step="review"] .home-demo-section.is-section-2 .r-action.is-approved,
+.home-demo[data-step="review"] .home-demo-section.is-section-2 .r-state-pill.kind-approve {
+  transition-delay: 1200ms;
+}
+
+/* ----------------------------------------------------------------------------
+   Reduced motion — kill all transitions so state changes appear instantly
+---------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .home-demo-reprompt,
+  .home-demo-section,
+  .home-demo-section-diff-wrap,
+  .home-demo-comment-row,
+  .home-demo-rev .pip,
+  .home-demo-stats .num,
+  .home-demo-section-actions .r-state-pill,
+  .home-demo-section-actions .r-action {
+    transition: none !important;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Mobile
+---------------------------------------------------------------------------- */
+@media (max-width: 880px) {
+  .home-hero {
+    padding: 64px 0 56px;
+  }
+  .home-hero h1 {
+    font-size: clamp(40px, 11vw, 64px);
+  }
+  .home-flow {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding: 24px 0 64px;
+  }
+  .home-flow-rail {
+    order: -1;
+  }
+  .home-flow-rail > .home-demo {
+    position: static;
+  }
+  .home-chapter {
+    padding: 40px 0;
+  }
+  .home-chapter h2 {
+    font-size: clamp(26px, 7vw, 36px);
+  }
+}
