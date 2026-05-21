@@ -29,14 +29,13 @@ import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
 import StickyHunkHeader from "./hooks/sticky_hunk_header"
 import StickyProse from "./hooks/sticky_prose"
-import DemoStepper from "./hooks/demo_stepper"
 import InstallCopy from "./hooks/install_copy"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, ChangesFileTree, DiffRenderer, PacketNavTree, StickyHunkHeader, StickyProse, DemoStepper, InstallCopy},
+  hooks: {...colocatedHooks, ChangesFileTree, DiffRenderer, PacketNavTree, StickyHunkHeader, StickyProse, InstallCopy},
 })
 
 // Show progress bar on live navigation and form submits

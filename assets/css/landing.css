@@ -4,7 +4,7 @@
    Two layers:
    1. Generic landing chrome (`.l-*`) — topbar, install snippet, wrap, grid,
       footer. Reusable across landing-style pages.
-   2. The homepage's hero + numbered chapters + scroll-driven workflow demo
+   2. The homepage's hero + numbered chapters + CTA-driven workflow demo
       (`.home-*`). Page-specific.
 
    Both consume tokens from tokens.css and components from components.css.
@@ -269,15 +269,7 @@
   align-items: stretch;
   width: min(1320px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 32px 0 240px;
-}
-
-/* The last chapter (Revise) needs enough breathing room below it that the
-   reader can actually scroll it into the viewport's vertical center —
-   otherwise the demo's stepper gets stuck on the second-to-last chapter
-   when the page hits its scroll limit. */
-.home-chapter:last-of-type {
-  padding-bottom: 120px;
+  padding: 32px 0 128px;
 }
 
 .home-flow-prose {
@@ -355,6 +347,54 @@
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 0.92em;
+}
+
+.home-chapter-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  margin-top: 28px;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: 6px;
+  background: var(--ds-panel);
+  padding: 0 14px;
+  color: var(--ds-text);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease,
+              transform 160ms ease;
+}
+
+.home-chapter-cta::after {
+  content: "→";
+  margin-left: 8px;
+  color: var(--ds-muted);
+  font-family: var(--font-mono);
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.home-chapter-cta:hover {
+  border-color: color-mix(in srgb, var(--ds-text) 46%, var(--ds-line));
+  background: var(--ds-hover);
+}
+
+.home-chapter-cta:hover::after {
+  color: var(--ds-text);
+  transform: translateX(2px);
+}
+
+.home-chapter-cta.is-active {
+  border-color: color-mix(in oklab, var(--ds-add) 48%, var(--ds-line));
+  background: color-mix(in oklab, var(--ds-add) 12%, var(--ds-panel));
+  color: var(--ds-add);
+}
+
+.home-chapter-cta.is-active::after {
+  content: "✓";
+  color: var(--ds-add);
+  transform: none;
 }
 
 /* ----------------------------------------------------------------------------
@@ -880,6 +920,9 @@
   }
   .home-chapter {
     padding: 40px 0;
+  }
+  .home-chapter-cta {
+    width: 100%;
   }
   .home-chapter h2 {
     font-size: clamp(26px, 7vw, 36px);

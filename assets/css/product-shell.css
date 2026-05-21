@@ -2,15 +2,14 @@
    Product shell — `.ds-*` components and `.design-page` chrome used by the
    in-product Review and Settings surfaces.
 
-   These rules used to live alongside the (now-removed) `/design` catalog
-   page and were named `playground.css` while the catalog existed. The
-   catalog-only rules were stripped; what's left is load-bearing for
+   These rules used to live alongside the now-removed `/design` catalog.
+   The catalog-only rules were stripped; what's left is load-bearing for
    `<.ds_shell>` (ReviewLive) and `<.ds_section>`/`<.ds_card>`/
    `<.ds_button>`/`<.ds_empty_state>`/`<.ds_page_header>` (SettingsLive).
 ---------------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------------
-   Design system playground
+   Product shell surface
 ---------------------------------------------------------------------------- */
 .design-page{
   --ds-bg: #000;

@@ -4,14 +4,11 @@ defmodule ReviewsWeb.HomeLive do
 
   Above the fold: a centered hero with the install snippet. Below the fold:
   four numbered chapters (Push / Review / Re-prompt / Revise) sit alongside a
-  sticky packet preview that morphs through the workflow as the reader
-  scrolls.
-
-  The morphing is driven by a `DemoStepper` JS hook on each chapter that
-  pushes `set_demo_step` to this LiveView when its sentinel scrolls into the
-  middle band of the viewport. CSS handles the actual transitions, including
-  staggered "comment → deny → approve" sequencing inside the `:review` step
-  via `transition-delay`.
+  sticky packet preview. Each chapter has an explicit CTA that pushes
+  `set_demo_step` to this LiveView, so the reader controls the simulation
+  instead of having it follow scroll position. CSS handles the actual
+  transitions, including staggered "comment → deny → approve" sequencing
+  inside the `:review` step via `transition-delay`.
   """
   use ReviewsWeb, :live_view
 
@@ -88,19 +85,37 @@ defmodule ReviewsWeb.HomeLive do
 
         <section class="home-flow">
           <div class="home-flow-prose">
-            <.chapter num="01" label="Push" sentinel_step="push">
+            <.chapter
+              num="01"
+              label="Push"
+              sentinel_step="push"
+              cta_label="Show packet"
+              active={@demo_step == :push}
+            >
               <h2>A <span class="accent-add">packet</span>, not a wall of edits.</h2>
               <p>
                 Every line of the diff sits inside an authored section. The CLI refuses to push otherwise.
               </p>
             </.chapter>
 
-            <.chapter num="02" label="Review" sentinel_step="review">
+            <.chapter
+              num="02"
+              label="Review"
+              sentinel_step="review"
+              cta_label="Show review"
+              active={@demo_step == :review}
+            >
               <h2>Decide section by section.</h2>
               <p>Drop a comment, deny what needs work, approve what doesn't. Inline, in place.</p>
             </.chapter>
 
-            <.chapter num="03" label="Re-prompt" sentinel_step="reprompt">
+            <.chapter
+              num="03"
+              label="Re-prompt"
+              sentinel_step="reprompt"
+              cta_label="Show re-prompt"
+              active={@demo_step == :reprompt}
+            >
               <h2>Hand it back as a re-prompt.</h2>
               <p>
                 <span class="add">reviews push --update &lt;slug&gt;</span>
@@ -108,7 +123,13 @@ defmodule ReviewsWeb.HomeLive do
               </p>
             </.chapter>
 
-            <.chapter num="04" label="Revise" sentinel_step="revise">
+            <.chapter
+              num="04"
+              label="Revise"
+              sentinel_step="revise"
+              cta_label="Show revised review"
+              active={@demo_step == :revise}
+            >
               <h2>Approvals carry, denials reset.</h2>
               <p>v2 collapses the resolved section. The reviewer reads just what's new.</p>
             </.chapter>
@@ -145,20 +166,27 @@ defmodule ReviewsWeb.HomeLive do
   attr :num, :string, required: true
   attr :label, :string, required: true
   attr :sentinel_step, :string, required: true
+  attr :cta_label, :string, required: true
+  attr :active, :boolean, default: false
   slot :inner_block, required: true
 
   defp chapter(assigns) do
     ~H"""
-    <article
-      class="home-chapter"
-      id={"chapter-#{@sentinel_step}"}
-      data-demo-step={@sentinel_step}
-      phx-hook="DemoStepper"
-    >
+    <article class={["home-chapter", @active && "is-active"]} id={"chapter-#{@sentinel_step}"}>
       <div class="home-chapter-num">
         <span class="pad">00</span>{@num} / {@label}
       </div>
       {render_slot(@inner_block)}
+      <button
+        type="button"
+        class={["home-chapter-cta", @active && "is-active"]}
+        phx-click="set_demo_step"
+        phx-value-step={@sentinel_step}
+        aria-controls="home-demo"
+        aria-pressed={@active}
+      >
+        {@cta_label}
+      </button>
     </article>
     """
   end
