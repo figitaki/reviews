@@ -410,7 +410,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       refute has_element?(view, "#publish-review-button")
     end
 
-    test "renders the classic diff on the changes route", %{conn: conn, author: author} do
+    test "renders small diffs by default on the changes route", %{conn: conn, author: author} do
       {:ok, %{review: packet_review}} =
         ReviewsCtx.create_review_with_initial_patchset(author, %{
           title: "Packet change",
@@ -442,6 +442,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
       assert has_element?(changes_view, "#diff-files")
+      assert has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
+      assert has_element?(changes_view, ~s|#changes-file-tree[data-nav*="lib/packet.ex"]|)
       refute has_element?(changes_view, "#diff-files .rev-file-card")
       refute has_element?(changes_view, "#diff-files .rev-file-placeholder")
 
@@ -450,21 +452,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
                ~s|#diff-files .review-hunk-toggle[title^="lib/packet.ex"]|
              )
 
-      refute has_element?(
-               changes_view,
-               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
-             )
-
       assert has_element?(changes_view, "#diff-files .review-hunk-card")
-
-      refute has_element?(
-               changes_view,
-               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
-             )
-
-      changes_view
-      |> element(~s|#diff-files .review-hunk-toggle[title^="lib/packet.ex"]|)
-      |> render_click()
 
       assert has_element?(
                changes_view,
@@ -499,18 +487,88 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 
+      assert has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
+      assert has_element?(changes_view, ~s|#changes-file-tree[data-nav*="lib/packet.ex"]|)
       assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff", "packet.ex")
       assert has_element?(changes_view, "#diff-files .review-file-view-state", "2 hunks")
       refute has_element?(changes_view, "#diff-files .review-hunk-card:not(.is-file-diff)")
       refute has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff", "hunks 1-2")
 
-      changes_view
-      |> element("#diff-files .review-hunk-card.is-file-diff .review-hunk-toggle")
-      |> render_click()
-
       assert has_element?(
                changes_view,
                ~s|#diff-files [id^="file-diff-"][id$="-diff"][phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
+             )
+    end
+
+    test "keeps large diffs collapsed on the changes route", %{conn: conn, author: author} do
+      large_changes =
+        1..500
+        |> Enum.map(fn index -> "-old_#{index}\n+new_#{index}" end)
+        |> Enum.join("\n")
+
+      {:ok, %{review: large_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Large change",
+          raw_diff: """
+          diff --git a/lib/large.ex b/lib/large.ex
+          --- a/lib/large.ex
+          +++ b/lib/large.ex
+          @@ -1,500 +1,500 @@
+          #{large_changes}
+          """
+        })
+
+      {:ok, changes_view, _html} = live(conn, ~p"/r/#{large_review.slug}/changes")
+
+      assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff", "large.ex")
+
+      refute has_element?(
+               changes_view,
+               ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="lib/large.ex"]|
+             )
+    end
+
+    test "opens each file diff under the line limit even when the patchset total is large", %{
+      conn: conn,
+      author: author
+    } do
+      first_changes =
+        1..300
+        |> Enum.map(fn index -> "-old_a_#{index}\n+new_a_#{index}" end)
+        |> Enum.join("\n")
+
+      second_changes =
+        1..300
+        |> Enum.map(fn index -> "-old_b_#{index}\n+new_b_#{index}" end)
+        |> Enum.join("\n")
+
+      {:ok, %{review: mixed_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Many small files",
+          raw_diff: """
+          diff --git a/lib/first.ex b/lib/first.ex
+          --- a/lib/first.ex
+          +++ b/lib/first.ex
+          @@ -1,300 +1,300 @@
+          #{first_changes}
+          diff --git a/lib/second.ex b/lib/second.ex
+          --- a/lib/second.ex
+          +++ b/lib/second.ex
+          @@ -1,300 +1,300 @@
+          #{second_changes}
+          """
+        })
+
+      {:ok, changes_view, _html} = live(conn, ~p"/r/#{mixed_review.slug}/changes")
+
+      assert has_element?(
+               changes_view,
+               ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="lib/first.ex"]|
+             )
+
+      assert has_element?(
+               changes_view,
+               ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="lib/second.ex"]|
              )
     end
   end
@@ -665,7 +723,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> render_click()
 
       assert has_element?(packet_view, "#packet-section-0 .review-hunk-viewed-pill", "Viewed")
-      refute has_element?(packet_view, ~s|#packet-section-0 [phx-hook="DiffRenderer"]|)
+      assert has_element?(packet_view, ~s|#packet-section-0 [phx-hook="DiffRenderer"]|)
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 

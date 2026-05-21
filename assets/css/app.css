@@ -1719,6 +1719,33 @@ details[open] > summary .review-collapse-icon,
   background: var(--review-panel);
 }
 
+.rev-file-tree {
+  height: min(
+    calc(var(--rev-file-tree-rows, 1) * 30px + 22px),
+    calc(100vh - var(--rev-header-h) - 18px)
+  );
+  min-height: 44px;
+  border: 1px solid var(--review-line);
+  border-radius: 8px;
+  background: var(--review-panel);
+  box-sizing: border-box;
+  overflow: hidden;
+  padding-top: 8px;
+}
+
+.rev-file-tree file-tree-container {
+  height: calc(100% - 8px);
+  color-scheme: light dark;
+}
+
+.rev-file-tree-empty {
+  margin: 0;
+  border: 1px solid var(--review-line);
+  border-radius: 8px;
+  background: var(--review-panel);
+  padding: 12px;
+}
+
 .rev-file-link {
   display: flex;
   align-items: center;

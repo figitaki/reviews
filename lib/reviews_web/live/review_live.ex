@@ -32,6 +32,7 @@ defmodule ReviewsWeb.ReviewLive do
   @single_section_auto_open_line_limit 100
   @section_expand_all_line_limit 1000
   @section_expand_all_file_limit 25
+  @changes_auto_open_line_limit 1_000
 
   @impl true
   def mount(%{"slug" => slug}, session, socket) do
@@ -60,6 +61,7 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:expanded_file_ids, MapSet.new())
               |> assign(:expanded_hunk_ids, MapSet.new())
               |> assign(:expanded_section_ids, MapSet.new())
+              |> assign(:changes_default_expanded_patchset_ids, MapSet.new())
               |> assign(:show_packet_outline, packet_outline_visible?(current_user))
               |> assign_snapshot(snapshot)
 
@@ -787,9 +789,7 @@ defmodule ReviewsWeb.ReviewLive do
       socket =
         case action do
           :viewed ->
-            socket
-            |> collapse_hunk(attrs)
-            |> auto_open_next_hunks(attrs)
+            auto_open_next_hunks(socket, attrs)
 
           :unviewed ->
             expand_hunk(socket, attrs)
@@ -816,18 +816,6 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp persist_hunk_view(socket, _patchset, user, attrs, :unviewed) do
     PacketHunkViews.clear_viewed(socket.assigns.review, user, attrs)
-  end
-
-  defp collapse_hunk(socket, attrs) do
-    hunk_id = hunk_id_for_attrs(socket, attrs)
-
-    if hunk_id do
-      socket
-      |> assign(:expanded_hunk_ids, MapSet.delete(socket.assigns.expanded_hunk_ids, hunk_id))
-      |> scroll_to_collapsed_hunk(hunk_id)
-    else
-      socket
-    end
   end
 
   defp scroll_to_collapsed_hunk(socket, hunk_id) do
@@ -928,17 +916,30 @@ defmodule ReviewsWeb.ReviewLive do
         MapSet.new()
       end
 
-    default_expansion = default_expanded_packet_state(snapshot)
+    default_expansion = default_expanded_state(socket, snapshot)
+    changes_default_hunk_ids = default_expanded_changes_hunk_ids(socket, snapshot)
+
+    apply_changes_default? =
+      apply_changes_default_expansion?(socket, snapshot, changes_default_hunk_ids)
 
     {expanded_hunk_ids, expanded_section_ids} =
       if previous_patchset_id == next_patchset_id do
         {
-          socket.assigns[:expanded_hunk_ids] || default_expansion.hunk_ids,
+          (socket.assigns[:expanded_hunk_ids] || MapSet.new())
+          |> maybe_apply_changes_default_expansion(
+            changes_default_hunk_ids,
+            apply_changes_default?
+          ),
           socket.assigns[:expanded_section_ids] || default_expansion.section_ids
         }
       else
         {default_expansion.hunk_ids, default_expansion.section_ids}
       end
+
+    changes_default_expanded_patchset_ids =
+      socket.assigns[:changes_default_expanded_patchset_ids]
+      |> Kernel.||(MapSet.new())
+      |> maybe_mark_changes_default_expanded(next_patchset_id, apply_changes_default?)
 
     socket
     |> assign(:review_snapshot, snapshot)
@@ -952,6 +953,7 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:expanded_file_ids, expanded_file_ids)
     |> assign(:expanded_hunk_ids, expanded_hunk_ids)
     |> assign(:expanded_section_ids, expanded_section_ids)
+    |> assign(:changes_default_expanded_patchset_ids, changes_default_expanded_patchset_ids)
     |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
@@ -983,6 +985,16 @@ defmodule ReviewsWeb.ReviewLive do
     Enum.uniq(changes_paths ++ packet_paths)
   end
 
+  defp default_expanded_state(socket, snapshot) do
+    packet_state = default_expanded_packet_state(snapshot)
+    changes_hunk_ids = default_expanded_changes_hunk_ids(socket, snapshot)
+
+    %{
+      section_ids: packet_state.section_ids,
+      hunk_ids: MapSet.union(packet_state.hunk_ids, changes_hunk_ids)
+    }
+  end
+
   defp default_expanded_packet_state(%{selected_patchset: nil}) do
     %{section_ids: MapSet.new(), hunk_ids: MapSet.new()}
   end
@@ -1008,6 +1020,44 @@ defmodule ReviewsWeb.ReviewLive do
     %{section_ids: section_ids, hunk_ids: hunk_ids}
   end
 
+  defp default_expanded_changes_hunk_ids(socket, snapshot) do
+    if socket.assigns[:live_action] == :changes do
+      snapshot.file_diffs
+      |> Enum.filter(&(file_changed_lines(&1) < @changes_auto_open_line_limit))
+      |> Enum.map(&file_diff_id/1)
+      |> MapSet.new()
+    else
+      MapSet.new()
+    end
+  end
+
+  defp apply_changes_default_expansion?(socket, snapshot, changes_default_hunk_ids) do
+    expanded_patchset_ids = socket.assigns[:changes_default_expanded_patchset_ids] || MapSet.new()
+    patchset_id = snapshot.selected_patchset && snapshot.selected_patchset.id
+
+    socket.assigns[:live_action] == :changes &&
+      is_integer(patchset_id) &&
+      MapSet.size(changes_default_hunk_ids) > 0 &&
+      !MapSet.member?(expanded_patchset_ids, patchset_id)
+  end
+
+  defp maybe_apply_changes_default_expansion(expanded_hunk_ids, changes_default_hunk_ids, true) do
+    MapSet.union(expanded_hunk_ids, changes_default_hunk_ids)
+  end
+
+  defp maybe_apply_changes_default_expansion(expanded_hunk_ids, _changes_default_hunk_ids, false) do
+    expanded_hunk_ids
+  end
+
+  defp maybe_mark_changes_default_expanded(expanded_patchset_ids, patchset_id, true)
+       when is_integer(patchset_id) do
+    MapSet.put(expanded_patchset_ids, patchset_id)
+  end
+
+  defp maybe_mark_changes_default_expanded(expanded_patchset_ids, _patchset_id, _apply?) do
+    expanded_patchset_ids
+  end
+
   defp expand_all_section_hunks?(hunks) do
     section_changed_lines(hunks) < @section_expand_all_line_limit &&
       section_file_count(hunks) < @section_expand_all_file_limit
@@ -1019,6 +1069,8 @@ defmodule ReviewsWeb.ReviewLive do
       changed_lines + hunk.display_additions + hunk.display_deletions
     end)
   end
+
+  defp file_changed_lines(file), do: file.additions + file.deletions
 
   defp section_file_count(hunks) do
     hunks
