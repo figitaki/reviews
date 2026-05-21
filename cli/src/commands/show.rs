@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::api::ApiClient;
 use crate::config::Config;
 
-const DEFAULT_SERVER: &str = "https://reviews-dev.fly.dev";
+const DEFAULT_SERVER: &str = "https://reviews.figitaki.dev";
 
 #[derive(Args, Debug)]
 pub struct ShowArgs {
@@ -21,7 +21,7 @@ pub struct ShowArgs {
     pub format: Format,
 
     /// Override server URL. Defaults to the configured server, or
-    /// https://reviews-dev.fly.dev if not logged in.
+    /// https://reviews.figitaki.dev if not logged in.
     #[arg(long)]
     pub server: Option<String>,
 }

@@ -43,6 +43,9 @@ defmodule ReviewsWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
+  # Redirect legacy hostnames (reviews-dev.fly.dev) to the canonical PHX_HOST.
+  plug ReviewsWeb.Plugs.CanonicalHost
+
   # `length: 50_000_000` lets diffs up to ~50MB flow through the JSON parser —
   # the CLI's `POST /api/v1/reviews` body is `raw_diff` JSON-wrapped.
   plug Plug.Parsers,
