@@ -275,8 +275,7 @@ export class VanillaDiffRenderer {
         this.virtualizer,
         {
           lineHeight: 20,
-          fileHeaderHeight: 44,
-          annotationEstimateHeight: 96,
+          diffHeaderHeight: 44,
         }
       )
       this.instance.render({ ...renderArgs, containerWrapper: contentWrapper })
