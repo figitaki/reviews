@@ -15,12 +15,18 @@ defmodule ReviewsWeb.HomeLiveTest do
   test "renders all four workflow chapters with demo CTAs", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
-    for step <- ~w(push review reprompt revise) do
+    for {step, label} <- [
+          {"push", "View section"},
+          {"review", "Request changes"},
+          {"reprompt", "Reprompt"},
+          {"final", "Approve"}
+        ] do
       assert has_element?(view, "#chapter-#{step}")
 
       assert has_element?(
                view,
-               "#chapter-#{step} button[phx-click=\"set_demo_step\"][phx-value-step=\"#{step}\"]"
+               "#chapter-#{step} button[phx-click=\"set_demo_step\"][phx-value-step=\"#{step}\"]",
+               label
              )
     end
   end
@@ -28,26 +34,46 @@ defmodule ReviewsWeb.HomeLiveTest do
   test "demo CTAs advance the demo state", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
-    # initial state is :push
-    assert has_element?(view, "#home-demo[data-step=\"push\"]")
+    assert has_element?(view, "#home-demo[data-step=\"intro\"]")
 
     view
-    |> element("#chapter-review button", "Show review")
+    |> element("#chapter-push button", "View section")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#home-demo[data-step=\"push\"] .home-demo-section.is-section-1.is-expanded"
+           )
+
+    view
+    |> element("#chapter-review button", "Request changes")
     |> render_click()
 
     assert has_element?(view, "#home-demo[data-step=\"review\"]")
+    assert has_element?(view, ".home-demo-comment-row")
 
     view
-    |> element("#chapter-revise button", "Show revised review")
+    |> element("#chapter-reprompt button", "Reprompt")
     |> render_click()
 
-    assert has_element?(view, "#home-demo[data-step=\"revise\"]")
+    assert has_element?(view, "#home-demo[data-step=\"reprompt\"]")
+    assert has_element?(view, "#chapter-reprompt .home-agent-harness", "Posted a new revision")
+    refute has_element?(view, ".home-demo-reprompt")
+
+    view
+    |> element("#chapter-final button", "Approve")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#home-demo[data-step=\"final\"] .home-demo-section.is-section-1.is-approved"
+           )
   end
 
   test "ignores unknown demo steps", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
     render_hook(view, "set_demo_step", %{"step" => "bogus"})
-    assert has_element?(view, "#home-demo[data-step=\"push\"]")
+    assert has_element?(view, "#home-demo[data-step=\"intro\"]")
   end
 end

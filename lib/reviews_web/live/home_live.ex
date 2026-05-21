@@ -3,7 +3,7 @@ defmodule ReviewsWeb.HomeLive do
   Public landing page for Reviews.
 
   Above the fold: a centered hero with the install snippet. Below the fold:
-  four numbered chapters (Push / Review / Re-prompt / Revise) sit alongside a
+  four numbered chapters (Push / Review / Re-prompt / Approve) sit alongside a
   sticky packet preview. Each chapter has an explicit CTA that pushes
   `set_demo_step` to this LiveView, so the reader controls the simulation
   instead of having it follow scroll position. CSS handles the actual
@@ -20,7 +20,7 @@ defmodule ReviewsWeb.HomeLive do
     {:ok,
      socket
      |> assign(:page_title, "Reviews — code review for agentic diffs")
-     |> assign(:demo_step, :push)
+     |> assign(:demo_step, :intro)
      |> assign(:install_command, @install_command)
      |> assign(:repo_url, @repo_url)
      |> assign(:current_user, load_current_user(session))}
@@ -59,7 +59,7 @@ defmodule ReviewsWeb.HomeLive do
   defp parse_step("push"), do: {:ok, :push}
   defp parse_step("review"), do: {:ok, :review}
   defp parse_step("reprompt"), do: {:ok, :reprompt}
-  defp parse_step("revise"), do: {:ok, :revise}
+  defp parse_step("final"), do: {:ok, :final}
   defp parse_step(_), do: :error
 
   @impl true
@@ -89,7 +89,7 @@ defmodule ReviewsWeb.HomeLive do
               num="01"
               label="Push"
               sentinel_step="push"
-              cta_label="Show packet"
+              cta_label="View section"
               active={@demo_step == :push}
             >
               <h2>A <span class="accent-add">packet</span>, not a wall of edits.</h2>
@@ -102,7 +102,7 @@ defmodule ReviewsWeb.HomeLive do
               num="02"
               label="Review"
               sentinel_step="review"
-              cta_label="Show review"
+              cta_label="Request changes"
               active={@demo_step == :review}
             >
               <h2>Decide section by section.</h2>
@@ -113,25 +113,41 @@ defmodule ReviewsWeb.HomeLive do
               num="03"
               label="Re-prompt"
               sentinel_step="reprompt"
-              cta_label="Show re-prompt"
+              cta_label="Reprompt"
               active={@demo_step == :reprompt}
             >
               <h2>Hand it back as a re-prompt.</h2>
               <p>
-                <span class="add">reviews push --update &lt;slug&gt;</span>
-                posts v2 to the same review.
+                Ask the agent to fix the denied section, then push the next patchset back into the same review.
               </p>
+              <div
+                :if={@demo_step == :reprompt}
+                class="home-agent-harness"
+                role="status"
+                aria-live="polite"
+              >
+                <div class="home-agent-prompt">
+                  Please handle deletions in the v1/v2 diff walker; the carryover marker disappears when a denied section drops files.
+                </div>
+                <div class="home-agent-status">
+                  <span class="home-agent-spinner" aria-hidden="true"></span>
+                  <span class="home-agent-thinking">thinking...</span>
+                  <span class="home-agent-posted">Posted a new revision</span>
+                </div>
+              </div>
             </.chapter>
 
             <.chapter
               num="04"
-              label="Revise"
-              sentinel_step="revise"
-              cta_label="Show revised review"
-              active={@demo_step == :revise}
+              label="Approve"
+              sentinel_step="final"
+              cta_label="Approve"
+              active={@demo_step == :final}
             >
-              <h2>Approvals carry, denials reset.</h2>
-              <p>v2 collapses the resolved section. The reviewer reads just what's new.</p>
+              <h2>Approve the new revision.</h2>
+              <p>
+                The denied section is resolved, approvals carry forward, and the packet lands clean.
+              </p>
             </.chapter>
           </div>
 
@@ -204,7 +220,7 @@ defmodule ReviewsWeb.HomeLive do
           </span>
           <span class="home-demo-rev">
             <span class="pip" aria-hidden="true"></span>
-            <span>{if @step == :revise, do: "v2", else: "v1"}</span>
+            <span>{if @step in [:reprompt, :final], do: "v2", else: "v1"}</span>
           </span>
         </div>
 
@@ -222,13 +238,13 @@ defmodule ReviewsWeb.HomeLive do
               <span class="add">+412</span> <span class="del">−47</span>
             </span>
             <span class="sep">/</span>
-            <span>{if @step == :revise, do: "~14 min", else: "~2 hr"}</span>
+            <span>{if @step in [:reprompt, :final], do: "~14 min", else: "~2 hr"}</span>
           </div>
 
           <.demo_section
             id="section-1"
             state={section_state(@step, :section_1)}
-            expanded={@step in [:review, :reprompt]}
+            expanded={@step in [:push, :review]}
             title="Canonical packet storage and API shape"
             effort="Deep"
             effort_class="is-deep"
@@ -245,7 +261,7 @@ defmodule ReviewsWeb.HomeLive do
           <.demo_section
             id="section-2"
             state={section_state(@step, :section_2)}
-            carried={@step == :revise}
+            carried={@step in [:reprompt, :final]}
             title="CLI authoring and packet validation"
             effort="Deep"
             effort_class="is-deep"
@@ -266,14 +282,6 @@ defmodule ReviewsWeb.HomeLive do
             estimate="~6 min"
             desc="Section-level state carries across patchsets so reviewers don't re-read approved work."
           />
-        </div>
-
-        <div class="home-demo-reprompt" role="status" aria-live="polite">
-          <span class="home-demo-reprompt-head">Re-prompt</span>
-          <div class="home-demo-reprompt-body">
-            Please handle deletions in the v1/v2 diff walker — the carryover marker disappears when a denied section drops files.
-          </div>
-          <div class="home-demo-reprompt-cmd">reviews push --update structured-markdown-packets</div>
         </div>
       </div>
     </div>
@@ -498,24 +506,20 @@ defmodule ReviewsWeb.HomeLive do
   # Maps `(step, section)` → the visual state the packet preview should show.
   #
   # Story arc:
+  #   :intro    all sections pending, section 1 collapsed
   #   :push     all sections pending, section 1 expanded with the diff
   #   :review   reviewer comments on section 1 (CSS reveal at +0ms),
   #             then denies section 1 (+600ms), then approves section 2 (+1200ms)
-  #   :reprompt same state plus the re-prompt card sliding in
-  #   :revise   v2 patchset: section 1 collapses, its deny is GONE (back to
-  #             pending), section 2 keeps its approval with an "approved in v1"
-  #             carryover marker. The comment and its annotation row are gone.
+  #   :reprompt v2 patchset: section 1 collapses, its deny is gone, section 2
+  #             keeps its approval with an "approved in v1" carryover marker
+  #   :final    the revised packet is approved.
 
-  # All sections start pending in :push.
+  defp section_state(:intro, _), do: :pending
   defp section_state(:push, _), do: :pending
-
-  # Section 1 gets denied in :review/:reprompt, then back to :pending in :revise
-  # (the agent's v2 cleared the issue, so the denial is gone).
-  defp section_state(:revise, :section_1), do: :pending
-  defp section_state(_, :section_1), do: :denied
-
-  # Section 2 gets approved during :review and stays approved (with the
-  # carryover marker added in :revise).
+  defp section_state(:review, :section_1), do: :denied
+  defp section_state(:review, :section_2), do: :approved
+  defp section_state(:final, _), do: :approved
+  defp section_state(_, :section_1), do: :pending
   defp section_state(_, :section_2), do: :approved
 
   # Section 3 stays undecided across the whole story — it's there to show the
