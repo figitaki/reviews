@@ -4,8 +4,11 @@ This doc covers everything you need to ship Reviews to production: the prod
 GitHub OAuth app, the Fly deploy, the GitHub mirror, and the CI/CD pipeline that
 auto-deploys `main`.
 
-The currently-deployed prod app is **`reviews-dev`** on Fly (`reviews-dev.fly.dev`).
-The name has `-dev` for historical reasons; treat it as production.
+The currently-deployed prod app is **`reviews-dev`** on Fly, served at the
+custom domain **`reviews.figitaki.dev`**. The Fly app name keeps the `-dev`
+suffix for historical reasons; treat it as production. The legacy Fly hostname
+`reviews-dev.fly.dev` still resolves but 301-redirects to the custom domain via
+`ReviewsWeb.Plugs.CanonicalHost`.
 
 For per-PR preview environments (a separate workflow that deploys
 `reviews-pr-<number>.fly.dev` apps), see [`PREVIEW_ENVS.md`](PREVIEW_ENVS.md).
@@ -68,10 +71,10 @@ share client secrets across environments.
 2. Fill in:
    - **Application name:** `Reviews (prod)` — or whatever name you want users
      to see on the consent screen.
-   - **Homepage URL:** `https://reviews-dev.fly.dev`
+   - **Homepage URL:** `https://reviews.figitaki.dev`
    - **Application description:** _(optional)_ "Code review tool for arbitrary
      diffs."
-   - **Authorization callback URL:** `https://reviews-dev.fly.dev/auth/github/callback`
+   - **Authorization callback URL:** `https://reviews.figitaki.dev/auth/github/callback`
      — exact path matters; this is the route registered at
      `lib/reviews_web/router.ex:35`.
 3. **Register application**. Copy the **Client ID**.
@@ -90,19 +93,19 @@ Fly will restart the app. Confirm it came up:
 
 ```sh
 fly status -a reviews-dev
-curl -sI https://reviews-dev.fly.dev/ | head -1   # expect: HTTP/2 200
+curl -sI https://reviews.figitaki.dev/ | head -1   # expect: HTTP/2 200
 ```
 
 ### Smoke-test the flow
 
-1. Open `https://reviews-dev.fly.dev/auth/github` in an incognito window.
+1. Open `https://reviews.figitaki.dev/auth/github` in an incognito window.
 2. Authorize the app.
 3. You should land back on the site, signed in. Navigate to `/settings` —
    you'll see a "Mint API token" control. Mint one to use with the CLI:
 
    ```sh
    reviews login
-   # server_url: https://reviews-dev.fly.dev
+   # server_url: https://reviews.figitaki.dev
    # api_token:  <paste from /settings>
    ```
 
@@ -113,7 +116,7 @@ curl -sI https://reviews-dev.fly.dev/ | head -1   # expect: HTTP/2 200
    reviews push --title "test review"
    ```
 
-   It should print a `https://reviews-dev.fly.dev/r/<slug>` URL.
+   It should print a `https://reviews.figitaki.dev/r/<slug>` URL.
 
 ---
 
@@ -125,7 +128,7 @@ Beyond the GitHub OAuth pair, the app needs:
 | ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------- |
 | `SECRET_KEY_BASE`  | `mix phx.gen.secret`                                  | 64-byte random hex. Phoenix raises at boot if unset.                  |
 | `DATABASE_URL`     | Provisioned automatically by `fly postgres attach`    | `ecto://user:pass@host/db` format.                                    |
-| `PHX_HOST`         | Already set in `fly.toml` (`reviews-dev.fly.dev`)     | Change here, not as a secret, if you move to a custom domain.         |
+| `PHX_HOST`         | Already set in `fly.toml` (`reviews.figitaki.dev`)    | Change here, not as a secret, if you move to a custom domain.         |
 
 To set the secret-class entries:
 
@@ -264,13 +267,26 @@ need to ship a forward-fix migration instead — don't roll back blindly.
 
 ---
 
-## 9. Custom domain (when ready)
+## 9. Custom domain
 
-Pointing `reviews.yourdomain.com` at the Fly app:
+The app is served at `reviews.figitaki.dev`. DNS for `figitaki.dev` is managed
+in Vercel (Vercel nameservers); the subdomain points at the Fly app via an
+`A`/`AAAA` record pair:
 
-1. `fly certs add reviews.yourdomain.com -a reviews-dev`
+| Type   | Name      | Value                      |
+| ------ | --------- | -------------------------- |
+| `A`    | `reviews` | `66.241.124.22`            |
+| `AAAA` | `reviews` | `2a09:8280:1::114:8b7b:0`  |
+
+Fly issues the TLS cert via Let's Encrypt (allowed by the `figitaki.dev` CAA
+records). `ReviewsWeb.Plugs.CanonicalHost` 301-redirects the legacy
+`reviews-dev.fly.dev` hostname to the custom domain.
+
+To repoint at a different domain:
+
+1. `fly certs add reviews.newdomain.com -a reviews-dev`
 2. Add the DNS records Fly prints (an `A`/`AAAA` pair, or a `CNAME`).
-3. Update `fly.toml`: change `PHX_HOST = 'reviews.yourdomain.com'`.
+3. Update `fly.toml`: change `PHX_HOST = 'reviews.newdomain.com'`.
 4. Update the GitHub OAuth App's **Homepage URL** and
    **Authorization callback URL** to the new domain.
 5. `fly deploy -a reviews-dev` to pick up the new `PHX_HOST`.
@@ -298,7 +314,7 @@ app is generating. Check:
 
 **`reviews push` returns 401:**
 Your API token is wrong, expired, or revoked. Re-mint at
-`https://reviews-dev.fly.dev/settings`, then `reviews login` again.
+`https://reviews.figitaki.dev/settings`, then `reviews login` again.
 
 **Fly deploy succeeds but app boots-and-dies:**
 Likely a missing required env (`SECRET_KEY_BASE`, `DATABASE_URL`). Check
