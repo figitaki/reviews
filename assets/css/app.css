@@ -117,14 +117,15 @@
 
 /* ----------------------------------------------------------------------------
    Reviews stylesheets, loaded in order:
-   - tokens.css      design-system color/type/spacing tokens + `.t-*` classes
-   - components.css  the `.r-*` UI component set (additive; prefer for new code)
-   - packet.css     `.review-*` and `.rev-*` — the in-product packet UI
-   - landing.css     landing chrome + the public homepage
-   - playground.css  `/design` route — the design-system playground
+   - tokens.css         design-system color/type/spacing tokens + `.t-*` classes
+   - components.css     the `.r-*` UI component set (additive; prefer for new code)
+   - packet.css         `.review-*` and `.rev-*` — the in-product packet UI
+   - landing.css        landing chrome + the public homepage
+   - product-shell.css  `.ds-*` components + `.design-page` chrome used by
+                        ReviewLive and SettingsLive
 ---------------------------------------------------------------------------- */
 @import "./tokens.css";
 @import "./components.css";
 @import "./packet.css";
 @import "./landing.css";
-@import "./playground.css";
+@import "./product-shell.css";

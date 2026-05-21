@@ -56,12 +56,6 @@ defmodule ReviewsWeb.Router do
   if Application.compile_env(:reviews, :dev_routes) do
     import Phoenix.LiveDashboard.Router
 
-    scope "/", ReviewsWeb do
-      pipe_through :browser
-
-      live "/design", DesignLive, :show
-    end
-
     scope "/dev" do
       pipe_through :browser
 
