@@ -10,9 +10,13 @@ initial HTML.
 
 - **Architecture:** Single `CodeView` per patchset. Pierre owns virtualization,
   sticky headers, and selection. "All expanded" becomes the native state.
-- **Scope:** **Changes view only.** The AI Review Packet view keeps its existing
-  section-collapse UX and its per-hunk `FileDiff` islands, untouched. The two
-  diff-rendering paths coexist after this work.
+- **Scope:** The **Changes view** gets the full CodeView migration. The **Review
+  Packet view** gets a lighter treatment (Phase 5 — streaming + lazy render, no
+  CodeView): `CodeViewItem` is `file | diff` only and cannot host the markdown
+  prose interleaved between section hunks. The two diff-rendering paths coexist.
+- **Layout:** The Changes view becomes a **full-height single-pane layout** —
+  fixed header + sidebar, CodeView pane fills the viewport — so there is exactly
+  one (real) scroll region and no nested-scroll wart.
 - **Dependency:** Bump `@pierre/diffs` `1.1.22` → `1.2.1` (see spike findings —
   `CodeView` does not exist before `1.2.0`).
 
@@ -71,11 +75,12 @@ needed, and the custom `StickyHunkHeader` hook is dropped for the Changes view.
 
 `CodeView.setup(root: HTMLElement)` virtualizes against **`root`'s own scroll**,
 not the window (the standalone `Virtualizer` accepted `Document`; `CodeView`
-does not). So the Changes view becomes a **height-bounded inner-scroll panel**:
-the `root` element needs an explicit height (e.g. `calc(100dvh - header)`) and
-the page header stays fixed outside it. Sticky file headers inside the panel are
-handled by `stickyHeaders: true`. This is a real layout change from today's
-single window scroll — see Risks.
+does not). The Changes view therefore adopts a **full-height single-pane
+layout**: fixed header + sidebar, and the CodeView `root` fills the remaining
+viewport (`calc(100dvh - header)`). The page itself does not scroll, so there is
+exactly one real scroll region — a small diff just does not scroll, no
+nested-scrollbar wart. Sticky file headers inside the pane come from
+`stickyHeaders: true`. See Risks for the layout rework.
 
 ### Other confirmed details
 
@@ -190,7 +195,8 @@ view keeps `expanded_section_ids` / `expanded_hunk_ids` and `@section_*`.)
 
 - `review_live.ex`: in the Changes-view branch (`review_live.ex:566-577`),
   render the single CodeView container instead of the `#diff-files` section.
-  Keep the sidebar + file tree. Give the panel a bounded height (inner scroll).
+  Keep the sidebar + file tree. Restructure the Changes view into a full-height
+  single-pane layout (fixed header + sidebar, CodeView pane fills the viewport).
 - Add the `{:stream_diffs, cursor}` loop and first-batch kickoff.
 - Split `ReviewView.snapshot` into light metadata vs. per-batch diff fetch.
 - Collapse `select_diff_style` → one `code_view:set_diff_style` push;
@@ -218,12 +224,36 @@ view keeps `expanded_section_ids` / `expanded_hunk_ids` and `@section_*`.)
   internals). The 27-test suite must stay green.
 - `mix precommit`.
 
+## Phase 5 — Packet-view streaming + lazy render (beefy sections)
+
+CodeView does not fit the packet view — `CodeViewItem` is `file | diff` only and
+cannot host the markdown prose interleaved between hunks, and that interleaving
+is the packet's purpose. The packet view keeps its per-hunk `FileDiff` islands
+but takes the two transferable benefits — no CodeView, no inner scroll:
+
+- **Stream the diffs off the socket.** Today every expanded hunk inlines its
+  full `data-raw-diff` in the section-body HTML (`packet_components.ex:982`) —
+  opening a beefy section ships all of it in one LiveView payload. Instead,
+  render the hunk-card shells and stream the raw diff text into the islands in
+  batches via `push_event` once a section opens. Reuses the Phase 2 loop.
+- **Viewport-gated rendering.** Defer the heavy Pierre `render()` until a hunk
+  shell nears the viewport (IntersectionObserver in the `DiffRenderer` hook),
+  instead of mounting every island the instant a section opens.
+- **Relax the auto-open budgets.** With rendering deferred and diffs streamed,
+  `@section_expand_all_line_limit`, `@section_expand_all_file_limit`,
+  `@section_auto_open_loc_budget` and friends (`review_live.ex:29-35`) can be
+  loosened or dropped — beefy sections can expand-all by default.
+
+Lower blast radius than the CodeView migration; depends on the Phase 2 streaming
+loop. Land after Phases 1–4.
+
 ## Risks
 
-- **Inner-scroll layout change.** CodeView owns its scroll; the Changes view
-  body becomes a height-bounded sidebar + panel region instead of one window
-  scroll. Touches `app.css` (`.rev-shell`, `.review-hunk-list`) and the sticky
-  header math. Medium effort, contained to the Changes view.
+- **Full-height layout rework.** The Changes view becomes fixed header + sidebar
+  + a viewport-filling CodeView pane (one real scroll region). Touches `app.css`
+  (`.rev-shell`, `.review-hunk-list`) and forces a call on the review
+  header/description — compact fixed chrome, or it scrolls away above the pane.
+  Medium effort, contained to the Changes view.
 - **Packet view regression** from the `1.2.1` bump — exercise it after Phase 1.
 - **Composer per-item updates.** Opening/closing the comment composer is now an
   `updateItem` + `version` bump rather than a full island re-render; verify
@@ -233,8 +263,9 @@ view keeps `expanded_section_ids` / `expanded_hunk_ids` and `@section_*`.)
 
 ## Out of scope
 
-- **AI Review Packet view** — keeps per-hunk `FileDiff` islands and section
-  collapse. Both renderers coexist.
+- **Full CodeView in the packet view** — structurally impossible (`CodeViewItem`
+  is `file | diff`; cannot host section prose). The packet view keeps its
+  per-hunk `FileDiff` islands and gets the lighter Phase 5 treatment instead.
 - **Syntax highlighting / Shiki swap.** `CodeView` is built on Shiki, but
   turning highlighting *on* stays governed by the separate deferred plan (see
   `diff_renderer.js:8-18` and CLAUDE.md). The CodeView integration keeps the
@@ -265,3 +296,4 @@ view keeps `expanded_section_ids` / `expanded_hunk_ids` and `@section_*`.)
    unit.
 3. **Phase 3** — navigation + mark-viewed.
 4. **Phase 4** — cleanup + test rewrite; `mix precommit`.
+5. **Phase 5** — packet-view streaming + lazy render, after Phases 1–4 land.
