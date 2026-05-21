@@ -65,6 +65,13 @@ if config_env() == :prod do
 
   config :reviews, ReviewsWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
+    # Accept WebSocket origins from both the canonical host and the legacy
+    # Fly hostname, so LiveView sockets still connect during the redirect
+    # window after a 301 from reviews-dev.fly.dev.
+    check_origin: [
+      "https://#{host}",
+      "https://reviews-dev.fly.dev"
+    ],
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
