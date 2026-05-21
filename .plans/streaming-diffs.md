@@ -8,13 +8,85 @@ initial HTML.
 
 ## Decisions (locked)
 
-Answered before this plan was written:
-
 - **Architecture:** Single `CodeView` per patchset. Pierre owns virtualization,
   sticky headers, and selection. "All expanded" becomes the native state.
 - **Scope:** **Changes view only.** The AI Review Packet view keeps its existing
   section-collapse UX and its per-hunk `FileDiff` islands, untouched. The two
   diff-rendering paths coexist after this work.
+- **Dependency:** Bump `@pierre/diffs` `1.1.22` → `1.2.1` (see spike findings —
+  `CodeView` does not exist before `1.2.0`).
+
+## Phase 0 — Spike findings (done)
+
+Verified by installing the package and reading `dist/*.d.ts` for `1.1.22`
+(pinned) and `1.2.1` (latest).
+
+### `CodeView` requires a version bump
+
+- `@pierre/diffs@1.1.22` does **not** export `CodeView`. Its multi-instance
+  primitive is a shared `Virtualizer` + N `VirtualizedFileDiff`.
+- `CodeView` landed in `1.2.0` (after `1.2.0-beta.0..6`); latest stable is
+  **`1.2.1`**. → bump `assets/package.json` + `bun.lock`.
+- The packet view's `vanilla_renderer.js` uses `FileDiff`, `Virtualizer`,
+  `VirtualizedFileDiff`, `parsePatchFiles` — all still exported in `1.2.1`.
+  Minor bump, low-risk, but the packet view must be regression-tested.
+
+### `CodeView` API confirmed — it fits, and simplifies the plan
+
+- **Self-contained virtualizer.** `new Diffs.CodeView(options?)` then
+  `codeView.setup(root)`. No separate `Virtualizer` to construct/wire — CodeView
+  manages its `VirtualizedFileDiff` child instances and render range itself.
+- **Streaming methods** are exactly what batched server push needs:
+  `addItems(items)` (documented append-only fast path — measures new items
+  immediately, single render), `addItem`, `setItems`, `updateItem`,
+  `updateItemId`, `getItem`, `reset`.
+- **`scrollTo(target)`** supports `{type:'item'|'line'|'range'|'position', id,
+  align, behavior}` — covers file-tree and open-threads navigation.
+- **`subscribeToScroll(listener)`** exposes scroll position — enables optional
+  scroll-aware batch prioritization later.
+- **Item shape** — `CodeViewDiffItem = { id, type:'diff', fileDiff:
+  FileDiffMetadata, annotations?: DiffLineAnnotation[], version?, collapsed? }`.
+  - `fileDiff` is produced by `parsePatchFiles(rawDiff)` — the same call
+    `vanilla_renderer.js` already makes. So **the server streams raw git-diff
+    text and the hook parses it client-side**; no raw diff in socket assigns,
+    no `data-raw-diff` attribute.
+  - `annotations: DiffLineAnnotation[]` (`{side, lineNumber, metadata}`) already
+    matches the output of the existing `threadsToAnnotations` (`schemas.js`).
+  - `collapsed?: boolean` is **per-item state** — per-file collapse is native to
+    CodeView (`updateItem` with `collapsed`); "all expanded by default" = simply
+    never setting it. No server-side expansion bookkeeping at all.
+  - `version?: number` — bump it when an item's annotations change so CodeView
+    re-renders just that item.
+
+### Mark-viewed risk — resolved
+
+`CodeViewOptions` exposes per-item header render slots — `renderCustomHeader`,
+`renderHeaderPrefix`, `renderHeaderMetadata` — plus `renderGutterUtility` /
+`onGutterUtilityClick`, and `stickyHeaders?: boolean`. The "mark file viewed"
+control and viewed-state pill render **inside the CodeView item header** via
+`renderHeaderMetadata`, wired to `pushEvent`. No relocation to the sidebar is
+needed, and the custom `StickyHunkHeader` hook is dropped for the Changes view.
+
+### New finding — CodeView is an inner-scroll container
+
+`CodeView.setup(root: HTMLElement)` virtualizes against **`root`'s own scroll**,
+not the window (the standalone `Virtualizer` accepted `Document`; `CodeView`
+does not). So the Changes view becomes a **height-bounded inner-scroll panel**:
+the `root` element needs an explicit height (e.g. `calc(100dvh - header)`) and
+the page header stays fixed outside it. Sticky file headers inside the panel are
+handled by `stickyHeaders: true`. This is a real layout change from today's
+single window scroll — see Risks.
+
+### Other confirmed details
+
+- `itemMetrics?: Partial<VirtualFileMetrics>` — height estimates
+  (`lineHeight`, `diffHeaderHeight`, `spacing`, ...); tune in the renderer.
+- `layout?: {paddingTop, paddingBottom, gap}` — inter-item spacing.
+- Pass-through diff options include `diffStyle`, `theme`, `unsafeCSS`,
+  `expandUnchanged`, `collapsedContextThreshold` — split/unified toggle and the
+  typography `unsafeCSS` carry over via one `setOptions` call.
+- Constructor takes an optional `workerManager` — **omit it**; single-threaded
+  highlighter stays the v1 target per CLAUDE.md.
 
 ## Why the current design can't just "expand all"
 
@@ -28,201 +100,168 @@ renders one `PacketComponents.hunk_card` per file. Each card:
 - Mounts its own `Diffs.FileDiff` / `Diffs.VirtualizedFileDiff` with its own
   `Virtualizer` (`vanilla_renderer.js`).
 
-So expanding everything today means: the full raw diff of every file in the
-initial HTML payload, plus N island mounts each parsing + rendering + holding a
-virtualizer. That cliff is exactly why `expanded_*` MapSets and the
-`@changes_auto_open_line_limit` budget (`review_live.ex:35`) exist.
+So expanding everything today means the full raw diff of every file in the
+initial HTML payload, plus N island mounts each with its own virtualizer. That
+cliff is why `expanded_*` MapSets and the `@changes_auto_open_line_limit` budget
+(`review_live.ex:35`) exist. One `CodeView` only renders visible lines, so "all
+expanded" is free and the budget logic goes away.
 
-`CodeView` removes the cliff: it is "a mixed, virtualized list of files and
-diffs in one scroll container" that "only renders what is visible." One
-container, one virtualizer, off-screen files cost ~nothing — so "all expanded"
-is free, and the budget logic can go away.
-
-Note: in the Changes view a "card" is already **file-level** — `hunk_card` is
-fed `ReviewHunks.combine_consecutive(hunks)` (`diff_components.ex:129`), i.e. all
-of a file's hunks combined. So one `CodeView` item == one file maps cleanly;
-there is no per-hunk granularity to preserve here.
+In the Changes view a "card" is already **file-level** — `hunk_card` is fed
+`ReviewHunks.combine_consecutive(hunks)` (`diff_components.ex:129`). So one
+`CodeViewDiffItem` == one file maps cleanly; no per-hunk granularity to keep.
 
 ## Target architecture
 
 ### Client: one CodeView
 
-- New `assets/js/diff_renderer/code_view_renderer.js` — wraps `Diffs.CodeView`
-  plus a single `Diffs.Virtualizer`, mirroring the structure of
-  `vanilla_renderer.js`. Virtualizer is set up against the document/window
-  (vanilla supports window scrolling) so the page keeps one natural scroll.
+- New `assets/js/diff_renderer/code_view_renderer.js` — wraps a single
+  `Diffs.CodeView` (self-contained; no separate `Virtualizer`). On `setup` it is
+  given the height-bounded `root` container element.
 - New hook `assets/js/hooks/code_view.js` on a single
-  `<div id="changes-code-view" phx-hook="CodeView" phx-update="ignore">`.
-  It owns the CodeView instance and handles server pushes:
-  - `code_view:add_items` → `codeView.addItems(items)` (streaming batches).
-  - `code_view:update_threads` → recompute `lineAnnotations` for one file,
-    `codeView.updateItem(...)`.
-  - `code_view:set_diff_style` → re-render with `diffStyle` (one event, not
-    one-per-file).
-  - `code_view:scroll_to` → `codeView.scrollTo(itemId)` for file-tree / open-
-    threads navigation.
-- Reuse `annotation_ui.js` (composer, thread bubble, sign-in prompt),
-  `lib/translate.js`, and `schemas.js` unchanged — `CodeView` shares the
-  `lineAnnotations` / `onLineNumberClick` / `onTokenClick` / `renderAnnotation`
-  props with `FileDiff`.
-- Register `CodeView` in `app.js` alongside the existing hooks.
-
-A CodeView **item** carries: a stable id (file path), the file's raw diff (or
-pre-parsed `FileDiffMetadata`), status, and per-file `lineAnnotations`.
+  `<div id="changes-code-view" phx-hook="CodeView" phx-update="ignore">`. It
+  owns the CodeView instance and handles server pushes:
+  - `code_view:add_items` → parse each raw diff with `parsePatchFiles`, build
+    `CodeViewDiffItem`s, `codeView.addItems(items)` (streaming batches).
+  - `code_view:update_threads` → recompute one item's `annotations`, bump
+    `version`, `codeView.updateItem(...)`.
+  - `code_view:set_diff_style` → `codeView.setOptions({diffStyle})` (one event,
+    not one-per-file).
+  - `code_view:scroll_to` → `codeView.scrollTo({type:'item', id})`.
+  - `code_view:reset` → `codeView.reset()` on patchset switch.
+- Item headers: `renderHeaderMetadata` renders the mark-viewed control + viewed
+  pill, wired to `pushEvent`. `stickyHeaders: true`.
+- Comment composer: `renderAnnotation` + `onLineNumberClick` / `onTokenClick`
+  drive the composer; reuse `annotation_ui.js`, `lib/translate.js`,
+  `schemas.js`. Opening the composer = `updateItem` on the affected item with a
+  bumped `version` and an extra composer annotation (per-item update, vs today's
+  full island re-render).
+- Register `CodeView` in `app.js`.
 
 ### Server: stream the diffs over the socket
 
-This is the "streaming capabilities of LiveView" piece — the stateful socket is
-used to push diff payloads progressively after the first paint, rather than
-`stream/3` DOM streams (the diff body lives inside a `phx-update="ignore"`
-island, so LV-managed DOM streaming does not apply).
+The stateful socket pushes diff payloads progressively after first paint
+(`stream/3` DOM streams do not apply — the diff body lives in a
+`phx-update="ignore"` island).
 
 - `mount/3` (connected) renders the page shell + the **empty** CodeView
   container, and assigns only **light file metadata** (path, status, +/−
-  counts, viewed state) — no raw diffs in the render tree, no `data-raw-diff`.
+  counts, viewed state) — no raw diffs in the render tree.
 - Streaming loop: `handle_info({:stream_diffs, cursor}, socket)` pops the next
-  batch of files, reads each `File.raw_diff` (the column already exists —
-  `file.ex`), builds CodeView item payloads, `push_event`s
-  `code_view:add_items`, then reschedules itself with `send(self(), ...)` so the
-  LiveView yields between batches and stays responsive.
-- Kick off the first batch from the connected `mount/3` via `push_event` so the
-  top of the page fills in one round-trip.
-- On patchset switch / `{:patchset_pushed, n}`: push `code_view:reset` (or
-  `setItems([])`) and restart the loop.
+  batch of files, reads each `File.raw_diff` (column already exists — `file.ex`),
+  `push_event`s `code_view:add_items` with raw diff text, then reschedules
+  itself with `send(self(), ...)` so the LiveView yields between batches.
+- Kick the first batch off from the connected `mount/3` so the top of the page
+  fills in one round-trip.
+- On patchset switch / `{:patchset_pushed, n}`: push `code_view:reset` and
+  restart the loop.
 
 **Intelligent ordering.** Stream in file-tree order so the top of the viewport
-fills first; make the **first batch small** (≈ first 6 files or ≈400 changed
-lines, whichever comes first) for fast first paint, then larger batches
-(≈30 files / ≈2000 lines). Constants tunable, defined next to the existing
-`review_live.ex` budget constants. Optional later enhancement: client reports
-scroll position and the server reprioritizes remaining batches — **not** in
-scope for v1.
+fills first; **first batch small** (≈6 files or ≈400 changed lines, whichever
+first) for fast first paint, then larger batches (≈30 files / ≈2000 lines).
+Constants live next to the existing `review_live.ex` budget constants. Optional
+later: use `subscribeToScroll` to report position and reprioritize remaining
+batches — **not** v1.
 
-**Memory win.** Raw diffs no longer need to live in socket assigns for the whole
-session: they are read per-batch from the `files` rows, pushed once, and then
-owned by the client's CodeView. `ReviewView.snapshot` / `file_diff_meta`
-(`review_view.ex:114-133`) gets a "light" path that skips loading `raw_diff`
-into `file_diffs`; a separate per-batch fetch supplies the diff text.
+**Memory win.** Raw diffs leave socket assigns: read per-batch from the `files`
+rows, pushed once, then owned by the client's CodeView. `ReviewView.snapshot` /
+`file_diff_meta` (`review_view.ex:114-133`) gets a "light" path that skips
+loading `raw_diff` into `file_diffs`.
 
 ### Expanded-by-default
 
-With CodeView virtualizing, the Changes view drops:
+CodeView virtualizes, so the Changes view drops `expanded_file_ids`, the
+changes-view use of `expanded_hunk_ids`, `@changes_auto_open_line_limit`, and
+the `default_expanded_changes_hunk_ids` / `apply_changes_default_expansion?` /
+`maybe_apply_changes_default_expansion` / `changes_default_expanded_patchset_ids`
+machinery (`review_live.ex:1023-1057`), plus the `toggle_file_diff` /
+`toggle_hunk_diff` handlers for the Changes view. Per-file collapse, if wanted,
+is a `collapsed` field on the item — client-side, no server assigns. (The packet
+view keeps `expanded_section_ids` / `expanded_hunk_ids` and `@section_*`.)
 
-- `expanded_file_ids`, and the changes-view use of `expanded_hunk_ids`.
-- `@changes_auto_open_line_limit` and the `default_expanded_changes_hunk_ids` /
-  `apply_changes_default_expansion?` / `maybe_apply_changes_default_expansion`
-  machinery (`review_live.ex:1023-1057`) and
-  `changes_default_expanded_patchset_ids`.
-- `toggle_file_diff` / `toggle_hunk_diff` handlers for the Changes view.
+## Phase 1 — Dependency bump + CodeView renderer/hook (client)
 
-(The packet view keeps `expanded_section_ids` / `expanded_hunk_ids` and the
-`@section_*` constants — those are still its code paths.)
-
-Per-file collapse, if still wanted, becomes a CodeView item-state concern
-(`updateItem`) rather than server assigns — treat as optional polish, not core.
-
-## Phase 0 — Spike & verify (no behavior change)
-
-1. Confirm `Diffs.CodeView` is exported by the pinned `@pierre/diffs@1.1.22`
-   (`assets/package.json`) and that its API has `setItems` / `addItems` /
-   `updateItem` / `scrollTo`, the shared annotation props, sticky headers, and
-   window-scroll virtualization. **If not present, bump `@pierre/diffs`** to the
-   minimum version that ships `CodeView`, and re-check `Virtualizer` config
-   (`overscrollSize`, `intersectionObserverMargin`, `resizeDebugging`).
-2. Decide where **"mark file viewed"** lives once CodeView owns the (shadow-DOM)
-   file headers — see Risks. Recommendation to validate: move the viewed
-   pill + toggle into the file-tree sidebar rows, which already render per-file
-   stats and have light-DOM `phx-click` surface.
-
-## Phase 1 — CodeView renderer + hook (client)
-
-- Add `code_view_renderer.js` and `hooks/code_view.js`; wire into `app.js`.
-- Build `lineAnnotations` per item from threads grouped by file (reuse
-  `threadsToAnnotations`).
-- Theme observer + `diffStyle` handling, mirroring `vanilla_renderer.js`.
+- Bump `@pierre/diffs` to `1.2.1` (`assets/package.json`, `bun.lock`);
+  smoke-test the packet view (`vanilla_renderer.js`) for regressions.
+- Add `code_view_renderer.js` + `hooks/code_view.js`; wire into `app.js`.
+- Build `annotations` per item via `threadsToAnnotations`; theme observer and
+  `diffStyle` handling mirroring `vanilla_renderer.js`.
 
 ## Phase 2 — Server streaming (Changes view)
 
-- `review_live.ex`: in the Changes-view branch (`@live_action == :changes ||
-  !has_packet`, `review_live.ex:566-577`), render the single CodeView container
-  instead of the `#diff-files` section. Keep the sidebar + file tree.
+- `review_live.ex`: in the Changes-view branch (`review_live.ex:566-577`),
+  render the single CodeView container instead of the `#diff-files` section.
+  Keep the sidebar + file tree. Give the panel a bounded height (inner scroll).
 - Add the `{:stream_diffs, cursor}` loop and first-batch kickoff.
 - Split `ReviewView.snapshot` into light metadata vs. per-batch diff fetch.
-- Collapse `select_diff_style` to one `code_view:set_diff_style` push;
-  `create_comment` + `{:thread_published, _}` to one `code_view:update_threads`
-  push.
+- Collapse `select_diff_style` → one `code_view:set_diff_style` push;
+  `create_comment` + `{:thread_published, _}` → one `code_view:update_threads`.
 - Delete the changes-view expansion code paths and constants listed above.
 
-## Phase 3 — Navigation & chrome re-homing
+## Phase 3 — Navigation & chrome
 
 - File tree: `ChangesFileTree.scrollToPath` (`changes_file_tree.js:270-277`)
   currently does `getElementById("file-<id>").scrollIntoView()`. Off-screen
-  CodeView items have no stable light-DOM node — route through a
-  `reviews:scroll-to-anchor`-style custom event that the CodeView hook catches
-  and answers with `codeView.scrollTo`.
+  CodeView items have no light-DOM node — route through a custom event the
+  CodeView hook answers with `codeView.scrollTo`.
 - Open-threads sidebar: same scroll-to path.
-- Mark-viewed: implement the Phase 0 decision.
+- Mark-viewed: `renderHeaderMetadata` control + `pushEvent` (per spike).
 
 ## Phase 4 — Cleanup & tests
 
-- Remove now-dead Changes-view code: per-file `DiffRenderer` mount in the
-  Changes view, the `shouldVirtualize` thresholds (CodeView always virtualizes),
-  `StickyHunkHeader` usage if the Changes view was its only consumer.
-  Keep `diff_renderer.js` / `vanilla_renderer.js` / `hunk_card` — still used by
-  the packet view.
+- Remove dead Changes-view code: per-file `DiffRenderer` mount in the Changes
+  view, the `shouldVirtualize` thresholds, `StickyHunkHeader` usage if the
+  Changes view was its only consumer. Keep `diff_renderer.js` /
+  `vanilla_renderer.js` / `hunk_card` — still used by the packet view.
 - Rewrite `test/reviews_web/live/review_live_test.exs` Changes-view assertions:
-  the diff body moves into shadow DOM, so assert on the `#changes-code-view`
-  hook element + the `code_view:add_items` push payloads (per project test
-  guidelines: test the hook contract, not diff internals). The 27-test suite
-  must stay green.
-- `mix precommit` (`compile --warnings-as-errors`, `format`, `test`).
+  the diff body moves into shadow DOM, so assert on `#changes-code-view` + the
+  `code_view:add_items` push payloads (test the hook contract, not diff
+  internals). The 27-test suite must stay green.
+- `mix precommit`.
 
 ## Risks
 
-- **Mark-viewed / per-file chrome.** Today's mark-viewed is a light-DOM
-  `phx-click` button in the card header (`packet_components.ex:928-967`).
-  CodeView owns headers in shadow DOM. Resolution per Phase 0 — likely the file
-  tree sidebar. This is the highest-uncertainty item; spike it first.
-- **CodeView availability** in `1.1.22` — may force a version bump (Phase 0).
-- **Window vs inner scroll.** CodeView must virtualize against the window so the
-  page keeps one scrollbar and the sticky header keeps working; confirm in the
-  Phase 0 spike (the current `VirtualizedFileDiff` path already does
-  `virtualizer.setup(document, contentWrapper)`).
-- **Test churn.** Several `review_live_test.exs` cases assert `#file-<id>`
-  anchors and hunk toggle buttons; those move or disappear for the Changes view.
+- **Inner-scroll layout change.** CodeView owns its scroll; the Changes view
+  body becomes a height-bounded sidebar + panel region instead of one window
+  scroll. Touches `app.css` (`.rev-shell`, `.review-hunk-list`) and the sticky
+  header math. Medium effort, contained to the Changes view.
+- **Packet view regression** from the `1.2.1` bump — exercise it after Phase 1.
+- **Composer per-item updates.** Opening/closing the comment composer is now an
+  `updateItem` + `version` bump rather than a full island re-render; verify
+  composer open/cancel/save and thread refresh.
+- **Test churn.** `review_live_test.exs` cases asserting `#file-<id>` anchors
+  and hunk toggle buttons move or disappear for the Changes view.
 
 ## Out of scope
 
 - **AI Review Packet view** — keeps per-hunk `FileDiff` islands and section
   collapse. Both renderers coexist.
-- **Syntax highlighting / Shiki swap.** `CodeView` is built on Shiki, so this
-  work touches adjacent code, but turning highlighting *on* stays governed by
-  the separate deferred plan (see `diff_renderer.js:8-18` and CLAUDE.md). The
-  CodeView integration keeps the current plain-text presentation until that
-  plan lands. `⚠ overlap` with the deferred Shiki swap.
+- **Syntax highlighting / Shiki swap.** `CodeView` is built on Shiki, but
+  turning highlighting *on* stays governed by the separate deferred plan (see
+  `diff_renderer.js:8-18` and CLAUDE.md). The CodeView integration keeps the
+  current plain-text presentation until that plan lands. `⚠ overlap` with the
+  deferred Shiki swap.
 - **Token-level commenting** — stays deferred; the `token_range` schema
   discriminator and `Anchoring.relocate/3` stub remain.
-- **Scroll-position-aware batch reprioritization** — optional future
-  enhancement, not v1.
-- a11y items in `.plans/a11y-design-fixes.md` whose targets (`.rdr-*` line
-  gutter, etc.) move into CodeView's shadow DOM for the Changes view become moot
-  there; reconcile when that plan is next touched.
+- **Scroll-position-aware batch reprioritization** — optional future work.
+- a11y items in `.plans/a11y-design-fixes.md` whose targets (`.rdr-*` gutter,
+  etc.) move into CodeView's shadow DOM for the Changes view become moot there;
+  reconcile when that plan is next touched.
 
 ## Testing
 
 - `mix test`, `mix compile --warnings-as-errors`, `mix format --check-formatted`.
 - `reviews push` from a large checkout against the dev server; eyeball:
-  first-paint latency, scrolling, all-files-expanded, batch fill-in, threads
+  first-paint latency, inner-scroll, all-files-expanded, batch fill-in, threads
   rendering + reply, mark-viewed, file-tree + open-threads navigation,
   split/unified toggle, patchset switch.
-- Verify against a deliberately large review (many files, a 10k-line file) to
-  confirm virtualization holds.
+- Regression-check the packet view after the `1.2.1` bump.
+- Verify against a deliberately large review (many files, a 10k-line file).
 
 ## Suggested landing order
 
-1. **Phase 0 spike** — version check + mark-viewed decision. Cheap, unblocks the
-   rest.
-2. **Phases 1–2 together** — renderer/hook + server streaming; the Changes view
-   is non-functional in between, so land as one reviewable unit.
+1. ~~Phase 0 spike~~ — done (this section).
+2. **Phases 1–2 together** — dependency bump + renderer/hook + server streaming;
+   the Changes view is non-functional in between, so land as one reviewable
+   unit.
 3. **Phase 3** — navigation + mark-viewed.
 4. **Phase 4** — cleanup + test rewrite; `mix precommit`.
