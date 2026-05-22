@@ -1,0 +1,330 @@
+/* ============================================================================
+   Reviews Design System — Colors + Type
+   ----------------------------------------------------------------------------
+   Single source of truth for tokens used across the Reviews product (review
+   packet page, design playground, settings, home). Dark is the default
+   surface; a light theme exists with the same semantic role names. Tokens
+   are duplicated to two namespaces:
+
+   - `--review-*`  used on the `.review-page` (packet) surface
+   - `--ds-*`      used on the `.design-page` (playground) and shared widgets
+
+   The two namespaces hold identical values; we keep both so existing markup
+   (lifted from the codebase) continues to work. Prefer `--ds-*` for new work.
+============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   Fonts
+   ----------------------------------------------------------------------------
+   Reviews ships system fonts only — no webfonts. UI text is the host OS
+   sans, code/diff text is the host OS monospace. This is intentional: the
+   product is code-first, dense, and benefits from familiar OS metrics.
+---------------------------------------------------------------------------- */
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
+               Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* ----------------------------------------------------------------------------
+   Dark theme (default — what most of the product looks like)
+---------------------------------------------------------------------------- */
+:root,
+[data-theme="dark"] {
+  /* Surface */
+  --ds-bg:           #000;     /* page background */
+  --ds-panel:        #050505;  /* cards, sidebar */
+  --ds-panel-raised: #0b0b0c;  /* raised cards, hunk body */
+  --ds-hover:        #111113;  /* row/button hover */
+
+  /* Lines */
+  --ds-line:         #242426;  /* default card/divider */
+  --ds-line-strong:  #3a3a3d;  /* buttons, inputs, emphasized divider */
+
+  /* Text */
+  --ds-text:         #f5f5f5;  /* body */
+  --ds-muted:        #a3a3a3;  /* secondary text, meta */
+  --ds-faint:        #707073;  /* tertiary, placeholder, index numbers */
+  --ds-focus:        #fff;     /* focus ring */
+
+  /* Semantic */
+  --ds-add:          #25d0a0;  /* additions / approved / viewed */
+  --ds-del:          #ff5f76;  /* deletions / denied */
+  --ds-blue:         #7bb7ff;  /* modified status, info */
+  --ds-warn:         #ffd166;  /* renamed, partial-viewed, warning */
+}
+
+/* ----------------------------------------------------------------------------
+   Light theme — warm off-white, ink black. Optional.
+---------------------------------------------------------------------------- */
+[data-theme="light"] {
+  --ds-bg:           #f7f7f5;
+  --ds-panel:        #fff;
+  --ds-panel-raised: #fbfbf8;
+  --ds-hover:        #efefeb;
+
+  --ds-line:         #deded8;
+  --ds-line-strong:  #bdbdb5;
+
+  --ds-text:         #111;
+  --ds-muted:        #5f5f59;
+  --ds-faint:        #8a8a82;
+  --ds-focus:        #111;
+
+  --ds-add:          #0f9f78;
+  --ds-del:          #c7354f;
+  --ds-blue:         #315a83;
+  --ds-warn:         #946200;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --ds-bg:           #f7f7f5;
+    --ds-panel:        #fff;
+    --ds-panel-raised: #fbfbf8;
+    --ds-hover:        #efefeb;
+
+    --ds-line:         #deded8;
+    --ds-line-strong:  #bdbdb5;
+
+    --ds-text:         #111;
+    --ds-muted:        #5f5f59;
+    --ds-faint:        #8a8a82;
+    --ds-focus:        #111;
+
+    --ds-add:          #0f9f78;
+    --ds-del:          #c7354f;
+    --ds-blue:         #315a83;
+    --ds-warn:         #946200;
+  }
+}
+
+/* Mirror to the review-page namespace for legacy compatibility */
+:root,
+[data-theme="dark"],
+[data-theme="light"] {
+  --review-bg:           var(--ds-bg);
+  --review-panel:        var(--ds-panel);
+  --review-panel-raised: var(--ds-panel-raised);
+  --review-hover:        var(--ds-hover);
+  --review-line:         var(--ds-line);
+  --review-line-strong:  var(--ds-line-strong);
+  --review-text:         var(--ds-text);
+  --review-muted:        var(--ds-muted);
+  --review-faint:        var(--ds-faint);
+  --review-focus:        var(--ds-focus);
+  --review-add:          var(--ds-add);
+  --review-del:          var(--ds-del);
+}
+
+/* ----------------------------------------------------------------------------
+   Type scale
+   ----------------------------------------------------------------------------
+   Reviews uses a compact, code-first scale. Body sits at 13–14px; headings
+   are pushed hard at the marketing/header level (clamp 46–108px) for
+   contrast against the dense interior. Weight runs hot — 700–800 for hero
+   text, 650–750 for UI titles, 450–550 for body.
+
+   Custom property names follow `--font-<role>-<axis>`.
+---------------------------------------------------------------------------- */
+:root {
+  /* Sizes (px) */
+  --font-size-3xs:  10px;  /* effort pills, status letters */
+  --font-size-2xs:  11px;  /* eyebrows, revision labels (uppercase + tracked) */
+  --font-size-xs:   12px;  /* chips, buttons, meta */
+  --font-size-sm:   13px;  /* body / hunk title / file path (mono) */
+  --font-size-base: 14px;  /* default body */
+  --font-size-md:   15px;  /* card / section heading */
+  --font-size-lg:   17px;  /* lede paragraph / section title */
+  --font-size-xl:   18px;  /* h3 in markdown */
+  --font-size-2xl:  30px;  /* DS section h2 */
+  --font-size-3xl:  36px;  /* packet title */
+  --font-size-hero: clamp(46px, 8vw, 108px); /* marketing/hero h1 */
+
+  /* Line heights */
+  --leading-tight:  1.08;  /* hero / packet title */
+  --leading-snug:   1.25;  /* h3 */
+  --leading-normal: 1.45;  /* body */
+  --leading-relax:  1.55;  /* lede / markdown */
+
+  /* Weights */
+  --weight-regular: 450;
+  --weight-medium:  550;
+  --weight-semi:    650;
+  --weight-bold:    720;
+  --weight-heavy:   800;
+
+  /* Tracking */
+  --tracking-tight:  -0.01em;
+  --tracking-flat:    0;
+  --tracking-eyebrow: 0.08em;  /* uppercase eyebrows / revision labels */
+}
+
+/* ----------------------------------------------------------------------------
+   Semantic type roles
+   ----------------------------------------------------------------------------
+   These mirror the visible elements in the product. Use them when authoring
+   new HTML; the class names exist alongside the existing `.review-*` and
+   `.ds-*` patterns lifted from the codebase.
+---------------------------------------------------------------------------- */
+
+/* Hero — marketing surface, design playground header */
+.t-hero {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-hero);
+  font-weight: 760;
+  line-height: 0.9;
+  letter-spacing: 0;
+  color: var(--ds-text);
+}
+
+/* Packet title — the bold name at the top of a review */
+.t-packet-title {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--weight-heavy);
+  line-height: var(--leading-tight);
+  letter-spacing: 0;
+  color: var(--ds-text);
+}
+
+/* Section heading — design-playground h2, settings h1 */
+.t-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  color: var(--ds-text);
+}
+
+/* h3 — packet section titles, card headings */
+.t-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+  color: var(--ds-text);
+}
+
+/* Lede — paragraph under packet title */
+.t-lede {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-relax);
+  color: color-mix(in srgb, var(--ds-text) 72%, var(--ds-muted));
+  max-width: 82ch;
+}
+
+/* Body paragraph */
+.t-p {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--leading-relax);
+  color: var(--ds-text);
+}
+
+/* Body small / meta / file headers */
+.t-meta {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-medium);
+  line-height: 1.4;
+  color: var(--ds-muted);
+}
+
+/* Eyebrow — uppercase, tracked, used for section labels and pill labels */
+.t-eyebrow {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-eyebrow);
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--ds-muted);
+}
+
+/* Code — inline + block. Plain monospace, no syntax color (v1 deferred). */
+.t-code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  color: var(--ds-text);
+}
+
+/* Inline code chip — used inside markdown blocks */
+.t-code-inline {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  border: 1px solid var(--ds-line);
+  border-radius: 4px;
+  background: var(--ds-panel-raised);
+  padding: 1px 4px;
+  color: var(--ds-text);
+}
+
+/* Status letter — single character (A/M/D/R) in a tiny bordered tile */
+.t-status-letter {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-3xs);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* ----------------------------------------------------------------------------
+   Spacing / radius / shadow tokens
+---------------------------------------------------------------------------- */
+:root {
+  /* Spacing (px). The product uses a fine-grained scale because rows are
+     dense. Use the lower end for inline gaps, the higher end for section
+     rhythm. */
+  --space-1:  4px;
+  --space-2:  6px;
+  --space-3:  8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 16px;
+  --space-8: 18px;
+  --space-9: 20px;
+  --space-10: 24px;
+  --space-12: 32px;
+  --space-14: 52px;  /* packet section rhythm */
+  --space-16: 88px;  /* hero top padding */
+
+  /* Radius — small numbers; 6/8 for cards, 999 for pills */
+  --radius-xs: 4px;   /* inline code, status letter tile */
+  --radius-sm: 6px;   /* chips, buttons */
+  --radius-md: 8px;   /* cards, panels, banners, modals */
+  --radius-pill: 999px;
+
+  /* Border — Reviews uses 1px for content, the daisyUI plugin sets 1.5px
+     for form/button surfaces; we expose both. */
+  --border-hair: 1px;
+  --border-1:    1.5px;
+
+  /* Shadows — used only on toasts, modals, the principles panel.
+     Cards/panels are flat. */
+  --shadow-toast:      0 12px 28px rgba(0, 0, 0, 0.45);
+  --shadow-modal:      0 24px 80px rgb(0 0 0 / 0.6);
+  --shadow-principles: 0 24px 80px rgb(0 0 0 / 0.3);
+
+  /* Header heights (used in sticky offsets) */
+  --review-main-nav-h:      64px;
+  --review-section-sticky-h: 46px;
+}
+
+/* ----------------------------------------------------------------------------
+   Element resets (light) so .t-* classes look right inline.
+---------------------------------------------------------------------------- */
+.t-hero,
+.t-packet-title,
+.t-h2,
+.t-h3,
+.t-lede,
+.t-p,
+.t-meta,
+.t-eyebrow {
+  margin: 0;
+}

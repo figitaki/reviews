@@ -22,7 +22,7 @@ defmodule ReviewsWeb.Router do
   scope "/", ReviewsWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", HomeLive, :index
 
     live "/r/:slug", ReviewLive, :show
     live "/r/:slug/changes", ReviewLive, :changes
@@ -55,12 +55,6 @@ defmodule ReviewsWeb.Router do
   # Enable LiveDashboard in development
   if Application.compile_env(:reviews, :dev_routes) do
     import Phoenix.LiveDashboard.Router
-
-    scope "/", ReviewsWeb do
-      pipe_through :browser
-
-      live "/design", DesignLive, :show
-    end
 
     scope "/dev" do
       pipe_through :browser
