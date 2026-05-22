@@ -107,6 +107,7 @@ jobs:
         with:
           name: Reviews CLI v${{ env.version }}
           tag_name: ${{ github.ref_name }}
+          prerelease: ${{ contains(env.version, '-') }}
           files: |
             dist/*.tar.gz
             dist/checksums.txt
