@@ -1,6 +1,6 @@
 {
   "name": "reviews-assets",
-  "version": "0.0.1-alpha.1",
+  "version": "0.0.1-alpha.2",
   "private": true,
   "description": "Front-end assets for the Reviews app. Vanilla @pierre/diffs is mounted via the DiffRenderer Phoenix LiveView hook.",
   "dependencies": {

@@ -23,7 +23,7 @@ jobs:
           - os: ubuntu-24.04-arm
             rust_target: aarch64-unknown-linux-musl
             archive_target: linux-arm64
-          - os: macos-13
+          - os: macos-14
             rust_target: x86_64-apple-darwin
             archive_target: macos-x64
           - os: macos-14
@@ -107,6 +107,7 @@ jobs:
         with:
           name: Reviews CLI v${{ env.version }}
           tag_name: ${{ github.ref_name }}
+          prerelease: ${{ contains(env.version, '-') }}
           files: |
             dist/*.tar.gz
             dist/checksums.txt
