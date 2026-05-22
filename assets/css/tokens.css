@@ -78,6 +78,28 @@
   --ds-warn:         #946200;
 }
 
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --ds-bg:           #f7f7f5;
+    --ds-panel:        #fff;
+    --ds-panel-raised: #fbfbf8;
+    --ds-hover:        #efefeb;
+
+    --ds-line:         #deded8;
+    --ds-line-strong:  #bdbdb5;
+
+    --ds-text:         #111;
+    --ds-muted:        #5f5f59;
+    --ds-faint:        #8a8a82;
+    --ds-focus:        #111;
+
+    --ds-add:          #0f9f78;
+    --ds-del:          #c7354f;
+    --ds-blue:         #315a83;
+    --ds-warn:         #946200;
+  }
+}
+
 /* Mirror to the review-page namespace for legacy compatibility */
 :root,
 [data-theme="dark"],

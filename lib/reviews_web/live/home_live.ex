@@ -37,6 +37,9 @@ defmodule ReviewsWeb.HomeLive do
         rescue
           Ecto.NoResultsError -> nil
         end
+
+      _ ->
+        nil
     end
   end
 

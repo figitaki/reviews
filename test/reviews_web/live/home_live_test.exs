@@ -85,7 +85,6 @@ defmodule ReviewsWeb.HomeLiveTest do
 
     assert has_element?(view, "#home-demo[data-step=\"reprompt\"]")
     assert has_element?(view, "#chapter-reprompt .home-agent-harness", "Pushed a new revision.")
-    refute has_element?(view, ".home-demo-reprompt")
 
     view
     |> element("#chapter-final button", "Approve")

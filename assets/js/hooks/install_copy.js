@@ -38,11 +38,13 @@ const InstallCopy = {
       }, FEEDBACK_MS)
     }
 
+    this._button = button
     button.addEventListener("click", this._onClick)
   },
 
   destroyed() {
     if (this._timer) window.clearTimeout(this._timer)
+    if (this._button && this._onClick) this._button.removeEventListener("click", this._onClick)
   },
 }
 
