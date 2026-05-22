@@ -23,6 +23,16 @@ pub struct ApiClient {
 pub struct Me {
     pub username: String,
     pub email: String,
+    pub identity: Option<Identity>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Identity {
+    pub id: i64,
+    pub kind: String,
+    pub handle: String,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -73,6 +83,19 @@ pub struct CreateCommentResponse {
     pub thread_id: i64,
     pub comment_id: i64,
     pub url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SectionDecisionRequest<'a> {
+    pub status: &'a str,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SectionDecisionResponse {
+    pub review: String,
+    pub patchset_number: i64,
+    pub section_index: i64,
+    pub status: Option<String>,
 }
 
 impl ApiClient {
@@ -184,6 +207,24 @@ impl ApiClient {
         resp.json::<Value>()
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
+
+    pub fn set_section_decision(
+        &self,
+        slug: &str,
+        section_index: i64,
+        req: &SectionDecisionRequest<'_>,
+    ) -> Result<SectionDecisionResponse> {
+        let path = format!("/api/v1/reviews/{slug}/sections/{section_index}/decision");
+        let _ = self.require_token(&format!("POST {path}"))?;
+        let resp = self
+            .auth(self.http.post(self.url(&path)))
+            .json(req)
+            .send()
+            .with_context(|| format!("could not reach server for POST {path}"))?;
+        let resp = check_status(resp, &format!("POST {path}"))?;
+        resp.json::<SectionDecisionResponse>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
 }
 
 fn check_status(resp: Response, what: &str) -> Result<Response> {
@@ -215,13 +256,14 @@ mod tests {
             .match_header("authorization", "Bearer tok")
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(r#"{"username":"careyjanecka","email":"carey@example.com"}"#)
+            .with_body(r#"{"username":"careyjanecka","email":"carey@example.com","identity":{"id":1,"kind":"agent","handle":"codex","display_name":"Codex","avatar_url":null}}"#)
             .create();
 
         let client = ApiClient::new(server.url(), "tok").unwrap();
         let me = client.me().unwrap();
         assert_eq!(me.username, "careyjanecka");
         assert_eq!(me.email, "carey@example.com");
+        assert_eq!(me.identity.unwrap().handle, "codex");
         mock.assert();
     }
 
@@ -408,6 +450,29 @@ mod tests {
             .unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("reviews login"), "msg = {msg}");
+    }
+
+    #[test]
+    fn set_section_decision_happy_path() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("POST", "/api/v1/reviews/k7m2qz/sections/1/decision")
+            .match_header("authorization", "Bearer tok")
+            .match_header("content-type", "application/json")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{"review":"k7m2qz","patchset_number":2,"section_index":1,"status":"approved"}"#,
+            )
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let resp = client
+            .set_section_decision("k7m2qz", 1, &SectionDecisionRequest { status: "approved" })
+            .unwrap();
+        assert_eq!(resp.review, "k7m2qz");
+        assert_eq!(resp.status.as_deref(), Some("approved"));
+        mock.assert();
     }
 
     #[test]

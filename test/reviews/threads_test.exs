@@ -66,7 +66,7 @@ defmodule Reviews.ThreadsTest do
       assert thread.side == "new"
       assert thread.anchor["granularity"] == "line"
       assert comment.body == "Should be `:newer`?"
-      assert comment.author_id == author.id
+      assert comment.author_id == Accounts.human_identity_for(author).id
     end
 
     test "appends replies to an existing thread" do

@@ -4,21 +4,29 @@ defmodule Reviews.PacketSectionDecisions do
   """
   import Ecto.Query, warn: false
 
-  alias Reviews.Accounts.User
+  alias Reviews.Accounts
+  alias Reviews.Accounts.{Identity, User}
   alias Reviews.Repo
   alias Reviews.ReviewPacket
   alias Reviews.Reviews.{PacketSectionDecision, Patchset, Review}
 
-  def list_for_review(%Review{id: review_id}, %User{id: author_id}) do
+  def list_for_review(%Review{id: review_id}, %Identity{id: author_id}) do
     PacketSectionDecision
     |> where([d], d.review_id == ^review_id and d.author_id == ^author_id)
     |> order_by([d], asc: d.patchset_id, asc: d.section_index)
     |> Repo.all()
   end
 
+  def list_for_review(%Review{} = review, %User{} = user) do
+    case Accounts.ensure_human_identity(user) do
+      {:ok, identity} -> list_for_review(review, identity)
+      {:error, _} -> []
+    end
+  end
+
   def list_for_review(_review, nil), do: []
 
-  def set_status(%Review{} = review, %Patchset{} = patchset, %User{} = author, attrs) do
+  def set_status(%Review{} = review, %Patchset{} = patchset, %Identity{} = author, attrs) do
     section_index = attrs.section_index
 
     base_attrs = %{
@@ -48,7 +56,18 @@ defmodule Reviews.PacketSectionDecisions do
     )
   end
 
-  def clear_status(%Review{} = review, %Patchset{} = patchset, %User{} = author, section_index) do
+  def set_status(%Review{} = review, %Patchset{} = patchset, %User{} = user, attrs) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      set_status(review, patchset, identity, attrs)
+    end
+  end
+
+  def clear_status(
+        %Review{} = review,
+        %Patchset{} = patchset,
+        %Identity{} = author,
+        section_index
+      ) do
     case Repo.get_by(PacketSectionDecision,
            review_id: review.id,
            patchset_id: patchset.id,
@@ -57,6 +76,36 @@ defmodule Reviews.PacketSectionDecisions do
          ) do
       nil -> {:ok, nil}
       %PacketSectionDecision{} = decision -> Repo.delete(decision)
+    end
+  end
+
+  def clear_status(%Review{} = review, %Patchset{} = patchset, %User{} = user, section_index) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      clear_status(review, patchset, identity, section_index)
+    end
+  end
+
+  def put_section_status(
+        %Review{} = review,
+        %Patchset{} = patchset,
+        author,
+        section,
+        decisions,
+        patchsets,
+        status
+      )
+      when status in ["approved", "denied", "ignored"] do
+    state = section_state(section, decisions, patchset, patchsets)
+
+    cond do
+      state.current && state.current.status == status ->
+        clear_status(review, patchset, author, section.index)
+
+      is_nil(state.current) && state.inherited && state.inherited.status == status ->
+        set_status(review, patchset, author, section_attrs(section, "pending"))
+
+      true ->
+        set_status(review, patchset, author, section_attrs(section, status))
     end
   end
 
@@ -91,6 +140,16 @@ defmodule Reviews.PacketSectionDecisions do
           selected_patchset,
           patchset_number_by_id
         )
+    }
+  end
+
+  defp section_attrs(section, status) do
+    %{
+      section_index: section.index,
+      section_title: section.title,
+      section_fingerprint: section.fingerprint,
+      section_refs: section.refs,
+      status: status
     }
   end
 

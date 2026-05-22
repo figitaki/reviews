@@ -17,6 +17,7 @@ defmodule Reviews.Accounts.ApiToken do
     field :last_used_at, :utc_datetime
 
     belongs_to :user, Reviews.Accounts.User
+    belongs_to :identity, Reviews.Accounts.Identity
 
     timestamps(type: :utc_datetime, updated_at: false)
   end
@@ -28,8 +29,8 @@ defmodule Reviews.Accounts.ApiToken do
   """
   def changeset(token, attrs) do
     token
-    |> cast(attrs, [:token_hash, :name, :user_id, :last_used_at])
-    |> validate_required([:token_hash, :user_id])
+    |> cast(attrs, [:token_hash, :name, :user_id, :identity_id, :last_used_at])
+    |> validate_required([:token_hash, :user_id, :identity_id])
     |> unique_constraint(:token_hash)
   end
 end

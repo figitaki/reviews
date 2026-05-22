@@ -81,7 +81,46 @@ Unknown slug → `404`.
 Powers `reviews whoami`. Response `200`:
 
 ```json
-{ "username": "careyjanecka", "email": "carey@example.com" }
+{
+  "username": "careyjanecka",
+  "email": "carey@example.com",
+  "identity": {
+    "id": 7,
+    "kind": "agent",
+    "handle": "codex",
+    "username": "codex",
+    "display_name": "Codex",
+    "avatar_url": null
+  }
+}
+```
+
+`username` and `email` describe the owning GitHub account. `identity`
+describes the actor attached to the bearer token; comments, review pushes, and
+packet-section decisions authored through the token use that identity.
+
+### `POST /api/v1/reviews/:slug/sections/:section_index/decision`
+
+Sets or toggles the current token identity's decision for one packet section on
+the latest patchset. `section_index` is zero-based.
+
+Request body:
+
+```json
+{ "status": "approved" }
+```
+
+`status` must be one of `"approved"`, `"denied"`, or `"ignored"`.
+
+Response `200`:
+
+```json
+{
+  "review": "k7m2qz",
+  "patchset_number": 2,
+  "section_index": 0,
+  "status": "approved"
+}
 ```
 
 ### Body size

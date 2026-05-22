@@ -77,11 +77,11 @@ defmodule ReviewsWeb.DesignSystemComponents do
 
   def ds_section(assigns) do
     ~H"""
-    <section id={@id} class={["ds-section", @class]}>
+    <section id={@id} class={["ds-section", @class]} aria-labelledby={@id && "#{@id}-title"}>
       <div class="ds-section-heading">
         <p :if={@eyebrow} class="ds-section-eyebrow">{@eyebrow}</p>
         <div>
-          <h2>{@title}</h2>
+          <h2 id={@id && "#{@id}-title"}>{@title}</h2>
           <p :if={@description} class="ds-section-description">{@description}</p>
         </div>
         <div :if={@actions != []} class="ds-section-actions">{render_slot(@actions)}</div>

@@ -15,7 +15,7 @@ defmodule ReviewsWeb.Api.CommentController do
 
   @doc "POST /api/v1/reviews/:slug/comments"
   def create(conn, %{"slug" => slug} = params) do
-    author = conn.assigns.current_user
+    author = conn.assigns.current_identity
 
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
