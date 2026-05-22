@@ -1,6 +1,6 @@
 [package]
 name = "reviews"
-version = "0.0.1-alpha.0"
+version = "0.0.1-alpha.1"
 edition = "2021"
 description = "CLI for the Reviews code review tool"
 license = "MIT"

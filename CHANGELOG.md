@@ -5,6 +5,16 @@ All notable changes to Reviews will be tracked here.
 Reviews uses semver with prerelease tags while the CLI and hosted service are
 still stabilizing.
 
+## [0.0.1-alpha.1] - 2026-05-21
+
+### Changed
+
+- CLI Linux release artifacts are now statically linked against musl
+  (`x86_64-unknown-linux-musl` / `aarch64-unknown-linux-musl`). This removes
+  the glibc version dependency, so the binary runs on older distros such as
+  Ubuntu 22.04, Debian 11, RHEL 8, and Amazon Linux 2 without the
+  `GLIBC_2.xx not found` runtime error.
+
 ## [0.0.1-alpha.0] - 2026-05-19
 
 Initial alpha baseline.
