@@ -49,6 +49,7 @@ defmodule ReviewsWeb.Router do
     post "/reviews", ReviewController, :create
     post "/reviews/:slug/patchsets", PatchsetController, :create
     post "/reviews/:slug/comments", CommentController, :create
+    patch "/reviews/:slug/threads/:thread_id", ThreadController, :update
     get "/me", MeController, :show
   end
 

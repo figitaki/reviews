@@ -11,7 +11,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
   defp seed!(_) do
     {:ok, author} =
       Accounts.upsert_from_github(%{
-        github_id: 1234,
+        github_id: 1234 + System.unique_integer([:positive]),
         username: "carey",
         email: "carey@example.com",
         avatar_url: nil
@@ -685,6 +685,38 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert [thread] = Threads.list_published_threads(review.id)
       assert [comment] = thread.comments
       assert comment.body == "from-hook"
+    end
+
+    test "update_thread_status event resolves an existing thread", %{
+      conn: conn,
+      author: author,
+      review: review
+    } do
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, author, %{
+          "file_path" => "lib/foo.ex",
+          "side" => "new",
+          "body" => "from-hook",
+          "thread_anchor" => %{
+            "granularity" => "line",
+            "line_text" => "  def bar, do: :new",
+            "context_before" => [],
+            "context_after" => [],
+            "line_number_hint" => 2
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      render_hook(view, "update_thread_status", %{
+        "file_path" => "lib/foo.ex",
+        "thread_id" => thread.id,
+        "status" => "resolved"
+      })
+
+      assert [updated] = Threads.list_published_threads(review.id)
+      assert updated.status == "resolved"
+      assert updated.resolved_by_id == author.id
     end
 
     test "hunk viewed state is shared between packet and changes views", %{

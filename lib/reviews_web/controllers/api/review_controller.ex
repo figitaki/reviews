@@ -97,11 +97,14 @@ defmodule ReviewsWeb.Api.ReviewController do
     author_username = thread.author && thread.author.username
 
     %{
+      id: thread.id,
       file_path: thread.file_path,
       side: thread.side,
       line_hint: get_in(thread.anchor || %{}, ["line_number_hint"]),
       status: thread.status,
       author: author_username,
+      resolved_by: thread.resolved_by && thread.resolved_by.username,
+      resolved_at: thread.resolved_at,
       comments:
         Enum.map(thread.comments || [], fn c ->
           %{

@@ -21,7 +21,7 @@ The core value is making a diff understandable to a human reviewer before, durin
 - **Lazy hunk rendering** so large diffs can be reviewed without eagerly mounting every diff.
 - **Explicit hunk viewed state** for signed-in reviewers.
 - **Section decisions** such as approve, deny, or ignore for packet sections.
-- **Comment drafting and publishing** so reviewers can batch feedback.
+- **Published review threads** that can be replied to, resolved, and reopened.
 - **Changes view** for direct file/hunk review outside the packet narrative.
 
 ## When To Use Reviews
@@ -66,11 +66,15 @@ Reviews can be the review surface of record, or it can be an intermediate review
 - **Hunk reference**: a pointer such as `@hunk path/to/file.ex#2` or a slice like `@hunk path/to/file.ex#2:L3-L18`.
 - **Viewed hunk**: explicit reviewer progress; opening a hunk is not the same as marking it viewed.
 - **Section decision**: explicit approve/deny/ignore state for a packet section.
+- **Thread**: an inline conversation anchored to a diff line or token range.
+- **Resolved thread**: a thread marked handled by a signed-in user. It remains visible inline with status, but is omitted from the Open threads sidebar.
 
 ## Agent Guidance
 
 When using Reviews, prefer producing a packet rather than uploading a raw diff alone for substantial work. The packet should tell the human what to review first, why the sections exist, and where tradeoffs or risk live.
 
 When updating a review, preserve packet section titles and hunk groupings if the goal is to keep previous section approvals valid. Create a new packet structure when the review framing has changed enough that prior approvals should not carry forward.
+
+When addressing feedback from Reviews, list threads with `reviews threads <slug>` or inspect `reviews show --format md`, then mark completed feedback with `reviews resolve <slug> <thread-id>`. Use `reviews reopen <slug> <thread-id>` when a resolved thread needs attention again.
 
 When reporting a Reviews link back to the user, include the URL and the patchset number if the CLI provides one.

@@ -164,6 +164,8 @@ defmodule Reviews.ReviewView do
       side: thread.side,
       anchor: thread.anchor,
       status: thread.status,
+      resolved_at: encode_dt(thread.resolved_at),
+      resolved_by: user_to_payload(thread.resolved_by),
       inserted_at: encode_dt(thread.inserted_at),
       author: user_to_payload(thread.author),
       comments:

@@ -83,10 +83,37 @@ cli/target/release/reviews push --update <slug> --range HEAD --packet /path/to/p
 
 If the sandbox blocks localhost networking, rerun the CLI with escalation. If the token is rejected, mint a token in the same local database as the running server.
 
+## Inspect and Resolve Threads
+
+List thread IDs for a review:
+
+```bash
+cli/target/release/reviews threads <slug>
+```
+
+Resolve a thread after addressing feedback:
+
+```bash
+cli/target/release/reviews resolve <slug> <thread-id>
+```
+
+Reopen a thread when feedback still needs attention:
+
+```bash
+cli/target/release/reviews reopen <slug> <thread-id>
+```
+
+Notes:
+- `reviews threads` can run anonymously against public review JSON.
+- `reviews resolve` and `reviews reopen` require `reviews login` / a valid API token.
+- `reviews show --format md` also includes thread IDs and status, which can be used as targets for resolve/reopen.
+- Resolved threads remain visible inline on the review page with a resolved status pill, but drop out of the Open threads sidebar.
+
 ## Codex Workflow
 
 - Keep local packet files in `/private/tmp` unless the user asks to commit them.
 - After pushing, return the review URL and patchset number.
+- After addressing review feedback, use `reviews threads <slug>` to find thread IDs and `reviews resolve <slug> <thread-id>` to mark handled threads. Use `reviews reopen` if a thread was closed too early.
 - Use `mix compile --warnings-as-errors`, `mix format --check-formatted`, and `mix assets.build` after relevant code/CSS/JS changes.
 - If `mix test` fails before tests run because DB config points at the wrong local Postgres, report that separately from app failures.
 

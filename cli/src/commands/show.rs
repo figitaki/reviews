@@ -141,17 +141,22 @@ fn render_markdown(body: &Value) -> Result<String> {
         if !threads.is_empty() {
             out.push_str("## Threads\n\n");
             for t in threads {
+                let id = t.get("id").and_then(Value::as_i64);
                 let path = t.get("file_path").and_then(Value::as_str).unwrap_or("?");
                 let line = t.get("line_hint").and_then(Value::as_i64);
                 let author = t
                     .get("author")
                     .and_then(Value::as_str)
                     .unwrap_or("anonymous");
+                let status = t.get("status").and_then(Value::as_str).unwrap_or("open");
                 let location = match line {
                     Some(n) => format!("{path}:{n}"),
                     None => path.to_string(),
                 };
-                out.push_str(&format!("### `{location}` — @{author}\n\n"));
+                let id_part = id.map(|n| format!("#{n} ")).unwrap_or_default();
+                out.push_str(&format!(
+                    "### {id_part}`{location}` — {status} by @{author}\n\n"
+                ));
                 if let Some(comments) = t.get("comments").and_then(Value::as_array) {
                     for c in comments {
                         let body = c.get("body").and_then(Value::as_str).unwrap_or("");
@@ -194,8 +199,10 @@ mod tests {
                 }]
             },
             "threads": [{
+                "id": 7,
                 "file_path": "foo",
                 "line_hint": 1,
+                "status": "open",
                 "author": "carey",
                 "comments": [{"body": "nit: rename?\nsee bug #42"}]
             }]
@@ -212,7 +219,7 @@ mod tests {
         assert!(md.contains("-old"));
         assert!(md.contains("+new"));
         assert!(md.contains("## Threads"));
-        assert!(md.contains("### `foo:1` — @carey"));
+        assert!(md.contains("### #7 `foo:1` — open by @carey"));
         assert!(md.contains("> nit: rename?"));
         assert!(md.contains("> see bug #42"));
     }

@@ -3,12 +3,13 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
 
   alias Reviews.Accounts
   alias Reviews.Reviews, as: ReviewsContext
+  alias Reviews.Threads
 
   describe "POST /api/v1/reviews" do
     setup do
       {:ok, user} =
         Accounts.upsert_from_github(%{
-          github_id: 12_345,
+          github_id: 12_345 + System.unique_integer([:positive]),
           username: "carey",
           email: "carey@example.com",
           avatar_url: nil
@@ -96,7 +97,7 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
     setup do
       {:ok, user} =
         Accounts.upsert_from_github(%{
-          github_id: 54_321,
+          github_id: 54_321 + System.unique_integer([:positive]),
           username: "carey",
           email: "carey@example.com",
           avatar_url: nil
@@ -180,6 +181,34 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
       [file] = body["selected_patchset"]["files"]
       assert file["raw_diff"] =~ "+new\n"
       refute file["raw_diff"] =~ "newer"
+    end
+
+    test "returns thread ids and resolution metadata",
+         %{conn: conn, review: review, user: user} do
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, user, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "looks done",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      {:ok, _} = Threads.update_status(review, thread.id, user, "resolved")
+
+      conn = get(conn, ~p"/api/v1/reviews/#{review.slug}")
+      body = json_response(conn, 200)
+
+      assert [
+               %{
+                 "id" => thread_id,
+                 "status" => "resolved",
+                 "resolved_by" => "carey",
+                 "resolved_at" => resolved_at
+               }
+             ] = body["threads"]
+
+      assert thread_id == thread.id
+      assert is_binary(resolved_at)
     end
 
     test "returns 404 for an unknown slug", %{conn: conn} do

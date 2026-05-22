@@ -277,6 +277,31 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("update_thread_status", params, socket) do
+    require Logger
+
+    case socket.assigns.current_user do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Sign in to update threads.")}
+
+      user ->
+        case Threads.update_status(
+               socket.assigns.review,
+               params["thread_id"],
+               user,
+               params["status"]
+             ) do
+          {:ok, _thread} ->
+            {:noreply, push_threads_for_file(socket, params["file_path"])}
+
+          {:error, reason} ->
+            Logger.warning("update_thread_status failed: #{inspect(reason)}")
+            {:noreply, put_flash(socket, :error, "Could not update thread.")}
+        end
+    end
+  end
+
+  @impl true
   def handle_info({:patchset_pushed, number}, socket) do
     {:noreply,
      socket
@@ -286,6 +311,14 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_info({:thread_published, _thread}, socket) do
+    {:noreply,
+     socket
+     |> refresh_snapshot!()
+     |> push_threads_for_all_files()}
+  end
+
+  @impl true
+  def handle_info({:thread_updated, _thread}, socket) do
     {:noreply,
      socket
      |> refresh_snapshot!()

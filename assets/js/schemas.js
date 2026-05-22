@@ -58,6 +58,8 @@ export const Thread = z.object({
   side: Side,
   anchor: Anchor,
   status: z.enum(["open", "resolved", "outdated"]),
+  resolved_by: Author.optional(),
+  resolved_at: z.string().nullable().optional(),
   inserted_at: z.string().nullable().optional(),
   author: Author,
   comments: z.array(Comment),
@@ -70,6 +72,12 @@ export const CreateCommentPayload = z.object({
   thread_id: z.number().nullable().optional(),
   thread_anchor: Anchor,
   line_text: z.string().optional(),
+})
+
+export const UpdateThreadStatusPayload = z.object({
+  file_path: z.string(),
+  thread_id: z.number(),
+  status: z.enum(["open", "resolved"]),
 })
 
 // Client-internal annotation shape — NOT a wire format. This is what we feed
