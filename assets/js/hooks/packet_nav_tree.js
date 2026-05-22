@@ -1,4 +1,4 @@
-import {FileTree} from "@pierre/trees"
+import {FileTree, preparePresortedFileTreeInput} from "@pierre/trees"
 
 const statText = stat => {
   if (!stat) return null
@@ -121,6 +121,7 @@ const parseNav = el => {
 
 const sectionMap = sections => new Map((sections || []).map(section => [section.path, section]))
 const pathSignature = paths => paths.join("\n")
+const presortedInput = paths => preparePresortedFileTreeInput(paths || [])
 const expandedSectionPaths = sections => (sections || [])
   .filter(section => section.expanded)
   .map(section => section.path)
@@ -190,7 +191,10 @@ const PacketNavTree = {
 
     if (signature !== this.pathsSignature) {
       this.pathsSignature = signature
-      this.tree.resetPaths(paths, {initialExpandedPaths: expandedSectionPaths(nav.sections)})
+      this.tree.resetPaths(paths, {
+        initialExpandedPaths: expandedSectionPaths(nav.sections),
+        preparedInput: presortedInput(paths),
+      })
     }
 
     this.syncSectionExpansion(nav.sections)
@@ -235,7 +239,7 @@ const PacketNavTree = {
       initialExpansion: "closed",
       itemHeight: 28,
       overscan: 6,
-      paths,
+      preparedInput: presortedInput(paths),
       renderRowDecoration: ({item}) => {
         const text = statText(this.stats?.[item.path])
         return text ? {text, title: "Lines changed"} : null
