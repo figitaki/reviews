@@ -18,10 +18,10 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            rust_target: x86_64-unknown-linux-gnu
+            rust_target: x86_64-unknown-linux-musl
             archive_target: linux-x64
           - os: ubuntu-24.04-arm
-            rust_target: aarch64-unknown-linux-gnu
+            rust_target: aarch64-unknown-linux-musl
             archive_target: linux-arm64
           - os: macos-13
             rust_target: x86_64-apple-darwin
@@ -43,6 +43,12 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_ENV"
+
+      - name: Install musl toolchain
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
 
       - name: Install Rust target
         run: rustup target add ${{ matrix.rust_target }}
