@@ -53,12 +53,24 @@ defmodule ReviewsWeb.HomeLive do
 
   def handle_event("set_demo_step", _params, socket), do: {:noreply, socket}
 
+  def handle_event("send_reprompt", _params, socket) do
+    Process.send_after(self(), :complete_reprompt, 1000)
+    {:noreply, assign(socket, :demo_step, :reprompting)}
+  end
+
+  @impl true
+  def handle_info(:complete_reprompt, %{assigns: %{demo_step: :reprompting}} = socket) do
+    {:noreply, assign(socket, :demo_step, :reprompt)}
+  end
+
+  def handle_info(:complete_reprompt, socket), do: {:noreply, socket}
+
   # Explicit string → atom whitelist. `String.to_existing_atom/1` is unsafe
   # here because `:review` and `:reprompt` aren't referenced anywhere else
   # in compiled code as literal atoms.
   defp parse_step("push"), do: {:ok, :push}
   defp parse_step("review"), do: {:ok, :review}
-  defp parse_step("reprompt"), do: {:ok, :reprompt}
+  defp parse_step("reprompt"), do: {:ok, :reprompt_prompt}
   defp parse_step("final"), do: {:ok, :final}
   defp parse_step(_), do: :error
 
@@ -114,25 +126,36 @@ defmodule ReviewsWeb.HomeLive do
               label="Re-prompt"
               sentinel_step="reprompt"
               cta_label="Reprompt"
-              active={@demo_step == :reprompt}
+              active={@demo_step in [:reprompt_prompt, :reprompting, :reprompt]}
             >
               <h2>Hand it back as a re-prompt.</h2>
               <p>
                 Ask the agent to fix the denied section, then push the next patchset back into the same review.
               </p>
               <div
-                :if={@demo_step == :reprompt}
-                class="home-agent-harness"
+                :if={@demo_step in [:reprompt_prompt, :reprompting, :reprompt]}
+                class={["home-agent-harness", "is-#{@demo_step}"]}
                 role="status"
                 aria-live="polite"
               >
-                <div class="home-agent-prompt">
-                  Please handle deletions in the v1/v2 diff walker; the carryover marker disappears when a denied section drops files.
+                <div class="home-agent-composer">
+                  <textarea readonly class="home-agent-input" aria-label="Agent prompt">Address the comments on the review packet</textarea>
+                  <button
+                    type="button"
+                    class="home-agent-send"
+                    phx-click="send_reprompt"
+                    disabled={@demo_step != :reprompt_prompt}
+                  >
+                    Send
+                  </button>
                 </div>
-                <div class="home-agent-status">
+                <div class="home-agent-bubble">Address the comments on the review packet</div>
+                <div :if={@demo_step == :reprompting} class="home-agent-status">
                   <span class="home-agent-spinner" aria-hidden="true"></span>
-                  <span class="home-agent-thinking">thinking...</span>
-                  <span class="home-agent-posted">Posted a new revision</span>
+                  <span>Thinking...</span>
+                </div>
+                <div :if={@demo_step == :reprompt} class="home-agent-status is-done">
+                  Pushed a new revision.
                 </div>
               </div>
             </.chapter>
@@ -220,7 +243,7 @@ defmodule ReviewsWeb.HomeLive do
           </span>
           <span class="home-demo-rev">
             <span class="pip" aria-hidden="true"></span>
-            <span>{if @step in [:reprompt, :final], do: "v2", else: "v1"}</span>
+            <span>{if revised_step?(@step), do: "v2", else: "v1"}</span>
           </span>
         </div>
 
@@ -238,13 +261,13 @@ defmodule ReviewsWeb.HomeLive do
               <span class="add">+412</span> <span class="del">−47</span>
             </span>
             <span class="sep">/</span>
-            <span>{if @step in [:reprompt, :final], do: "~14 min", else: "~2 hr"}</span>
+            <span>{if revised_step?(@step), do: "~14 min", else: "~2 hr"}</span>
           </div>
 
           <.demo_section
             id="section-1"
             state={section_state(@step, :section_1)}
-            expanded={@step in [:push, :review]}
+            expanded={@step in [:push, :review, :reprompt_prompt, :reprompting]}
             title="Canonical packet storage and API shape"
             effort="Deep"
             effort_class="is-deep"
@@ -261,7 +284,7 @@ defmodule ReviewsWeb.HomeLive do
           <.demo_section
             id="section-2"
             state={section_state(@step, :section_2)}
-            carried={@step in [:reprompt, :final]}
+            carried={revised_step?(@step)}
             title="CLI authoring and packet validation"
             effort="Deep"
             effort_class="is-deep"
@@ -510,14 +533,23 @@ defmodule ReviewsWeb.HomeLive do
   #   :push     all sections pending, section 1 expanded with the diff
   #   :review   reviewer comments on section 1 (CSS reveal at +0ms),
   #             then denies section 1 (+600ms), then approves section 2 (+1200ms)
+  #   :reprompt_prompt keeps v1 visible while the prompt composer is open
+  #   :reprompting keeps v1 visible while the simulated agent is thinking
   #   :reprompt v2 patchset: section 1 collapses, its deny is gone, section 2
   #             keeps its approval with an "approved in v1" carryover marker
   #   :final    the revised packet is approved.
 
+  defp revised_step?(step), do: step in [:reprompt, :final]
+
   defp section_state(:intro, _), do: :pending
   defp section_state(:push, _), do: :pending
-  defp section_state(:review, :section_1), do: :denied
-  defp section_state(:review, :section_2), do: :approved
+
+  defp section_state(step, :section_1) when step in [:review, :reprompt_prompt, :reprompting],
+    do: :denied
+
+  defp section_state(step, :section_2) when step in [:review, :reprompt_prompt, :reprompting],
+    do: :approved
+
   defp section_state(:final, _), do: :approved
   defp section_state(_, :section_1), do: :pending
   defp section_state(_, :section_2), do: :approved

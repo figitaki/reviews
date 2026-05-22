@@ -56,8 +56,35 @@ defmodule ReviewsWeb.HomeLiveTest do
     |> element("#chapter-reprompt button", "Reprompt")
     |> render_click()
 
+    assert has_element?(view, "#home-demo[data-step=\"reprompt_prompt\"]")
+
+    assert has_element?(
+             view,
+             "#chapter-reprompt .home-agent-input",
+             "Address the comments on the review packet"
+           )
+
+    assert has_element?(view, "#chapter-reprompt .home-agent-send", "Send")
+
+    view
+    |> element("#chapter-reprompt .home-agent-send", "Send")
+    |> render_click()
+
+    assert has_element?(view, "#home-demo[data-step=\"reprompting\"]")
+
+    assert has_element?(
+             view,
+             "#chapter-reprompt .home-agent-bubble",
+             "Address the comments on the review packet"
+           )
+
+    assert has_element?(view, "#chapter-reprompt .home-agent-status", "Thinking...")
+
+    send(view.pid, :complete_reprompt)
+    render(view)
+
     assert has_element?(view, "#home-demo[data-step=\"reprompt\"]")
-    assert has_element?(view, "#chapter-reprompt .home-agent-harness", "Posted a new revision")
+    assert has_element?(view, "#chapter-reprompt .home-agent-harness", "Pushed a new revision.")
     refute has_element?(view, ".home-demo-reprompt")
 
     view

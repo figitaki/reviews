@@ -399,7 +399,7 @@
 
 .home-agent-harness {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin-top: 18px;
   border: 1px solid var(--ds-line);
   border-radius: 8px;
@@ -407,18 +407,70 @@
   padding: 12px;
 }
 
-.home-agent-prompt {
+.home-agent-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.home-agent-harness:not(.is-reprompt_prompt) .home-agent-composer {
+  display: none;
+}
+
+.home-agent-input {
+  min-height: 76px;
+  resize: none;
   border: 1px solid var(--ds-line);
   border-radius: 6px;
   background: var(--ds-bg);
-  padding: 10px 12px;
+  padding: 10px;
+  color: var(--ds-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.home-agent-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid var(--ds-text);
+  border-radius: 6px;
+  background: var(--ds-text);
+  padding: 0 13px;
+  color: var(--ds-bg);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.home-agent-send:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.home-agent-bubble {
+  display: none;
+  justify-self: end;
+  max-width: 88%;
+  border: 1px solid color-mix(in oklab, var(--ds-add) 42%, var(--ds-line));
+  border-radius: 10px 10px 2px 10px;
+  background: color-mix(in oklab, var(--ds-add) 12%, var(--ds-panel));
+  padding: 9px 11px;
   color: var(--ds-text);
   font-size: 13px;
   line-height: 1.45;
 }
 
+.home-agent-harness.is-reprompting .home-agent-bubble,
+.home-agent-harness.is-reprompt .home-agent-bubble {
+  display: block;
+  animation: home-agent-bubble-up 180ms ease both;
+}
+
 .home-agent-status {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -434,38 +486,34 @@
   border: 2px solid var(--ds-line-strong);
   border-top-color: var(--ds-add);
   border-radius: 999px;
-  animation: home-agent-spin 720ms linear infinite,
-             home-agent-hide 1ms linear 1000ms forwards;
+  animation: home-agent-spin 720ms linear infinite;
 }
 
-.home-agent-thinking {
-  animation: home-agent-hide 1ms linear 1000ms forwards;
-}
-
-.home-agent-posted {
-  position: absolute;
-  left: 0;
-  opacity: 0;
+.home-agent-status.is-done {
   color: var(--ds-add);
   font-weight: 700;
-  animation: home-agent-posted 180ms ease 1000ms forwards;
+  animation: home-agent-posted 180ms ease both;
 }
 
 @keyframes home-agent-spin {
   to { transform: rotate(360deg); }
 }
 
-@keyframes home-agent-hide {
-  to {
-    opacity: 0;
-    visibility: hidden;
-  }
-}
-
 @keyframes home-agent-posted {
   from {
     opacity: 0;
     transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes home-agent-bubble-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -793,7 +841,9 @@
               opacity 280ms ease;
 }
 
-.home-demo[data-step="review"] .home-demo-comment-row {
+.home-demo[data-step="review"] .home-demo-comment-row,
+.home-demo[data-step="reprompt_prompt"] .home-demo-comment-row,
+.home-demo[data-step="reprompting"] .home-demo-comment-row {
   max-height: 180px;
   opacity: 1;
 }
@@ -915,19 +965,9 @@
   }
 
   .home-agent-spinner,
-  .home-agent-thinking,
-  .home-agent-posted {
+  .home-agent-bubble,
+  .home-agent-status.is-done {
     animation: none !important;
-  }
-
-  .home-agent-spinner,
-  .home-agent-thinking {
-    display: none;
-  }
-
-  .home-agent-posted {
-    position: static;
-    opacity: 1;
   }
 }
 
