@@ -813,6 +813,8 @@
 }
 
 .review-packet-grid {
+  position: relative;
+  z-index: 0;
   display: grid;
   gap: 40px;
   min-width: 0;
@@ -1874,6 +1876,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-guide-shell {
   position: sticky;
+  z-index: 30;
   top: var(--rev-header-h);
   display: grid;
   grid-template-columns: 48px minmax(380px, 460px);
@@ -1882,11 +1885,13 @@ details[open] > summary .review-collapse-icon,
   max-height: calc(100vh - var(--rev-header-h));
   border-right: 1px solid var(--review-line);
   background: var(--review-bg);
+  isolation: isolate;
+  overflow: visible;
 }
 
 .review-edge-rail {
   position: relative;
-  z-index: 25;
+  z-index: 3;
   display: flex;
   min-height: calc(100vh - var(--rev-header-h));
   flex-direction: column;
@@ -1986,14 +1991,14 @@ details[open] > summary .review-collapse-icon,
 
 .review-guide-flyout {
   position: absolute;
-  z-index: 24;
+  z-index: 2;
   top: 0;
   bottom: 0;
   left: 48px;
   width: 320px;
   overflow-y: auto;
   border-right: 1px solid var(--review-line-strong);
-  background: var(--review-panel);
+  background: color-mix(in oklab, var(--review-panel) 96%, var(--review-bg));
   box-shadow: 18px 0 60px rgb(0 0 0 / 0.42);
   opacity: 0;
   padding: 28px;
