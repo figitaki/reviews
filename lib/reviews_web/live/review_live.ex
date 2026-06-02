@@ -61,6 +61,7 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:expanded_file_ids, MapSet.new())
               |> assign(:expanded_hunk_ids, MapSet.new())
               |> assign(:expanded_section_ids, MapSet.new())
+              |> assign(:active_outline_section_index, nil)
               |> assign(:changes_default_expanded_patchset_ids, MapSet.new())
               |> assign(:show_packet_outline, packet_outline_visible?(current_user))
               |> assign_snapshot(snapshot)
@@ -193,6 +194,7 @@ defmodule ReviewsWeb.ReviewLive do
       case parse_int(section_index) do
         index when is_integer(index) ->
           socket
+          |> assign(:active_outline_section_index, index)
           |> assign(:expanded_section_ids, MapSet.put(socket.assigns.expanded_section_ids, index))
           |> auto_open_section_hunks(index)
 
@@ -473,6 +475,18 @@ defmodule ReviewsWeb.ReviewLive do
           <% has_packet = ReviewPacket.present?(packet) %>
           <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
           <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
+          <% show_packet_outline = @diff_style == "unified" && @show_packet_outline %>
+          <% packet_outline =
+            if has_packet do
+              PacketComponents.packet_outline(
+                packet,
+                @file_diffs,
+                @hunks_by_path,
+                @packet_section_decisions,
+                @selected_patchset,
+                @patchsets
+              )
+            end %>
           <% packet_effort =
             if has_packet do
               PacketComponents.packet_effort_for_header(
@@ -529,8 +543,9 @@ defmodule ReviewsWeb.ReviewLive do
             review={@review}
             live_action={@live_action}
             selected_patchset={@selected_patchset}
-            has_packet={has_packet && @live_action != :changes}
-            show_packet_outline={@show_packet_outline}
+            has_packet={has_packet}
+            outline_available={has_packet && @diff_style == "unified"}
+            show_packet_outline={show_packet_outline}
           />
 
           <%!-- Patchset-pushed banner --%>
@@ -559,7 +574,7 @@ defmodule ReviewsWeb.ReviewLive do
             diff_style={@diff_style}
             expanded_section_ids={@expanded_section_ids}
             expanded_hunk_ids={@expanded_hunk_ids}
-            show_packet_outline={@show_packet_outline}
+            show_packet_outline={show_packet_outline}
           />
 
           <%!-- Body: sidebar + diff list --%>
@@ -574,6 +589,9 @@ defmodule ReviewsWeb.ReviewLive do
             expanded_file_ids={@expanded_file_ids}
             expanded_hunk_ids={@expanded_hunk_ids}
             hunks_by_path={@hunks_by_path}
+            packet_outline={packet_outline}
+            active_section_index={@active_outline_section_index}
+            show_packet_outline={show_packet_outline}
           />
         </div>
       </.ds_shell>
@@ -953,11 +971,35 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:expanded_file_ids, expanded_file_ids)
     |> assign(:expanded_hunk_ids, expanded_hunk_ids)
     |> assign(:expanded_section_ids, expanded_section_ids)
+    |> assign(
+      :active_outline_section_index,
+      active_outline_section_index(
+        socket.assigns[:active_outline_section_index],
+        snapshot.selected_patchset
+      )
+    )
     |> assign(:changes_default_expanded_patchset_ids, changes_default_expanded_patchset_ids)
     |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
     |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
   end
+
+  defp active_outline_section_index(current_index, %{packet: packet}) do
+    sections = ReviewPacket.sections(packet || %{})
+
+    cond do
+      sections == [] ->
+        nil
+
+      is_integer(current_index) && current_index >= 0 && current_index < length(sections) ->
+        current_index
+
+      true ->
+        0
+    end
+  end
+
+  defp active_outline_section_index(_current_index, _patchset), do: nil
 
   defp mounted_diff_paths(socket) do
     changes_paths =

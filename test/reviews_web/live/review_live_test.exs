@@ -438,12 +438,27 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
       assert has_element?(packet_view, "#review-packet")
+
+      assert has_element?(
+               packet_view,
+               "#code-view-switcher .review-code-view-tab.is-active",
+               "Guide"
+             )
+
+      assert has_element?(packet_view, "#code-view-switcher .review-code-view-tab", "Diff")
       refute has_element?(packet_view, "#diff-files")
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
       assert has_element?(changes_view, "#diff-files")
-      assert has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
-      assert has_element?(changes_view, ~s|#changes-file-tree[data-nav*="lib/packet.ex"]|)
+
+      assert has_element?(
+               changes_view,
+               "#code-view-switcher .review-code-view-tab.is-active",
+               "Diff"
+             )
+
+      assert has_element?(changes_view, "#code-view-switcher .review-code-view-tab", "Guide")
+      refute has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#diff-files .rev-file-card")
       refute has_element?(changes_view, "#diff-files .rev-file-placeholder")
 
@@ -458,6 +473,124 @@ defmodule ReviewsWeb.ReviewLiveTest do
                changes_view,
                ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
              )
+
+      changes_view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#review-guide-sidebar #review-guide-rail")
+
+      assert has_element?(
+               changes_view,
+               "#review-guide-rail .review-guide-rail-count",
+               "1 section"
+             )
+
+      assert has_element?(changes_view, "#review-guide-rail .review-guide-rail-summary", "1 file")
+
+      assert has_element?(
+               changes_view,
+               "#review-guide-rail .review-guide-section-title",
+               "Main change"
+             )
+
+      assert has_element?(changes_view, "#review-guide-rail .review-guide-file-row", "packet.ex")
+      assert has_element?(changes_view, "#review-guide-rail .review-guide-file-state", "1 hunk")
+
+      refute has_element?(
+               changes_view,
+               ~s|#diff-files .review-hunk-summary[phx-hook="StickyHunkHeader"]|
+             )
+
+      changes_view
+      |> element("#diff-style-split")
+      |> render_click()
+
+      refute has_element?(changes_view, "#file-tree")
+    end
+
+    test "unified guide rail focuses the active section overview", %{conn: conn, author: author} do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Packet active section",
+          raw_diff: """
+          diff --git a/lib/first.ex b/lib/first.ex
+          --- a/lib/first.ex
+          +++ b/lib/first.ex
+          @@ -1 +1 @@
+          -old_first
+          +new_first
+          diff --git a/lib/second.ex b/lib/second.ex
+          --- a/lib/second.ex
+          +++ b/lib/second.ex
+          @@ -1 +1 @@
+          -old_second
+          +new_second
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Active outline",
+            "sections" => [
+              %{
+                "title" => "Primary reasoning",
+                "rows" => [
+                  %{
+                    "kind" => "markdown",
+                    "body" =>
+                      "This first paragraph explains why the entrypoint change matters before the reviewer looks at the code."
+                  },
+                  %{"kind" => "hunk", "path" => "lib/first.ex", "hunk_index" => 1}
+                ]
+              },
+              %{
+                "title" => "Secondary consequence",
+                "rows" => [
+                  %{
+                    "kind" => "markdown",
+                    "body" =>
+                      "This second paragraph should stay out of the way until the reviewer makes this section active."
+                  },
+                  %{"kind" => "hunk", "path" => "lib/second.ex", "hunk_index" => 1}
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
+
+      view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      assert has_element?(view, "#review-guide-section-0.is-active")
+
+      assert has_element?(
+               view,
+               "#review-guide-section-0 .review-guide-section-summary",
+               "entrypoint change matters"
+             )
+
+      assert has_element?(view, "#review-guide-section-0 .review-guide-file-row", "first.ex")
+      assert has_element?(view, "#review-guide-section-1 .review-guide-section-collapsed-meta")
+      refute has_element?(view, "#review-guide-section-1 .review-guide-section-summary")
+      refute has_element?(view, "#review-guide-section-1 .review-guide-file-row")
+
+      view
+      |> element("#review-guide-section-1 .review-guide-section-button")
+      |> render_click()
+
+      assert has_element?(view, "#review-guide-section-1.is-active")
+
+      assert has_element?(
+               view,
+               "#review-guide-section-1 .review-guide-section-summary",
+               "stay out of the way"
+             )
+
+      assert has_element?(view, "#review-guide-section-1 .review-guide-file-row", "second.ex")
+      refute has_element?(view, "#review-guide-section-0 .review-guide-section-summary")
     end
 
     test "changes route renders one collapsible diff island per file", %{
@@ -487,8 +620,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 
-      assert has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
-      assert has_element?(changes_view, ~s|#changes-file-tree[data-nav*="lib/packet.ex"]|)
+      refute has_element?(changes_view, "#file-tree")
       assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff", "packet.ex")
       assert has_element?(changes_view, "#diff-files .review-file-view-state", "2 hunks")
       refute has_element?(changes_view, "#diff-files .review-hunk-card:not(.is-file-diff)")
@@ -561,6 +693,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{mixed_review.slug}/changes")
 
+      refute has_element?(changes_view, "#code-view-switcher")
+
       assert has_element?(
                changes_view,
                ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="lib/first.ex"]|
@@ -570,6 +704,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
                changes_view,
                ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="lib/second.ex"]|
              )
+
+      changes_view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      refute has_element?(changes_view, "#file-tree")
+      refute has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
+      refute has_element?(changes_view, "#review-guide-sidebar")
+      assert has_element?(changes_view, "#diff-files")
     end
   end
 
@@ -614,24 +757,36 @@ defmodule ReviewsWeb.ReviewLiveTest do
           }
         })
 
-      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 
-      assert has_element?(view, "#review-packet-nav")
+      refute has_element?(view, "#review-guide-rail")
+
+      view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      assert has_element?(view, "#review-guide-rail")
       refute has_element?(view, ".review-outline-toggle")
 
       view
-      |> element("#review-packet-nav .review-packet-nav-hide")
+      |> element("#review-guide-rail .review-packet-nav-hide")
       |> render_click()
 
-      refute has_element?(view, "#review-packet-nav")
+      refute has_element?(view, "#review-guide-rail")
       assert has_element?(view, ".review-outline-toggle", "Show outline")
 
       author = Accounts.get_user!(author.id)
       assert Accounts.get_user_preference(author, :packet_outline_visible, true) == false
 
-      {:ok, next_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+      {:ok, next_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 
-      refute has_element?(next_view, "#review-packet-nav")
+      refute has_element?(next_view, "#review-guide-rail")
+
+      next_view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      refute has_element?(next_view, "#review-guide-rail")
       assert has_element?(next_view, ".review-outline-toggle", "Show outline")
     end
 

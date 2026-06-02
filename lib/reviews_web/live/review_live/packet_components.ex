@@ -31,7 +31,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> assign(:file_labels, file_labels)
       |> assign(
         :packet_nav,
-        packet_nav(sections, assigns.hunks_by_path, file_labels, assigns.expanded_section_ids)
+        build_packet_nav(
+          sections,
+          assigns.hunks_by_path,
+          file_labels,
+          assigns.expanded_section_ids
+        )
       )
 
     ~H"""
@@ -203,6 +208,81 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     |> packet_effort()
   end
 
+  def packet_outline_nav(packet, file_diffs, hunks_by_path, expanded_section_ids) do
+    sections = ReviewPacket.sections(packet)
+    file_labels = file_labels(file_diffs)
+
+    build_packet_nav(sections, hunks_by_path, file_labels, expanded_section_ids)
+  end
+
+  def packet_outline(
+        packet,
+        file_diffs,
+        hunks_by_path,
+        section_decisions,
+        selected_patchset,
+        patchsets
+      ) do
+    sections =
+      %{
+        packet: packet,
+        file_diffs: file_diffs,
+        hunks_by_path: hunks_by_path,
+        section_decisions: section_decisions,
+        selected_patchset: selected_patchset,
+        patchsets: patchsets
+      }
+      |> packet_sections()
+
+    file_by_path = Map.new(file_diffs, &{&1.path, &1})
+
+    outline_sections =
+      Enum.map(sections, fn section ->
+        files = outline_files(section, hunks_by_path, file_by_path)
+
+        section
+        |> Map.take([:index, :title, :summary, :effective_status, :estimate])
+        |> Map.put(:status_label, guide_status_label(section.effective_status))
+        |> Map.put(:files, files)
+        |> Map.put(:file_count, length(files))
+        |> Map.put(:target_id, Enum.find_value(files, & &1.target_id))
+      end)
+
+    %{
+      sections: outline_sections,
+      summary: outline_summary(outline_sections)
+    }
+  end
+
+  defp outline_summary(sections) do
+    files = Enum.flat_map(sections, & &1.files)
+
+    %{
+      section_count: length(sections),
+      file_count:
+        files
+        |> Enum.map(& &1.path)
+        |> Enum.reject(&is_nil/1)
+        |> MapSet.new()
+        |> MapSet.size(),
+      hunk_count: Enum.sum(Enum.map(files, & &1.hunk_count)),
+      viewed_count: Enum.sum(Enum.map(files, & &1.viewed_count)),
+      additions: Enum.sum(Enum.map(sections, & &1.estimate.additions)),
+      deletions: Enum.sum(Enum.map(sections, & &1.estimate.deletions)),
+      time: sections |> Enum.map(& &1.estimate.minutes) |> Enum.sum() |> format_minutes(),
+      progress_percent:
+        outline_progress_percent(
+          Enum.sum(Enum.map(files, & &1.viewed_count)),
+          Enum.sum(Enum.map(files, & &1.hunk_count))
+        )
+    }
+  end
+
+  defp outline_progress_percent(_viewed_count, 0), do: 0
+
+  defp outline_progress_percent(viewed_count, hunk_count),
+    do: round(viewed_count * 100 / hunk_count)
+
   defp packet_sections(assigns) do
     selected_patchset = assigns.selected_patchset
 
@@ -228,6 +308,76 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   defp section_expanded?(expanded_section_ids, section_index) do
     MapSet.member?(expanded_section_ids, section_index)
+  end
+
+  defp outline_files(section, hunks_by_path, file_by_path) do
+    section.rows
+    |> Enum.reduce(%{order: [], files: %{}}, fn row, acc ->
+      if ReviewPacket.text(row, "kind") == "hunk" do
+        case ReviewHunks.for_packet_row(hunks_by_path, row) do
+          nil ->
+            acc
+
+          hunk ->
+            path = hunk.file_path
+            order = if Map.has_key?(acc.files, path), do: acc.order, else: acc.order ++ [path]
+
+            files =
+              Map.update(acc.files, path, new_outline_file(path, hunk, file_by_path), fn file ->
+                update_outline_file(file, hunk)
+              end)
+
+            %{acc | order: order, files: files}
+        end
+      else
+        acc
+      end
+    end)
+    |> then(fn acc -> Enum.map(acc.order, &Map.fetch!(acc.files, &1)) end)
+  end
+
+  defp new_outline_file(path, hunk, file_by_path) do
+    file = Map.get(file_by_path, path)
+
+    %{
+      path: path,
+      basename: Path.basename(path || ""),
+      directory: outline_directory(path),
+      target_id: file && "file-#{file.id}",
+      additions: hunk.display_additions,
+      deletions: hunk.display_deletions,
+      hunk_count: 1,
+      viewed_count: if(hunk.viewed?, do: 1, else: 0)
+    }
+    |> put_outline_file_state()
+  end
+
+  defp update_outline_file(file, hunk) do
+    file
+    |> Map.update!(:additions, &(&1 + hunk.display_additions))
+    |> Map.update!(:deletions, &(&1 + hunk.display_deletions))
+    |> Map.update!(:hunk_count, &(&1 + 1))
+    |> Map.update!(:viewed_count, &(&1 + if(hunk.viewed?, do: 1, else: 0)))
+    |> put_outline_file_state()
+  end
+
+  defp put_outline_file_state(%{hunk_count: hunk_count, viewed_count: viewed_count} = file) do
+    state =
+      cond do
+        hunk_count == 0 -> %{status: "empty", label: "No hunks"}
+        viewed_count == hunk_count -> %{status: "viewed", label: "Viewed"}
+        viewed_count > 0 -> %{status: "partial", label: "#{viewed_count}/#{hunk_count} viewed"}
+        true -> %{status: "unviewed", label: "#{hunk_count} #{plural(hunk_count, "hunk")}"}
+      end
+
+    Map.put(file, :view_state, state)
+  end
+
+  defp outline_directory(path) do
+    case Path.dirname(path || "") do
+      "." -> ""
+      directory -> directory
+    end
   end
 
   defp packet_effort(sections) do
@@ -281,7 +431,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     """
   end
 
-  defp packet_nav(sections, hunks_by_path, file_labels, expanded_section_ids) do
+  defp build_packet_nav(sections, hunks_by_path, file_labels, expanded_section_ids) do
     file_hunk_counts = file_hunk_counts(hunks_by_path)
 
     Enum.reduce(sections, %{paths: [], sections: [], stats: %{}, targets: %{}}, fn section, acc ->
@@ -463,7 +613,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> Enum.reject(&(&1 == "" || String.starts_with?(&1, "#")))
       |> case do
         [] -> nil
-        lines -> lines |> Enum.join(" ") |> plain_markdown() |> truncate_summary()
+        lines -> lines |> Enum.join(" ") |> plain_markdown()
       end
     end)
   end
@@ -477,16 +627,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
-
-  defp truncate_summary(text) do
-    text = String.trim(text)
-
-    if String.length(text) > 150 do
-      text |> String.slice(0, 147) |> String.trim_trailing() |> Kernel.<>("...")
-    else
-      text
-    end
-  end
 
   def file_labels(file_diffs) do
     paths = Enum.map(file_diffs, & &1.path)
@@ -588,10 +728,18 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp effort_label(minutes) when minutes <= 12, do: "Involved"
   defp effort_label(_minutes), do: "Deep"
 
+  defp guide_status_label("approved"), do: "Approved"
+  defp guide_status_label("denied"), do: "Denied"
+  defp guide_status_label("ignored"), do: "Ignored"
+  defp guide_status_label(_status), do: "Open"
+
   defp section_status_label("approved"), do: "Approve"
   defp section_status_label("denied"), do: "Deny"
   defp section_status_label("ignored"), do: "Ignore"
   defp section_status_label(status), do: status
+
+  defp plural(1, word), do: word
+  defp plural(_count, word), do: word <> "s"
 
   attr :additions, :integer, required: true
   attr :deletions, :integer, required: true
@@ -890,9 +1038,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       @class,
       @expanded? && "is-open",
       @viewed? && "is-viewed",
-      @partially_viewed? && "is-partially-viewed"
+      @partially_viewed? && "is-partially-viewed",
+      @diff_style == "unified" && "is-unified"
     ]}>
-      <header id={"#{@hunk_id}-summary"} class="review-hunk-summary" phx-hook="StickyHunkHeader">
+      <header
+        id={"#{@hunk_id}-summary"}
+        class="review-hunk-summary"
+        phx-hook={if(@diff_style == "split", do: "StickyHunkHeader")}
+      >
         <button
           type="button"
           class="review-hunk-toggle"
