@@ -120,6 +120,83 @@ defmodule ReviewsWeb.Layouts do
   end
 
   @doc """
+  Shared landing-style topbar — used on `/` (HomeLive) and `/settings`
+  (SettingsLive). Renders brand + a small nav + either a Sign-in CTA or a
+  link to the current user's settings.
+
+  Visual style: `.l-topbar` chrome from `landing.css` and `.r-*` components
+  from `components.css`.
+  """
+  attr :current_user, :map,
+    default: nil,
+    doc: "the current user struct (or nil for signed-out visitors)"
+
+  attr :show_workflow_anchor, :boolean,
+    default: true,
+    doc: "whether to include the in-page #chapter-push 'Workflow' anchor link"
+
+  def landing_topbar(assigns) do
+    ~H"""
+    <header class="l-topbar">
+      <div class="l-wrap l-topbar-inner">
+        <.link navigate={~p"/"} class="r-brand" aria-label="Reviews home">
+          <svg class="l-brand-mark-svg" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+            <rect
+              x="0.75"
+              y="0.75"
+              width="24.5"
+              height="24.5"
+              rx="5.25"
+              fill="currentColor"
+              fill-opacity="0.04"
+              stroke="currentColor"
+              stroke-opacity="0.32"
+              stroke-width="1"
+            >
+            </rect>
+            <path
+              d="M8.6 18.5V7.5h4.65c1.45 0 2.55 0.36 3.3 1.07 0.76 0.71 1.14 1.64 1.14 2.78 0 0.85-0.22 1.58-0.66 2.18-0.43 0.6-1.05 1.04-1.86 1.32L18.6 18.5h-2.45l-2.92-3.36h-2.18V18.5H8.6Zm2.45-5.35h2.07c0.73 0 1.3-0.17 1.7-0.5 0.4-0.34 0.6-0.81 0.6-1.42 0-0.6-0.2-1.07-0.6-1.4-0.4-0.34-0.97-0.5-1.7-0.5h-2.07v3.82Z"
+              fill="currentColor"
+            >
+            </path>
+          </svg>
+          <span>Reviews</span>
+        </.link>
+
+        <nav class="l-nav" aria-label="Primary">
+          <a :if={@show_workflow_anchor} class="r-nav-item" href="/#chapter-push">Workflow</a>
+          <a class="r-nav-item" href="https://github.com/figitaki/reviews">
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+
+          <%= if @current_user do %>
+            <.link
+              navigate={~p"/settings"}
+              class="r-nav-item l-nav-user"
+              aria-label={"Signed in as #{@current_user.username}"}
+            >
+              <img
+                :if={@current_user.avatar_url}
+                src={@current_user.avatar_url}
+                alt=""
+                class="l-nav-avatar"
+                width="20"
+                height="20"
+              />
+              <span>{@current_user.username}</span>
+            </.link>
+          <% else %>
+            <.link href={~p"/auth/github"} class="r-button r-button-primary l-nav-signin">
+              Sign in
+            </.link>
+          <% end %>
+        </nav>
+      </div>
+    </header>
+    """
+  end
+
+  @doc """
   Provides dark vs light theme toggle based on themes defined in app.css.
 
   See <head> in root.html.heex which applies the theme before page load.

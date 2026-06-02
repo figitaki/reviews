@@ -5,7 +5,17 @@ All notable changes to Reviews will be tracked here.
 Reviews uses semver with prerelease tags while the CLI and hosted service are
 still stabilizing.
 
-## [0.0.1-alpha.1] - 2026-05-21
+## [0.0.1-alpha.2] - 2026-05-21
+
+Supersedes `0.0.1-alpha.1`, whose release build never published — its CLI
+release workflow stalled on a retired macOS Intel runner. This release carries
+the same changes plus the CI fix.
+
+### Added
+
+- New homepage with a CTA-driven walkthrough that demonstrates the review
+  workflow.
+- Packet outline tree navigation for moving through review packet sections.
 
 ### Changed
 
@@ -14,6 +24,16 @@ still stabilizing.
   the glibc version dependency, so the binary runs on older distros such as
   Ubuntu 22.04, Debian 11, RHEL 8, and Amazon Linux 2 without the
   `GLIBC_2.xx not found` runtime error.
+- Improved the changes view with better expansion behavior and file tree.
+- The diff renderer was migrated from React to a vanilla implementation.
+- Production now runs on the `reviews.figitaki.dev` custom domain; the legacy
+  `reviews-dev.fly.dev` hostname 301-redirects to it.
+
+### Fixed
+
+- The CLI release workflow now cross-compiles the macOS x64 build on an Apple
+  Silicon runner instead of the retired `macos-13` Intel runner, which had been
+  blocking release publication.
 
 ## [0.0.1-alpha.0] - 2026-05-19
 

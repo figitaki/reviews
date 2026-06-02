@@ -1,5 +1,18 @@
 import Config
 
+parse_int_env = fn name, default ->
+  case System.get_env(name) do
+    value when is_binary(value) ->
+      case Integer.parse(value) do
+        {int, ""} -> int
+        _ -> default
+      end
+
+    _ ->
+      default
+  end
+end
+
 # Configure your database
 postgres_host = System.get_env("POSTGRES_HOST")
 postgres_port = System.get_env("POSTGRES_PORT")
@@ -15,7 +28,7 @@ config :reviews, Reviews.Repo,
 if postgres_host || postgres_port do
   config :reviews, Reviews.Repo,
     hostname: postgres_host || "localhost",
-    port: String.to_integer(postgres_port || "5432")
+    port: parse_int_env.("POSTGRES_PORT", 5432)
 else
   config :reviews, Reviews.Repo, socket_dir: System.get_env("POSTGRES_SOCKET_DIR", "/tmp")
 end
@@ -29,7 +42,7 @@ end
 config :reviews, ReviewsWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}],
+  http: [ip: {127, 0, 0, 1}, port: parse_int_env.("PORT", 4000)],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,

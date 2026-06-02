@@ -1,0 +1,499 @@
+/* ----------------------------------------------------------------------------
+   Reviews — production-style component CSS, ported from app.css in the
+   figitaki/reviews repo. Trimmed to just what the preview cards and UI kit
+   need. Consume after tokens.css.
+
+   These are NET NEW classes that sit alongside the existing `.review-*`
+   and `.rev-*` packet-UI selectors. New markup should prefer `.r-*`; the
+   old selectors stay in packet.css for compatibility.
+---------------------------------------------------------------------------- */
+
+/* ---- Brand mark ---- */
+.r-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ds-text);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.r-brand-mark {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: 6px;
+  background: var(--ds-panel-raised);
+  font-size: 12px;
+  color: var(--ds-text);
+}
+
+/* ---- Chip / Button (review-chip / review-button) ---- */
+.r-chip,
+.r-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: 6px;
+  background: var(--ds-panel);
+  color: var(--ds-text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1;
+  padding: 0 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease,
+              color 160ms ease, opacity 160ms ease;
+}
+.r-chip {
+  min-height: 28px;
+  min-width: 34px;
+  padding: 0 9px;
+  font-variant-numeric: tabular-nums;
+}
+.r-chip:hover,
+.r-button:hover { background: var(--ds-hover); border-color: var(--ds-line-strong); }
+.r-chip.is-active,
+.r-button-primary {
+  background: var(--ds-text);
+  border-color: var(--ds-text);
+  color: var(--ds-bg);
+}
+/* Primary hover/active: stay inverted, just nudge contrast — never dim
+   the surface to ds-hover or the ink-on-ink swap goes illegible. */
+.r-button-primary:hover {
+  background: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
+  border-color: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
+  color: var(--ds-bg);
+}
+.r-button-primary:active {
+  background: color-mix(in oklab, var(--ds-text) 78%, var(--ds-bg));
+  border-color: color-mix(in oklab, var(--ds-text) 78%, var(--ds-bg));
+  color: var(--ds-bg);
+}
+.r-chip.is-active:hover {
+  background: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
+  border-color: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
+  color: var(--ds-bg);
+}
+.r-button-secondary { background: transparent; }
+.r-button-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ds-muted);
+}
+.r-button-ghost:hover { color: var(--ds-text); }
+.r-button:disabled { cursor: not-allowed; opacity: 0.38; }
+
+/* Pill variant — fully-rounded shape for "soft" actions that sit inline
+   with prose (e.g. section decisions, "Mark Viewed"). Same metrics as
+   the default; only the radius changes. */
+.r-button.is-pill,
+.r-chip.is-pill {
+  border-radius: 999px;
+  padding-inline: 14px;
+}
+.r-button.is-pill.is-icon-only {
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+
+/* ---- Status mark (A / M / D / R) ---- */
+.r-status-icon {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: 4px;
+  background: #101012;
+  color: var(--ds-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+[data-theme="light"] .r-status-icon { background: var(--ds-panel-raised); }
+.r-status-icon.is-added    { color: var(--ds-add); }
+.r-status-icon.is-modified { color: var(--ds-blue); }
+.r-status-icon.is-deleted  { color: var(--ds-del); }
+.r-status-icon.is-renamed  { color: var(--ds-warn); }
+
+/* ---- Effort pill ---- */
+.r-effort-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ds-line);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--ds-muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.r-effort-pill.is-light    { color: var(--ds-faint); }
+.r-effort-pill.is-moderate {
+  border-color: color-mix(in oklab, var(--ds-blue) 36%, var(--ds-line));
+  color: var(--ds-blue);
+}
+.r-effort-pill.is-involved,
+.r-effort-pill.is-deep {
+  border-color: color-mix(in oklab, var(--ds-warn) 34%, var(--ds-line));
+  background: color-mix(in oklab, var(--ds-warn) 10%, transparent);
+  color: var(--ds-warn);
+}
+
+/* ---- Section state pill (the 28×28 circle) ---- */
+.r-state-pill {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--ds-line);
+  border-radius: 999px;
+  color: var(--ds-faint);
+  background: transparent;
+}
+.r-state-pill.is-approved {
+  border-color: color-mix(in oklab, var(--ds-add) 50%, transparent);
+  background: color-mix(in oklab, var(--ds-add) 18%, transparent);
+  color: var(--ds-add);
+}
+.r-state-pill.is-denied {
+  border-color: color-mix(in oklab, var(--ds-del) 50%, transparent);
+  background: color-mix(in oklab, var(--ds-del) 18%, transparent);
+  color: var(--ds-del);
+}
+.r-state-pill.is-ignored {
+  border-color: var(--ds-line);
+  background: var(--ds-panel-raised);
+  color: var(--ds-faint);
+}
+.r-state-pill.is-previous {
+  opacity: 0.72;
+}
+
+/* ---- Section decision action (the growing oval) ---- */
+.r-action {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--ds-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ds-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 220ms ease, border-color 220ms ease,
+              color 220ms ease;
+}
+.r-action.is-approved {
+  border-color: var(--ds-add);
+  background: color-mix(in oklab, var(--ds-add) 16%, transparent);
+  color: var(--ds-add);
+}
+.r-action.is-denied {
+  border-color: var(--ds-del);
+  background: color-mix(in oklab, var(--ds-del) 16%, transparent);
+  color: var(--ds-del);
+}
+.r-action.is-ignored {
+  border-color: var(--ds-line-strong);
+  background: var(--ds-panel-raised);
+  color: var(--ds-text);
+}
+
+/* ---- Change stat (+47 -12) ---- */
+.r-change-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.r-change-stat .add { color: var(--ds-add); }
+.r-change-stat .del { color: var(--ds-del); }
+.r-change-stat .none { color: var(--ds-faint); }
+
+/* ---- File link row ---- */
+.r-file-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 34px;
+  border-radius: 4px;
+  padding: 0 12px 0 8px;
+  color: var(--ds-text);
+  text-decoration: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.r-file-link:hover { background: var(--ds-hover); }
+.r-file-link.is-current {
+  background: var(--ds-panel-raised);
+  /* Inset shadow keeps the border inside the row so it can't bleed past
+     the rounded container; outline would clip against the parent. */
+  box-shadow: inset 0 0 0 1px var(--ds-line);
+}
+.r-file-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ds-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.r-file-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.r-file-stats .add { color: var(--ds-add); }
+.r-file-stats .del { color: var(--ds-del); }
+
+/* ---- Hunk card ---- */
+.r-hunk-card {
+  border: 1px solid var(--ds-line);
+  border-radius: 8px;
+  background: var(--ds-panel-raised);
+  overflow: hidden;
+}
+.r-hunk-card.is-viewed {
+  border-color: color-mix(in srgb, var(--ds-add) 36%, var(--ds-line));
+}
+.r-hunk-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  background: var(--ds-panel-raised);
+  padding: 6px;
+}
+.r-hunk-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 8px;
+}
+.r-hunk-filename { color: color-mix(in oklab, var(--ds-text) 76%, transparent); }
+.r-hunk-separator,
+.r-hunk-index { color: var(--ds-faint); }
+.r-hunk-lines { color: var(--ds-muted); }
+.r-hunk-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 6px;
+}
+.r-hunk-viewed-pill { color: var(--ds-add); font-size: 12px; font-weight: 700; }
+
+/* Diff body — plain text by design (no syntax highlighting in v1). */
+.r-diff {
+  border-top: 1px solid var(--ds-line);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: var(--ds-panel);
+}
+.r-diff-row {
+  display: grid;
+  grid-template-columns: 44px 44px 1fr;
+  align-items: baseline;
+}
+.r-diff-row > span:nth-child(1),
+.r-diff-row > span:nth-child(2) {
+  text-align: right;
+  padding: 0 8px;
+  color: var(--ds-faint);
+  font-variant-numeric: tabular-nums;
+  background: var(--ds-panel);
+  border-right: 1px solid var(--ds-line);
+}
+.r-diff-row > span:nth-child(2) { border-right: 1px solid var(--ds-line); }
+.r-diff-row > code {
+  padding-left: 12px;
+  color: var(--ds-text);
+  white-space: pre;
+  overflow-x: auto;
+}
+.r-diff-row.is-add { background: color-mix(in oklab, var(--ds-add) 12%, transparent); }
+.r-diff-row.is-add > code { color: var(--ds-text); }
+.r-diff-row.is-add > code::before { content: "+ "; color: var(--ds-add); }
+.r-diff-row.is-del { background: color-mix(in oklab, var(--ds-del) 12%, transparent); }
+.r-diff-row.is-del > code::before { content: "- "; color: var(--ds-del); }
+.r-diff-row.is-hunk {
+  background: var(--ds-bg);
+  color: var(--ds-faint);
+}
+.r-diff-row.is-hunk > code { color: var(--ds-faint); }
+.r-diff-row.is-hunk > code::before { content: ""; }
+.r-diff-row.is-context > code::before { content: "  "; }
+
+/* ---- Banner / Toast / Empty state ---- */
+.r-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 260px;
+  max-width: 420px;
+  padding: 12px 14px;
+  border: 1px solid var(--ds-line-strong);
+  border-radius: 10px;
+  background: var(--ds-panel-raised);
+  color: var(--ds-text);
+  box-shadow: var(--shadow-toast);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.r-toast.is-info { border-left: 3px solid var(--ds-add); }
+.r-toast.is-error { border-left: 3px solid var(--ds-del); }
+.r-toast-body { flex: 1 1 auto; min-width: 0; }
+.r-toast-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 2px;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.3;
+}
+.r-toast-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+}
+.r-toast-icon svg { width: 18px; height: 18px; }
+.r-toast.is-info .r-toast-icon { color: var(--ds-add); }
+.r-toast.is-error .r-toast-icon { color: var(--ds-del); }
+.r-toast-message { margin: 0; padding-left: 26px; }
+.r-toast-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: -2px -4px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ds-faint);
+  cursor: pointer;
+}
+.r-toast-close:hover { color: var(--ds-text); }
+
+.r-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed var(--ds-line-strong);
+  border-radius: 8px;
+  background: var(--ds-panel);
+  padding: 28px 24px;
+  color: var(--ds-muted);
+  text-align: center;
+}
+.r-empty h3 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ds-text); }
+.r-empty p { margin: 0; font-size: 13px; line-height: 1.5; }
+
+/* ---- Nav item / Topbar shell ---- */
+.r-nav-item {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--ds-muted);
+  padding: 0 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.r-nav-item:hover,
+.r-nav-item.is-active {
+  border-color: var(--ds-line);
+  background: var(--ds-panel-raised);
+  color: var(--ds-text);
+}
+
+/* Section title + section summary header */
+.r-section-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 6px 0;
+}
+.r-section-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 550;
+  line-height: 1.25;
+  color: var(--ds-text);
+}
+.r-section-estimate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ds-faint);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.r-section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Heroicon helper for static HTML (loaded via <svg> directly). */
+.r-icon { width: 16px; height: 16px; }
+.r-icon-sm { width: 14px; height: 14px; }
+.r-icon-lg { width: 20px; height: 20px; }

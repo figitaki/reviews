@@ -1316,7 +1316,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             section_title={@section_title}
             file_label={@file_label}
             show_hunk_label?={@show_hunk_label?}
-            sticky_header?={false}
+            sticky_header?={@diff_style == "unified"}
           />
         </div>
       <% @kind == "hunk" -> %>
@@ -1528,7 +1528,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         file_label={@file_label}
         grouped?={@grouped?}
         show_hunk_label?={@show_hunk_label?}
-        sticky_header?={false}
+        sticky_header?={@diff_style == "unified"}
       />
     </div>
     """
@@ -1583,7 +1583,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :grouped?, :boolean, default: false
   attr :show_file_label?, :boolean, default: true
   attr :show_hunk_label?, :boolean, default: true
-  attr :sticky_header?, :boolean, default: true
+  attr :sticky_header?, :boolean, default: false
   attr :view_state, :any, default: nil
   attr :class, :string, default: nil
 
@@ -1613,12 +1613,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       @viewed? && "is-viewed",
       @partially_viewed? && "is-partially-viewed",
       @diff_style == "unified" && "is-unified",
+      @sticky_header? && "is-sticky-header",
       !@sticky_header? && "is-inline-header"
     ]}>
       <header
         id={"#{@hunk_id}-summary"}
         class="review-hunk-summary"
-        phx-hook={if(@sticky_header? && @diff_style == "split", do: "StickyHunkHeader")}
+        phx-hook={if(@sticky_header?, do: "StickyHunkHeader")}
       >
         <button
           type="button"
