@@ -32,10 +32,40 @@ pub fn run(args: SectionArgs) -> Result<()> {
         },
     )?;
 
-    let status = resp.status.as_deref().unwrap_or("pending");
-    println!(
-        "Section {} on {} marked {} in patchset {}.",
-        resp.section_index, resp.review, status, resp.patchset_number
-    );
+    println!("{}", decision_message(&resp));
     Ok(())
+}
+
+fn decision_message(resp: &crate::api::SectionDecisionResponse) -> String {
+    match resp.status.as_deref() {
+        Some(status) => format!(
+            "Section {} on {} marked {} in patchset {}.",
+            resp.section_index, resp.review, status, resp.patchset_number
+        ),
+        None => format!(
+            "Section {} on {} cleared to pending in patchset {}.",
+            resp.section_index, resp.review, resp.patchset_number
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::SectionDecisionResponse;
+
+    #[test]
+    fn formats_a_cleared_decision_as_pending() {
+        let response = SectionDecisionResponse {
+            review: "k7m2qz".to_string(),
+            patchset_number: 2,
+            section_index: 1,
+            status: None,
+        };
+
+        assert_eq!(
+            decision_message(&response),
+            "Section 1 on k7m2qz cleared to pending in patchset 2."
+        );
+    }
 }

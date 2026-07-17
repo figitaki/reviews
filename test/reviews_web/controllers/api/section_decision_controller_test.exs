@@ -56,6 +56,15 @@ defmodule ReviewsWeb.Api.SectionDecisionControllerTest do
              PacketSectionDecisions.list_for_review(review, agent)
 
     assert author_id == agent.id
+
+    conn =
+      authenticated_json_conn(raw)
+      |> post(~p"/api/v1/reviews/#{review.slug}/sections/0/decision", %{
+        "status" => "approved"
+      })
+
+    assert %{"section_index" => 0, "status" => nil} = json_response(conn, 200)
+    assert [] = PacketSectionDecisions.list_for_review(review, agent)
   end
 
   test "rejects an invalid status", %{conn: conn, raw_token: raw, review: review} do
@@ -67,5 +76,29 @@ defmodule ReviewsWeb.Api.SectionDecisionControllerTest do
 
     assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
     assert detail =~ "status"
+  end
+
+  test "reports an unknown section index accurately", %{raw_token: raw, review: review} do
+    conn =
+      authenticated_json_conn(raw)
+      |> post(~p"/api/v1/reviews/#{review.slug}/sections/9/decision", %{"status" => "approved"})
+
+    assert %{"errors" => %{"detail" => "Section not found"}} = json_response(conn, 404)
+  end
+
+  test "rejects malformed section indexes", %{raw_token: raw, review: review} do
+    conn =
+      authenticated_json_conn(raw)
+      |> post(~p"/api/v1/reviews/#{review.slug}/sections/5abc/decision", %{
+        "status" => "approved"
+      })
+
+    assert %{"errors" => %{"detail" => "Invalid section index"}} = json_response(conn, 400)
+  end
+
+  defp authenticated_json_conn(raw) do
+    build_conn()
+    |> put_req_header("authorization", "Bearer #{raw}")
+    |> put_req_header("content-type", "application/json")
   end
 end

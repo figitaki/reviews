@@ -99,7 +99,10 @@ defmodule Reviews.PacketSectionDecisions do
 
     cond do
       state.current && state.current.status == status ->
-        clear_status(review, patchset, author, section.index)
+        case clear_status(review, patchset, author, section.index) do
+          {:ok, _decision} -> {:ok, nil}
+          {:error, reason} -> {:error, reason}
+        end
 
       is_nil(state.current) && state.inherited && state.inherited.status == status ->
         set_status(review, patchset, author, section_attrs(section, "pending"))

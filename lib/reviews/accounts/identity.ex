@@ -38,7 +38,7 @@ defmodule Reviews.Accounts.Identity do
     |> validate_length(:handle, min: 1, max: 80)
     |> validate_format(:handle, ~r/^[A-Za-z0-9][A-Za-z0-9._-]*$/)
     |> validate_length(:display_name, min: 1, max: 120)
-    |> unique_constraint([:owner_user_id, :handle])
+    |> unique_constraint(:handle, name: :identities_owner_lower_handle_index)
     |> unique_constraint(:owner_user_id, name: :identities_one_human_per_user)
   end
 

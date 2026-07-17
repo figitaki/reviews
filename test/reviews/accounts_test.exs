@@ -70,4 +70,68 @@ defmodule Reviews.AccountsTest do
     assert authed_identity.id == agent.id
     assert authed_identity.handle == "codex"
   end
+
+  test "rejects a token identity owned by another user" do
+    owner = user!("owner")
+    other_user = user!("other")
+
+    {:ok, other_identity} =
+      Accounts.create_agent_identity(other_user, %{display_name: "Codex", handle: "codex"})
+
+    assert {:error, :invalid_identity} =
+             Accounts.mint_token(owner, %{name: "not-owned", identity_id: other_identity.id})
+  end
+
+  test "keeps the human handle when a GitHub rename conflicts with an agent" do
+    user = user!("old-handle")
+
+    {:ok, _agent} =
+      Accounts.create_agent_identity(user, %{display_name: "Agent", handle: "new-handle"})
+
+    assert {:ok, updated_user} =
+             Accounts.upsert_from_github(%{
+               github_id: user.github_id,
+               username: "new-handle",
+               email: "renamed@example.com",
+               avatar_url: "https://example.com/avatar.png"
+             })
+
+    assert updated_user.username == "new-handle"
+    assert %Identity{} = human_identity = Accounts.human_identity_for(updated_user)
+    assert human_identity.handle == "old-handle"
+    assert human_identity.display_name == "new-handle"
+    assert human_identity.avatar_url == "https://example.com/avatar.png"
+  end
+
+  test "rejects case-only duplicate handles for one owner" do
+    user = user!("owner")
+
+    assert {:ok, _identity} =
+             Accounts.create_agent_identity(user, %{display_name: "Codex", handle: "Codex"})
+
+    assert {:error, changeset} =
+             Accounts.create_agent_identity(user, %{display_name: "codex", handle: "codex"})
+
+    assert "has already been taken" in errors_on(changeset).handle
+  end
+
+  test "repeated first GitHub upserts are idempotent" do
+    github_id = System.unique_integer([:positive])
+
+    attrs = %{
+      github_id: github_id,
+      username: "idempotent",
+      email: "idempotent@example.com",
+      avatar_url: nil
+    }
+
+    assert {:ok, first_user} = Accounts.upsert_from_github(attrs)
+    assert {:ok, second_user} = Accounts.upsert_from_github(attrs)
+    assert first_user.id == second_user.id
+
+    assert [%Identity{kind: "human", owner_user_id: owner_user_id}] =
+             Accounts.list_identities_for(first_user)
+
+    assert owner_user_id == first_user.id
+  end
 end

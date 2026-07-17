@@ -25,24 +25,10 @@ defmodule Reviews.Accounts do
   def upsert_from_github(%{github_id: github_id} = attrs) when is_integer(github_id) do
     case get_user_by_github_id(github_id) do
       nil ->
-        Ecto.Multi.new()
-        |> Ecto.Multi.insert(:user, User.changeset(%User{}, attrs))
-        |> Ecto.Multi.run(:identity, fn _repo, %{user: user} -> ensure_human_identity(user) end)
-        |> Repo.transaction()
-        |> case do
-          {:ok, %{user: user}} -> {:ok, user}
-          {:error, _step, changeset, _} -> {:error, changeset}
-        end
+        create_github_user(attrs)
 
       %User{} = user ->
-        Ecto.Multi.new()
-        |> Ecto.Multi.update(:user, User.changeset(user, attrs))
-        |> Ecto.Multi.run(:identity, fn _repo, %{user: user} -> ensure_human_identity(user) end)
-        |> Repo.transaction()
-        |> case do
-          {:ok, %{user: user}} -> {:ok, user}
-          {:error, _step, changeset, _} -> {:error, changeset}
-        end
+        update_github_user(user, attrs)
     end
   end
 
@@ -57,13 +43,7 @@ defmodule Reviews.Accounts do
   def ensure_human_identity(%User{} = user) do
     case human_identity_for(user) do
       %Identity{} = identity ->
-        identity
-        |> Identity.changeset(%{
-          handle: user.username,
-          display_name: user.username,
-          avatar_url: user.avatar_url
-        })
-        |> Repo.update()
+        sync_human_identity(identity, user)
 
       nil ->
         %Identity{}
@@ -200,6 +180,85 @@ defmodule Reviews.Accounts do
   defp touch_last_used(%ApiToken{} = token) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
     token |> Ecto.Changeset.change(last_used_at: now) |> Repo.update()
+  end
+
+  defp create_github_user(%{github_id: github_id} = attrs) do
+    Ecto.Multi.new()
+    |> Ecto.Multi.insert(:user, User.changeset(%User{}, attrs))
+    |> Ecto.Multi.run(:identity, fn _repo, %{user: user} -> ensure_human_identity(user) end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{user: user}} ->
+        {:ok, user}
+
+      {:error, :user, changeset, _} ->
+        # Two first OAuth callbacks can both miss the initial lookup. Once the
+        # unique github_id constraint picks a winner, retry through the normal
+        # update path so the loser remains a successful, idempotent login.
+        case get_user_by_github_id(github_id) do
+          %User{} = user -> update_github_user(user, attrs)
+          nil -> {:error, changeset}
+        end
+
+      {:error, _step, changeset, _} ->
+        {:error, changeset}
+    end
+  end
+
+  defp update_github_user(%User{} = user, attrs) do
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:user, User.changeset(user, attrs))
+    |> Ecto.Multi.run(:identity, fn _repo, %{user: updated_user} ->
+      ensure_human_identity(updated_user)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{user: updated_user}} -> {:ok, updated_user}
+      {:error, _step, changeset, _} -> {:error, changeset}
+    end
+  end
+
+  defp sync_human_identity(%Identity{} = identity, %User{} = user) do
+    attrs = %{display_name: user.username, avatar_url: user.avatar_url}
+
+    if human_handle_available?(identity, user.username) do
+      case update_human_identity(identity, Map.put(attrs, :handle, user.username)) do
+        {:error, changeset} ->
+          if handle_conflict?(changeset) do
+            update_human_identity(identity, attrs)
+          else
+            {:error, changeset}
+          end
+
+        result ->
+          result
+      end
+    else
+      update_human_identity(identity, attrs)
+    end
+  end
+
+  defp update_human_identity(%Identity{} = identity, attrs) do
+    identity
+    |> Identity.changeset(attrs)
+    |> Repo.update()
+  end
+
+  defp human_handle_available?(%Identity{} = identity, handle) do
+    !Repo.exists?(
+      from other in Identity,
+        where:
+          other.owner_user_id == ^identity.owner_user_id and
+            other.id != ^identity.id and
+            fragment("lower(?)", other.handle) == fragment("lower(?)", ^handle)
+    )
+  end
+
+  defp handle_conflict?(%Ecto.Changeset{} = changeset) do
+    Enum.any?(changeset.errors, fn
+      {:handle, {_message, options}} -> options[:constraint] == :unique
+      _ -> false
+    end)
   end
 
   defp token_identity(%User{} = user, nil) do

@@ -123,6 +123,9 @@ Response `200`:
 }
 ```
 
+Posting the same status again clears that identity's current decision. In that
+case, `status` is `null`, meaning the section is pending.
+
 ### Body size
 
 `Plug.Parsers` is configured with `length: 50_000_000` so diffs up to ~50 MB

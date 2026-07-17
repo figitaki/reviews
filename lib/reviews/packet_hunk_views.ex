@@ -98,8 +98,4 @@ defmodule Reviews.PacketHunkViews do
   def view_key(%{file_path: file_path, row_ref: row_ref, hunk_fingerprint: hunk_fingerprint}) do
     {file_path, row_ref, hunk_fingerprint}
   end
-
-  def view_key(%PacketHunkView{} = view) do
-    {view.file_path, view.row_ref, view.hunk_fingerprint}
-  end
 end

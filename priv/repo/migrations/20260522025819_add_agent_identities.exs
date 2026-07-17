@@ -15,7 +15,10 @@ defmodule Reviews.Repo.Migrations.AddAgentIdentities do
     end
 
     create index(:identities, [:owner_user_id])
-    create unique_index(:identities, [:owner_user_id, :handle])
+
+    create unique_index(:identities, [:owner_user_id, "lower(handle)"],
+             name: :identities_owner_lower_handle_index
+           )
 
     create unique_index(:identities, [:owner_user_id],
              where: "kind = 'human'",
@@ -62,6 +65,8 @@ defmodule Reviews.Repo.Migrations.AddAgentIdentities do
   end
 
   def down do
+    # Best effort only: once an agent identity has authored records, its ID has
+    # no matching users row, so restoring these foreign keys will fail.
     retarget_author_fk_to_users(:reviews, "RESTRICT")
     retarget_author_fk_to_users(:threads, "RESTRICT")
     retarget_author_fk_to_users(:comments, "RESTRICT")

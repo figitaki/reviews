@@ -14,10 +14,10 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
       when status in @statuses do
     identity = conn.assigns.current_identity
 
-    with {section_index, ""} <- Integer.parse(to_string(section_index)),
-         review when not is_nil(review) <- ReviewsContext.get_review_by_slug(slug),
-         patchset when not is_nil(patchset) <- ReviewsContext.latest_patchset(review),
-         %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
+    with {:ok, section_index} <- parse_section_index(section_index),
+         {:ok, review} <- fetch_review(slug),
+         {:ok, patchset} <- fetch_latest_patchset(review),
+         {:ok, section} <- fetch_section(patchset, section_index),
          patchsets <- ReviewsContext.list_patchsets(review),
          decisions <- PacketSectionDecisions.list_for_review(review, identity),
          {:ok, decision} <-
@@ -37,11 +37,17 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
         status: decision && decision.status
       })
     else
-      nil ->
+      {:error, :invalid_section_index} ->
+        conn |> put_status(:bad_request) |> json(%{errors: %{detail: "Invalid section index"}})
+
+      {:error, :review_not_found} ->
         conn |> put_status(:not_found) |> json(%{errors: %{detail: "Review not found"}})
 
-      :error ->
-        conn |> put_status(:bad_request) |> json(%{errors: %{detail: "Invalid section index"}})
+      {:error, :patchset_not_found} ->
+        conn |> put_status(:not_found) |> json(%{errors: %{detail: "Patchset not found"}})
+
+      {:error, :section_not_found} ->
+        conn |> put_status(:not_found) |> json(%{errors: %{detail: "Section not found"}})
 
       _ ->
         conn
@@ -60,5 +66,33 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
     conn
     |> put_status(:bad_request)
     |> json(%{errors: %{detail: "Invalid request"}})
+  end
+
+  defp parse_section_index(value) do
+    case Integer.parse(to_string(value)) do
+      {index, ""} when index >= 0 -> {:ok, index}
+      _ -> {:error, :invalid_section_index}
+    end
+  end
+
+  defp fetch_review(slug) do
+    case ReviewsContext.get_review_by_slug(slug) do
+      nil -> {:error, :review_not_found}
+      review -> {:ok, review}
+    end
+  end
+
+  defp fetch_latest_patchset(review) do
+    case ReviewsContext.latest_patchset(review) do
+      nil -> {:error, :patchset_not_found}
+      patchset -> {:ok, patchset}
+    end
+  end
+
+  defp fetch_section(patchset, section_index) do
+    case ReviewPacket.section_at(patchset.packet || %{}, section_index) do
+      nil -> {:error, :section_not_found}
+      section -> {:ok, section}
+    end
   end
 end
