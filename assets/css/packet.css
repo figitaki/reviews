@@ -1607,6 +1607,10 @@ details[open] > summary .review-collapse-icon,
   align-items: start;
 }
 
+.rev-shell.is-outline-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .rev-sidebar {
   position: sticky;
   top: var(--rev-header-h);
