@@ -7,7 +7,7 @@ defmodule Reviews.ReviewView do
   controllers do not duplicate file/thread payload shaping.
   """
 
-  alias Reviews.Accounts.User
+  alias Reviews.Accounts.Identity
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
   alias Reviews.ReviewHunks
@@ -25,7 +25,7 @@ defmodule Reviews.ReviewView do
           packet_hunk_views: [map()],
           packet_section_decisions: [map()],
           published_threads: [map()],
-          viewer: User.t() | nil
+          viewer: Identity.t() | nil
         }
 
   def get_snapshot_by_slug(slug, viewer, opts \\ []) when is_binary(slug) do
@@ -72,7 +72,7 @@ defmodule Reviews.ReviewView do
     threads
     |> Enum.filter(&(&1.status == "open"))
     |> Enum.group_by(fn t -> Map.get(List.first(t.comments) || %{}, :author) end)
-    |> Enum.sort_by(fn {op, _} -> (op && op.username) || "" end)
+    |> Enum.sort_by(fn {op, _} -> author_sort_name(op) end)
   end
 
   @doc """
@@ -181,10 +181,36 @@ defmodule Reviews.ReviewView do
     }
   end
 
-  defp user_to_payload(%{id: id, username: username} = u),
-    do: %{id: id, username: username, avatar_url: Map.get(u, :avatar_url)}
+  defp user_to_payload(%Identity{} = identity) do
+    %{
+      id: identity.id,
+      kind: identity.kind,
+      handle: identity.handle,
+      username: identity.handle,
+      display_name: identity.display_name,
+      avatar_url: identity.avatar_url
+    }
+  end
+
+  defp user_to_payload(%{id: id, handle: handle} = identity) do
+    %{
+      id: id,
+      kind: Map.get(identity, :kind),
+      handle: handle,
+      username: handle,
+      display_name: Map.get(identity, :display_name) || handle,
+      avatar_url: Map.get(identity, :avatar_url)
+    }
+  end
 
   defp user_to_payload(_), do: nil
+
+  defp author_sort_name(%Identity{} = identity),
+    do: identity.handle || identity.display_name || ""
+
+  defp author_sort_name(%{username: username}), do: username || ""
+  defp author_sort_name(%{handle: handle}), do: handle || ""
+  defp author_sort_name(_), do: ""
 
   defp encode_dt(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
   defp encode_dt(%NaiveDateTime{} = dt), do: NaiveDateTime.to_iso8601(dt)

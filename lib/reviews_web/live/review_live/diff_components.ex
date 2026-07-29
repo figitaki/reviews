@@ -57,7 +57,7 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
                 loading="lazy"
                 class="rdr-avatar"
               />
-              <span>{(op && op.username) || "anonymous"}</span>
+              <span>{author_label(op)}</span>
             </header>
             <button
               :for={t <- threads}
@@ -121,6 +121,13 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
 
   defp anchor_line_hint(%{anchor: %{"line_number_hint" => hint}}), do: hint
   defp anchor_line_hint(_), do: nil
+
+  defp author_label(%{display_name: display_name}) when is_binary(display_name),
+    do: display_name
+
+  defp author_label(%{handle: handle}) when is_binary(handle), do: handle
+  defp author_label(%{username: username}) when is_binary(username), do: username
+  defp author_label(_), do: "anonymous"
 
   defp file_id_for(file_diffs, file_path) do
     Enum.find_value(file_diffs, fn fd -> fd.path == file_path && fd.id end)

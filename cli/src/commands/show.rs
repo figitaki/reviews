@@ -146,7 +146,12 @@ fn render_markdown(body: &Value) -> Result<String> {
                 let line = t.get("line_hint").and_then(Value::as_i64);
                 let author = t
                     .get("author")
-                    .and_then(Value::as_str)
+                    .and_then(|author| {
+                        author
+                            .as_str()
+                            .or_else(|| author.get("handle").and_then(Value::as_str))
+                            .or_else(|| author.get("username").and_then(Value::as_str))
+                    })
                     .unwrap_or("anonymous");
                 let status = t.get("status").and_then(Value::as_str).unwrap_or("open");
                 let location = match line {
@@ -203,7 +208,13 @@ mod tests {
                 "file_path": "foo",
                 "line_hint": 1,
                 "status": "open",
-                "author": "carey",
+                "author": {
+                    "id": 12,
+                    "kind": "human",
+                    "handle": "carey",
+                    "username": "carey",
+                    "display_name": "Carey"
+                },
                 "comments": [{"body": "nit: rename?\nsee bug #42"}]
             }]
         });

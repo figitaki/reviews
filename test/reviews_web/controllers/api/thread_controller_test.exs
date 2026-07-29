@@ -15,7 +15,11 @@ defmodule ReviewsWeb.Api.ThreadControllerTest do
           avatar_url: nil
         })
 
-      {:ok, _token, raw} = Accounts.mint_token(user, %{"name" => "test"})
+      {:ok, agent} =
+        Accounts.create_agent_identity(user, %{handle: "codex", display_name: "Codex"})
+
+      {:ok, _token, raw} =
+        Accounts.mint_token(user, %{"name" => "test", "identity_id" => agent.id})
 
       diff =
         "diff --git a/foo b/foo\n" <>
@@ -38,7 +42,7 @@ defmodule ReviewsWeb.Api.ThreadControllerTest do
           "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
         })
 
-      %{raw_token: raw, review: review, thread: thread, user: user}
+      %{agent: agent, raw_token: raw, review: review, thread: thread, user: user}
     end
 
     test "resolves a thread", %{conn: conn, raw_token: raw, review: review, thread: thread} do
@@ -53,7 +57,8 @@ defmodule ReviewsWeb.Api.ThreadControllerTest do
       resp = json_response(conn, 200)
       assert resp["id"] == thread.id
       assert resp["status"] == "resolved"
-      assert resp["resolved_by"]["username"] == "carey"
+      assert resp["resolved_by"]["kind"] == "agent"
+      assert resp["resolved_by"]["handle"] == "codex"
       assert is_binary(resp["resolved_at"])
     end
 
@@ -62,9 +67,9 @@ defmodule ReviewsWeb.Api.ThreadControllerTest do
       raw_token: raw,
       review: review,
       thread: thread,
-      user: user
+      agent: agent
     } do
-      {:ok, _} = Threads.update_status(review, thread.id, user, "resolved")
+      {:ok, _} = Threads.update_status(review, thread.id, agent, "resolved")
 
       conn =
         conn

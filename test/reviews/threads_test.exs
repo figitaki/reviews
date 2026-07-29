@@ -67,7 +67,7 @@ defmodule Reviews.ThreadsTest do
       assert thread.side == "new"
       assert thread.anchor["granularity"] == "line"
       assert comment.body == "Should be `:newer`?"
-      assert comment.author_id == author.id
+      assert comment.author_id == Accounts.human_identity_for(author).id
     end
 
     test "appends replies to an existing thread" do
@@ -146,11 +146,13 @@ defmodule Reviews.ThreadsTest do
       assert {:ok, %Thread{} = updated} =
                Threads.update_status(review, thread.id, author, "resolved")
 
+      identity = Accounts.human_identity_for(author)
+
       assert updated.id == thread.id
       assert updated.status == "resolved"
-      assert updated.resolved_by_id == author.id
+      assert updated.resolved_by_id == identity.id
       assert %DateTime{} = updated.resolved_at
-      assert updated.resolved_by.username == author.username
+      assert updated.resolved_by.handle == author.username
       assert_receive {:thread_updated, %Thread{id: thread_id, status: "resolved"}}
       assert thread_id == thread.id
     end

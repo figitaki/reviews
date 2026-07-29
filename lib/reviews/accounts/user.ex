@@ -19,6 +19,7 @@ defmodule Reviews.Accounts.User do
     field :preferences, :map, default: %{}
 
     has_many :api_tokens, Reviews.Accounts.ApiToken
+    has_many :identities, Reviews.Accounts.Identity, foreign_key: :owner_user_id
 
     timestamps(type: :utc_datetime)
   end

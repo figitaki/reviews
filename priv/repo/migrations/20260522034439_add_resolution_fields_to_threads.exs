@@ -3,7 +3,7 @@ defmodule Reviews.Repo.Migrations.AddResolutionFieldsToThreads do
 
   def change do
     alter table(:threads) do
-      add :resolved_by_id, references(:users, on_delete: :nilify_all)
+      add :resolved_by_id, references(:identities, on_delete: :nilify_all)
       add :resolved_at, :utc_datetime
     end
 

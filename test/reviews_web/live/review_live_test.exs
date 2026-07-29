@@ -716,7 +716,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert [updated] = Threads.list_published_threads(review.id)
       assert updated.status == "resolved"
-      assert updated.resolved_by_id == author.id
+      assert updated.resolved_by_id == Accounts.human_identity_for(author).id
     end
 
     test "hunk viewed state is shared between packet and changes views", %{

@@ -9,7 +9,8 @@ defmodule Reviews.Threads do
   """
   import Ecto.Query, warn: false
 
-  alias Reviews.Accounts.User
+  alias Reviews.Accounts
+  alias Reviews.Accounts.{Identity, User}
   alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
@@ -65,7 +66,7 @@ defmodule Reviews.Threads do
   Returns `{:ok, %{thread: t, comment: c}}` or `{:error, reason}`.
   Broadcasts `{:thread_published, thread}` on `"review:<slug>"`.
   """
-  def publish_comment(%Review{} = review, %User{} = author, params) when is_map(params) do
+  def publish_comment(%Review{} = review, %Identity{} = author, params) when is_map(params) do
     file_path = params["file_path"] || params[:file_path]
     side = params["side"] || params[:side]
     body = String.trim(to_string(params["body"] || params[:body] || ""))
@@ -125,13 +126,19 @@ defmodule Reviews.Threads do
     error in [Ecto.InvalidChangesetError, Postgrex.Error] -> {:error, error}
   end
 
+  def publish_comment(%Review{} = review, %User{} = user, params) when is_map(params) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      publish_comment(review, identity, params)
+    end
+  end
+
   @doc """
   Updates a thread's review status.
 
-  Resolving records the acting user and timestamp. Reopening clears both. The
+  Resolving records the acting identity and timestamp. Reopening clears both. The
   thread must belong to the supplied review.
   """
-  def update_status(%Review{} = review, thread_id, %User{} = user, status)
+  def update_status(%Review{} = review, thread_id, %Identity{} = identity, status)
       when status in ["open", "resolved"] do
     with {:ok, id} <- cast_thread_id(thread_id),
          %Thread{review_id: review_id} = thread when review_id == review.id <-
@@ -139,7 +146,11 @@ defmodule Reviews.Threads do
       attrs =
         case status do
           "resolved" ->
-            %{status: "resolved", resolved_by_id: user.id, resolved_at: DateTime.utc_now(:second)}
+            %{
+              status: "resolved",
+              resolved_by_id: identity.id,
+              resolved_at: DateTime.utc_now(:second)
+            }
 
           "open" ->
             %{status: "open", resolved_by_id: nil, resolved_at: nil}
@@ -166,7 +177,13 @@ defmodule Reviews.Threads do
     end
   end
 
-  def update_status(%Review{}, _thread_id, %User{}, _status), do: {:error, :invalid_status}
+  def update_status(%Review{} = review, thread_id, %User{} = user, status) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      update_status(review, thread_id, identity, status)
+    end
+  end
+
+  def update_status(%Review{}, _thread_id, %Identity{}, _status), do: {:error, :invalid_status}
 
   defp cast_thread_id(id) when is_integer(id) and id > 0, do: {:ok, id}
 

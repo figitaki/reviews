@@ -83,11 +83,14 @@ defmodule Reviews.Release do
           username: @preview_username
         })
 
+    {:ok, identity} = Reviews.Accounts.ensure_human_identity(user)
+
     hash = :crypto.hash(:sha256, raw)
 
     Reviews.Repo.insert!(
       %Reviews.Accounts.ApiToken{
         user_id: user.id,
+        identity_id: identity.id,
         token_hash: hash,
         name: @preview_token_name
       },

@@ -46,6 +46,9 @@ enum Command {
 
     /// Reopen a resolved review thread (requires `reviews login`)
     Reopen(commands::thread_status::ThreadStatusArgs),
+
+    /// Approve, deny, or ignore a packet section
+    Section(commands::section::SectionArgs),
 }
 
 fn main() {
@@ -67,5 +70,6 @@ fn run() -> Result<()> {
         Command::Threads(args) => commands::threads::run(args),
         Command::Resolve(args) => commands::thread_status::run(args, "resolved"),
         Command::Reopen(args) => commands::thread_status::run(args, "open"),
+        Command::Section(args) => commands::section::run(args),
     }
 }

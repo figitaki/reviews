@@ -19,7 +19,7 @@ defmodule Reviews.Reviews.PacketHunkView do
 
     belongs_to :review, Reviews.Reviews.Review
     belongs_to :patchset, Reviews.Reviews.Patchset
-    belongs_to :author, Reviews.Accounts.User
+    belongs_to :author, Reviews.Accounts.Identity
 
     timestamps(type: :utc_datetime)
   end

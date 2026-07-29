@@ -50,6 +50,7 @@ defmodule ReviewsWeb.Router do
     post "/reviews/:slug/patchsets", PatchsetController, :create
     post "/reviews/:slug/comments", CommentController, :create
     patch "/reviews/:slug/threads/:thread_id", ThreadController, :update
+    post "/reviews/:slug/sections/:section_index/decision", SectionDecisionController, :create
     get "/me", MeController, :show
   end
 

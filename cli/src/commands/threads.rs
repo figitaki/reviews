@@ -57,7 +57,12 @@ fn render_threads(body: &Value) -> Result<String> {
         let line = t.get("line_hint").and_then(Value::as_i64);
         let author = t
             .get("author")
-            .and_then(Value::as_str)
+            .and_then(|author| {
+                author
+                    .as_str()
+                    .or_else(|| author.get("handle").and_then(Value::as_str))
+                    .or_else(|| author.get("username").and_then(Value::as_str))
+            })
             .unwrap_or("anonymous");
         let first = t
             .get("comments")
@@ -96,7 +101,13 @@ mod tests {
                 "status": "open",
                 "file_path": "foo",
                 "line_hint": 3,
-                "author": "carey",
+                "author": {
+                    "id": 12,
+                    "kind": "human",
+                    "handle": "carey",
+                    "username": "carey",
+                    "display_name": "Carey"
+                },
                 "comments": [{"body": "nit: rename?\nmore"}]
             }]
         });

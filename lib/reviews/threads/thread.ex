@@ -24,8 +24,8 @@ defmodule Reviews.Threads.Thread do
 
     belongs_to :review, Reviews.Reviews.Review
     belongs_to :originating_patchset, Reviews.Reviews.Patchset
-    belongs_to :author, Reviews.Accounts.User
-    belongs_to :resolved_by, Reviews.Accounts.User
+    belongs_to :author, Reviews.Accounts.Identity
+    belongs_to :resolved_by, Reviews.Accounts.Identity
     has_many :comments, Reviews.Threads.Comment
 
     timestamps(type: :utc_datetime)
