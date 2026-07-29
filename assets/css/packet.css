@@ -1311,6 +1311,7 @@ details[open] > summary .review-collapse-icon,
 .review-file-hunks {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .review-file-header {
@@ -1347,9 +1348,14 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-hunk-card {
+  min-width: 0;
   border: 1px solid var(--review-line);
   border-radius: 8px;
   background: var(--review-panel-raised);
+}
+
+.review-hunk-card.is-file-diff .review-packet-inline-diff {
+  overflow-x: auto;
 }
 
 .review-hunk-card.is-open {

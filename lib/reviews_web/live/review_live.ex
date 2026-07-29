@@ -499,7 +499,7 @@ defmodule ReviewsWeb.ReviewLive do
                   const pushStyle = (style, viewport = media.matches ? "tablet" : "wide") => {
                     this.pushEvent("select_diff_style", { style, viewport })
                   }
-                  const syncViewport = () => {
+                  this.syncViewport = () => {
                     const tablet = media.matches
                     this.el.classList.toggle("is-tablet-locked", tablet)
                     splitButton?.toggleAttribute("disabled", tablet)
@@ -515,9 +515,9 @@ defmodule ReviewsWeb.ReviewLive do
                     }
                   }
 
-                  syncViewport()
+                  this.syncViewport()
 
-                  const onMediaChange = () => syncViewport()
+                  const onMediaChange = () => this.syncViewport()
                   if (media.addEventListener) media.addEventListener("change", onMediaChange)
                   else media.addListener(onMediaChange)
                   this.cleanupMedia = () => {
@@ -539,6 +539,9 @@ defmodule ReviewsWeb.ReviewLive do
                       localStorage.setItem(KEY, style)
                     }
                   })
+                },
+                updated() {
+                  this.syncViewport?.()
                 },
                 destroyed() {
                   this.cleanupMedia?.()
