@@ -1,10 +1,6 @@
 defmodule ReviewsWeb.SettingsLive do
   @moduledoc """
-  Per-user settings page. v1 has one feature: mint an API token for the CLI.
-
-  Tokens are opaque — we generate one, show it ONCE in the flash/banner, and
-  only persist its SHA-256 hash. Subsequent visits show token *metadata* (name,
-  last_used_at) but never the raw value.
+  Account settings: appearance, actor identities, and API tokens.
   """
   use ReviewsWeb, :live_view
 
@@ -12,41 +8,64 @@ defmodule ReviewsWeb.SettingsLive do
 
   @impl true
   def mount(_params, session, socket) do
-    user_id = session["current_user_id"]
+    user = session["current_user_id"] && safe_load_user(session["current_user_id"])
 
-    case user_id && safe_load_user(user_id) do
+    socket =
+      socket
+      |> assign(:current_user, user)
+      |> assign(:new_token, nil)
+      |> assign(:new_token_identity, nil)
+      |> assign(:agent_form, to_form(%{}, as: :identity))
+      |> assign(:token_form, to_form(%{}, as: :token))
+      |> assign_account_data()
+
+    {:ok, socket}
+  end
+
+  @impl true
+  def handle_event("create_agent_identity", %{"identity" => params}, socket) do
+    case socket.assigns.current_user do
       nil ->
-        {:ok,
-         socket
-         |> assign(:current_user, nil)
-         |> assign(:tokens, [])
-         |> assign(:new_token, nil)}
+        {:noreply, put_flash(socket, :error, "Sign in to manage identities.")}
 
       user ->
-        {:ok,
-         socket
-         |> assign(:current_user, user)
-         |> assign(:tokens, Accounts.list_tokens_for(user))
-         |> assign(:new_token, nil)}
+        case Accounts.create_agent_identity(user, params) do
+          {:ok, _identity} ->
+            {:noreply,
+             socket
+             |> assign(:agent_form, to_form(%{}, as: :identity))
+             |> assign_account_data()
+             |> put_flash(:info, "Agent identity created.")}
+
+          {:error, changeset} ->
+            {:noreply, assign(socket, :agent_form, to_form(changeset, as: :identity))}
+        end
     end
   end
 
   @impl true
-  def handle_event("mint_token", %{"name" => name}, socket) do
+  def handle_event("mint_token", %{"token" => params}, socket) do
     case socket.assigns.current_user do
       nil ->
         {:noreply, put_flash(socket, :error, "Sign in to manage API tokens.")}
 
       user ->
-        case Accounts.mint_token(user, %{"name" => name}) do
-          {:ok, _token, raw} ->
+        case Accounts.mint_token(user, params) do
+          {:ok, token, raw} ->
+            identity = token.identity || Accounts.get_identity!(token.identity_id)
+
             {:noreply,
              socket
              |> assign(:new_token, raw)
-             |> assign(:tokens, Accounts.list_tokens_for(user))
-             |> put_flash(:info, "Token generated. Copy it now — it will not be shown again.")}
+             |> assign(:new_token_identity, identity)
+             |> assign(:token_form, to_form(%{}, as: :token))
+             |> assign_account_data()
+             |> put_flash(:info, "Token generated. Copy it now; it will not be shown again.")}
 
-          {:error, _changeset} ->
+          {:error, %Ecto.Changeset{} = changeset} ->
+            {:noreply, assign(socket, :token_form, to_form(changeset, as: :token))}
+
+          {:error, _reason} ->
             {:noreply, put_flash(socket, :error, "Could not generate token.")}
         end
     end
@@ -59,11 +78,12 @@ defmodule ReviewsWeb.SettingsLive do
       <main id="settings-page" class="l-page design-page">
         <Layouts.landing_topbar current_user={@current_user} />
 
-        <div class="design-main">
+        <div class="design-main is-settings">
           <.ds_page_header
             eyebrow="Settings"
-            title="API tokens for the reviews CLI."
-            description="Mint scoped credentials for local pushes. Generated tokens are shown once, then stored only as a hash."
+            title="Account settings"
+            description="Manage your review identity, agent identities, and CLI credentials."
+            class="is-compact"
           >
             <:actions>
               <.link :if={!@current_user} href={~p"/auth/github"} class="ds-button is-primary">
@@ -72,64 +92,146 @@ defmodule ReviewsWeb.SettingsLive do
             </:actions>
           </.ds_page_header>
 
-          <.ds_section
-            :if={@current_user}
-            id="appearance"
-            eyebrow="Appearance"
-            title="Theme"
-            description="Pick a theme for your account. Public pages follow your OS default."
-          >
-            <div class="design-section-body">
-              <.ds_card class="min-h-0">
-                <div class="flex items-center gap-4">
-                  <Layouts.theme_toggle />
-                  <p class="text-sm text-[color:var(--ds-muted)]">
-                    Choose system, light, or dark.
-                  </p>
+          <%= if @current_user do %>
+            <div class="ds-settings-layout">
+              <.ds_section
+                id="appearance"
+                eyebrow="Appearance"
+                title="Theme"
+                description="Choose how Reviews renders in this browser."
+              >
+                <div class="design-section-body">
+                  <.ds_card class="ds-settings-card">
+                    <div class="ds-settings-row">
+                      <div>
+                        <h3 id="appearance-theme-title">Theme</h3>
+                        <p>Stored in this browser.</p>
+                      </div>
+                      <div class="ds-settings-row-control">
+                        <Layouts.theme_toggle />
+                      </div>
+                    </div>
+                  </.ds_card>
                 </div>
-              </.ds_card>
-            </div>
-          </.ds_section>
+              </.ds_section>
 
-          <.ds_section
-            id="api-tokens"
-            eyebrow="Credentials"
-            title="Token access"
-            description="Name each token after the machine or automation that will use it."
-          >
-            <div class="design-section-body">
-              <.ds_card class="min-h-0">
-                <%= if @current_user do %>
-                  <form
-                    id="mint-token-form"
-                    phx-submit="mint_token"
-                    class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
-                  >
-                    <.input
-                      id="token-name"
-                      name="name"
-                      type="text"
-                      value=""
-                      label="Token Name"
-                      placeholder="laptop"
-                      autocomplete="off"
-                      class="h-10 w-full rounded-md border border-[color:var(--ds-line-strong)] bg-[color:var(--ds-panel)] px-3 text-sm text-[color:var(--ds-text)] outline-none transition placeholder:text-[color:var(--ds-faint)] focus:border-[color:var(--ds-text)] focus:ring-2 focus:ring-[color:var(--ds-line)]"
-                    />
-                    <.ds_button type="submit" variant="primary" class="mb-2">
-                      <.icon name="hero-key" class="size-4" /> Generate token
-                    </.ds_button>
-                  </form>
+              <.ds_section
+                id="identities"
+                eyebrow="Identities"
+                title="Review actors"
+                description="Create distinct human and agent actors so comments, pushes, and decisions show the right source."
+              >
+                <div class="design-section-body">
+                  <.ds_card class="ds-settings-card">
+                    <div class="ds-identity-list">
+                      <.identity_row
+                        :if={@human_identity}
+                        identity={@human_identity}
+                        token_stats={Map.get(@identity_token_stats, @human_identity.id, %{count: 0})}
+                        id="identity-human"
+                      />
 
-                  <div
-                    :if={@new_token}
-                    id="new-token-banner"
-                    translate="no"
-                    class="mt-4 rounded-md border border-[color:var(--ds-line)] bg-[color:var(--ds-panel-raised)] p-3 font-mono text-sm break-all text-[color:var(--ds-text)]"
-                  >
-                    {@new_token}
-                  </div>
+                      <.identity_row
+                        :for={identity <- @agent_identities}
+                        identity={identity}
+                        token_stats={Map.get(@identity_token_stats, identity.id, %{count: 0})}
+                        id={"identity-agent-#{identity.id}"}
+                      />
+                    </div>
 
-                  <div class="mt-6 border-t border-[color:var(--ds-line)] pt-3">
+                    <div :if={@agent_identities == []} class="ds-settings-empty-inline">
+                      <.icon name="hero-cpu-chip" class="size-4" />
+                      <span>No agent identities yet.</span>
+                    </div>
+
+                    <form
+                      id="new-agent-identity-form"
+                      phx-submit="create_agent_identity"
+                      class="ds-settings-form"
+                    >
+                      <.input
+                        field={@agent_form[:display_name]}
+                        id="agent-display-name"
+                        type="text"
+                        label="Agent Name"
+                        placeholder="Claude"
+                        autocomplete="off"
+                        class="ds-input"
+                      />
+                      <.input
+                        field={@agent_form[:handle]}
+                        id="agent-handle"
+                        type="text"
+                        label="Handle"
+                        placeholder="claude"
+                        autocomplete="off"
+                        class="ds-input"
+                      />
+                      <.input
+                        field={@agent_form[:provider]}
+                        id="agent-provider"
+                        type="text"
+                        label="Provider"
+                        placeholder="Claude, Codex, custom"
+                        autocomplete="off"
+                        class="ds-input"
+                      />
+                      <.ds_button type="submit" variant="primary" class="ds-settings-form-submit">
+                        <.icon name="hero-plus" class="size-4" /> New agent identity
+                      </.ds_button>
+                    </form>
+                  </.ds_card>
+                </div>
+              </.ds_section>
+
+              <.ds_section
+                id="access-tokens"
+                eyebrow="Credentials"
+                title="Access tokens"
+                description="Mint one token per machine, CI job, or agent runtime."
+              >
+                <div class="design-section-body">
+                  <.ds_card class="ds-settings-card">
+                    <form id="mint-token-form" phx-submit="mint_token" class="ds-settings-form">
+                      <.input
+                        field={@token_form[:identity_id]}
+                        id="token-identity-id"
+                        type="select"
+                        label="Acting Identity"
+                        options={identity_options(@identities)}
+                        class="ds-input"
+                      />
+                      <.input
+                        field={@token_form[:name]}
+                        id="token-name"
+                        type="text"
+                        label="Token Name"
+                        placeholder="laptop"
+                        autocomplete="off"
+                        class="ds-input"
+                      />
+                      <.ds_button type="submit" variant="primary" class="ds-settings-form-submit">
+                        <.icon name="hero-key" class="size-4" /> Generate token
+                      </.ds_button>
+                    </form>
+
+                    <div
+                      :if={@new_token}
+                      id="new-token-banner"
+                      class="ds-token-callout"
+                      aria-live="polite"
+                      translate="no"
+                    >
+                      <div>
+                        <strong>New token</strong>
+                        <span :if={@new_token_identity}>
+                          for {identity_label(@new_token_identity)}
+                        </span>
+                        <em>Shown once</em>
+                      </div>
+                      <code>{@new_token}</code>
+                    </div>
+
                     <.ds_empty_state
                       :if={@tokens == []}
                       icon="hero-key"
@@ -137,51 +239,141 @@ defmodule ReviewsWeb.SettingsLive do
                       body="Generate a token before using reviews push from the CLI."
                     />
 
-                    <ul
-                      :if={@tokens != []}
-                      id="tokens-list"
-                      class="divide-y divide-[color:var(--ds-line)]"
-                    >
-                      <li
-                        :for={t <- @tokens}
-                        id={"token-#{t.id}"}
-                        class="flex flex-col gap-1 py-3 sm:flex-row sm:items-baseline sm:justify-between"
+                    <div :if={@tokens != []} id="tokens-list" class="ds-token-list">
+                      <section
+                        :for={{identity, tokens} <- tokens_by_identity(@identities, @tokens)}
+                        id={"tokens-for-identity-#{identity.id}"}
+                        class="ds-token-group"
+                        aria-labelledby={"tokens-for-identity-#{identity.id}-title"}
                       >
-                        <span
-                          translate="no"
-                          class="min-w-0 font-medium text-[color:var(--ds-text)] break-words"
-                        >
-                          {t.name || "(unnamed)"}
-                        </span>
-                        <span class="text-xs text-[color:var(--ds-muted)]">
-                          Created {Calendar.strftime(t.inserted_at, "%Y-%m-%d")}
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
-                <% else %>
-                  <div class="design-state-focus is-compact">
-                    <.ds_empty_state
-                      icon="hero-key"
-                      title="Sign in to manage API tokens"
-                      body="Tokens are tied to your account so generated credentials can be listed and revoked safely."
-                    >
-                      <:actions>
-                        <.link href={~p"/auth/github"} class="ds-button is-primary">
-                          Sign in with GitHub
-                        </.link>
-                      </:actions>
-                    </.ds_empty_state>
-                  </div>
-                <% end %>
-              </.ds_card>
+                        <h3 id={"tokens-for-identity-#{identity.id}-title"}>
+                          {identity_label(identity)}
+                        </h3>
+                        <ul>
+                          <li :for={token <- tokens} id={"token-#{token.id}"} class="ds-token-row">
+                            <span class="ds-token-row-name" translate="no">
+                              {token.name || "(unnamed)"}
+                            </span>
+                            <span>{identity_label(identity)}</span>
+                            <span>Created {format_date(token.inserted_at)}</span>
+                            <span>{last_used_label(token.last_used_at)}</span>
+                            <span class="ds-badge">Active</span>
+                          </li>
+                        </ul>
+                      </section>
+                    </div>
+                  </.ds_card>
+                </div>
+              </.ds_section>
             </div>
-          </.ds_section>
+          <% else %>
+            <div class="design-state-focus">
+              <.ds_empty_state
+                icon="hero-key"
+                title="Sign in to manage account settings"
+                body="Settings are tied to your GitHub account so identities and credentials can be managed safely."
+              >
+                <:actions>
+                  <.link href={~p"/auth/github"} class="ds-button is-primary">
+                    Sign in with GitHub
+                  </.link>
+                </:actions>
+              </.ds_empty_state>
+            </div>
+          <% end %>
         </div>
       </main>
     </Layouts.app>
     """
   end
+
+  attr :id, :string, required: true
+  attr :identity, :map, required: true
+  attr :token_stats, :map, required: true
+
+  defp identity_row(assigns) do
+    ~H"""
+    <article id={@id} class="ds-identity-row">
+      <div class="ds-avatar-mark" aria-hidden="true">
+        <img
+          :if={@identity.avatar_url}
+          src={@identity.avatar_url}
+          alt=""
+          width="36"
+          height="36"
+          loading="lazy"
+        />
+        <span :if={!@identity.avatar_url}>{identity_initial(@identity)}</span>
+      </div>
+      <div class="ds-identity-main">
+        <h3>{@identity.display_name}</h3>
+        <p translate="no">@{@identity.handle}</p>
+      </div>
+      <div class="ds-identity-meta">
+        <span class="ds-badge">{String.capitalize(@identity.kind)}</span>
+        <span :if={@identity.provider}>{@identity.provider}</span>
+        <span>{@token_stats.count} {plural(@token_stats.count, "token")}</span>
+        <span>{last_used_label(Map.get(@token_stats, :last_used_at))}</span>
+      </div>
+    </article>
+    """
+  end
+
+  defp assign_account_data(%{assigns: %{current_user: nil}} = socket) do
+    socket
+    |> assign(:identities, [])
+    |> assign(:human_identity, nil)
+    |> assign(:agent_identities, [])
+    |> assign(:identity_token_stats, %{})
+    |> assign(:tokens, [])
+  end
+
+  defp assign_account_data(%{assigns: %{current_user: user}} = socket) do
+    {:ok, human_identity} = Accounts.ensure_human_identity(user)
+    identities = Accounts.list_identities_for(user)
+
+    socket
+    |> assign(:identities, identities)
+    |> assign(:human_identity, human_identity)
+    |> assign(:agent_identities, Enum.filter(identities, &(&1.kind == "agent")))
+    |> assign(:identity_token_stats, Accounts.identity_token_counts(user))
+    |> assign(:tokens, Accounts.list_tokens_for(user))
+  end
+
+  defp identity_options(identities) do
+    Enum.map(identities, &{identity_label(&1), &1.id})
+  end
+
+  defp tokens_by_identity(identities, tokens) do
+    tokens_by_identity_id = Enum.group_by(tokens, & &1.identity_id)
+
+    identities
+    |> Enum.map(fn identity -> {identity, Map.get(tokens_by_identity_id, identity.id, [])} end)
+    |> Enum.filter(fn {_identity, tokens} -> tokens != [] end)
+  end
+
+  defp identity_label(identity), do: "#{identity.display_name} (@#{identity.handle})"
+
+  defp identity_initial(identity) do
+    identity.display_name
+    |> to_string()
+    |> String.trim()
+    |> String.first()
+    |> case do
+      nil -> "?"
+      initial -> String.upcase(initial)
+    end
+  end
+
+  defp format_date(nil), do: "unknown"
+  defp format_date(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d")
+  defp format_date(%NaiveDateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d")
+
+  defp last_used_label(nil), do: "Never used"
+  defp last_used_label(dt), do: "Last used #{format_date(dt)}"
+
+  defp plural(1, word), do: word
+  defp plural(_count, word), do: word <> "s"
 
   defp safe_load_user(id) do
     try do

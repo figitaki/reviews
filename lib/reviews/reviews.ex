@@ -7,9 +7,10 @@ defmodule Reviews.Reviews do
   """
   import Ecto.Query, warn: false
 
+  alias Reviews.Accounts
+  alias Reviews.Accounts.{Identity, User}
   alias Reviews.Repo
   alias Reviews.Reviews.{File, Patchset, Review}
-  alias Reviews.Accounts.User
 
   ## Reviews
 
@@ -32,7 +33,7 @@ defmodule Reviews.Reviews do
   Populates per-file rows from the raw unified diff in the same transaction so
   the LiveView sidebar can render without re-parsing on each load.
   """
-  def create_review_with_initial_patchset(%User{} = author, attrs) when is_map(attrs) do
+  def create_review_with_initial_patchset(%Identity{} = author, attrs) when is_map(attrs) do
     slug = attrs[:slug] || attrs["slug"] || generate_slug()
     raw_diff = attrs[:raw_diff] || attrs["raw_diff"]
 
@@ -61,6 +62,12 @@ defmodule Reviews.Reviews do
       insert_files_for_patchset(patchset, raw_diff)
     end)
     |> Repo.transaction()
+  end
+
+  def create_review_with_initial_patchset(%User{} = user, attrs) when is_map(attrs) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      create_review_with_initial_patchset(identity, attrs)
+    end
   end
 
   ## Patchsets

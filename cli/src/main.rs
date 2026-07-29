@@ -37,6 +37,9 @@ enum Command {
 
     /// Publish a comment on a review (requires `reviews login`)
     Comment(commands::comment::CommentArgs),
+
+    /// Approve, deny, or ignore a packet section
+    Section(commands::section::SectionArgs),
 }
 
 fn main() {
@@ -55,5 +58,6 @@ fn run() -> Result<()> {
         Command::Diff(args) => commands::diff::run(args),
         Command::Show(args) => commands::show::run(args),
         Command::Comment(args) => commands::comment::run(args),
+        Command::Section(args) => commands::section::run(args),
     }
 }

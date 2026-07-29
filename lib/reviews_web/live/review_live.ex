@@ -49,13 +49,15 @@ defmodule ReviewsWeb.ReviewLive do
         end
 
         current_user = load_current_user(session)
+        current_identity = load_current_identity(current_user)
 
-        case ReviewView.snapshot(review, current_user) do
+        case ReviewView.snapshot(review, current_identity) do
           {:ok, snapshot} ->
             socket =
               socket
               |> assign(:page_title, review.title)
               |> assign(:current_user, current_user)
+              |> assign(:current_identity, current_identity)
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
               |> assign(:expanded_file_ids, MapSet.new())
@@ -110,11 +112,11 @@ defmodule ReviewsWeb.ReviewLive do
   @impl true
   def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
       when status in ["approved", "denied", "ignored"] do
-    with %{} = user <- socket.assigns.current_user,
+    with %{} = identity <- socket.assigns.current_identity,
          %{} = patchset <- socket.assigns.selected_patchset,
          {section_index, ""} <- Integer.parse(to_string(index)),
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
-         {:ok, _decision} <- put_section_status(socket, patchset, user, section, status) do
+         {:ok, _decision} <- put_section_status(socket, patchset, identity, section, status) do
       {:noreply,
        socket
        |> refresh_snapshot!()
@@ -260,7 +262,7 @@ defmodule ReviewsWeb.ReviewLive do
   def handle_event("create_comment", params, socket) do
     require Logger
 
-    case socket.assigns.current_user do
+    case socket.assigns.current_identity do
       nil ->
         {:noreply, put_flash(socket, :error, "Sign in to leave a comment.")}
 
@@ -305,7 +307,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp refresh_snapshot(socket, opts) do
     review = socket.assigns.review
-    current_user = socket.assigns.current_user
+    current_identity = socket.assigns.current_identity
     selected = socket.assigns.selected_patchset
 
     patchset_number =
@@ -313,7 +315,7 @@ defmodule ReviewsWeb.ReviewLive do
         selected && selected.number
       end)
 
-    case ReviewView.snapshot(review, current_user, patchset_number: patchset_number) do
+    case ReviewView.snapshot(review, current_identity, patchset_number: patchset_number) do
       {:ok, snapshot} -> {:ok, assign_snapshot(socket, snapshot)}
       {:error, reason} -> {:error, reason}
     end
@@ -374,6 +376,15 @@ defmodule ReviewsWeb.ReviewLive do
 
       _ ->
         nil
+    end
+  end
+
+  defp load_current_identity(nil), do: nil
+
+  defp load_current_identity(user) do
+    case Accounts.ensure_human_identity(user) do
+      {:ok, identity} -> identity
+      {:error, _changeset} -> nil
     end
   end
 
@@ -781,8 +792,8 @@ defmodule ReviewsWeb.ReviewLive do
   defp update_hunk_view(socket, params, action) do
     with {:ok, attrs_list} <- hunk_attrs_list_from_params(params),
          %{} = patchset <- socket.assigns.selected_patchset,
-         %{} = user <- socket.assigns.current_user,
-         {:ok, _} <- persist_hunk_views(socket, patchset, user, attrs_list, action) do
+         %{} = identity <- socket.assigns.current_identity,
+         {:ok, _} <- persist_hunk_views(socket, patchset, identity, attrs_list, action) do
       socket = refresh_snapshot!(socket)
       attrs = List.first(attrs_list)
 
@@ -1086,35 +1097,14 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp put_section_status(socket, patchset, user, section, status) do
-    state =
-      PacketSectionDecisions.section_state(
-        section,
-        socket.assigns.packet_section_decisions,
-        patchset,
-        socket.assigns.patchsets
-      )
-
-    cond do
-      state.current && state.current.status == status ->
-        PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
-
-      is_nil(state.current) && state.inherited && state.inherited.status == status ->
-        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
-          section_index: section.index,
-          section_title: section.title,
-          section_fingerprint: section.fingerprint,
-          section_refs: section.refs,
-          status: "pending"
-        })
-
-      true ->
-        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
-          section_index: section.index,
-          section_title: section.title,
-          section_fingerprint: section.fingerprint,
-          section_refs: section.refs,
-          status: status
-        })
-    end
+    PacketSectionDecisions.put_section_status(
+      socket.assigns.review,
+      patchset,
+      user,
+      section,
+      socket.assigns.packet_section_decisions,
+      socket.assigns.patchsets,
+      status
+    )
   end
 end
