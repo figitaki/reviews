@@ -15,7 +15,14 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
         })
 
       {:ok, _token, raw} = Accounts.mint_token(user, %{"name" => "test"})
-      %{user: user, raw_token: raw}
+
+      {:ok, agent} =
+        Accounts.create_agent_identity(user, %{display_name: "Codex", handle: "codex"})
+
+      {:ok, _agent_token, agent_raw} =
+        Accounts.mint_token(user, %{name: "agent", identity_id: agent.id})
+
+      %{user: user, raw_token: raw, agent: agent, agent_raw_token: agent_raw}
     end
 
     test "creates a review + patchset with a valid token", %{conn: conn, raw_token: raw} do
@@ -42,6 +49,30 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
 
       assert is_binary(slug) and slug != ""
       assert url =~ slug
+    end
+
+    test "stores the token identity as review author", %{
+      conn: conn,
+      agent: agent,
+      agent_raw_token: raw
+    } do
+      body = %{
+        "title" => "Agent-authored review",
+        "description" => "",
+        "base_sha" => "deadbeef",
+        "branch_name" => "codex/perf",
+        "raw_diff" => "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+      }
+
+      conn =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews", body)
+
+      %{"slug" => slug} = json_response(conn, 201)
+      review = ReviewsContext.get_review_by_slug(slug)
+      assert review.author_id == agent.id
     end
 
     test "stores optional packet JSON on the initial patchset", %{conn: conn, raw_token: raw} do

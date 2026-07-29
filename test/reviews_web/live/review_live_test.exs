@@ -601,6 +601,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-split-inline-overview", "Packet-level overview")
       refute has_element?(view, "#packet-section-0")
 
+      send(view.pid, {:patchset_pushed, 1})
+      _ = render(view)
+
+      assert has_element?(view, "#review-guide-overview-tick.is-active")
+      assert has_element?(view, "#review-split-inline-overview")
+      refute has_element?(view, "#packet-section-0")
+
       view
       |> element("#review-guide-tick-0")
       |> render_click()

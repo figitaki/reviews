@@ -52,7 +52,7 @@ Then connect it to a Reviews server:
 reviews login
 ```
 
-For the hosted alpha, use `https://reviews-dev.fly.dev` as the server URL and
+For the hosted alpha, use `https://reviews.figitaki.dev` as the server URL and
 mint an API token from `/settings`.
 
 ## Getting Started

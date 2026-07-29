@@ -17,6 +17,12 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
 
       {:ok, _token, raw} = Accounts.mint_token(user, %{"name" => "test"})
 
+      {:ok, agent} =
+        Accounts.create_agent_identity(user, %{display_name: "Codex", handle: "codex"})
+
+      {:ok, _agent_token, agent_raw} =
+        Accounts.mint_token(user, %{name: "agent", identity_id: agent.id})
+
       diff =
         "diff --git a/foo b/foo\n" <>
           "--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+GITHUB_CLIENT_ID=\n"
@@ -30,7 +36,7 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
           raw_diff: diff
         })
 
-      %{user: user, raw_token: raw, review: review}
+      %{user: user, raw_token: raw, agent_raw_token: agent_raw, agent: agent, review: review}
     end
 
     test "publishes a line-anchored comment", %{conn: conn, raw_token: raw, review: review} do
@@ -62,6 +68,30 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
       assert thread.file_path == "foo"
       assert [comment] = thread.comments
       assert comment.body == "looks good"
+    end
+
+    test "publishes comments under the token identity", %{
+      conn: conn,
+      agent_raw_token: raw,
+      agent: agent,
+      review: review
+    } do
+      conn =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "agent pass",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      assert %{"comment_id" => _} = json_response(conn, 201)
+      [thread] = ThreadsContext.list_published_threads(review.id)
+      assert thread.author_id == agent.id
+      assert [comment] = thread.comments
+      assert comment.author_id == agent.id
     end
 
     test "publishes a token-range anchored comment",

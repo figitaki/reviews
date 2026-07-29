@@ -7,6 +7,19 @@ defmodule ReviewsWeb.Api.MeController do
 
   def show(conn, _params) do
     user = conn.assigns.current_user
-    json(conn, %{username: user.username, email: user.email})
+    identity = conn.assigns.current_identity
+
+    json(conn, %{
+      username: user.username,
+      email: user.email,
+      identity: %{
+        id: identity.id,
+        kind: identity.kind,
+        handle: identity.handle,
+        username: identity.handle,
+        display_name: identity.display_name,
+        avatar_url: identity.avatar_url
+      }
+    })
   end
 end

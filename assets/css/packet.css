@@ -10,7 +10,6 @@
 .review-page {
   --review-main-nav-h: 64px;
   --review-section-sticky-h: 46px;
-  --review-sticky-prose-cover-h: calc((1em * 1.55 * 2) + 16px);
   --review-hunk-sticky-top: var(--review-main-nav-h);
 
   color-scheme: light;
@@ -679,9 +678,7 @@
 }
 
 .review-packet-section-body {
-  --review-hunk-sticky-top: calc(
-    var(--review-main-nav-h) + var(--review-section-sticky-h) + var(--review-sticky-prose-cover-h)
-  );
+  --review-hunk-sticky-top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h));
 
   display: grid;
   gap: 14px;
@@ -1107,14 +1104,6 @@ details[open] > summary .review-collapse-icon,
   overflow: visible;
   border-bottom: 1px solid transparent;
   padding: 8px;
-}
-
-.review-packet-row.is-markdown::before {
-  content: none;
-}
-
-.review-packet-row.is-markdown.is-stuck::before {
-  content: none;
 }
 
 .review-packet-row.is-markdown .review-packet-markdown {

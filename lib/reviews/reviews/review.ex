@@ -15,7 +15,7 @@ defmodule Reviews.Reviews.Review do
     field :visibility, :string, default: "link"
     field :published_at, :utc_datetime
 
-    belongs_to :author, Reviews.Accounts.User
+    belongs_to :author, Reviews.Accounts.Identity
     has_many :patchsets, Reviews.Reviews.Patchset
 
     timestamps(type: :utc_datetime)

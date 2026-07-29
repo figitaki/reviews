@@ -83,81 +83,22 @@ defmodule Reviews.Release do
           username: @preview_username
         })
 
+    {:ok, identity} = Reviews.Accounts.ensure_human_identity(user)
+
     hash = :crypto.hash(:sha256, raw)
 
-    if column_exists?("api_tokens", "identity_id") do
-      identity_id = seed_preview_identity(user)
-
-      Ecto.Adapters.SQL.query!(
-        Reviews.Repo,
-        """
-        INSERT INTO api_tokens (user_id, identity_id, token_hash, name, inserted_at)
-        VALUES ($1, $2, $3, $4, NOW())
-        ON CONFLICT (token_hash) DO NOTHING
-        """,
-        [user.id, identity_id, hash, @preview_token_name]
-      )
-    else
-      Reviews.Repo.insert!(
-        %Reviews.Accounts.ApiToken{
-          user_id: user.id,
-          token_hash: hash,
-          name: @preview_token_name
-        },
-        on_conflict: :nothing,
-        conflict_target: :token_hash
-      )
-    end
+    Reviews.Repo.insert!(
+      %Reviews.Accounts.ApiToken{
+        user_id: user.id,
+        identity_id: identity.id,
+        token_hash: hash,
+        name: @preview_token_name
+      },
+      on_conflict: :nothing,
+      conflict_target: :token_hash
+    )
 
     :ok
-  end
-
-  defp seed_preview_identity(user) do
-    %{rows: [[identity_id]]} =
-      Ecto.Adapters.SQL.query!(
-        Reviews.Repo,
-        """
-        INSERT INTO identities (
-          owner_user_id,
-          kind,
-          handle,
-          display_name,
-          avatar_url,
-          provider,
-          inserted_at,
-          updated_at
-        )
-        VALUES ($1, 'human', $2, $2, $3, 'GitHub', NOW(), NOW())
-        ON CONFLICT (owner_user_id) WHERE kind = 'human'
-        DO UPDATE SET
-          handle = EXCLUDED.handle,
-          display_name = EXCLUDED.display_name,
-          avatar_url = EXCLUDED.avatar_url,
-          provider = EXCLUDED.provider,
-          updated_at = EXCLUDED.updated_at
-        RETURNING id
-        """,
-        [user.id, user.username, user.avatar_url]
-      )
-
-    identity_id
-  end
-
-  defp column_exists?(table, column) do
-    %{rows: [[count]]} =
-      Ecto.Adapters.SQL.query!(
-        Reviews.Repo,
-        """
-        SELECT count(*)
-        FROM information_schema.columns
-        WHERE table_schema = current_schema()
-          AND table_name = $1
-          AND column_name = $2
-        """,
-        [table, column]
-      )
-
-    count > 0
   end
 
   defp repos do

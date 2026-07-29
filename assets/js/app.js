@@ -28,7 +28,6 @@ import DiffRenderer from "./hooks/diff_renderer"
 import GuideFlyout from "./hooks/guide_flyout"
 import PacketNavTree from "./hooks/packet_nav_tree"
 import StickyHunkHeader from "./hooks/sticky_hunk_header"
-import StickyProse from "./hooks/sticky_prose"
 import InstallCopy from "./hooks/install_copy"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -41,7 +40,6 @@ const liveSocket = new LiveSocket("/live", Socket, {
     GuideFlyout,
     PacketNavTree,
     StickyHunkHeader,
-    StickyProse,
     InstallCopy,
   },
 })

@@ -49,16 +49,17 @@ defmodule ReviewsWeb.ReviewLive do
         end
 
         current_user = load_current_user(session)
+        current_identity = load_current_identity(current_user)
 
-        case ReviewView.snapshot(review, current_user) do
+        case ReviewView.snapshot(review, current_identity) do
           {:ok, snapshot} ->
             socket =
               socket
               |> assign(:page_title, review.title)
               |> assign(:current_user, current_user)
+              |> assign(:current_identity, current_identity)
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
-              |> assign(:expanded_file_ids, MapSet.new())
               |> assign(:expanded_hunk_ids, MapSet.new())
               |> assign(:expanded_section_ids, MapSet.new())
               |> assign(:active_outline_section_index, nil)
@@ -111,11 +112,11 @@ defmodule ReviewsWeb.ReviewLive do
   @impl true
   def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
       when status in ["approved", "denied", "ignored"] do
-    with %{} = user <- socket.assigns.current_user,
+    with %{} = identity <- socket.assigns.current_identity,
          %{} = patchset <- socket.assigns.selected_patchset,
          {section_index, ""} <- Integer.parse(to_string(index)),
          %{} = section <- ReviewPacket.section_at(patchset.packet || %{}, section_index),
-         {:ok, _decision} <- put_section_status(socket, patchset, user, section, status) do
+         {:ok, _decision} <- put_section_status(socket, patchset, identity, section, status) do
       {:noreply,
        socket
        |> refresh_snapshot!()
@@ -254,24 +255,6 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_event("toggle_file_diff", %{"file_id" => file_id}, socket) do
-    case parse_int(file_id) do
-      id when is_integer(id) ->
-        expanded_file_ids =
-          if MapSet.member?(socket.assigns.expanded_file_ids, id) do
-            MapSet.delete(socket.assigns.expanded_file_ids, id)
-          else
-            MapSet.put(socket.assigns.expanded_file_ids, id)
-          end
-
-        {:noreply, assign(socket, :expanded_file_ids, expanded_file_ids)}
-
-      _ ->
-        {:noreply, socket}
-    end
-  end
-
-  @impl true
   def handle_event("toggle_hunk_diff", %{"hunk_id" => hunk_id}, socket) do
     collapsing? = MapSet.member?(socket.assigns.expanded_hunk_ids, hunk_id)
 
@@ -310,7 +293,7 @@ defmodule ReviewsWeb.ReviewLive do
   def handle_event("create_comment", params, socket) do
     require Logger
 
-    case socket.assigns.current_user do
+    case socket.assigns.current_identity do
       nil ->
         {:noreply, put_flash(socket, :error, "Sign in to leave a comment.")}
 
@@ -355,7 +338,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp refresh_snapshot(socket, opts) do
     review = socket.assigns.review
-    current_user = socket.assigns.current_user
+    current_identity = socket.assigns.current_identity
     selected = socket.assigns.selected_patchset
 
     patchset_number =
@@ -363,7 +346,7 @@ defmodule ReviewsWeb.ReviewLive do
         selected && selected.number
       end)
 
-    case ReviewView.snapshot(review, current_user, patchset_number: patchset_number) do
+    case ReviewView.snapshot(review, current_identity, patchset_number: patchset_number) do
       {:ok, snapshot} -> {:ok, assign_snapshot(socket, snapshot)}
       {:error, reason} -> {:error, reason}
     end
@@ -424,6 +407,15 @@ defmodule ReviewsWeb.ReviewLive do
 
       _ ->
         nil
+    end
+  end
+
+  defp load_current_identity(nil), do: nil
+
+  defp load_current_identity(user) do
+    case Accounts.ensure_human_identity(user) do
+      {:ok, identity} -> identity
+      {:error, _changeset} -> nil
     end
   end
 
@@ -569,17 +561,6 @@ defmodule ReviewsWeb.ReviewLive do
           <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
           <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
           <% show_packet_outline = has_packet && @show_packet_outline %>
-          <% packet_outline =
-            if has_packet do
-              PacketComponents.packet_outline(
-                packet,
-                @file_diffs,
-                @hunks_by_path,
-                @packet_section_decisions,
-                @selected_patchset,
-                @patchsets
-              )
-            end %>
           <% packet_effort =
             if has_packet do
               PacketComponents.packet_effort_for_header(
@@ -678,17 +659,12 @@ defmodule ReviewsWeb.ReviewLive do
           <DiffComponents.diff_shell
             :if={@live_action == :changes || !has_packet}
             file_diffs={@file_diffs}
-            open_threads_by_op={@open_threads_by_op}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
             current_user={@current_user}
             diff_style={@diff_style}
-            expanded_file_ids={@expanded_file_ids}
             expanded_hunk_ids={@expanded_hunk_ids}
             hunks_by_path={@hunks_by_path}
-            packet_outline={packet_outline}
-            active_section_index={@active_outline_section_index}
-            show_packet_outline={false}
           />
         </div>
       </.ds_shell>
@@ -896,8 +872,8 @@ defmodule ReviewsWeb.ReviewLive do
   defp update_hunk_view(socket, params, action) do
     with {:ok, attrs_list} <- hunk_attrs_list_from_params(params),
          %{} = patchset <- socket.assigns.selected_patchset,
-         %{} = user <- socket.assigns.current_user,
-         {:ok, _} <- persist_hunk_views(socket, patchset, user, attrs_list, action) do
+         %{} = identity <- socket.assigns.current_identity,
+         {:ok, _} <- persist_hunk_views(socket, patchset, identity, attrs_list, action) do
       socket = refresh_snapshot!(socket)
       attrs = List.first(attrs_list)
 
@@ -1024,13 +1000,6 @@ defmodule ReviewsWeb.ReviewLive do
 
     next_patchset_id = snapshot.selected_patchset && snapshot.selected_patchset.id
 
-    expanded_file_ids =
-      if previous_patchset_id == next_patchset_id do
-        socket.assigns[:expanded_file_ids] || MapSet.new()
-      else
-        MapSet.new()
-      end
-
     default_expansion = default_expanded_state(socket, snapshot)
     changes_default_hunk_ids = default_expanded_changes_hunk_ids(socket, snapshot)
 
@@ -1065,31 +1034,33 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:file_diffs, snapshot.file_diffs)
     |> assign(:hunks_by_path, snapshot.hunks_by_path)
     |> assign(:packet_hunk_views, snapshot.packet_hunk_views)
-    |> assign(:expanded_file_ids, expanded_file_ids)
     |> assign(:expanded_hunk_ids, expanded_hunk_ids)
     |> assign(:expanded_section_ids, expanded_section_ids)
     |> assign(
       :active_outline_section_index,
       active_outline_section_index(
         socket.assigns[:active_outline_section_index],
-        snapshot.selected_patchset
+        snapshot.selected_patchset,
+        previous_patchset_id != next_patchset_id
       )
     )
     |> assign(:changes_default_expanded_patchset_ids, changes_default_expanded_patchset_ids)
     |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
-    |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
   end
 
-  defp active_outline_section_index(nil, %{packet: packet}) do
+  defp active_outline_section_index(_current_index, %{packet: packet}, true) do
     if ReviewPacket.sections(packet || %{}) == [], do: nil, else: 0
   end
 
-  defp active_outline_section_index(current_index, %{packet: packet}) do
+  defp active_outline_section_index(current_index, %{packet: packet}, false) do
     sections = ReviewPacket.sections(packet || %{})
 
     cond do
       sections == [] ->
+        nil
+
+      is_nil(current_index) ->
         nil
 
       is_integer(current_index) && current_index >= 0 && current_index < length(sections) ->
@@ -1100,7 +1071,7 @@ defmodule ReviewsWeb.ReviewLive do
     end
   end
 
-  defp active_outline_section_index(_current_index, _patchset), do: nil
+  defp active_outline_section_index(_current_index, _patchset, _patchset_changed?), do: nil
 
   defp mounted_diff_paths(socket) do
     changes_paths =
@@ -1229,35 +1200,14 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp put_section_status(socket, patchset, user, section, status) do
-    state =
-      PacketSectionDecisions.section_state(
-        section,
-        socket.assigns.packet_section_decisions,
-        patchset,
-        socket.assigns.patchsets
-      )
-
-    cond do
-      state.current && state.current.status == status ->
-        PacketSectionDecisions.clear_status(socket.assigns.review, patchset, user, section.index)
-
-      is_nil(state.current) && state.inherited && state.inherited.status == status ->
-        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
-          section_index: section.index,
-          section_title: section.title,
-          section_fingerprint: section.fingerprint,
-          section_refs: section.refs,
-          status: "pending"
-        })
-
-      true ->
-        PacketSectionDecisions.set_status(socket.assigns.review, patchset, user, %{
-          section_index: section.index,
-          section_title: section.title,
-          section_fingerprint: section.fingerprint,
-          section_refs: section.refs,
-          status: status
-        })
-    end
+    PacketSectionDecisions.put_section_status(
+      socket.assigns.review,
+      patchset,
+      user,
+      section,
+      socket.assigns.packet_section_decisions,
+      socket.assigns.patchsets,
+      status
+    )
   end
 end

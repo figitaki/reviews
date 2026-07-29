@@ -9,7 +9,8 @@ defmodule Reviews.Threads do
   """
   import Ecto.Query, warn: false
 
-  alias Reviews.Accounts.User
+  alias Reviews.Accounts
+  alias Reviews.Accounts.{Identity, User}
   alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
@@ -65,7 +66,7 @@ defmodule Reviews.Threads do
   Returns `{:ok, %{thread: t, comment: c}}` or `{:error, reason}`.
   Broadcasts `{:thread_published, thread}` on `"review:<slug>"`.
   """
-  def publish_comment(%Review{} = review, %User{} = author, params) when is_map(params) do
+  def publish_comment(%Review{} = review, %Identity{} = author, params) when is_map(params) do
     file_path = params["file_path"] || params[:file_path]
     side = params["side"] || params[:side]
     body = String.trim(to_string(params["body"] || params[:body] || ""))
@@ -123,6 +124,12 @@ defmodule Reviews.Threads do
     end
   rescue
     error in [Ecto.InvalidChangesetError, Postgrex.Error] -> {:error, error}
+  end
+
+  def publish_comment(%Review{} = review, %User{} = user, params) when is_map(params) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      publish_comment(review, identity, params)
+    end
   end
 
   defp comments_query do

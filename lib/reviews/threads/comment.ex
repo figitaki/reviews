@@ -11,7 +11,7 @@ defmodule Reviews.Threads.Comment do
     field :body, :string
 
     belongs_to :thread, Reviews.Threads.Thread
-    belongs_to :author, Reviews.Accounts.User
+    belongs_to :author, Reviews.Accounts.Identity
 
     timestamps(type: :utc_datetime)
   end
