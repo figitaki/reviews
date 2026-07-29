@@ -2295,8 +2295,10 @@ details[open] > summary .review-collapse-icon,
     border-left-width: 1px;
   }
 
-  .review-packet-shell {
-    grid-template-columns: 1fr;
+  .review-packet-shell,
+  .review-packet-shell.is-guide-unified,
+  .review-packet-shell.is-guide-split {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .review-packet-grid {
@@ -2306,7 +2308,7 @@ details[open] > summary .review-collapse-icon,
   .review-guide-shell {
     position: relative;
     top: auto;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     max-height: none;
     border-right: 0;
     border-bottom: 1px solid var(--review-line);
