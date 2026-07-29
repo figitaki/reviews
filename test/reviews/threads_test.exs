@@ -2,6 +2,7 @@ defmodule Reviews.ThreadsTest do
   use Reviews.DataCase, async: true
 
   alias Reviews.Accounts
+  alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsCtx
   alias Reviews.Threads
   alias Reviews.Threads.{Comment, Thread}
@@ -133,6 +134,58 @@ defmodule Reviews.ThreadsTest do
       assert [thread] = Threads.list_published_threads(review.id)
       assert length(thread.comments) == 1
       assert hd(thread.comments).body == "published now"
+    end
+  end
+
+  describe "update_status/4" do
+    test "resolves a thread and records who resolved it" do
+      %{author: author, review: review} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+      Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
+
+      assert {:ok, %Thread{} = updated} =
+               Threads.update_status(review, thread.id, author, "resolved")
+
+      identity = Accounts.human_identity_for(author)
+
+      assert updated.id == thread.id
+      assert updated.status == "resolved"
+      assert updated.resolved_by_id == identity.id
+      assert %DateTime{} = updated.resolved_at
+      assert updated.resolved_by.handle == author.username
+      assert_receive {:thread_updated, %Thread{id: thread_id, status: "resolved"}}
+      assert thread_id == thread.id
+    end
+
+    test "reopens a resolved thread and clears resolution metadata" do
+      %{author: author, review: review} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+      {:ok, resolved} = Threads.update_status(review, thread.id, author, "resolved")
+
+      assert {:ok, reopened} = Threads.update_status(review, resolved.id, author, "open")
+
+      assert reopened.status == "open"
+      assert reopened.resolved_by_id == nil
+      assert reopened.resolved_at == nil
+    end
+
+    test "rejects threads from another review" do
+      %{author: author, review: review} = setup_review!()
+      %{review: other_review} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+
+      assert {:error, :not_found} =
+               Threads.update_status(other_review, thread.id, author, "resolved")
+    end
+
+    test "rejects invalid statuses" do
+      %{author: author, review: review} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+
+      assert {:error, :invalid_status} =
+               Threads.update_status(review, thread.id, author, "closed")
+
+      assert %Thread{status: "open"} = Repo.get(Thread, thread.id)
     end
   end
 end

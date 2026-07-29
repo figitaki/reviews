@@ -32,7 +32,7 @@ defmodule Reviews.Threads do
       from t in Thread,
         where: t.review_id == ^review_id,
         order_by: [asc: t.inserted_at],
-        preload: [comments: ^comments_query, author: []]
+        preload: [comments: ^comments_query, author: [], resolved_by: []]
 
     Repo.all(query)
     |> Enum.filter(fn thread -> thread.comments != [] end)
@@ -131,6 +131,70 @@ defmodule Reviews.Threads do
       publish_comment(review, identity, params)
     end
   end
+
+  @doc """
+  Updates a thread's review status.
+
+  Resolving records the acting identity and timestamp. Reopening clears both. The
+  thread must belong to the supplied review.
+  """
+  def update_status(%Review{} = review, thread_id, %Identity{} = identity, status)
+      when status in ["open", "resolved"] do
+    with {:ok, id} <- cast_thread_id(thread_id),
+         %Thread{review_id: review_id} = thread when review_id == review.id <-
+           Repo.get(Thread, id) do
+      attrs =
+        case status do
+          "resolved" ->
+            %{
+              status: "resolved",
+              resolved_by_id: identity.id,
+              resolved_at: DateTime.utc_now(:second)
+            }
+
+          "open" ->
+            %{status: "open", resolved_by_id: nil, resolved_at: nil}
+        end
+
+      case thread |> Thread.changeset(attrs) |> Repo.update() do
+        {:ok, updated} ->
+          updated = Repo.preload(updated, [:author, :resolved_by, comments: comments_query()])
+
+          Phoenix.PubSub.broadcast(
+            @pubsub,
+            "review:#{review.slug}",
+            {:thread_updated, updated}
+          )
+
+          {:ok, updated}
+
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    else
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def update_status(%Review{} = review, thread_id, %User{} = user, status) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      update_status(review, thread_id, identity, status)
+    end
+  end
+
+  def update_status(%Review{}, _thread_id, %Identity{}, _status), do: {:error, :invalid_status}
+
+  defp cast_thread_id(id) when is_integer(id) and id > 0, do: {:ok, id}
+
+  defp cast_thread_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {parsed, ""} when parsed > 0 -> {:ok, parsed}
+      _ -> {:error, :not_found}
+    end
+  end
+
+  defp cast_thread_id(_id), do: {:error, :not_found}
 
   defp comments_query do
     from c in Comment,
