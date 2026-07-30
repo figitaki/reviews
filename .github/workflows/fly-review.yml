@@ -76,8 +76,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
@@ -120,25 +118,6 @@ jobs:
             --config fly.toml \
             --remote-only \
             --yes
-
-      - name: Publish PR 58 review packet
-        if: github.event.action != 'closed' && github.event.pull_request.number == 58
-        env:
-          PREVIEW_API_TOKEN: ${{ secrets.PREVIEW_API_TOKEN }}
-          REVIEWS_HOME: ${{ runner.temp }}/reviews-home
-        run: |
-          cargo build --release --manifest-path cli/Cargo.toml
-          install -d "$REVIEWS_HOME/.config/reviews"
-          set +x
-          printf '[default]\nserver_url = "https://%s"\napi_token = "%s"\n' \
-            "$APP_HOST" "$PREVIEW_API_TOKEN" \
-            > "$REVIEWS_HOME/.config/reviews/config.toml"
-          set -x
-          HOME="$REVIEWS_HOME" cli/target/release/reviews push \
-            --range origin/main...2a5e25fd7daba7035645422cf131bc53293bc637 \
-            --packet .github/pr58-review-packet.md \
-            --title "PR 58: Outline-guided review layout" \
-            --description "Merge-ready review of figitaki/reviews#58 at 2a5e25f."
 
       - name: Destroy preview app
         if: github.event.action == 'closed'
