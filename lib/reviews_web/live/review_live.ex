@@ -471,6 +471,7 @@ defmodule ReviewsWeb.ReviewLive do
               class={["review-chip", @diff_style == "split" && "is-active"]}
             >
               <.icon name="hero-table-cells" class="w-4 h-4" />
+              <span class="review-diff-style-label">Side by side</span>
             </button>
             <button
               id="diff-style-unified"
@@ -483,6 +484,7 @@ defmodule ReviewsWeb.ReviewLive do
               class={["review-chip", @diff_style == "unified" && "is-active"]}
             >
               <.icon name="hero-queue-list" class="w-4 h-4" />
+              <span class="review-diff-style-label">Inline</span>
             </button>
             <script :type={Phoenix.LiveView.ColocatedHook} name=".DiffStylePref">
               export default {

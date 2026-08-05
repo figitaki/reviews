@@ -3,6 +3,9 @@
   "version": "0.0.1-alpha.2",
   "private": true,
   "description": "Front-end assets for the Reviews app. Vanilla @pierre/diffs is mounted via the DiffRenderer Phoenix LiveView hook.",
+  "scripts": {
+    "test": "node --experimental-default-type=module --test js/diff_renderer/*.test.js"
+  },
   "dependencies": {
     "@pierre/diffs": "1.1.22",
     "@pierre/trees": "1.0.0-beta.4",

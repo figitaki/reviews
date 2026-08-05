@@ -2,6 +2,10 @@
 // renderer per mounted file. Rendering details live in ../diff_renderer/*.
 
 import { VanillaDiffRenderer } from "../diff_renderer/vanilla_renderer.js"
+import {
+  compactHunkPayload,
+  hunkUIFromDataset,
+} from "../diff_renderer/hunk_controls.js"
 import { Thread, CreateCommentPayload } from "../schemas.js"
 
 function parseInitial(text, schema) {
@@ -23,6 +27,7 @@ const DiffRenderer = {
     const rawDiff = ds.rawDiff || ""
     const initialDiffStyle = ds.diffStyle === "unified" ? "unified" : "split"
     const initialThreads = parseInitial(ds.threads, Thread)
+    const hunkUI = hunkUIFromDataset(ds)
 
     const onCreateComment = (payload) => {
       try {
@@ -42,6 +47,17 @@ const DiffRenderer = {
       threads: initialThreads,
       diffStyle: initialDiffStyle,
       onCreateComment,
+      hunkUI,
+      onToggleHunk: () => {
+        this.pushEvent("toggle_hunk_diff", { hunk_id: hunkUIFromDataset(this.el.dataset).hunkId })
+      },
+      onSetHunkViewed: (viewed) => {
+        const next = hunkUIFromDataset(this.el.dataset)
+        this.pushEvent(
+          viewed ? "mark_hunk_viewed" : "mark_hunk_unviewed",
+          compactHunkPayload(next.payload)
+        )
+      },
     })
     this._renderer.render()
 
@@ -77,7 +93,7 @@ const DiffRenderer = {
   },
 
   updated() {
-    // The wrapper is phx-update="ignore"; refreshes flow through push events.
+    this._renderer?.updateHunkUI(hunkUIFromDataset(this.el.dataset))
   },
 
   destroyed() {
