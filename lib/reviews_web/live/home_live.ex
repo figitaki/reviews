@@ -236,6 +236,12 @@ defmodule ReviewsWeb.HomeLive do
   attr :step, :atom, required: true
 
   defp demo(assigns) do
+    assigns =
+      assigns
+      |> assign(:active_section_key, active_demo_section(assigns.step))
+      |> assign(:section_one_state, section_state(assigns.step, :section_1))
+      |> assign(:section_two_state, section_state(assigns.step, :section_2))
+
     ~H"""
     <div class="home-demo" data-step={@step} id="home-demo">
       <div class="home-demo-frame">
@@ -251,200 +257,169 @@ defmodule ReviewsWeb.HomeLive do
         </div>
 
         <div class="home-demo-body">
-          <div class="home-demo-eyebrow">Review packet</div>
-          <h2 class="home-demo-title">Structured Markdown review packets</h2>
+          <div class="home-demo-guide-layout">
+            <nav class="home-demo-edge-rail" aria-label="Demo guide rail">
+              <span class="review-edge-rail-menu home-demo-menu" aria-hidden="true">
+                <.icon name="hero-bars-3" class="size-4" />
+              </span>
 
-          <div class="home-demo-stats">
-            <span>32 files</span>
-            <span class="sep">/</span>
-            <span class="num is-v1">
-              <span class="add">+3754</span> <span class="del">−191</span>
-            </span>
-            <span class="num is-v2">
-              <span class="add">+412</span> <span class="del">−47</span>
-            </span>
-            <span class="sep">/</span>
-            <span>{if revised_step?(@step), do: "~14 min", else: "~2 hr"}</span>
-          </div>
+              <div class="review-edge-rail-ticks">
+                <span class={[
+                  "review-edge-tick",
+                  "home-demo-edge-tick",
+                  "is-overview",
+                  is_nil(@active_section_key) && "is-active"
+                ]}>
+                  ★
+                </span>
+                <span class={[
+                  "review-edge-tick",
+                  "home-demo-edge-tick",
+                  "is-section-1",
+                  @active_section_key == :section_1 && "is-active",
+                  "is-#{@section_one_state}"
+                ]}>
+                  01
+                </span>
+                <span class={[
+                  "review-edge-tick",
+                  "home-demo-edge-tick",
+                  "is-section-2",
+                  @active_section_key == :section_2 && "is-active",
+                  "is-#{@section_two_state}"
+                ]}>
+                  02
+                </span>
+                <span class="review-edge-tick home-demo-edge-tick is-section-3 is-pending">03</span>
+              </div>
+            </nav>
 
-          <.demo_section
-            id="section-1"
-            state={section_state(@step, :section_1)}
-            expanded={@step in [:push, :review, :reprompt_prompt, :reprompting]}
-            title="Canonical packet storage and API shape"
-            effort="Deep"
-            effort_class="is-deep"
-            add="+286"
-            del="−17"
-            estimate="~13 min"
-            desc="Persisted contract — canonical JSON on patchsets, compact metadata, read-side helpers."
-          >
-            <:diff>
+            <section class={[
+              "home-demo-focus-panel",
+              is_nil(@active_section_key) && "is-overview",
+              @active_section_key == :section_1 && "is-section-1",
+              @active_section_key == :section_2 && "is-section-2"
+            ]}>
+              <div :if={is_nil(@active_section_key)} class="review-guide-panel-inner is-overview">
+                <span class="review-guide-eyebrow">Overview · 3 sections · ~2 hr</span>
+                <h2 class="review-guide-panel-title">Structured Markdown review packets</h2>
+                <p class="review-guide-panel-prose">
+                  The packet opens on a focused guide: the rail gives reviewers a map, the panel explains the reasoning behind the changeset, and file rows point straight into the diff.
+                </p>
+                <div class="review-guide-overview-stats">
+                  <span>32 files</span>
+                  <span class="r-change-stat num is-v1">
+                    <span class="add">+3754</span><span class="del">−191</span>
+                  </span>
+                  <span class="r-change-stat num is-v2">
+                    <span class="add">+412</span><span class="del">−47</span>
+                  </span>
+                  <span>{if revised_step?(@step), do: "~14 min", else: "~2 hr"}</span>
+                </div>
+                <span class="review-guide-begin">Begin review <span aria-hidden="true">→</span></span>
+              </div>
+
+              <div :if={@active_section_key == :section_1} class="review-guide-panel-inner">
+                <span class="review-guide-eyebrow">Section 01 / 03</span>
+                <h2 class="review-guide-panel-title">Canonical packet storage and API shape</h2>
+                <p class="review-guide-panel-prose">
+                  The first section leads with why the packet schema exists: every hunk belongs to authored reviewer context, so review state, reprompts, and revisions can all reason over the same durable section boundary.
+                </p>
+                <div class="review-guide-panel-meta">
+                  <span>Deep</span>
+                  <span>3 files</span>
+                  <span class="r-change-stat">
+                    <span class="add">+286</span><span class="del">−17</span>
+                  </span>
+                  <span>~13 min</span>
+                </div>
+                <div class="review-guide-section-controls">
+                  <%= case @section_one_state do %>
+                    <% :approved -> %>
+                      <span class="r-action is-approved">
+                        <.icon name="hero-check" class="r-icon" />
+                        <span>Approved</span>
+                      </span>
+                    <% :denied -> %>
+                      <span class="r-action is-denied">
+                        <.icon name="hero-x-mark" class="r-icon" />
+                        <span>Denied</span>
+                      </span>
+                    <% _ -> %>
+                      <span class="r-state-pill kind-approve">
+                        <.icon name="hero-check" class="r-icon-sm" />
+                      </span>
+                      <span class="r-state-pill kind-deny">
+                        <.icon name="hero-x-mark" class="r-icon-sm" />
+                      </span>
+                      <span class="r-state-pill kind-ignore">
+                        <.icon name="hero-minus" class="r-icon-sm" />
+                      </span>
+                  <% end %>
+                </div>
+                <div class="review-guide-panel-files">
+                  <div class="review-guide-files-label">
+                    <span>Files</span>
+                    <span></span>
+                  </div>
+                  <.demo_file_row
+                    basename="packets.ex"
+                    directory="lib/reviews"
+                    additions="+18"
+                    deletions="−4"
+                    state={@section_one_state}
+                    label={if(@section_one_state == :approved, do: "Viewed", else: "3 hunks")}
+                  />
+                  <.demo_file_row
+                    basename="packet_json.ex"
+                    directory="lib/reviews"
+                    additions="+124"
+                    deletions="−8"
+                    state={@section_one_state}
+                    label={if(@section_one_state == :approved, do: "Viewed", else: "5 hunks")}
+                  />
+                  <.demo_file_row
+                    basename="review_live.ex"
+                    directory="lib/reviews_web/live"
+                    additions="+144"
+                    deletions="−5"
+                    state={if(@section_one_state == :pending, do: :partial, else: @section_one_state)}
+                    label={if(@section_one_state == :pending, do: "1/4 viewed", else: "Viewed")}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <div :if={@active_section_key == :section_1} class="home-demo-diff-preview">
               <.demo_diff />
-            </:diff>
-          </.demo_section>
-
-          <.demo_section
-            id="section-2"
-            state={section_state(@step, :section_2)}
-            carried={revised_step?(@step)}
-            title="CLI authoring and packet validation"
-            effort="Deep"
-            effort_class="is-deep"
-            add="+734"
-            del="−32"
-            estimate="~25 min"
-            desc="Structured Markdown is parsed, validated for complete hunk coverage, and bundled before push."
-          />
-
-          <.demo_section
-            id="section-3"
-            state={section_state(@step, :section_3)}
-            title="Revision navigation and v1/v2 diffing"
-            effort="Moderate"
-            effort_class="is-moderate"
-            add="+184"
-            del="−66"
-            estimate="~6 min"
-            desc="Section-level state carries across patchsets so reviewers don't re-read approved work."
-          />
+            </div>
+          </div>
         </div>
       </div>
     </div>
     """
   end
 
-  attr :id, :string, required: true
-  attr :title, :string, required: true
-  attr :effort, :string, required: true
-  attr :effort_class, :string, required: true
-  attr :add, :string, required: true
-  attr :del, :string, required: true
-  attr :estimate, :string, required: true
-  attr :desc, :string, required: true
+  attr :basename, :string, required: true
+  attr :directory, :string, required: true
+  attr :additions, :string, required: true
+  attr :deletions, :string, required: true
   attr :state, :atom, default: :pending
-  attr :carried, :boolean, default: false
-  attr :expanded, :boolean, default: false
-  slot :diff
+  attr :label, :string, required: true
 
-  defp demo_section(assigns) do
+  defp demo_file_row(assigns) do
     ~H"""
-    <div class={[
-      "home-demo-section",
-      "is-#{@id}",
-      "is-#{@state}",
-      @state != :pending && "is-decided",
-      @expanded && "is-expanded",
-      @carried && "is-carried"
-    ]}>
-      <div class="home-demo-section-head">
-        <div class="home-demo-section-title-row">
-          <h3 class="home-demo-section-title">{@title}</h3>
-          <span class={["r-effort-pill", @effort_class]}>{@effort}</span>
-          <span class="r-change-stat">
-            <span class="add">{@add}</span><span class="del">{@del}</span>
-          </span>
-          <span class="home-demo-section-meta">{@estimate}</span>
-        </div>
-        <div class="home-demo-section-actions r-section-actions">
-          <button
-            type="button"
-            class="r-state-pill kind-approve"
-            aria-label="Approve (demo)"
-            tabindex="-1"
-          >
-            <svg
-              class="r-icon-sm"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M4.5 12.75l6 6 9-13.5"></path>
-            </svg>
-          </button>
-          <button type="button" class="r-state-pill kind-deny" aria-label="Deny (demo)" tabindex="-1">
-            <svg
-              class="r-icon-sm"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="r-state-pill kind-ignore"
-            aria-label="Skip (demo)"
-            tabindex="-1"
-          >
-            <svg
-              class="r-icon-sm"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M5 12h14"></path>
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="r-action is-approved"
-            aria-label="Approved (demo)"
-            tabindex="-1"
-          >
-            <svg
-              class="r-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M4.5 12.75l6 6 9-13.5"></path>
-            </svg>
-            <span>Approve</span>
-          </button>
-          <button type="button" class="r-action is-denied" aria-label="Denied (demo)" tabindex="-1">
-            <svg
-              class="r-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-            <span>Deny</span>
-          </button>
-        </div>
-      </div>
-
-      <p class="home-demo-section-desc">{@desc}</p>
-
-      <span :if={@carried} class="home-demo-carryover">approved in v1</span>
-
-      <div :if={@diff != []} class="home-demo-section-diff-wrap">
-        {render_slot(@diff)}
-      </div>
-    </div>
+    <span class={["review-guide-file-row", "is-#{@state}"]}>
+      <.icon name="hero-document-text" class="review-guide-file-icon" />
+      <span class="review-guide-file-name" translate="no">{@basename}</span>
+      <span class="review-guide-file-path" translate="no">{@directory}</span>
+      <span class="review-guide-file-stat">
+        <span class="r-change-stat">
+          <span class="add">{@additions}</span><span class="del">{@deletions}</span>
+        </span>
+      </span>
+      <span class="review-guide-file-state">{@label}</span>
+    </span>
     """
   end
 
@@ -532,15 +507,13 @@ defmodule ReviewsWeb.HomeLive do
   # Maps `(step, section)` → the visual state the packet preview should show.
   #
   # Story arc:
-  #   :intro    all sections pending, section 1 collapsed
-  #   :push     all sections pending, section 1 expanded with the diff
-  #   :review   reviewer comments on section 1 (CSS reveal at +0ms),
-  #             then denies section 1 (+600ms), then approves section 2 (+1200ms)
+  #   :intro    overview panel, all section ticks pending
+  #   :push     section 1 panel, section 1 diff preview
+  #   :review   reviewer comment appears, section 1 denied, section 2 approved
   #   :reprompt_prompt keeps v1 visible while the prompt composer is open
   #   :reprompting keeps v1 visible while the simulated agent is thinking
-  #   :reprompt v2 patchset: section 1 collapses, its deny is gone, section 2
-  #             keeps its approval with an "approved in v1" carryover marker
-  #   :final    the revised packet is approved.
+  #   :reprompt v2 patchset: section 1 is back to pending, section 2 remains approved
+  #   :final    all visible sections are approved.
 
   defp revised_step?(step), do: step in [:reprompt, :final]
 
@@ -557,7 +530,6 @@ defmodule ReviewsWeb.HomeLive do
   defp section_state(_, :section_1), do: :pending
   defp section_state(_, :section_2), do: :approved
 
-  # Section 3 stays undecided across the whole story — it's there to show the
-  # packet has unfinished work, not as a focus.
-  defp section_state(_, :section_3), do: :pending
+  defp active_demo_section(:intro), do: :section_1
+  defp active_demo_section(_step), do: :section_1
 end

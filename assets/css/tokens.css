@@ -116,6 +116,8 @@
   --review-focus:        var(--ds-focus);
   --review-add:          var(--ds-add);
   --review-del:          var(--ds-del);
+  --review-blue:         var(--ds-blue);
+  --review-warn:         var(--ds-warn);
 }
 
 /* ----------------------------------------------------------------------------
@@ -313,6 +315,12 @@
   /* Header heights (used in sticky offsets) */
   --review-main-nav-h:      64px;
   --review-section-sticky-h: 46px;
+
+  /* Packet guide layout primitives */
+  --guide-rail-w:   48px;
+  --guide-flyout-w: 320px;
+  --guide-panel-min: 380px;
+  --guide-panel-max: 460px;
 }
 
 /* ----------------------------------------------------------------------------

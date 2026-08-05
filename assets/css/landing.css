@@ -232,18 +232,18 @@
 
 .home-hero h1 {
   margin: 0;
-  font-size: clamp(56px, 9vw, 124px);
-  font-weight: 800;
-  line-height: 0.92;
-  letter-spacing: -0.025em;
+  font-size: var(--font-size-hero);
+  font-weight: 760;
+  line-height: 0.9;
+  letter-spacing: var(--tracking-flat);
   color: var(--ds-text);
 }
 
 .home-hero-lede {
   max-width: 60ch;
   margin: 4px auto 0;
-  font-size: 17px;
-  line-height: 1.55;
+  font-size: var(--font-size-lg);
+  line-height: var(--leading-relax);
   color: color-mix(in srgb, var(--ds-text) 70%, var(--ds-muted));
   text-wrap: pretty;
 }
@@ -303,9 +303,9 @@
   display: inline-block;
   margin-bottom: 24px;
   font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-eyebrow);
   color: var(--ds-faint);
   text-transform: uppercase;
 }
@@ -319,7 +319,7 @@
   font-size: clamp(32px, 2.8vw, 44px);
   font-weight: 750;
   line-height: 1.08;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-flat);
   color: var(--ds-text);
   max-width: 14ch;
   text-wrap: balance;
@@ -332,8 +332,8 @@
   margin: 0;
   max-width: 30ch;
   color: color-mix(in srgb, var(--ds-text) 70%, var(--ds-muted));
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: var(--font-size-md);
+  line-height: var(--leading-relax);
 }
 
 .home-chapter p .add {
@@ -598,113 +598,85 @@
 }
 
 .home-demo-body {
-  padding: 28px 28px 24px;
+  display: grid;
+  gap: 16px;
+  padding: 0;
 }
 
-.home-demo-eyebrow {
-  color: var(--ds-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-}
-
-.home-demo-title {
-  margin: 0 0 12px;
-  font-size: 26px;
-  font-weight: 800;
-  line-height: 1.08;
-  color: var(--ds-text);
-  letter-spacing: -0.01em;
-}
-
-.home-demo-stats {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--ds-muted);
-  font-size: 12px;
-  font-weight: 600;
-  padding-bottom: 16px;
+.home-demo-guide-layout {
+  display: grid;
+  grid-template-columns: var(--guide-rail-w) minmax(280px, 320px) minmax(280px, 1fr);
+  min-height: 520px;
   border-bottom: 1px solid var(--ds-line);
-  flex-wrap: wrap;
+  background: var(--ds-bg);
 }
 
-.home-demo-stats .sep { color: var(--ds-faint); }
-.home-demo-stats .num {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  transition: opacity 320ms ease;
-}
-.home-demo-stats .add { color: var(--ds-add); }
-.home-demo-stats .del { color: var(--ds-del); }
-
-.home-demo-section {
+.home-demo-edge-rail {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  border-right: 1px solid var(--ds-line);
+  background: var(--ds-panel);
   padding: 18px 0;
-  border-bottom: 1px solid var(--ds-line);
-}
-.home-demo-section:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
 }
 
-.home-demo-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+.home-demo-guide-layout .review-edge-tick,
+.home-demo-guide-layout .review-edge-rail-menu {
+  cursor: default;
 }
 
-.home-demo-section-title-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.home-demo-focus-panel {
+  min-width: 0;
+  border-right: 1px solid var(--ds-line);
+  background: var(--ds-bg);
 }
 
-.home-demo-section-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 550;
-  color: var(--ds-text);
+.home-demo-focus-panel .review-guide-panel-inner {
+  padding: 42px 38px;
 }
 
-.home-demo-section-meta {
-  color: var(--ds-faint);
-  font-size: 12px;
-  font-family: var(--font-mono);
+.home-demo-focus-panel .review-guide-panel-title {
+  font-size: var(--font-size-2xl);
 }
 
-.home-demo-section-desc {
-  margin: 8px 0 0;
-  color: var(--ds-muted);
-  font-size: 13px;
-  line-height: 1.5;
-  max-width: 64ch;
+.home-demo-focus-panel .review-guide-panel-prose {
+  font-size: var(--font-size-lg);
 }
 
-.home-demo-section-tail {
-  margin-top: 14px;
+.home-demo-focus-panel .review-guide-begin {
+  pointer-events: none;
 }
 
-/* Carryover marker — "approved in v1" */
-.home-demo-carryover {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  color: var(--ds-faint);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+.home-demo-focus-panel .review-guide-panel-files {
+  margin-top: 28px;
 }
 
-.home-demo-carryover::before {
-  content: "↳";
+.home-demo-focus-panel .review-guide-file-row {
+  background: color-mix(in srgb, var(--ds-panel) 68%, transparent);
+}
+
+.home-demo-focus-panel .review-guide-file-row.is-denied .review-guide-file-state {
+  color: var(--ds-del);
+}
+
+.home-demo-focus-panel .review-guide-file-row.is-approved .review-guide-file-state {
   color: var(--ds-add);
-  font-family: var(--font-mono);
+}
+
+.home-demo-focus-panel .review-guide-file-row.is-partial .review-guide-file-state {
+  color: var(--ds-warn);
+}
+
+.home-demo-diff-preview {
+  min-width: 0;
+  overflow: hidden;
+  padding: 28px 20px;
+}
+
+.home-demo-diff-preview .home-demo-section-diff {
+  min-width: 660px;
 }
 
 /* Push diff illustration — the manifesto's wall-of-diff → packet.md graphic */
@@ -751,83 +723,6 @@
 }
 
 .home-diff-illo .ctx { color: var(--ds-muted); }
-
-/* ----------------------------------------------------------------------------
-   Decision actions — three state-pills and three action ovals share the same
-   row. The pill of the active decision collapses, the matching action button
-   expands. The state class (is-approved / is-denied / is-pending) on the
-   section drives which one wins.
----------------------------------------------------------------------------- */
-.home-demo-section-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.home-demo-section-actions .r-state-pill {
-  flex: 0 0 auto;
-  transition: opacity 240ms ease, width 360ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-width 240ms ease, padding 240ms ease;
-}
-
-.home-demo-section-actions .r-action {
-  flex: 0 0 auto;
-  overflow: hidden;
-  white-space: nowrap;
-  width: 0;
-  opacity: 0;
-  border-width: 0;
-  padding: 0;
-  pointer-events: none;
-  transition: opacity 280ms ease, width 360ms cubic-bezier(0.22, 1, 0.36, 1),
-              padding 360ms cubic-bezier(0.22, 1, 0.36, 1), border-width 240ms ease;
-}
-
-/* When the section has a decision, the matching pill collapses */
-.home-demo-section.is-approved .home-demo-section-actions .r-state-pill.kind-approve,
-.home-demo-section.is-denied .home-demo-section-actions .r-state-pill.kind-deny,
-.home-demo-section.is-ignored .home-demo-section-actions .r-state-pill.kind-ignore {
-  width: 0;
-  opacity: 0;
-  border-width: 0;
-  padding: 0;
-  pointer-events: none;
-}
-
-/* …and the matching action expands */
-.home-demo-section.is-approved .home-demo-section-actions .r-action.is-approved,
-.home-demo-section.is-denied .home-demo-section-actions .r-action.is-denied,
-.home-demo-section.is-ignored .home-demo-section-actions .r-action.is-ignored {
-  width: auto;
-  opacity: 1;
-  border-width: 1px;
-  padding: 0 10px 0 8px;
-  pointer-events: auto;
-}
-
-/* ----------------------------------------------------------------------------
-   Section 1's diff card — collapsed by default; the LV adds `.is-expanded`
-   to the section during :push and :review, which animates it open.
-   It collapses again after the reprompt posts the new revision.
----------------------------------------------------------------------------- */
-.home-demo-section-diff-wrap {
-  margin-top: 0;
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition: max-height 520ms cubic-bezier(0.22, 1, 0.36, 1),
-              opacity 320ms ease,
-              margin-top 360ms ease;
-}
-
-.home-demo-section.is-expanded .home-demo-section-diff-wrap {
-  max-height: 720px;
-  opacity: 1;
-  margin-top: 12px;
-  transition: max-height 520ms cubic-bezier(0.22, 1, 0.36, 1),
-              opacity 320ms ease 60ms,
-              margin-top 360ms ease;
-}
 
 /* ----------------------------------------------------------------------------
    Inline comment annotation — sits between two diff rows. Hidden by default,
@@ -908,22 +803,11 @@
 /* ----------------------------------------------------------------------------
    v2 stats — visible after the reprompt posts a new revision
 ---------------------------------------------------------------------------- */
-.home-demo-stats .num.is-v2 { display: none; }
-.home-demo[data-step="reprompt"] .home-demo-stats .num.is-v1,
-.home-demo[data-step="final"] .home-demo-stats .num.is-v1 { display: none; }
-.home-demo[data-step="reprompt"] .home-demo-stats .num.is-v2,
-.home-demo[data-step="final"] .home-demo-stats .num.is-v2 { display: inline; }
-
-/* ----------------------------------------------------------------------------
-   Carryover marker — appears on v2 for sections marked is-carried
----------------------------------------------------------------------------- */
-.home-demo-carryover {
-  display: none;
-}
-.home-demo[data-step="reprompt"] .home-demo-section.is-carried .home-demo-carryover,
-.home-demo[data-step="final"] .home-demo-section.is-carried .home-demo-carryover {
-  display: inline-flex;
-}
+.home-demo .num.is-v2 { display: none; }
+.home-demo[data-step="reprompt"] .num.is-v1,
+.home-demo[data-step="final"] .num.is-v1 { display: none; }
+.home-demo[data-step="reprompt"] .num.is-v2,
+.home-demo[data-step="final"] .num.is-v2 { display: inline-flex; }
 
 /* ----------------------------------------------------------------------------
    Staggered sequencing inside :review
@@ -931,22 +815,17 @@
    When the user enters :review, three things should happen in order:
 
      1. The reviewer's comment fades in     (t = 0)
-     2. Section 1 transitions to "Denied"   (t = 600ms)
-     3. Section 2 transitions to "Approved" (t = 1200ms)
+    2. Section 1 and section 2 state cues settle into place.
 
    We achieve this by adding transition-delay to the elements whose final
    visual state should appear later than the comment. The delays apply only
    while [data-step="review"] is active — later steps drop them so
    the user doesn't see another wait on later transitions.
 ---------------------------------------------------------------------------- */
-.home-demo[data-step="review"] .home-demo-section.is-section-1 .r-action.is-denied,
-.home-demo[data-step="review"] .home-demo-section.is-section-1 .r-state-pill.kind-deny {
-  transition-delay: 600ms;
-}
-
-.home-demo[data-step="review"] .home-demo-section.is-section-2 .r-action.is-approved,
-.home-demo[data-step="review"] .home-demo-section.is-section-2 .r-state-pill.kind-approve {
-  transition-delay: 1200ms;
+.home-demo[data-step="review"] .home-demo-focus-panel .r-action.is-denied,
+.home-demo[data-step="review"] .home-demo-edge-tick.is-section-1,
+.home-demo[data-step="review"] .home-demo-edge-tick.is-section-2 {
+  transition-delay: 320ms;
 }
 
 /* ----------------------------------------------------------------------------
@@ -954,13 +833,10 @@
 ---------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   .home-agent-harness,
-  .home-demo-section,
-  .home-demo-section-diff-wrap,
+  .home-demo-edge-tick,
   .home-demo-comment-row,
   .home-demo-rev .pip,
-  .home-demo-stats .num,
-  .home-demo-section-actions .r-state-pill,
-  .home-demo-section-actions .r-action {
+  .home-demo .num {
     transition: none !important;
   }
 
@@ -1000,5 +876,16 @@
   }
   .home-chapter h2 {
     font-size: clamp(26px, 7vw, 36px);
+  }
+  .home-demo-guide-layout {
+    grid-template-columns: var(--guide-rail-w) minmax(0, 1fr);
+    min-height: 0;
+  }
+  .home-demo-focus-panel .review-guide-panel-inner {
+    padding: 28px 24px;
+  }
+  .home-demo-diff-preview {
+    grid-column: 1 / -1;
+    padding: 0 12px 12px;
   }
 }

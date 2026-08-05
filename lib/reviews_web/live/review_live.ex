@@ -60,9 +60,9 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:current_identity, current_identity)
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
-              |> assign(:expanded_file_ids, MapSet.new())
               |> assign(:expanded_hunk_ids, MapSet.new())
               |> assign(:expanded_section_ids, MapSet.new())
+              |> assign(:active_outline_section_index, nil)
               |> assign(:changes_default_expanded_patchset_ids, MapSet.new())
               |> assign(:show_packet_outline, packet_outline_visible?(current_user))
               |> assign_snapshot(snapshot)
@@ -135,6 +135,10 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("select_diff_style", %{"style" => "split", "viewport" => "tablet"}, socket) do
+    {:noreply, socket}
+  end
+
   def handle_event("select_diff_style", %{"style" => style}, socket)
       when style in ["split", "unified"] do
     socket = assign(socket, :diff_style, style)
@@ -195,6 +199,7 @@ defmodule ReviewsWeb.ReviewLive do
       case parse_int(section_index) do
         index when is_integer(index) ->
           socket
+          |> assign(:active_outline_section_index, index)
           |> assign(:expanded_section_ids, MapSet.put(socket.assigns.expanded_section_ids, index))
           |> auto_open_section_hunks(index)
 
@@ -206,21 +211,47 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_event("toggle_file_diff", %{"file_id" => file_id}, socket) do
-    case parse_int(file_id) do
-      id when is_integer(id) ->
-        expanded_file_ids =
-          if MapSet.member?(socket.assigns.expanded_file_ids, id) do
-            MapSet.delete(socket.assigns.expanded_file_ids, id)
+  def handle_event("select_packet_overview", _params, socket) do
+    socket = assign(socket, :active_outline_section_index, nil)
+
+    socket =
+      if socket.assigns.diff_style == "split" do
+        push_event(socket, "packet_nav_jump", %{id: "review-split-inline-overview"})
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("select_guide_section", %{"section_index" => section_index}, socket) do
+    socket =
+      case parse_int(section_index) do
+        index when is_integer(index) ->
+          socket
+          |> assign(:active_outline_section_index, index)
+          |> assign(:expanded_section_ids, MapSet.put(socket.assigns.expanded_section_ids, index))
+          |> auto_open_section_hunks(index)
+
+        _ ->
+          socket
+      end
+
+    socket =
+      case parse_int(section_index) do
+        index when is_integer(index) ->
+          if socket.assigns.diff_style == "split" do
+            push_event(socket, "packet_nav_jump", %{id: "review-split-section-overview-#{index}"})
           else
-            MapSet.put(socket.assigns.expanded_file_ids, id)
+            socket
           end
 
-        {:noreply, assign(socket, :expanded_file_ids, expanded_file_ids)}
+        _ ->
+          socket
+      end
 
-      _ ->
-        {:noreply, socket}
-    end
+    {:noreply, socket}
   end
 
   @impl true
@@ -426,6 +457,7 @@ defmodule ReviewsWeb.ReviewLive do
             role="group"
             aria-label="Diff layout"
             phx-hook=".DiffStylePref"
+            data-tablet-query="(max-width: 1024px)"
           >
             <button
               id="diff-style-split"
@@ -435,6 +467,7 @@ defmodule ReviewsWeb.ReviewLive do
               aria-pressed={if @diff_style == "split", do: "true", else: "false"}
               aria-label="Split view"
               title="Split view"
+              data-requires-wide="true"
               class={["review-chip", @diff_style == "split" && "is-active"]}
             >
               <.icon name="hero-table-cells" class="w-4 h-4" />
@@ -455,22 +488,63 @@ defmodule ReviewsWeb.ReviewLive do
               export default {
                 mounted() {
                   const KEY = "reviews:diffStyle"
-                  const saved = localStorage.getItem(KEY)
-                  if (saved === "split" || saved === "unified") {
+                  const tabletQuery = this.el.dataset.tabletQuery || "(max-width: 1024px)"
+                  const media = window.matchMedia(tabletQuery)
+                  const splitButton = this.el.querySelector("#diff-style-split")
+                  const saved = () => localStorage.getItem(KEY)
+                  const currentStyle = () => {
                     const currentBtn = this.el.querySelector('[aria-pressed="true"]')
-                    const currentStyle = currentBtn?.id === "diff-style-unified" ? "unified" : "split"
-                    if (saved !== currentStyle) {
-                      this.pushEvent("select_diff_style", { style: saved })
+                    return currentBtn?.id === "diff-style-unified" ? "unified" : "split"
+                  }
+                  const pushStyle = (style, viewport = media.matches ? "tablet" : "wide") => {
+                    this.pushEvent("select_diff_style", { style, viewport })
+                  }
+                  this.syncViewport = () => {
+                    const tablet = media.matches
+                    this.el.classList.toggle("is-tablet-locked", tablet)
+                    splitButton?.toggleAttribute("disabled", tablet)
+                    splitButton?.setAttribute("aria-disabled", tablet ? "true" : "false")
+
+                    if (tablet && currentStyle() !== "unified") {
+                      pushStyle("unified", "tablet")
+                    } else if (!tablet) {
+                      const preferred = saved()
+                      if ((preferred === "split" || preferred === "unified") && preferred !== currentStyle()) {
+                        pushStyle(preferred, "wide")
+                      }
                     }
                   }
+
+                  this.syncViewport()
+
+                  const onMediaChange = () => this.syncViewport()
+                  if (media.addEventListener) media.addEventListener("change", onMediaChange)
+                  else media.addListener(onMediaChange)
+                  this.cleanupMedia = () => {
+                    if (media.removeEventListener) media.removeEventListener("change", onMediaChange)
+                    else media.removeListener(onMediaChange)
+                  }
+
                   this.el.addEventListener("click", (e) => {
                     const btn = e.target.closest("[phx-value-style]")
                     if (!btn) return
                     const style = btn.getAttribute("phx-value-style")
+                    if (media.matches && style === "split") {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      pushStyle("unified", "tablet")
+                      return
+                    }
                     if (style === "split" || style === "unified") {
                       localStorage.setItem(KEY, style)
                     }
                   })
+                },
+                updated() {
+                  this.syncViewport?.()
+                },
+                destroyed() {
+                  this.cleanupMedia?.()
                 }
               }
             </script>
@@ -479,11 +553,17 @@ defmodule ReviewsWeb.ReviewLive do
           <.user_menu current_user={@current_user} />
         </:actions>
 
-        <div class="design-main">
-          <% packet = @selected_patchset && @selected_patchset.packet %>
-          <% has_packet = ReviewPacket.present?(packet) %>
+        <% packet = @selected_patchset && @selected_patchset.packet %>
+        <% has_packet = ReviewPacket.present?(packet) %>
+
+        <div class={[
+          "design-main",
+          has_packet && @live_action != :changes && "is-guide-view",
+          has_packet && @live_action == :changes && "is-packet-diff-view"
+        ]}>
           <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
           <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
+          <% show_packet_outline = has_packet && @show_packet_outline %>
           <% packet_effort =
             if has_packet do
               PacketComponents.packet_effort_for_header(
@@ -496,7 +576,10 @@ defmodule ReviewsWeb.ReviewLive do
               )
             end %>
 
-          <header class="review-header">
+          <header class={[
+            "review-header",
+            has_packet && @live_action != :changes && "is-guide-compact"
+          ]}>
             <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
             <h1
               id={if(has_packet, do: "review-packet-title", else: "review-title")}
@@ -540,8 +623,9 @@ defmodule ReviewsWeb.ReviewLive do
             review={@review}
             live_action={@live_action}
             selected_patchset={@selected_patchset}
-            has_packet={has_packet && @live_action != :changes}
-            show_packet_outline={@show_packet_outline}
+            has_packet={has_packet}
+            outline_available={has_packet && @live_action != :changes}
+            show_packet_outline={show_packet_outline}
           />
 
           <%!-- Patchset-pushed banner --%>
@@ -570,19 +654,18 @@ defmodule ReviewsWeb.ReviewLive do
             diff_style={@diff_style}
             expanded_section_ids={@expanded_section_ids}
             expanded_hunk_ids={@expanded_hunk_ids}
-            show_packet_outline={@show_packet_outline}
+            show_packet_outline={show_packet_outline}
+            active_section_index={@active_outline_section_index}
           />
 
           <%!-- Body: sidebar + diff list --%>
           <DiffComponents.diff_shell
             :if={@live_action == :changes || !has_packet}
             file_diffs={@file_diffs}
-            open_threads_by_op={@open_threads_by_op}
             selected_patchset={@selected_patchset}
             published_threads={@published_threads}
             current_user={@current_user}
             diff_style={@diff_style}
-            expanded_file_ids={@expanded_file_ids}
             expanded_hunk_ids={@expanded_hunk_ids}
             hunks_by_path={@hunks_by_path}
           />
@@ -920,13 +1003,6 @@ defmodule ReviewsWeb.ReviewLive do
 
     next_patchset_id = snapshot.selected_patchset && snapshot.selected_patchset.id
 
-    expanded_file_ids =
-      if previous_patchset_id == next_patchset_id do
-        socket.assigns[:expanded_file_ids] || MapSet.new()
-      else
-        MapSet.new()
-      end
-
     default_expansion = default_expanded_state(socket, snapshot)
     changes_default_hunk_ids = default_expanded_changes_hunk_ids(socket, snapshot)
 
@@ -961,14 +1037,44 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:file_diffs, snapshot.file_diffs)
     |> assign(:hunks_by_path, snapshot.hunks_by_path)
     |> assign(:packet_hunk_views, snapshot.packet_hunk_views)
-    |> assign(:expanded_file_ids, expanded_file_ids)
     |> assign(:expanded_hunk_ids, expanded_hunk_ids)
     |> assign(:expanded_section_ids, expanded_section_ids)
+    |> assign(
+      :active_outline_section_index,
+      active_outline_section_index(
+        socket.assigns[:active_outline_section_index],
+        snapshot.selected_patchset,
+        previous_patchset_id != next_patchset_id
+      )
+    )
     |> assign(:changes_default_expanded_patchset_ids, changes_default_expanded_patchset_ids)
     |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
     |> assign(:published_threads, snapshot.published_threads)
-    |> assign(:open_threads_by_op, ReviewView.open_threads_by_op(snapshot))
   end
+
+  defp active_outline_section_index(_current_index, %{packet: packet}, true) do
+    if ReviewPacket.sections(packet || %{}) == [], do: nil, else: 0
+  end
+
+  defp active_outline_section_index(current_index, %{packet: packet}, false) do
+    sections = ReviewPacket.sections(packet || %{})
+
+    cond do
+      sections == [] ->
+        nil
+
+      is_nil(current_index) ->
+        nil
+
+      is_integer(current_index) && current_index >= 0 && current_index < length(sections) ->
+        current_index
+
+      true ->
+        0
+    end
+  end
+
+  defp active_outline_section_index(_current_index, _patchset, _patchset_changed?), do: nil
 
   defp mounted_diff_paths(socket) do
     changes_paths =

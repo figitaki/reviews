@@ -31,6 +31,27 @@
   padding-bottom: 112px;
 }
 
+.design-main.is-guide-view{
+  width: 100%;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.design-main.is-guide-view .review-revision-nav{
+  margin: 0;
+  border-top: 0;
+  padding: 10px 16px;
+}
+
+.design-main.is-guide-view .review-revision-row{
+  max-width: none;
+}
+
+.design-main.is-packet-diff-view{
+  width: 100%;
+  padding-top: 16px;
+}
+
 .design-section-body{
   width: min(1040px, 100%);
   margin: 0 auto;

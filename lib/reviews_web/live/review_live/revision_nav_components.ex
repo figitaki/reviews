@@ -7,6 +7,7 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
   attr :live_action, :atom, required: true
   attr :selected_patchset, :any, required: true
   attr :has_packet, :boolean, default: false
+  attr :outline_available, :boolean, default: false
   attr :show_packet_outline, :boolean, default: true
 
   def revision_nav(assigns) do
@@ -28,7 +29,7 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
             </strong>
           </div>
           <button
-            :if={@has_packet && !@show_packet_outline}
+            :if={@outline_available && !@show_packet_outline}
             type="button"
             class="review-nav-button review-outline-toggle"
             phx-click="toggle_packet_outline"
@@ -38,12 +39,30 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
         </div>
 
         <div class="review-revision-controls" aria-label="Revision navigation">
-          <.link
-            navigate={revision_mode_path(@review, @selected_patchset, @live_action)}
-            class="review-nav-button"
+          <div
+            :if={@has_packet}
+            id="code-view-switcher"
+            class="review-code-view-switcher"
+            role="tablist"
+            aria-label="Code view"
           >
-            {if(@live_action == :changes, do: "Packet", else: "Changes")}
-          </.link>
+            <.link
+              navigate={guide_path(@review, @selected_patchset)}
+              class={["review-code-view-tab", @live_action != :changes && "is-active"]}
+              role="tab"
+              aria-selected={if(@live_action != :changes, do: "true", else: "false")}
+            >
+              Guide
+            </.link>
+            <.link
+              navigate={diff_path(@review, @selected_patchset)}
+              class={["review-code-view-tab", @live_action == :changes && "is-active"]}
+              role="tab"
+              aria-selected={if(@live_action == :changes, do: "true", else: "false")}
+            >
+              Diff
+            </.link>
+          </div>
           <button
             type="button"
             class="review-nav-button"
@@ -97,12 +116,12 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
     """
   end
 
-  defp revision_mode_path(review, selected_patchset, :changes) do
+  defp guide_path(review, selected_patchset) do
     suffix = patchset_query(selected_patchset)
     "/r/#{review.slug}#{suffix}"
   end
 
-  defp revision_mode_path(review, selected_patchset, _action) do
+  defp diff_path(review, selected_patchset) do
     suffix = patchset_query(selected_patchset)
     "/r/#{review.slug}/changes#{suffix}"
   end
