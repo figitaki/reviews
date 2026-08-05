@@ -6,7 +6,6 @@ import {
   threadBubble,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
-import { hunkViewLabel } from "./hunk_controls.js"
 import {
   annotationSideToSide,
   composerToAnchor,
@@ -24,12 +23,6 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     --diffs-font-features: "liga" 0, "calt" 0;
   }
 `
-
-function stopHeaderEvent(event, callback) {
-  event.preventDefault()
-  event.stopPropagation()
-  callback?.()
-}
 
 function currentPierreTheme() {
   const explicit = document.documentElement.dataset.theme
@@ -88,9 +81,6 @@ export class VanillaDiffRenderer {
     threads,
     diffStyle,
     onCreateComment,
-    hunkUI,
-    onToggleHunk,
-    onSetHunkViewed,
   }) {
     this.container = container
     this.filePath = filePath
@@ -99,9 +89,6 @@ export class VanillaDiffRenderer {
     this.threads = threads
     this.diffStyle = diffStyle
     this.onCreateComment = onCreateComment
-    this.hunkUI = hunkUI
-    this.onToggleHunk = onToggleHunk
-    this.onSetHunkViewed = onSetHunkViewed
     this.composerAt = null
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
@@ -116,12 +103,6 @@ export class VanillaDiffRenderer {
   updateStyle(diffStyle) {
     this.diffStyle = diffStyle
     this.render()
-  }
-
-  updateHunkUI(hunkUI) {
-    const changed = JSON.stringify(this.hunkUI) !== JSON.stringify(hunkUI)
-    this.hunkUI = hunkUI
-    if (changed) this.render()
   }
 
   setComposerAt(composerAt) {
@@ -240,80 +221,11 @@ export class VanillaDiffRenderer {
     })
   }
 
-  renderHeaderPrefix() {
-    if (!this.hunkUI?.hunkId) return null
-
-    return el(
-      "button",
-      {
-        type: "button",
-        className: "reviews-diff-header-toggle",
-        title: this.hunkUI.details,
-        "aria-label": this.hunkUI.expanded ? "Collapse code" : "Expand code",
-        "aria-expanded": String(this.hunkUI.expanded),
-        onclick: (event) => stopHeaderEvent(event, this.onToggleHunk),
-      },
-      [
-        el(
-          "span",
-          {
-            className: `reviews-diff-header-chevron${this.hunkUI.expanded ? " is-expanded" : ""}`,
-            "aria-hidden": "true",
-          },
-          ">"
-        ),
-      ]
-    )
-  }
-
-  renderHeaderMetadata() {
-    if (!this.hunkUI?.hunkId) return null
-
-    const label = hunkViewLabel(this.hunkUI)
-    const children = []
-
-    if (this.hunkUI.label) {
-      children.push(el("span", { className: "reviews-diff-header-hunk" }, this.hunkUI.label))
-    }
-
-    if (label) {
-      children.push(
-        el(
-          "span",
-          {
-            className: `reviews-diff-header-state${this.hunkUI.viewed ? " is-viewed" : ""}`,
-          },
-          label
-        )
-      )
-    }
-
-    if (this.hunkUI.signedIn) {
-      children.push(
-        el(
-          "button",
-          {
-            type: "button",
-            className: `reviews-diff-header-viewed${this.hunkUI.viewed ? " is-viewed" : ""}`,
-            onclick: (event) =>
-              stopHeaderEvent(event, () => this.onSetHunkViewed?.(!this.hunkUI.viewed)),
-          },
-          this.hunkUI.viewed ? "Mark unviewed" : "Mark viewed"
-        )
-      )
-    }
-
-    return el("div", { className: "reviews-diff-header-metadata" }, children)
-  }
-
   options() {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
-      collapsed: !this.hunkUI?.expanded,
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS,
-      renderHeaderPrefix: () => this.renderHeaderPrefix(),
-      renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
       onLineNumberClick: (props) => this.handleLineNumberClick(props),
       onTokenClick: (props) => this.handleTokenClick(props),
