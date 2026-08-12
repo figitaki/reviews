@@ -411,20 +411,31 @@ export function threadBubble({ thread, onReply, onUpdateStatus }) {
       )
     } else {
       const actions = []
+      const where = anchorPinpoint(thread.anchor, thread.side)
 
-      if (onReply && thread.status === "open") {
+      // Reply stays available whatever the status: saying what you did is how a
+      // thread gets resolved, and an `outdated` thread still needs an answer.
+      if (onReply) {
         actions.push(
-          button("Reply", () => {
-            replyOpen = true
-            renderFooter()
-          })
+          button(
+            "Reply",
+            () => {
+              replyOpen = true
+              renderFooter()
+            },
+            { ariaLabel: `Reply to thread on line ${where}` }
+          )
         )
       }
 
       if (onUpdateStatus && ["open", "resolved"].includes(thread.status)) {
         const nextStatus = thread.status === "resolved" ? "open" : "resolved"
         const label = nextStatus === "resolved" ? "Resolve" : "Reopen"
-        actions.push(button(label, () => onUpdateStatus(thread, nextStatus)))
+        actions.push(
+          button(label, () => onUpdateStatus(thread, nextStatus), {
+            ariaLabel: `${label} thread on line ${where}`,
+          })
+        )
       }
 
       if (actions.length > 0) {

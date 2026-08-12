@@ -50,9 +50,24 @@ defmodule ReviewsWeb.Api.CommentController do
       "file_path" => params["file_path"],
       "side" => params["side"] || "new",
       "body" => params["body"],
-      "thread_anchor" => params["thread_anchor"] || %{}
+      "thread_anchor" => params["thread_anchor"] || %{},
+      "thread_id" => cast_thread_id(params["thread_id"])
     }
   end
+
+  # A reply carries the id of the thread it belongs to. `publish_comment/3`
+  # matches on an integer, so a JSON string id has to be cast here or the
+  # comment silently opens a new thread instead of joining the existing one.
+  defp cast_thread_id(id) when is_integer(id), do: id
+
+  defp cast_thread_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {parsed, ""} -> parsed
+      _ -> nil
+    end
+  end
+
+  defp cast_thread_id(_), do: nil
 
   defp file_anchor(%{file_path: path}) when is_binary(path), do: path
   defp file_anchor(_), do: ""

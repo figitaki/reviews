@@ -76,6 +76,9 @@ pub struct CreateCommentRequest<'a> {
     pub side: &'a str,
     pub body: &'a str,
     pub thread_anchor: Value,
+    /// Set to append to an existing thread instead of opening a new one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -454,6 +457,7 @@ mod tests {
                     side: "new",
                     body: "lgtm",
                     thread_anchor: anchor,
+                    thread_id: None,
                 },
             )
             .unwrap();
@@ -474,6 +478,7 @@ mod tests {
                     side: "new",
                     body: "b",
                     thread_anchor: serde_json::json!({"granularity": "line"}),
+                    thread_id: None,
                 },
             )
             .unwrap_err();

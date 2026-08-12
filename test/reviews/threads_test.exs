@@ -187,5 +187,30 @@ defmodule Reviews.ThreadsTest do
 
       assert %Thread{status: "open"} = Repo.get(Thread, thread.id)
     end
+
+    test "re-resolving keeps the original resolver and stays quiet" do
+      %{author: author, review: review} = setup_review!()
+      %{author: other} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+      {:ok, resolved} = Threads.update_status(review, thread.id, author, "resolved")
+
+      Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
+
+      assert {:ok, again} = Threads.update_status(review, thread.id, other, "resolved")
+
+      assert again.resolved_by_id == resolved.resolved_by_id
+      assert again.resolved_at == resolved.resolved_at
+      refute_receive {:thread_updated, _}
+    end
+
+    test "treats an out-of-range thread id as a miss rather than crashing" do
+      %{author: author, review: review} = setup_review!()
+
+      assert {:error, :not_found} =
+               Threads.update_status(review, 99_999_999_999_999_999_999, author, "resolved")
+
+      assert {:error, :not_found} =
+               Threads.update_status(review, "99999999999999999999", author, "resolved")
+    end
   end
 end

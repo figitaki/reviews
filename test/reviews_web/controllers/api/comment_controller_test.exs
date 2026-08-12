@@ -175,5 +175,111 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
 
       assert %{"errors" => %{"detail" => "Unauthorized"}} = json_response(conn, 401)
     end
+
+    test "appends to an existing thread when thread_id is given", %{
+      conn: conn,
+      raw_token: raw,
+      review: review
+    } do
+      first =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "needs a default",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+        |> json_response(201)
+
+      reply =
+        build_conn()
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "done, defaulted to \"new\"",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1},
+          "thread_id" => first["thread_id"]
+        })
+        |> json_response(201)
+
+      assert reply["thread_id"] == first["thread_id"]
+      refute reply["comment_id"] == first["comment_id"]
+
+      assert [thread] = ThreadsContext.list_published_threads(review.id)
+      assert length(thread.comments) == 2
+    end
+
+    test "accepts a stringified thread_id", %{conn: conn, raw_token: raw, review: review} do
+      first =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "first",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+        |> json_response(201)
+
+      reply =
+        build_conn()
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "second",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1},
+          "thread_id" => to_string(first["thread_id"])
+        })
+        |> json_response(201)
+
+      assert reply["thread_id"] == first["thread_id"]
+    end
+
+    test "a thread_id from another review opens a new thread instead of leaking", %{
+      conn: conn,
+      raw_token: raw,
+      user: user,
+      review: review
+    } do
+      {:ok, %{review: other}} =
+        ReviewsContext.create_review_with_initial_patchset(user, %{
+          title: "Other",
+          description: "",
+          base_sha: "cafe",
+          branch_name: "carey/other",
+          raw_diff: "diff --git a/bar b/bar\n--- a/bar\n+++ b/bar\n@@ -1 +1 @@\n-a\n+b\n"
+        })
+
+      {:ok, %{thread: foreign}} =
+        ThreadsContext.publish_comment(other, user, %{
+          "file_path" => "bar",
+          "side" => "new",
+          "body" => "elsewhere",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      resp =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "should not land on the other review",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1},
+          "thread_id" => foreign.id
+        })
+        |> json_response(201)
+
+      refute resp["thread_id"] == foreign.id
+      assert [%{comments: [_only_one]}] = ThreadsContext.list_published_threads(other.id)
+    end
   end
 end
