@@ -75,6 +75,6 @@ When using Reviews, prefer producing a packet rather than uploading a raw diff a
 
 When updating a review, preserve packet section titles and hunk groupings if the goal is to keep previous section approvals valid. Create a new packet structure when the review framing has changed enough that prior approvals should not carry forward.
 
-When addressing feedback from Reviews, list threads with `reviews threads <slug>` or inspect `reviews show --format md`, then mark completed feedback with `reviews resolve <slug> <thread-id>`. Use `reviews reopen <slug> <thread-id>` when a resolved thread needs attention again.
+When addressing feedback from Reviews, list threads with `reviews threads <slug>` or inspect `reviews show --format md`. Answer each thread with `reviews reply <slug> <thread-id>` describing what changed, then mark it handled with `reviews resolve <slug> <thread-id>`. Use `reviews reopen <slug> <thread-id>` when a resolved thread needs attention again.
 
 When reporting a Reviews link back to the user, include the URL and the patchset number if the CLI provides one.

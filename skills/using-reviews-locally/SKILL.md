@@ -103,17 +103,26 @@ Reopen a thread when feedback still needs attention:
 cli/target/release/reviews reopen <slug> <thread-id>
 ```
 
+Say what you changed before resolving, so the reviewer can see the answer next to
+the question:
+
+```bash
+cli/target/release/reviews reply <slug> <thread-id> --body "Switched to Decimal in 4f2a1c9."
+```
+
 Notes:
 - `reviews threads` can run anonymously against public review JSON.
-- `reviews resolve` and `reviews reopen` require `reviews login` / a valid API token.
-- `reviews show --format md` also includes thread IDs and status, which can be used as targets for resolve/reopen.
+- `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` / a valid API token.
+- Thread IDs are accepted bare (`7`) or as printed by the listing (`#7`).
+- `reviews reply` appends to the thread. `reviews comment` always opens a new one.
+- `reviews show --format md` also includes thread IDs and status, which can be used as targets for reply/resolve/reopen.
 - Resolved threads remain visible inline on the review page with a resolved status pill, but drop out of the Open threads sidebar.
 
 ## Codex Workflow
 
 - Keep local packet files in `/private/tmp` unless the user asks to commit them.
 - After pushing, return the review URL and patchset number.
-- After addressing review feedback, use `reviews threads <slug>` to find thread IDs and `reviews resolve <slug> <thread-id>` to mark handled threads. Use `reviews reopen` if a thread was closed too early.
+- After addressing review feedback, use `reviews threads <slug>` to find thread IDs, `reviews reply <slug> <thread-id>` to record what changed, then `reviews resolve <slug> <thread-id>` to mark the thread handled. Use `reviews reopen` if a thread was closed too early.
 - Use `mix compile --warnings-as-errors`, `mix format --check-formatted`, and `mix assets.build` after relevant code/CSS/JS changes.
 - If `mix test` fails before tests run because DB config points at the wrong local Postgres, report that separately from app failures.
 

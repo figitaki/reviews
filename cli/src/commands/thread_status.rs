@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Args;
 
 use crate::api::{ApiClient, UpdateThreadStatusRequest};
+use crate::commands::parse_thread_id;
 use crate::config::Config;
 
 #[derive(Args, Debug)]
@@ -10,6 +11,7 @@ pub struct ThreadStatusArgs {
     pub slug: String,
 
     /// Thread id from `reviews threads <slug>` or `reviews show`.
+    #[arg(value_parser = parse_thread_id)]
     pub thread_id: i64,
 }
 
