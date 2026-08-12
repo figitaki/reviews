@@ -10,9 +10,13 @@ defmodule ReviewsWeb.ReviewLive do
 
   PubSub:
     * subscribes to `"review:<slug>"`
-    * receives `{:patchset_pushed, n}` and `{:thread_published, thread}`
+    * receives `{:patchset_pushed, n}`, `{:thread_published, thread}`, and
+      `{:thread_updated, thread}` — the last also fires for resolve/reopen
+      performed over the CLI/API, not just from a browser
   """
   use ReviewsWeb, :live_view
+
+  require Logger
 
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
@@ -260,8 +264,6 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("create_comment", params, socket) do
-    require Logger
-
     case socket.assigns.current_identity do
       nil ->
         {:noreply, put_flash(socket, :error, "Sign in to leave a comment.")}
@@ -280,8 +282,6 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("update_thread_status", params, socket) do
-    require Logger
-
     case socket.assigns.current_identity do
       nil ->
         {:noreply, put_flash(socket, :error, "Sign in to update threads.")}
@@ -320,11 +320,10 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_info({:thread_updated, _thread}, socket) do
-    {:noreply,
-     socket
-     |> refresh_snapshot!()
-     |> push_threads_for_all_files()}
+  def handle_info({:thread_updated, thread}, socket) do
+    # Only the thread's own file changed, so pushing every file would remount
+    # each mounted renderer on every connected client for a one-thread change.
+    {:noreply, push_threads_for_file(socket, thread.file_path)}
   end
 
   # ---------------------------------------------------------------------------
