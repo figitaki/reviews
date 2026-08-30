@@ -1,3 +1,5 @@
+
+
 # Reviews
 
 Reviews is a code-review tool for arbitrary diffs. It gives agents and humans a
@@ -6,7 +8,7 @@ shareable review surface before, during, or outside a GitHub PR workflow.
 The app is Phoenix 1.8 + LiveView, with a React diff island powered by
 `@pierre/diffs`, and a Rust CLI (`reviews push`) for uploading diffs.
 
-Current alpha version: `0.0.1-alpha.0`.
+Current alpha version: `0.0.1-alpha.2`.
 
 ## What It Provides
 
