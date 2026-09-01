@@ -37,7 +37,7 @@ defmodule Reviews.Reviews.CodeSnapshot do
   end
 
   @required ~w(base_ref head_ref base_oid head_oid head_kind status expires_at)a
-  @optional ~w(last_error)a
+  @optional ~w(public_id last_error)a
 
   @doc """
   `code_repository_id`, `patchset_id`, and `reserved_by_id` are set

@@ -33,7 +33,7 @@ defmodule Reviews.Reviews.CodeRepository do
   end
 
   @required ~w(backend storage_key object_format status)a
-  @optional ~w(provider_repo_id last_error expires_at)a
+  @optional ~w(public_id provider_repo_id last_error expires_at)a
 
   @doc """
   `owner_id` and `review_id` are set programmatically by the context, never
