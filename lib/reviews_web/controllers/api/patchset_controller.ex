@@ -8,44 +8,60 @@ defmodule ReviewsWeb.Api.PatchsetController do
   """
   use ReviewsWeb, :controller
 
+  import ReviewsWeb.Api.ApiHelpers
+
+  alias Reviews.CodeStorage.Errors
   alias Reviews.Reviews
 
   @doc "POST /api/v1/reviews/:slug/patchsets"
   def create(conn, %{"slug" => slug} = params) do
     case Reviews.get_review_by_slug(slug) do
       nil ->
-        conn |> put_status(:not_found) |> json(%{errors: %{detail: "Review not found"}})
+        error_json(conn, :not_found, "Review not found")
 
       review ->
         attrs = %{
           base_sha: params["base_sha"],
           branch_name: params["branch_name"],
           raw_diff: params["raw_diff"],
-          packet: params["packet"]
+          packet: params["packet"],
+          code_snapshot_id: params["code_snapshot_id"]
         }
 
-        case Reviews.append_patchset(review, attrs) do
-          {:ok, patchset} ->
-            conn
-            |> put_status(:created)
-            |> json(%{
+        identity = conn.assigns.current_identity
+
+        case Reviews.append_patchset(identity, review, attrs) do
+          {:ok, %{patchset: patchset, code_snapshot: code_snapshot}} ->
+            response = %{
               patchset_number: patchset.number,
               url: url(~p"/r/#{review.slug}")
-            })
+            }
 
-          {:error, changeset} ->
+            conn
+            |> put_status(:created)
+            |> json(maybe_put_code_snapshot(response, code_snapshot))
+
+          {:error, {:code_snapshot, code}} when is_atom(code) ->
+            error_json(conn, Errors.http_status(code), code, Errors.message(code))
+
+          {:error, %Ecto.Changeset{} = changeset} ->
             conn
             |> put_status(:unprocessable_entity)
             |> json(%{errors: format_changeset(changeset)})
+
+          {:error, _reason} ->
+            error_json(conn, :unprocessable_entity, "Could not append patchset")
         end
     end
   end
 
-  defp format_changeset(%Ecto.Changeset{} = cs) do
-    Ecto.Changeset.traverse_errors(cs, fn {msg, opts} ->
-      Regex.replace(~r/%{(\w+)}/, msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
+  defp maybe_put_code_snapshot(response, nil), do: response
+
+  defp maybe_put_code_snapshot(response, {:skipped, code}) do
+    Map.put(response, :code_snapshot, %{status: "skipped", code: Atom.to_string(code)})
+  end
+
+  defp maybe_put_code_snapshot(response, snapshot) do
+    Map.put(response, :code_snapshot, %{id: snapshot.public_id, status: snapshot.status})
   end
 end

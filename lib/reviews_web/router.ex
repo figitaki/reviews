@@ -40,6 +40,7 @@ defmodule ReviewsWeb.Router do
   scope "/api/v1", ReviewsWeb.Api do
     pipe_through :api
 
+    get "/capabilities", CapabilityController, :show
     get "/reviews/:slug", ReviewController, :show
   end
 

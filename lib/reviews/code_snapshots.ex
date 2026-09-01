@@ -1,0 +1,200 @@
+defmodule Reviews.CodeSnapshots do
+  @moduledoc """
+  The code-snapshots context: reservations, verification, claiming, and
+  expiry of source snapshots.
+
+  This is the only module that should touch `Reviews.Repo` for
+  `code_repositories` and `code_snapshots`. The claim step runs inside the
+  push transaction owned by `Reviews.Reviews`, which calls `maybe_claim/4`
+  from an `Ecto.Multi.run/3` step.
+  """
+  import Ecto.Query, warn: false
+
+  alias Reviews.Accounts.Identity
+  alias Reviews.CodeStorage
+  alias Reviews.Repo
+  alias Reviews.Reviews.{CodeRepository, CodeSnapshot, Patchset, Review}
+
+  # Namespace for pg_advisory_xact_lock; arbitrary but stable.
+  @advisory_lock_namespace 7_201
+
+  ## Lookup
+
+  def get_snapshot_by_public_id(public_id) when is_binary(public_id) do
+    case Ecto.UUID.cast(public_id) do
+      {:ok, uuid} ->
+        Repo.one(
+          from s in CodeSnapshot,
+            where: s.public_id == ^uuid,
+            preload: [:code_repository]
+        )
+
+      :error ->
+        nil
+    end
+  end
+
+  def get_snapshot_by_public_id(_), do: nil
+
+  ## Claiming
+
+  @doc """
+  Claim step for the push transaction Multis in `Reviews.Reviews`.
+
+  Returns `{:ok, nil}` when no snapshot id was sent, `{:ok, snapshot}` on a
+  successful claim, `{:ok, {:skipped, code}}` when the claim failed under the
+  `:optional` policy (the patchset proceeds diff-only), or `{:error, code}`
+  under the `:required` policy (the whole transaction rolls back).
+  """
+  def maybe_claim(_identity, _review, _patchset, nil), do: {:ok, nil}
+
+  def maybe_claim(%Identity{} = identity, %Review{} = review, %Patchset{} = patchset, public_id) do
+    case claim_for_patchset(identity, review, patchset, public_id) do
+      {:ok, snapshot} ->
+        {:ok, snapshot}
+
+      {:error, code} ->
+        case CodeStorage.policy() do
+          :required -> {:error, code}
+          _optional -> {:ok, {:skipped, code}}
+        end
+    end
+  end
+
+  @doc """
+  Attach a ready snapshot (and its repository) to a patchset. Must run inside
+  a transaction. Serializes concurrent claims per review with an advisory
+  transaction lock so a losing concurrent first push fails cleanly instead of
+  aborting the transaction on the partial unique index (which remains the
+  integrity backstop).
+  """
+  def claim_for_patchset(
+        %Identity{} = identity,
+        %Review{} = review,
+        %Patchset{} = patchset,
+        public_id
+      ) do
+    Repo.query!("SELECT pg_advisory_xact_lock($1, $2)", [@advisory_lock_namespace, review.id])
+
+    with {:ok, snapshot} <- lock_snapshot(public_id),
+         :ok <- check_owner(snapshot, identity),
+         :ok <- check_status(snapshot),
+         {:ok, repository} <- attach_repository(snapshot.code_repository, review) do
+      snapshot =
+        snapshot
+        |> Ecto.Changeset.change(
+          patchset_id: patchset.id,
+          status: "claimed",
+          expires_at: nil
+        )
+        |> Repo.update!()
+
+      {:ok, %{snapshot | code_repository: repository}}
+    end
+  end
+
+  defp lock_snapshot(public_id) do
+    with {:ok, uuid} <- Ecto.UUID.cast(public_id || ""),
+         %CodeSnapshot{} = snapshot <-
+           Repo.one(
+             from s in CodeSnapshot,
+               where: s.public_id == ^uuid,
+               lock: "FOR UPDATE"
+           ) do
+      {:ok, Repo.preload(snapshot, :code_repository)}
+    else
+      # Not found and malformed ids both report :snapshot_not_ready so the
+      # response does not reveal whether a snapshot id exists.
+      _ -> {:error, :snapshot_not_ready}
+    end
+  end
+
+  defp check_owner(%CodeSnapshot{reserved_by_id: owner_id}, %Identity{id: owner_id}), do: :ok
+  defp check_owner(_snapshot, _identity), do: {:error, :snapshot_not_authorized}
+
+  defp check_status(%CodeSnapshot{status: "ready"}), do: :ok
+  defp check_status(%CodeSnapshot{status: "expired"}), do: {:error, :upload_expired}
+  defp check_status(_snapshot), do: {:error, :snapshot_not_ready}
+
+  # The snapshot's repository must already belong to the target review, or be
+  # unclaimed while the review has no repository yet (first code-enabled push).
+  defp attach_repository(%CodeRepository{review_id: review_id} = repository, %Review{
+         id: review_id
+       }) do
+    {:ok, repository}
+  end
+
+  defp attach_repository(%CodeRepository{review_id: nil} = repository, %Review{} = review) do
+    review_has_repository? =
+      Repo.exists?(from r in CodeRepository, where: r.review_id == ^review.id)
+
+    if review_has_repository? do
+      # A concurrent first push already attached a different repository.
+      {:error, :snapshot_not_ready}
+    else
+      repository =
+        repository
+        |> Ecto.Changeset.change(review_id: review.id, status: "ready", expires_at: nil)
+        |> Repo.update!()
+
+      {:ok, repository}
+    end
+  end
+
+  defp attach_repository(_repository, _review), do: {:error, :snapshot_not_ready}
+
+  ## Expiry (sweeper entry points)
+
+  @doc """
+  Expire unclaimed snapshots whose reservation deadline passed. Returns the
+  number of rows transitioned to `expired`.
+  """
+  def expire_stale(now \\ DateTime.utc_now()) do
+    {count, _} =
+      Repo.update_all(
+        from(s in CodeSnapshot,
+          where:
+            s.status in ["reserved", "uploading", "ready"] and
+              is_nil(s.patchset_id) and
+              s.expires_at < ^now
+        ),
+        set: [status: "expired", updated_at: DateTime.truncate(now, :second)]
+      )
+
+    count
+  end
+
+  @doc """
+  Unclaimed, expired staging repositories eligible for provider deletion.
+  Locks the rows with `SKIP LOCKED` so concurrent sweepers do not double-work.
+  """
+  def stale_staging_repositories(now \\ DateTime.utc_now(), limit \\ 20) do
+    Repo.all(
+      from r in CodeRepository,
+        where:
+          r.status == "staging" and
+            is_nil(r.review_id) and
+            r.expires_at < ^now,
+        limit: ^limit,
+        lock: "FOR UPDATE SKIP LOCKED"
+    )
+  end
+
+  def delete_repository_row(%CodeRepository{} = repository) do
+    Repo.delete(repository, allow_stale: true)
+  end
+
+  def record_repository_error(%CodeRepository{} = repository, error) do
+    repository
+    |> Ecto.Changeset.change(last_error: redact_error(error))
+    |> Repo.update()
+  end
+
+  # Keep operational errors readable without leaking URLs, tokens, or keys.
+  defp redact_error(error) do
+    error
+    |> inspect()
+    |> String.replace(~r/https?:\/\/\S+/, "[url]")
+    |> String.slice(0, 500)
+  end
+end

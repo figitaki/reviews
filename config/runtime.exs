@@ -29,6 +29,33 @@ config :ueberauth, Ueberauth.Strategy.Github.OAuth,
   client_id: System.get_env("GITHUB_CLIENT_ID"),
   client_secret: System.get_env("GITHUB_CLIENT_SECRET")
 
+# Code storage (code.storage backend). Off unless CODE_STORAGE_ADAPTER is set.
+# CODE_STORAGE_ORG is the code.storage organization; CODE_STORAGE_JWT_PRIVATE_KEY
+# is the P-256 private key in PKCS8 PEM format that signs ES256 upload tokens.
+if System.get_env("CODE_STORAGE_ADAPTER") == "code_storage" do
+  org = System.get_env("CODE_STORAGE_ORG")
+  key_pem = System.get_env("CODE_STORAGE_JWT_PRIVATE_KEY")
+
+  if config_env() == :prod and (is_nil(org) or is_nil(key_pem)) do
+    raise """
+    CODE_STORAGE_ADAPTER=code_storage requires CODE_STORAGE_ORG and
+    CODE_STORAGE_JWT_PRIVATE_KEY (P-256 PKCS8 PEM) to be set.
+    """
+  end
+
+  policy =
+    case System.get_env("CODE_STORAGE_POLICY", "optional") do
+      "required" -> :required
+      _ -> :optional
+    end
+
+  config :reviews, Reviews.CodeStorage,
+    adapter: Reviews.CodeStorage.CodeDotStorage,
+    policy: policy,
+    org: org,
+    jwt_private_key: key_pem
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
