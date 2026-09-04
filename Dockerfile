@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for building a Phoenix release of :reviews.
 #
-# Build stage: Elixir 1.18 / Erlang 27 on Debian Bookworm, with Node + Bun added
+# Build stage: Elixir 1.20 / Erlang 28 on Debian Bookworm, with Node + Bun added
 # for the React-island asset bundle. Node is needed to fetch/run the esbuild
 # binary; Bun is the package manager (single source of truth, matches dev).
 #
@@ -15,9 +15,9 @@
 #     -e GITHUB_CLIENT_ID=... -e GITHUB_CLIENT_SECRET=... \
 #     reviews:latest
 
-ARG ELIXIR_VERSION=1.18.3
-ARG OTP_VERSION=27.3.4.11
-ARG DEBIAN_VERSION=bookworm-20260505-slim
+ARG ELIXIR_VERSION=1.20.2
+ARG OTP_VERSION=28.5.0.5
+ARG DEBIAN_VERSION=bookworm-20260713-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"

@@ -858,7 +858,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp hunk_attrs_list_from_params(%{"hunk_attrs" => encoded} = params)
        when is_binary(encoded) and encoded != "" do
-    case Jason.decode(encoded) do
+    case JSON.decode(encoded) do
       {:ok, attrs_list} when is_list(attrs_list) ->
         attrs_list
         |> Enum.map(&Map.put(&1, "hunk_id", params["hunk_id"]))

@@ -5,6 +5,24 @@ All notable changes to Reviews will be tracked here.
 Reviews uses semver with prerelease tags while the CLI and hosted service are
 still stabilizing.
 
+## [Unreleased]
+
+### Changed
+
+- Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
+  now requires Elixir `~> 1.20`.
+- Phoenix 1.8.13, LiveView 1.2.11, Phoenix LiveDashboard 0.9.1, Bandit 1.12.5,
+  Ecto SQL 3.14, Tailwind CLI 4.3.0 and other dependency updates.
+- JSON encoding uses Elixir's built-in `JSON` module instead of Jason for
+  Phoenix, Postgrex (`jsonb` columns) and Ueberauth. The `jason` package stays
+  only as a transitive dependency.
+- List renders in the review, changes and settings screens carry `:key`, so
+  LiveView diffs reorderings item by item.
+- The `InstallCopy` and `StickyProse` hooks are colocated with their templates.
+  The install snippet's CSS is colocated too via the new
+  `ReviewsWeb.ColocatedCSS` module.
+- LiveView test warnings for duplicate DOM ids and forms without ids now raise.
+
 ## [0.0.1-alpha.2] - 2026-05-21
 
 Supersedes `0.0.1-alpha.1`, whose release build never published — its CLI
