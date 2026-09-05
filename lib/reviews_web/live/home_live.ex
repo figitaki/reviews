@@ -193,15 +193,119 @@ defmodule ReviewsWeb.HomeLive do
   attr :id, :string, required: true
   attr :command, :string, required: true
 
+  # Install snippet — looks like a terminal line. Copy-to-clipboard is pure DOM,
+  # so the hook and its styles live here with the markup.
   defp install_snippet(assigns) do
     ~H"""
-    <div class="l-install" id={"#{@id}-root"} phx-hook="InstallCopy" data-install-command={@command}>
+    <style :type={ReviewsWeb.ColocatedCSS}>
+      .l-install {
+        display: flex;
+        align-items: stretch;
+        border: 1px solid var(--ds-line);
+        border-radius: 8px;
+        background: var(--ds-panel);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        line-height: 1.4;
+        overflow: hidden;
+        max-width: 100%;
+      }
+
+      .l-install-prompt {
+        display: inline-grid;
+        place-items: center;
+        padding: 0 12px;
+        border-right: 1px solid var(--ds-line);
+        color: var(--ds-add);
+        background: var(--ds-panel-raised);
+        font-size: 12px;
+        font-weight: 700;
+        user-select: none;
+      }
+
+      .l-install-cmd {
+        flex: 1;
+        min-width: 0;
+        padding: 12px 14px;
+        color: var(--ds-text);
+        overflow-x: auto;
+        white-space: nowrap;
+        scrollbar-width: none;
+      }
+      .l-install-cmd::-webkit-scrollbar { display: none; }
+
+      .l-install-copy {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 14px;
+        border: 0;
+        border-left: 1px solid var(--ds-line);
+        background: var(--ds-panel);
+        color: var(--ds-muted);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: color 160ms ease, background 160ms ease;
+      }
+      .l-install-copy:hover { color: var(--ds-text); background: var(--ds-hover); }
+      .l-install-copy.is-copied { color: var(--ds-add); }
+    </style>
+    <div class="l-install" id={"#{@id}-root"} phx-hook=".InstallCopy" data-install-command={@command}>
       <span class="l-install-prompt">$</span>
       <div class="l-install-cmd" data-install-cmd>{@command}</div>
       <button type="button" class="l-install-copy" data-install-copy aria-label="Copy install command">
         Copy
       </button>
     </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".InstallCopy">
+      export default {
+        mounted() {
+          const FEEDBACK_MS = 1400
+          const root = this.el
+          const button = root.querySelector("[data-install-copy]")
+          const cmdEl = root.querySelector("[data-install-cmd]")
+          if (!button || !cmdEl) return
+
+          const command = root.dataset.installCommand || cmdEl.textContent.trim()
+
+          this._onClick = async () => {
+            try {
+              await navigator.clipboard.writeText(command)
+            } catch (e) {
+              // Older browsers without async clipboard — try the legacy path quietly.
+              const ta = document.createElement("textarea")
+              ta.value = command
+              ta.setAttribute("readonly", "")
+              ta.style.position = "absolute"
+              ta.style.left = "-9999px"
+              document.body.appendChild(ta)
+              ta.select()
+              try { document.execCommand("copy") } catch (_) {}
+              document.body.removeChild(ta)
+            }
+
+            const original = button.textContent
+            button.textContent = "Copied"
+            button.classList.add("is-copied")
+            if (this._timer) window.clearTimeout(this._timer)
+            this._timer = window.setTimeout(() => {
+              button.textContent = original
+              button.classList.remove("is-copied")
+            }, FEEDBACK_MS)
+          }
+
+          this._button = button
+          button.addEventListener("click", this._onClick)
+        },
+
+        destroyed() {
+          if (this._timer) window.clearTimeout(this._timer)
+          if (this._button && this._onClick) this._button.removeEventListener("click", this._onClick)
+        },
+      }
+    </script>
     """
   end
 
