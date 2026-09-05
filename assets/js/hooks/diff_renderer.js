@@ -2,7 +2,7 @@
 // renderer per mounted file. Rendering details live in ../diff_renderer/*.
 
 import { VanillaDiffRenderer } from "../diff_renderer/vanilla_renderer.js"
-import { Thread, CreateCommentPayload } from "../schemas.js"
+import { Thread, CreateCommentPayload, UpdateThreadStatusPayload } from "../schemas.js"
 
 function parseInitial(text, schema) {
   try {
@@ -34,6 +34,16 @@ const DiffRenderer = {
       }
     }
 
+    const onUpdateThreadStatus = (payload) => {
+      try {
+        const parsed = UpdateThreadStatusPayload.parse(payload)
+        this.pushEvent("update_thread_status", parsed)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[DiffRenderer] invalid update_thread_status payload:", err, payload)
+      }
+    }
+
     this._renderer = new VanillaDiffRenderer({
       container: this.el,
       filePath,
@@ -42,6 +52,7 @@ const DiffRenderer = {
       threads: initialThreads,
       diffStyle: initialDiffStyle,
       onCreateComment,
+      onUpdateThreadStatus,
     })
     this._renderer.render()
 

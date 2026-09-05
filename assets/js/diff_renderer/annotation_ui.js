@@ -366,7 +366,7 @@ function commentTime(iso, prefix = "") {
   )
 }
 
-export function threadBubble({ thread, onReply }) {
+export function threadBubble({ thread, onReply, onUpdateStatus }) {
   const runs = groupCommentsByAuthor(thread.comments)
   const commentRows = []
 
@@ -409,13 +409,27 @@ export function threadBubble({ thread, onReply }) {
           },
         })
       )
-    } else if (onReply) {
-      footer.append(
-        button("Reply", () => {
-          replyOpen = true
-          renderFooter()
-        })
-      )
+    } else {
+      const actions = []
+
+      if (onReply && thread.status === "open") {
+        actions.push(
+          button("Reply", () => {
+            replyOpen = true
+            renderFooter()
+          })
+        )
+      }
+
+      if (onUpdateStatus && ["open", "resolved"].includes(thread.status)) {
+        const nextStatus = thread.status === "resolved" ? "open" : "resolved"
+        const label = nextStatus === "resolved" ? "Resolve" : "Reopen"
+        actions.push(button(label, () => onUpdateStatus(thread, nextStatus)))
+      }
+
+      if (actions.length > 0) {
+        footer.append(el("div", { style: composerActionsStyle }, actions))
+      }
     }
   }
   renderFooter()
