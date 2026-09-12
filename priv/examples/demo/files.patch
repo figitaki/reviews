@@ -1,0 +1,28 @@
+diff --git a/lib/new.ex b/lib/new.ex
+new file mode 100644
+--- /dev/null
++++ b/lib/new.ex
+@@ -0,0 +1,3 @@
++defmodule Demo.New do
++  def ready?, do: true
++end
+diff --git a/lib/removed.ex b/lib/removed.ex
+deleted file mode 100644
+--- a/lib/removed.ex
++++ /dev/null
+@@ -1,2 +0,0 @@
+-defmodule Demo.Removed do
+-end
+diff --git a/docs/old-name.txt b/docs/new-name.txt
+similarity index 100%
+rename from docs/old-name.txt
+rename to docs/new-name.txt
+diff --git a/config/settings.json b/config/settings.json
+--- a/config/settings.json
++++ b/config/settings.json
+@@ -1 +1 @@
+-{"enabled": false}
++{"enabled": true}
+diff --git a/images/example.png b/images/example.png
+index 1111111..2222222 100644
+Binary files a/images/example.png and b/images/example.png differ

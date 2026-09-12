@@ -61,7 +61,25 @@ defmodule Reviews.Release do
     for repo <- repos() do
       {:ok, _, _} =
         Ecto.Migrator.with_repo(repo, fn _ ->
-          Reviews.DemoReview.seed!()
+          # Release eval starts only the repo; revision seeding broadcasts via PubSub.
+          pubsub =
+            if Process.whereis(Reviews.PubSub) == nil do
+              {:ok, _} = Application.ensure_all_started(:phoenix_pubsub)
+
+              {:ok, pid} =
+                Supervisor.start_link([{Phoenix.PubSub, name: Reviews.PubSub}],
+                  strategy: :one_for_one
+                )
+
+              pid
+            end
+
+          try do
+            Reviews.DemoReview.seed!()
+          after
+            if pubsub, do: Supervisor.stop(pubsub)
+          end
+
           :ok
         end)
     end
