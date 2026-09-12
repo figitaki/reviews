@@ -27,6 +27,7 @@ import topbar from "../vendor/topbar"
 import ChangesFileTree from "./hooks/changes_file_tree"
 import DiffRenderer from "./hooks/diff_renderer"
 import Markdown from "./hooks/markdown"
+import DemoChecklist from "./hooks/demo_checklist"
 import PacketNavTree from "./hooks/packet_nav_tree"
 import StickyHunkHeader from "./hooks/sticky_hunk_header"
 
@@ -34,7 +35,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, ChangesFileTree, DiffRenderer, Markdown, PacketNavTree, StickyHunkHeader},
+  hooks: {...colocatedHooks, ChangesFileTree, DiffRenderer, Markdown, DemoChecklist, PacketNavTree, StickyHunkHeader},
 })
 
 // Show progress bar on live navigation and form submits

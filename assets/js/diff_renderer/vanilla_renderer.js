@@ -267,7 +267,7 @@ export class VanillaDiffRenderer {
       }
       this.container.append(toolbar)
       if (this.preview) {
-        this.container.append(markdownPreview(this.rawDiff))
+        this.container.append(markdownPreview(this.rawDiff, this.diffStyle))
         return
       }
       this.sourceContainer = el("div")
