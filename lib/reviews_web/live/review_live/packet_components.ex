@@ -686,7 +686,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           class={["review-packet-row is-markdown", @annotation? && "is-annotation"]}
           phx-hook={if(@annotation?, do: nil, else: "StickyProse")}
         >
-          <.markdown body={@body} class="review-packet-markdown" />
+          <.markdown id={"#{@row_id}-markdown"} body={@body} class="review-packet-markdown" />
         </div>
     <% end %>
     """
@@ -1049,6 +1049,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     "#{hunk.file_path} · hunk #{hunk.hunk_index} · #{line_ref} · #{stats}"
   end
 
+  attr :id, :string, required: true
   attr :body, :string, required: true
   attr :class, :string, default: "review-packet-markdown"
 
@@ -1057,28 +1058,42 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
     ~H"""
     <div class={@class}>
-      <%= for block <- @blocks do %>
-        <h3
-          :if={block.kind == :heading && block.level == 3}
-          class="review-packet-md-heading is-h3"
+      <div
+        id={@id}
+        phx-hook="Markdown"
+        phx-update="ignore"
+        data-markdown={@body}
+      >
+        <div
+          id={"#{@id}-output"}
+          phx-update="ignore"
+          data-markdown-output
+          class="review-rich-markdown"
         >
-          <.inline segments={block.segments} />
-        </h3>
-        <h4
-          :if={block.kind == :heading && block.level == 4}
-          class="review-packet-md-heading is-h4"
-        >
-          <.inline segments={block.segments} />
-        </h4>
-        <ul :if={block.kind == :list} class="review-packet-md-list">
-          <li :for={item <- block.items}>
-            <.inline segments={item} />
-          </li>
-        </ul>
-        <p :if={block.kind == :paragraph} class="review-packet-md-paragraph">
-          <.inline segments={block.segments} />
-        </p>
-      <% end %>
+          <%= for block <- @blocks do %>
+            <h3
+              :if={block.kind == :heading && block.level == 3}
+              class="review-packet-md-heading is-h3"
+            >
+              <.inline segments={block.segments} />
+            </h3>
+            <h4
+              :if={block.kind == :heading && block.level == 4}
+              class="review-packet-md-heading is-h4"
+            >
+              <.inline segments={block.segments} />
+            </h4>
+            <ul :if={block.kind == :list} class="review-packet-md-list">
+              <li :for={item <- block.items}>
+                <.inline segments={item} />
+              </li>
+            </ul>
+            <p :if={block.kind == :paragraph} class="review-packet-md-paragraph">
+              <.inline segments={block.segments} />
+            </p>
+          <% end %>
+        </div>
+      </div>
     </div>
     """
   end

@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/reviews"
 import topbar from "../vendor/topbar"
 import ChangesFileTree from "./hooks/changes_file_tree"
 import DiffRenderer from "./hooks/diff_renderer"
+import Markdown from "./hooks/markdown"
 import PacketNavTree from "./hooks/packet_nav_tree"
 import StickyHunkHeader from "./hooks/sticky_hunk_header"
 import StickyProse from "./hooks/sticky_prose"
@@ -35,7 +36,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, ChangesFileTree, DiffRenderer, PacketNavTree, StickyHunkHeader, StickyProse, InstallCopy},
+  hooks: {...colocatedHooks, ChangesFileTree, DiffRenderer, Markdown, PacketNavTree, StickyHunkHeader, StickyProse, InstallCopy},
 })
 
 // Show progress bar on live navigation and form submits
