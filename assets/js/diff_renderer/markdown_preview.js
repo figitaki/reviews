@@ -1,8 +1,8 @@
 import { el } from "./dom.js"
 import { markdownPatchExcerpts, renderMarkdown } from "../lib/markdown.js"
 
-export function markdownPreview(patch) {
-  const preview = el("div", { className: "review-markdown-preview" }, [
+export function markdownPreview(patch, diffStyle = "split") {
+  const preview = el("div", { className: "review-markdown-preview", dataset: { diffStyle } }, [
     el("p", { className: "review-markdown-notice" }, "Rendered patch excerpts. Omitted file content is unavailable. Use Source to review exact changes and add comments."),
   ])
   for (const excerpt of markdownPatchExcerpts(patch)) {

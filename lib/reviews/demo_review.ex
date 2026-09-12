@@ -4,7 +4,6 @@ defmodule Reviews.DemoReview do
   """
 
   alias Reviews.Accounts
-  alias Reviews.Repo
   alias Reviews.Reviews
 
   @slug "demo-review"
@@ -22,10 +21,13 @@ defmodule Reviews.DemoReview do
       |> File.read!()
       |> parse_packet_markdown()
 
-    if review = Reviews.get_review_by_slug(@slug) do
-      Repo.delete!(review)
-    end
+    review = Reviews.get_review_by_slug(@slug) || create_demo!(author, raw_diff, packet)
 
+    Elixir.Reviews.DemoCatalog.seed!(author)
+    review
+  end
+
+  defp create_demo!(author, raw_diff, packet) do
     {:ok, %{review: review}} =
       Reviews.create_review_with_initial_patchset(author, %{
         slug: @slug,
