@@ -507,6 +507,7 @@ defmodule ReviewsWeb.ReviewLive do
             </h1>
             <PacketComponents.markdown
               :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
+              id="review-description-markdown"
               body={ReviewPacket.text(packet, "summary")}
               class="review-description review-packet-lede"
             />
