@@ -80,7 +80,7 @@ when the pass is complete.
 
 ## Prereqs
 
-- Elixir 1.18 / Erlang 27
+- Elixir 1.20 / Erlang 28
 - Node 22+ (or Bun)
 - Postgres 14+ running locally. The default dev config talks to a Postgres
   on the `/tmp` unix socket as user `reviews` (no password). To avoid clashing

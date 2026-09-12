@@ -31,7 +31,7 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
           class="rev-file-tree"
           phx-hook="ChangesFileTree"
           phx-update="ignore"
-          data-nav={Jason.encode!(@file_tree_nav)}
+          data-nav={JSON.encode!(@file_tree_nav)}
         >
         </div>
 
@@ -46,7 +46,11 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
           aria-label="Open threads"
         >
           <h2 class="rev-open-threads-heading">Open threads</h2>
-          <div :for={{op, threads} <- @open_threads_by_op} class="rev-open-thread-group">
+          <div
+            :for={{op, threads} <- @open_threads_by_op}
+            :key={(op && op.id) || "anonymous"}
+            class="rev-open-thread-group"
+          >
             <header class="rev-open-thread-group-header">
               <img
                 :if={op && op.avatar_url}
@@ -61,6 +65,7 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
             </header>
             <button
               :for={t <- threads}
+              :key={t.id}
               type="button"
               class="rev-open-thread-entry"
               phx-click={
@@ -88,7 +93,7 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
       </aside>
 
       <section :if={@selected_patchset} id="diff-files" class="review-hunk-list min-w-0">
-        <div :for={fd <- @file_diffs} id={"file-#{fd.id}"} class="review-file-hunks">
+        <div :for={fd <- @file_diffs} :key={fd.id} id={"file-#{fd.id}"} class="review-file-hunks">
           <% file_hunks = Map.get(@hunks_by_path, fd.path, []) %>
           <% file_state = file_view_state(file_hunks) %>
           <PacketComponents.hunk_card

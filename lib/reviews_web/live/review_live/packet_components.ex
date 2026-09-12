@@ -48,6 +48,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         <div class="review-packet-grid">
           <article
             :for={section <- @sections}
+            :key={section.index}
             id={"packet-section-#{section.index}"}
             class={[
               "review-packet-section",
@@ -158,6 +159,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               <div class="review-packet-row-list">
                 <.packet_unit
                   :for={unit <- packet_units(section, @hunks_by_path)}
+                  :key={unit.row_id}
                   unit={unit}
                   file_diffs={@file_diffs}
                   selected_patchset={@selected_patchset}
@@ -269,7 +271,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           class="review-packet-nav-tree"
           phx-hook="PacketNavTree"
           phx-update="ignore"
-          data-nav={Jason.encode!(@nav)}
+          data-nav={JSON.encode!(@nav)}
         >
         </div>
 
@@ -684,9 +686,39 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         <div
           id={@row_id}
           class={["review-packet-row is-markdown", @annotation? && "is-annotation"]}
-          phx-hook={if(@annotation?, do: nil, else: "StickyProse")}
+          phx-hook={if(@annotation?, do: nil, else: ".StickyProse")}
         >
           <.markdown id={"#{@row_id}-markdown"} body={@body} class="review-packet-markdown" />
+          <script :type={Phoenix.LiveView.ColocatedHook} name=".StickyProse">
+            export default {
+              mounted() {
+                this.ticking = false
+                this.onScroll = () => {
+                  if (this.ticking) return
+                  this.ticking = true
+                  window.requestAnimationFrame(() => {
+                    this.updateStuckState()
+                    this.ticking = false
+                  })
+                }
+
+                this.updateStuckState()
+                window.addEventListener("scroll", this.onScroll, {passive: true})
+                window.addEventListener("resize", this.onScroll)
+              },
+
+              destroyed() {
+                window.removeEventListener("scroll", this.onScroll)
+                window.removeEventListener("resize", this.onScroll)
+              },
+
+              updateStuckState() {
+                const top = Number.parseFloat(window.getComputedStyle(this.el).top || "0")
+                const rect = this.el.getBoundingClientRect()
+                this.el.classList.toggle("is-stuck", rect.top <= top + 1)
+              },
+            }
+          </script>
         </div>
     <% end %>
     """
@@ -994,7 +1026,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp hunk_attrs_json(%{grouped_hunks: hunks}) do
     hunks
     |> Enum.map(&hunk_attrs/1)
-    |> Jason.encode!()
+    |> JSON.encode!()
   end
 
   defp hunk_attrs_json(_hunk), do: nil
@@ -1210,6 +1242,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   defp threads_json(threads, file_path) do
     snapshot = %{published_threads: threads}
-    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
+    JSON.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
   end
 end
