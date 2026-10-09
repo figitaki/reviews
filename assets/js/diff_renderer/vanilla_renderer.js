@@ -7,6 +7,7 @@ import {
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
 import { selectionInProgress } from "./selection.js"
+import { diffOverflow, wrapLinesEnabled } from "../lib/line_wrap.js"
 import {
   annotationSideToSide,
   composerToAnchor,
@@ -351,6 +352,7 @@ export class VanillaDiffRenderer {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
+      overflow: diffOverflow({ filePath: this.filePath, wrapLines: wrapLinesEnabled() }),
       collapsed: this.collapsed(),
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS,
       renderHeaderPrefix: () => this.renderHeaderPrefix(),

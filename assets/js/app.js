@@ -26,6 +26,8 @@ import {hooks as colocatedHooks} from "phoenix-colocated/reviews"
 import topbar from "../vendor/topbar"
 import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
+import WrapLinesToggle from "./hooks/wrap_lines_toggle"
+import {applyWrapLines, readWrapLinesPref} from "./lib/line_wrap"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -35,8 +37,12 @@ const liveSocket = new LiveSocket("/live", Socket, {
     ...colocatedHooks,
     DiffRenderer,
     PacketNavTree,
+    WrapLinesToggle,
   },
 })
+
+// Apply the saved "Wrap lines" preference before any diff island mounts.
+applyWrapLines(readWrapLinesPref())
 
 // Show progress bar on live navigation and form submits
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})

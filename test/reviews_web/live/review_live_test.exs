@@ -140,6 +140,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, ~s|#diff-style-split[aria-pressed="true"]|)
     end
 
+    test "header renders the client-side wrap lines toggle", %{conn: conn, review: review} do
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}/changes")
+
+      assert has_element?(
+               view,
+               ~s|button#wrap-lines-toggle[phx-hook="WrapLinesToggle"][phx-update="ignore"][aria-pressed="false"][aria-label="Wrap lines"]|
+             )
+    end
+
     test "renders a stored review packet above the diff", %{conn: conn, author: author} do
       {:ok, %{review: packet_review}} =
         ReviewsCtx.create_review_with_initial_patchset(author, %{

@@ -550,6 +550,19 @@ defmodule ReviewsWeb.ReviewLive do
             </script>
           </div>
 
+          <button
+            id="wrap-lines-toggle"
+            type="button"
+            phx-hook="WrapLinesToggle"
+            phx-update="ignore"
+            aria-pressed="false"
+            aria-label="Wrap lines"
+            title="Wrap long lines (Markdown and text files always wrap)"
+            class="review-chip review-wrap-lines"
+          >
+            <.icon name="hero-bars-3-bottom-left" class="w-4 h-4" />
+          </button>
+
           <.user_menu current_user={@current_user} />
         </:actions>
 
