@@ -6,6 +6,7 @@ import {
   threadBubble,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { selectionInProgress } from "./selection.js"
 import {
   annotationSideToSide,
   composerToAnchor,
@@ -232,6 +233,7 @@ export class VanillaDiffRenderer {
   }
 
   handleLineNumberClick(props) {
+    if (selectionInProgress(props?.event, props?.lineElement)) return
     const side = props?.annotationSide || props?.side
     const lineNumber = props?.lineNumber
     if (!side || !lineNumber) return
@@ -249,7 +251,8 @@ export class VanillaDiffRenderer {
     })
   }
 
-  handleTokenClick(props) {
+  handleTokenClick(props, event) {
+    if (selectionInProgress(event, props?.tokenElement)) return
     const side = props?.side
     const lineNumber = props?.lineNumber
     const tokenText = props?.tokenText || ""
@@ -354,7 +357,7 @@ export class VanillaDiffRenderer {
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
       onLineNumberClick: (props) => this.handleLineNumberClick(props),
-      onTokenClick: (props) => this.handleTokenClick(props),
+      onTokenClick: (props, event) => this.handleTokenClick(props, event),
     }
   }
 
