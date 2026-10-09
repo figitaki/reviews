@@ -23,7 +23,7 @@ config :reviews, ReviewsWeb.Endpoint,
   live_view: [signing_salt: "RllUbgpY"]
 
 # Configure esbuild (the version is required)
-# JSX is enabled via --loader:.jsx=jsx so React islands can live alongside .js sources.
+# The JSX loaders are left over from the old React diff island. No source uses JSX now.
 config :esbuild,
   version: "0.25.4",
   reviews: [

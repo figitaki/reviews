@@ -21,7 +21,7 @@ The core value is making a diff understandable to a human reviewer before, durin
 - **Lazy hunk rendering** so large diffs can be reviewed without eagerly mounting every diff.
 - **Explicit hunk viewed state** for signed-in reviewers.
 - **Section decisions** such as approve, deny, or ignore for packet sections.
-- **Comment drafting and publishing** so reviewers can batch feedback.
+- **Line and token comments** that publish right away, from the web UI or `POST /api/v1/reviews/:slug/comments`.
 - **Changes view** for direct file/hunk review outside the packet narrative.
 
 ## When To Use Reviews

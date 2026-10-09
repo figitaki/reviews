@@ -165,8 +165,4 @@ defmodule Reviews.Threads do
     })
     |> Repo.insert!()
   end
-
-  @doc false
-  # Exposed for tests + future use.
-  def __types__, do: %{thread: Thread, comment: Comment}
 end

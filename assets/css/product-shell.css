@@ -19,11 +19,6 @@
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.design-wrap{
-  width: min(1440px, calc(100vw - 32px));
-  margin: 0 auto;
-}
-
 .design-main{
   width: min(1440px, calc(100vw - 48px));
   margin: 0 auto;
@@ -56,8 +51,6 @@
   width: min(1040px, 100%);
   margin: 0 auto;
 }
-
-
 
 .ds-shell{
   min-height: 100vh;
@@ -94,10 +87,6 @@
   justify-content: flex-end;
 }
 
-
-
-
-
 .design-brand{
   display: inline-flex;
   align-items: center;
@@ -120,8 +109,6 @@
   font-size: 12px;
 }
 
-
-
 .design-kicker{
   display: inline-flex;
   align-items: center;
@@ -143,19 +130,12 @@
   background: var(--ds-add);
 }
 
-.design-hero h1,
 .design-hero-copy,
 .ds-section-heading h2,
 .ds-section-heading p,
-.ds-card h3,
-.design-review-header h3,
-.design-review-header p,
-.ds-state h3,
-.ds-state p{
+.ds-card h3{
   margin: 0;
 }
-
-
 
 .design-hero-copy{
   max-width: 690px;
@@ -207,59 +187,6 @@
   padding-bottom: 8px;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-.design-content{
-  padding: 0 0 88px;
-}
-
-
-
-
-
-
-
-.ds-nav-item{
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--ds-muted);
-  padding: 0 10px;
-  font-size: 13px;
-  font-weight: 650;
-  text-decoration: none;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
-}
-
-.ds-nav-item:hover,
-.ds-nav-item:focus-visible,
-.ds-nav-item.is-active{
-  border-color: var(--ds-line);
-  background: var(--ds-panel-raised);
-  color: var(--ds-text);
-  outline: none;
-}
-
-
-
-.design-nav-stack .ds-nav-item{
-  justify-content: flex-start;
-  width: 100%;
-}
-
 .ds-section{
   scroll-margin-top: 58px;
   padding-top: 56px;
@@ -300,24 +227,7 @@
   line-height: 1.08;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-.ds-card,
-.design-review-shell,
-.ds-state{
+.ds-card{
   border: 1px solid var(--ds-line);
   border-radius: 8px;
   background: var(--ds-panel);
@@ -546,202 +456,14 @@ textarea.ds-input{
   overflow-wrap: anywhere;
 }
 
-.ds-card h3,
-.design-review-header h3,
-.ds-state h3{
+.ds-card h3{
   color: var(--ds-text);
   font-size: 15px;
   font-weight: 720;
   line-height: 1.3;
 }
 
-
-
-
-
-.design-atom-grid .ds-card{
-  min-height: 340px;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-.ds-token{
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
-  gap: 4px 10px;
-  align-items: center;
-  color: var(--ds-muted);
-  font-size: 12px;
-}
-
-.ds-token span{
-  grid-row: span 2;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--ds-line-strong);
-  border-radius: 6px;
-  background: var(--token-color);
-}
-
-.ds-token strong{
-  color: var(--ds-text);
-  font-size: 13px;
-}
-
-.ds-token code{
-  color: var(--ds-muted);
-  font: inherit;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.ds-token em{
-  grid-column: 2 / -1;
-  color: var(--ds-faint);
-  font-style: normal;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-.ds-split-view{
-  display: grid;
-  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
-  min-height: 360px;
-  overflow: hidden;
-  border: 1px solid var(--ds-line);
-  border-radius: 8px;
-  background: var(--ds-panel);
-}
-
-.ds-split-view.is-review{
-  border: 0;
-  border-radius: 0;
-}
-
-.ds-split-sidebar{
-  border-right: 1px solid var(--ds-line);
-  background: var(--ds-panel);
-  padding: 8px;
-}
-
-.ds-split-main{
-  min-width: 0;
-  background: var(--ds-panel);
-}
-
-
-
-
-
-
-
-
-
-
-
-.design-compound-grid > .ds-card:first-child{
-  grid-row: span 2;
-}
-
-
-
-
-
-.ds-button,
-.ds-chip{
+.ds-button{
   display: inline-flex;
   min-height: 32px;
   cursor: pointer;
@@ -763,23 +485,13 @@ textarea.ds-input{
   padding: 0 12px;
 }
 
-.ds-chip{
-  min-width: 34px;
-  padding: 0 9px;
-  font-variant-numeric: tabular-nums;
-}
-
-.ds-button:hover,
-.ds-chip:hover{
+.ds-button:hover{
   border-color: color-mix(in srgb, var(--ds-text) 46%, var(--ds-line));
   background: var(--ds-hover);
   transform: translateY(-1px);
 }
 
-.ds-button:focus-visible,
-.ds-chip:focus-visible,
-.design-nav a:focus-visible,
-.ds-file-link:focus-visible{
+.ds-button:focus-visible{
   outline: 2px solid var(--ds-text);
   outline-offset: 2px;
 }
@@ -790,8 +502,7 @@ textarea.ds-input{
   transform: none;
 }
 
-.ds-button.is-primary,
-.ds-chip.is-active{
+.ds-button.is-primary{
   border-color: var(--ds-text);
   background: var(--ds-text);
   color: var(--ds-bg);
@@ -806,58 +517,6 @@ textarea.ds-input{
 .ds-button.is-danger{
   color: var(--ds-del);
 }
-
-.ds-code{
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-.ds-file-link{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 36px;
-  border-radius: 6px;
-  color: var(--ds-text);
-  padding: 0 8px;
-  text-decoration: none;
-}
-
-.ds-file-link:hover,
-.ds-file-link.is-current{
-  background: var(--ds-hover);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 .design-state-focus{
   display: grid;
@@ -907,45 +566,13 @@ textarea.ds-input{
   margin-top: 18px;
 }
 
-.ds-state{
-  min-height: 180px;
-  padding: 18px;
-}
-
-.ds-state svg{
-  margin-bottom: 22px;
-  color: var(--ds-blue);
-}
-
-.ds-state p{
-  margin-top: 8px;
-  color: var(--ds-muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-
-
-
-
-
-
-
-
 @media (max-width: 860px) {
-  .design-hero-grid,
   .ds-page-header,
-  .ds-section-heading,
-  .design-review-layout,
-  .ds-split-view{
+  .ds-section-heading{
     grid-template-columns: 1fr;
   }
 
   
-
-  .design-compound-grid > .ds-card:first-child{
-    grid-row: auto;
-  }
 
   
 
@@ -965,10 +592,6 @@ textarea.ds-input{
   .ds-page-header{
     min-height: auto;
     padding: 52px 0 44px;
-  }
-
-  .design-wrap{
-    width: min(1440px, calc(100vw - 16px));
   }
 
   .design-main{
@@ -1009,11 +632,6 @@ textarea.ds-input{
   }
 
   
-
-  .ds-split-sidebar{
-    border-right: 0;
-    border-bottom: 1px solid var(--ds-line);
-  }
 
   
 

@@ -43,10 +43,6 @@ defmodule Reviews.ReviewNavigation do
     end)
   end
 
-  def format_diff_stats(%{files: files, additions: additions, deletions: deletions}) do
-    "#{files} #{plural(files, "file")} · +#{additions} -#{deletions}"
-  end
-
   defp revision(patchset) do
     %{
       number: patchset.number,
@@ -64,7 +60,4 @@ defmodule Reviews.ReviewNavigation do
 
   defp at_index(_items, index) when index < 0, do: nil
   defp at_index(items, index), do: Enum.at(items, index)
-
-  defp plural(1, word), do: word
-  defp plural(_, word), do: word <> "s"
 end

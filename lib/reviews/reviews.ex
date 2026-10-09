@@ -134,13 +134,6 @@ defmodule Reviews.Reviews do
     end
   end
 
-  def latest_patchset_number(%Review{} = review) do
-    case latest_patchset(review) do
-      %Patchset{number: number} -> number
-      nil -> 1
-    end
-  end
-
   def list_files(%Patchset{id: patchset_id}) do
     Repo.all(from f in File, where: f.patchset_id == ^patchset_id, order_by: [asc: f.path])
   end
