@@ -24,7 +24,7 @@ defmodule ReviewsWeb.DemoLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} chrome={false}>
+    <Layouts.app flash={@flash}>
       <Layouts.landing_topbar current_user={@current_user} show_workflow_anchor={false} />
       <main id="demo-hub" class="demo-hub">
         <header class="demo-intro">

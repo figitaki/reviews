@@ -688,7 +688,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           class={["review-packet-row is-markdown", @annotation? && "is-annotation"]}
           phx-hook={if(@annotation?, do: nil, else: ".StickyProse")}
         >
-                    <.markdown id={"#{@row_id}-markdown"} body={@body} class="review-packet-markdown" />
+          <.markdown id={"#{@row_id}-markdown"} body={@body} class="review-packet-markdown" />
           <script :type={Phoenix.LiveView.ColocatedHook} name=".StickyProse">
             export default {
               mounted() {
