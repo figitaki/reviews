@@ -18,21 +18,8 @@
   font-weight: 650;
   text-decoration: none;
 }
-.r-brand-mark {
-  display: inline-flex;
-  width: 26px;
-  height: 26px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--ds-line-strong);
-  border-radius: 6px;
-  background: var(--ds-panel-raised);
-  font-size: 12px;
-  color: var(--ds-text);
-}
 
-/* ---- Chip / Button (review-chip / review-button) ---- */
-.r-chip,
+/* ---- Button (review-button) ---- */
 .r-button {
   display: inline-flex;
   min-height: 32px;
@@ -53,15 +40,7 @@
   transition: background-color 160ms ease, border-color 160ms ease,
               color 160ms ease, opacity 160ms ease;
 }
-.r-chip {
-  min-height: 28px;
-  min-width: 34px;
-  padding: 0 9px;
-  font-variant-numeric: tabular-nums;
-}
-.r-chip:hover,
 .r-button:hover { background: var(--ds-hover); border-color: var(--ds-line-strong); }
-.r-chip.is-active,
 .r-button-primary {
   background: var(--ds-text);
   border-color: var(--ds-text);
@@ -79,25 +58,12 @@
   border-color: color-mix(in oklab, var(--ds-text) 78%, var(--ds-bg));
   color: var(--ds-bg);
 }
-.r-chip.is-active:hover {
-  background: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
-  border-color: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
-  color: var(--ds-bg);
-}
-.r-button-secondary { background: transparent; }
-.r-button-ghost {
-  background: transparent;
-  border-color: transparent;
-  color: var(--ds-muted);
-}
-.r-button-ghost:hover { color: var(--ds-text); }
 .r-button:disabled { cursor: not-allowed; opacity: 0.38; }
 
 /* Pill variant — fully-rounded shape for "soft" actions that sit inline
    with prose (e.g. section decisions, "Mark Viewed"). Same metrics as
    the default; only the radius changes. */
-.r-button.is-pill,
-.r-chip.is-pill {
+.r-button.is-pill {
   border-radius: 999px;
   padding-inline: 14px;
 }
@@ -238,49 +204,6 @@
 .r-change-stat .del { color: var(--ds-del); }
 .r-change-stat .none { color: var(--ds-faint); }
 
-/* ---- File link row ---- */
-.r-file-link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  min-height: 34px;
-  border-radius: 4px;
-  padding: 0 12px 0 8px;
-  color: var(--ds-text);
-  text-decoration: none;
-  font-family: var(--font-sans);
-  font-size: 12px;
-}
-.r-file-link:hover { background: var(--ds-hover); }
-.r-file-link.is-current {
-  background: var(--ds-panel-raised);
-  /* Inset shadow keeps the border inside the row so it can't bleed past
-     the rounded container; outline would clip against the parent. */
-  box-shadow: inset 0 0 0 1px var(--ds-line);
-}
-.r-file-path {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ds-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  flex: 1;
-}
-.r-file-stats {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
-.r-file-stats .add { color: var(--ds-add); }
-.r-file-stats .del { color: var(--ds-del); }
-
 /* ---- Hunk card ---- */
 .r-hunk-card {
   border: 1px solid var(--ds-line);
@@ -322,7 +245,6 @@
   gap: 8px;
   padding-right: 6px;
 }
-.r-hunk-viewed-pill { color: var(--ds-add); font-size: 12px; font-weight: 700; }
 
 /* Diff body — plain text by design (no syntax highlighting in v1). */
 .r-diff {
@@ -366,77 +288,6 @@
 .r-diff-row.is-hunk > code::before { content: ""; }
 .r-diff-row.is-context > code::before { content: "  "; }
 
-/* ---- Banner / Toast / Empty state ---- */
-.r-toast {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 260px;
-  max-width: 420px;
-  padding: 12px 14px;
-  border: 1px solid var(--ds-line-strong);
-  border-radius: 10px;
-  background: var(--ds-panel-raised);
-  color: var(--ds-text);
-  box-shadow: var(--shadow-toast);
-  font-size: 13px;
-  line-height: 1.4;
-}
-.r-toast.is-info { border-left: 3px solid var(--ds-add); }
-.r-toast.is-error { border-left: 3px solid var(--ds-del); }
-.r-toast-body { flex: 1 1 auto; min-width: 0; }
-.r-toast-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 2px;
-  font-weight: 600;
-  font-size: 14px;
-  line-height: 1.3;
-}
-.r-toast-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  align-items: center;
-  justify-content: center;
-}
-.r-toast-icon svg { width: 18px; height: 18px; }
-.r-toast.is-info .r-toast-icon { color: var(--ds-add); }
-.r-toast.is-error .r-toast-icon { color: var(--ds-del); }
-.r-toast-message { margin: 0; padding-left: 26px; }
-.r-toast-close {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  margin: -2px -4px 0 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ds-faint);
-  cursor: pointer;
-}
-.r-toast-close:hover { color: var(--ds-text); }
-
-.r-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  border: 1px dashed var(--ds-line-strong);
-  border-radius: 8px;
-  background: var(--ds-panel);
-  padding: 28px 24px;
-  color: var(--ds-muted);
-  text-align: center;
-}
-.r-empty h3 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ds-text); }
-.r-empty p { margin: 0; font-size: 13px; line-height: 1.5; }
-
 /* ---- Nav item / Topbar shell ---- */
 .r-nav-item {
   display: inline-flex;
@@ -462,31 +313,7 @@
   color: var(--ds-text);
 }
 
-/* Section title + section summary header */
-.r-section-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 6px 0;
-}
-.r-section-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 550;
-  line-height: 1.25;
-  color: var(--ds-text);
-}
-.r-section-estimate {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ds-faint);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.25;
-  white-space: nowrap;
-}
+/* Section header actions */
 .r-section-actions {
   display: inline-flex;
   align-items: center;
@@ -496,4 +323,3 @@
 /* Heroicon helper for static HTML (loaded via <svg> directly). */
 .r-icon { width: 16px; height: 16px; }
 .r-icon-sm { width: 14px; height: 14px; }
-.r-icon-lg { width: 20px; height: 20px; }
