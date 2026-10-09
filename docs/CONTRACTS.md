@@ -24,6 +24,80 @@ endpoint — tokens are user-initiated through the browser.
 
 Missing/invalid token → `401` with body `{ "errors": { "detail": "Unauthorized" } }`.
 
+### `GET /api/v1/reviews`
+
+Lists reviews. Powers `reviews list` and matches the `/reviews` web page.
+Needs a bearer token.
+
+The list has only reviews that the token's actor wrote or took part in.
+Taking part means a published comment, a section decision, or a viewed hunk.
+A review slug is the key to a link review, so the list never shows other
+reviews, even public ones.
+
+- A token for your human identity lists reviews for all of your identities
+  (human and agents).
+- A token for an agent identity lists only that agent's reviews.
+
+Query params (all optional):
+
+| Param    | Values                           | Default | Meaning |
+| -------- | -------------------------------- | ------- | ------- |
+| `role`   | `all`, `authored`, `involved`    | `all`   | `authored`: one of your identities wrote it. `involved`: someone else wrote it and you took part. |
+| `status` | `all`, `open`, `updated`         | `all`   | `open`: has open threads. `updated`: has a patchset newer than your last action on it. |
+| `author` | identity handle, `@` is optional | none    | Author handle. Case does not matter. |
+| `q`      | text                             | none    | Finds the text in the title or slug. Case does not matter. |
+| `limit`  | 1 to 100                         | 25      | Page size. |
+| `offset` | 0 or more                        | 0       | Rows to skip. |
+
+Rows are sorted by `updated_at`, newest first. `updated_at` is the later of
+the review's last change and its newest patchset push.
+
+Response `200`:
+
+```json
+{
+  "reviews": [
+    {
+      "slug": "k7m2qz",
+      "title": "Make user lookup faster",
+      "url": "http://localhost:4000/r/k7m2qz",
+      "author": {
+        "id": 3,
+        "kind": "human",
+        "handle": "conner",
+        "username": "conner",
+        "display_name": "conner",
+        "avatar_url": null
+      },
+      "role": "involved",
+      "patchset_count": 2,
+      "latest_patchset_number": 2,
+      "last_pushed_at": "2026-10-09T15:04:00Z",
+      "updated_at": "2026-10-09T15:04:00Z",
+      "thread_count": 3,
+      "open_thread_count": 1,
+      "last_activity_at": "2026-10-08T11:20:00Z",
+      "has_new_patchset": true,
+      "created_at": "2026-10-07T09:00:00Z"
+    }
+  ],
+  "limit": 25,
+  "offset": 0,
+  "next_offset": null
+}
+```
+
+`next_offset` is the `offset` for the next page, or `null` on the last page.
+`last_activity_at` is your last comment, decision, or viewed hunk on the
+review, or `null`. `has_new_patchset` is `true` when a patchset is newer than
+`last_activity_at`.
+
+A bad param value gives `400` with one message per param:
+
+```json
+{ "errors": { "role": "must be one of: all, authored, involved" } }
+```
+
 ### `POST /api/v1/reviews`
 
 Creates a new review and its first patchset.
