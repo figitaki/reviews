@@ -40,37 +40,34 @@ defmodule Reviews.Threads do
   end
 
   @doc """
-  Published reviewers for the review, collapsed to one entry per author.
+  Published comment activity for a review, one entry per comment author.
 
-  The current schema does not store a review-level approve/deny/ignore yet, so
-  callers should treat these as neutral published-review participants.
+  Returns `%{author: Identity.t(), comment_count: integer, last_commented_at:
+  DateTime.t()}` maps. `Reviews.ReviewDeciders` merges these with section
+  decisions to build the published reviewers list.
   """
-  def list_published_deciders(review_id) when is_integer(review_id) do
-    from(c in Comment,
-      join: t in assoc(c, :thread),
-      where: t.review_id == ^review_id,
-      group_by: c.author_id,
-      select: {c.author_id, count(c.id), max(c.inserted_at)}
-    )
-    |> Repo.all()
-    |> then(fn rows ->
-      authors_by_id =
-        rows
-        |> Enum.map(&elem(&1, 0))
-        |> then(&Repo.all(from i in Identity, where: i.id in ^&1))
-        |> Map.new(&{&1.id, &1})
+  def list_comment_authors(review_id) when is_integer(review_id) do
+    rows =
+      Repo.all(
+        from c in Comment,
+          join: t in assoc(c, :thread),
+          where: t.review_id == ^review_id,
+          group_by: c.author_id,
+          select: {c.author_id, count(c.id), max(c.inserted_at)}
+      )
 
-      Enum.map(rows, fn {author_id, comment_count, published_at} ->
-        %{
-          author: Map.fetch!(authors_by_id, author_id),
-          decision: "reviewed",
-          comment_count: comment_count,
-          published_at: published_at
-        }
-      end)
-    end)
-    |> Enum.sort_by(fn %{published_at: published_at, author: author} ->
-      {DateTime.to_unix(published_at), String.downcase(author.handle || "")}
+    author_ids = Enum.map(rows, &elem(&1, 0))
+
+    authors_by_id =
+      Repo.all(from i in Identity, where: i.id in ^author_ids)
+      |> Map.new(&{&1.id, &1})
+
+    Enum.map(rows, fn {author_id, comment_count, last_commented_at} ->
+      %{
+        author: Map.fetch!(authors_by_id, author_id),
+        comment_count: comment_count,
+        last_commented_at: last_commented_at
+      }
     end)
   end
 

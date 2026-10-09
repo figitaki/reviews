@@ -8,7 +8,10 @@
   display: inline-flex;
   min-height: 32px;
   align-items: center;
+  margin: 0;
+  padding-block: 0;
   padding-inline: 6px 4px;
+  list-style: none;
 }
 
 .rev-decider-stack.is-empty {
@@ -32,6 +35,7 @@
   align-items: center;
   justify-content: center;
   margin-left: calc(var(--decider-overlap) * -1);
+  cursor: default;
   border: 2px solid var(--decider-color);
   border-radius: 999px;
   background: var(--ds-panel-raised);
@@ -100,6 +104,30 @@
   border-radius: 999px;
   background: var(--decider-color);
   color: var(--ds-bg);
+}
+
+.rev-decider.is-approved {
+  --decider-color: var(--ds-add);
+}
+
+.rev-decider.is-denied {
+  --decider-color: var(--ds-del);
+}
+
+.rev-decider.is-ignored {
+  --decider-color: var(--ds-faint);
+}
+
+.rev-decider.is-in-progress {
+  --decider-color: var(--ds-warn);
+}
+
+.rev-decider.is-pending {
+  --decider-color: var(--ds-line-strong);
+}
+
+.rev-decider.is-commented {
+  --decider-color: var(--ds-blue);
 }
 
 .rev-decider-more {

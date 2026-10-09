@@ -10,6 +10,7 @@ defmodule Reviews.ReviewView do
   alias Reviews.Accounts.Identity
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
+  alias Reviews.ReviewDeciders
   alias Reviews.ReviewHunks
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.{File, Patchset, Review}
@@ -25,7 +26,7 @@ defmodule Reviews.ReviewView do
           packet_hunk_views: [map()],
           packet_section_decisions: [map()],
           published_threads: [map()],
-          deciders: [map()],
+          deciders: [ReviewDeciders.decider()],
           viewer: Identity.t() | nil
         }
 
@@ -108,7 +109,7 @@ defmodule Reviews.ReviewView do
       packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
       published_threads: Threads.list_published_threads(review.id),
-      deciders: Threads.list_published_deciders(review.id),
+      deciders: ReviewDeciders.list(review, patchsets, selected),
       viewer: viewer
     }
   end
