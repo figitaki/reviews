@@ -72,7 +72,7 @@ defmodule ReviewsWeb.ReviewListLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} chrome={false}>
+    <Layouts.app flash={@flash}>
       <main id="reviews-index" class="l-page design-page">
         <Layouts.landing_topbar current_user={@current_user} active={:reviews} />
 
