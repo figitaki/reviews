@@ -407,10 +407,13 @@ export class VanillaDiffRenderer {
       this.instance = new Diffs.VirtualizedFileDiff(
         options,
         this.virtualizer,
+        // Partial<VirtualFileMetrics>: Pierre fills in the rest from
+        // DEFAULT_VIRTUAL_FILE_METRICS. There is no annotation estimate:
+        // rows taller than lineHeight (annotations, wrapped lines) are
+        // measured after render.
         {
           lineHeight: 20,
-          fileHeaderHeight: 44,
-          annotationEstimateHeight: 96,
+          diffHeaderHeight: 44,
         }
       )
       this.instance.render({ ...renderArgs, containerWrapper: contentWrapper })
