@@ -47,18 +47,6 @@ defmodule Reviews.ReviewHunks do
     end
   end
 
-  def attrs_for_view(hunk, extra \\ %{}) do
-    %{
-      file_path: hunk.file_path,
-      row_ref: hunk.row_ref,
-      hunk_fingerprint: hunk.hunk_fingerprint,
-      hunk_index: hunk.hunk_index,
-      line_start: hunk.line_start,
-      line_end: hunk.line_end
-    }
-    |> Map.merge(extra)
-  end
-
   def combine_consecutive([hunk]), do: hunk
 
   def combine_consecutive([first | _] = hunks) do
