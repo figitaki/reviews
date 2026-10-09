@@ -1254,6 +1254,7 @@ details[open] > summary .review-collapse-icon,
   display: grid;
   gap: 10px;
   padding-top: clamp(22px, 3vw, 36px);
+  padding-bottom: 12px;
 }
 
 .review-section-header-eyebrow {
