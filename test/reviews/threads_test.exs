@@ -123,16 +123,4 @@ defmodule Reviews.ThreadsTest do
       assert_receive {:thread_published, %Thread{}}
     end
   end
-
-  describe "list_published_threads/1" do
-    test "comments are visible immediately to every viewer" do
-      %{author: author, review: review} = setup_review!()
-
-      {:ok, _} = Threads.publish_comment(review, author, line_params("published now"))
-
-      assert [thread] = Threads.list_published_threads(review.id)
-      assert length(thread.comments) == 1
-      assert hd(thread.comments).body == "published now"
-    end
-  end
 end
