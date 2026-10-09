@@ -1251,6 +1251,17 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
 
+      # The rail glyph carries the decision label; the tick keeps a neutral name.
+      assert has_element?(
+               view,
+               ~s|#review-guide-tick-0[aria-label="01 Main change"][aria-describedby="review-guide-tick-0-state"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#review-guide-tick-0-state[role="img"][aria-label="Decision: Approved"]|
+             )
+
       assert has_element?(
                view,
                "#review-split-section-overview-0 .review-section-state-text",
