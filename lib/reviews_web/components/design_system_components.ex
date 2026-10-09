@@ -1,6 +1,6 @@
 defmodule ReviewsWeb.DesignSystemComponents do
   @moduledoc """
-  Product design primitives shared by the review UI and `/design` playground.
+  Product design primitives shared by the review and settings screens.
   """
   use Phoenix.Component
 
@@ -55,18 +55,6 @@ defmodule ReviewsWeb.DesignSystemComponents do
     """
   end
 
-  attr :navigate, :string, required: true
-  attr :active, :boolean, default: false
-  slot :inner_block, required: true
-
-  def ds_nav_item(assigns) do
-    ~H"""
-    <.link navigate={@navigate} class={["ds-nav-item", @active && "is-active"]}>
-      {render_slot(@inner_block)}
-    </.link>
-    """
-  end
-
   attr :id, :string, default: nil
   attr :eyebrow, :string, default: nil
   attr :title, :string, required: true
@@ -102,19 +90,6 @@ defmodule ReviewsWeb.DesignSystemComponents do
     """
   end
 
-  attr :class, :any, default: nil
-  slot :sidebar, required: true
-  slot :main, required: true
-
-  def ds_split_view(assigns) do
-    ~H"""
-    <div class={["ds-split-view", @class]}>
-      <aside class="ds-split-sidebar">{render_slot(@sidebar)}</aside>
-      <section class="ds-split-main">{render_slot(@main)}</section>
-    </div>
-    """
-  end
-
   attr :variant, :string, default: "secondary", values: ~w(primary secondary ghost danger)
   attr :class, :any, default: nil
   attr :rest, :global, include: ~w(type disabled aria-label phx-click phx-value-number)
@@ -138,88 +113,6 @@ defmodule ReviewsWeb.DesignSystemComponents do
     """
   end
 
-  attr :label, :string, required: true
-  attr :active, :boolean, default: false
-  attr :rest, :global, include: ~w(type aria-pressed phx-click phx-value-number)
-
-  def ds_chip(assigns) do
-    ~H"""
-    <button
-      type={@rest[:type] || "button"}
-      class={["ds-chip", @active && "is-active"]}
-      aria-pressed={to_string(@active)}
-      {@rest}
-    >
-      {@label}
-    </button>
-    """
-  end
-
-  attr :status, :string, required: true
-  attr :class, :any, default: nil
-
-  def ds_status_mark(assigns) do
-    ~H"""
-    <span class={[
-      "rev-status-icon",
-      @status == "added" && "is-added",
-      @status == "modified" && "is-modified",
-      @status == "deleted" && "is-deleted",
-      @status == "renamed" && "is-renamed",
-      @class
-    ]}>
-      {status_letter(@status)}
-    </span>
-    """
-  end
-
-  attr :file, :map, required: true
-  attr :current, :boolean, default: false
-
-  def ds_file_link(assigns) do
-    ~H"""
-    <a href="#design-diff" class={["ds-file-link", @current && "is-current"]}>
-      <span class="flex items-center gap-2 min-w-0">
-        <.ds_status_mark status={@file.status} />
-        <span class="ds-code truncate" translate="no">{@file.path}</span>
-      </span>
-      <span class="rev-file-stats">
-        <span class="rev-stat-add">+{@file.additions}</span>
-        <span class="rev-stat-del">-{@file.deletions}</span>
-      </span>
-    </a>
-    """
-  end
-
-  attr :label, :string, required: true
-  attr :value, :string, required: true
-  attr :role, :string, required: true
-
-  def ds_token(assigns) do
-    ~H"""
-    <div class="ds-token" style={"--token-color: #{@value}"}>
-      <span aria-hidden="true"></span>
-      <strong>{@label}</strong>
-      <code>{@value}</code>
-      <em>{@role}</em>
-    </div>
-    """
-  end
-
-  attr :icon, :string, required: true
-  attr :title, :string, required: true
-  attr :body, :string, required: true
-
-  def ds_state(assigns) do
-    ~H"""
-    <article class="ds-state">
-      <.icon name={@icon} class="size-5" />
-      <h3>{@title}</h3>
-      <p>{@body}</p>
-    </article>
-    """
-  end
-
   attr :icon, :string, required: true
   attr :title, :string, required: true
   attr :body, :string, required: true
@@ -235,48 +128,4 @@ defmodule ReviewsWeb.DesignSystemComponents do
     </div>
     """
   end
-
-  attr :name, :string, required: true
-
-  def ds_catalog_icon(%{name: "hero-list-bullet"} = assigns) do
-    ~H"""
-    <.icon name="hero-list-bullet" class="size-4" />
-    """
-  end
-
-  def ds_catalog_icon(%{name: "hero-view-columns"} = assigns) do
-    ~H"""
-    <.icon name="hero-view-columns" class="size-4" />
-    """
-  end
-
-  def ds_catalog_icon(%{name: "hero-squares-2x2"} = assigns) do
-    ~H"""
-    <.icon name="hero-squares-2x2" class="size-4" />
-    """
-  end
-
-  def ds_catalog_icon(%{name: "hero-minus"} = assigns) do
-    ~H"""
-    <.icon name="hero-minus" class="size-4" />
-    """
-  end
-
-  def ds_catalog_icon(%{name: "hero-bars-3-bottom-left"} = assigns) do
-    ~H"""
-    <.icon name="hero-bars-3-bottom-left" class="size-4" />
-    """
-  end
-
-  def ds_catalog_icon(assigns) do
-    ~H"""
-    <.icon name="hero-x-mark" class="size-4" />
-    """
-  end
-
-  defp status_letter("added"), do: "A"
-  defp status_letter("modified"), do: "M"
-  defp status_letter("deleted"), do: "D"
-  defp status_letter("renamed"), do: "R"
-  defp status_letter(_), do: "?"
 end
