@@ -104,13 +104,14 @@ When several adjacent hunks in the same file are mechanical or serve the same pu
 ## Pre-Push Packet Review
 
 Before pushing, audit the packet:
-1. Confirm every changed line is covered by exactly one intended hunk ref.
-2. Count hunks, files, and changed-line weight per section.
-3. Split any section whose approval would bless multiple unrelated concerns.
-4. Move glue files into the section that owns their risk.
-5. Give packet/tooling/docs-only changes their own tiny section, or omit them when review would not be useful.
-6. Trim lead-ins that repeat paths, repeat section titles, or read longer than two short tablet lines.
-7. If the sectioning choice still feels uncertain, ask the user for their preferred organization before pushing.
+1. Run `reviews push --dry-run --packet /path/to/packet.md` (add `--update <slug>` for a new patchset). It checks the packet against the diff without contacting the server and lists every problem as `file:line: message`. Fix them all and run it again until it says the packet is valid.
+2. Confirm every changed line is covered by exactly one intended hunk ref.
+3. Count hunks, files, and changed-line weight per section.
+4. Split any section whose approval would bless multiple unrelated concerns.
+5. Move glue files into the section that owns their risk.
+6. Give packet/tooling/docs-only changes their own tiny section, or omit them when review would not be useful.
+7. Trim lead-ins that repeat paths, repeat section titles, or read longer than two short tablet lines.
+8. If the sectioning choice still feels uncertain, ask the user for their preferred organization before pushing.
 
 ## Approval Inheritance
 
@@ -138,5 +139,6 @@ reviews push --update <slug> --range HEAD --packet /path/to/packet.md
 Notes:
 - `--range HEAD` captures current working-tree changes.
 - Default capture is usually `HEAD~1..HEAD`; use an explicit range when needed.
+- `--dry-run` (alias `--validate`) runs the same checks as a real push and sends nothing. Use it when the user wants to read the packet before it is published.
 - If validation fails with an uncovered changed line, add or adjust hunk refs until the packet covers the diff.
 - Do not commit local packet files unless the user explicitly wants them tracked.

@@ -14,7 +14,7 @@ Don't start a second Phoenix server while one is already running on `:4000` — 
 - Postgres test DB is `reviews_test` plus `MIX_TEST_PARTITION` if set; `pg_isready` to check before running.
 
 ### Pushing diffs to view as reviews
-The Rust CLI at `cli/target/release/reviews` is how you preview your own changes: `cd <any-git-checkout> && reviews push` posts the current branch's diff to the local Phoenix server and prints a `http://localhost:4000/r/<slug>` URL. `reviews push --update <slug>` adds a patchset to an existing review.
+The Rust CLI at `cli/target/release/reviews` is how you preview your own changes: `cd <any-git-checkout> && reviews push` posts the current branch's diff to the local Phoenix server and prints a `http://localhost:4000/r/<slug>` URL. `reviews push --update <slug>` adds a patchset to an existing review. Add `--dry-run` (alias `--validate`) to check the packet and see what would be sent without contacting the server; it exits 1 and lists each problem as `file:line: message` if the packet is not valid.
 
 ### Git remote
 Whichever git remote the maintainer has configured as `origin` is the canonical one. Don't add other remotes without checking; don't `git push` anywhere but `origin` unless explicitly asked. If a `github` remote is also configured, it's a mirror that's pushed to as part of the release process — see `docs/RELEASE.md`.

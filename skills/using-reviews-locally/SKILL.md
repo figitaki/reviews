@@ -81,6 +81,14 @@ Push current uncommitted work:
 cli/target/release/reviews push --update <slug> --range HEAD --packet /path/to/packet.md
 ```
 
+Check any of these first without contacting the server by adding `--dry-run` (alias `--validate`):
+
+```bash
+cli/target/release/reviews push --dry-run --update <slug> --packet /path/to/packet.md
+```
+
+It prints the target server, the review or slug, the diff files, the packet sections, and every packet problem with `file:line`. It exits 1 if the packet has problems. It does not need the server to be running.
+
 If the sandbox blocks localhost networking, rerun the CLI with escalation. If the token is rejected, mint a token in the same local database as the running server.
 
 ## Codex Workflow

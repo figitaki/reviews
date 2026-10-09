@@ -7,6 +7,12 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Added
+
+- `reviews push --dry-run` (alias `--validate`) checks the diff and packet
+  and prints what would be sent, without contacting the server. It lists
+  every packet problem with `file:line` and exits 1 if there are any.
+
 ### Changed
 
 - Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
