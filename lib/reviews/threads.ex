@@ -18,6 +18,10 @@ defmodule Reviews.Threads do
 
   @pubsub Reviews.PubSub
 
+  # Postgres bigint. An id past this range reaches the driver as an unencodable
+  # integer and takes the whole request down, so it is a miss like any other.
+  @max_thread_id 9_223_372_036_854_775_807
+
   ## Queries
 
   @doc """
@@ -44,9 +48,10 @@ defmodule Reviews.Threads do
   @doc """
   Creates a published comment in one transaction.
 
-  When `"thread_id"` belongs to the review, the comment is appended to that
-  thread. Otherwise a new thread is created from `"file_path"`, `"side"`, and
-  `"thread_anchor"`.
+  When `"thread_id"` is given, the comment is appended to that thread. If the
+  id is not a thread of this review, it returns `{:error, :thread_not_found}`
+  and writes nothing. Without `"thread_id"`, a new thread is created from
+  `"file_path"`, `"side"`, and `"thread_anchor"`.
 
   `params`:
 
@@ -90,36 +95,8 @@ defmodule Reviews.Threads do
         {:error, :unknown_granularity}
 
       true ->
-        result =
-          Repo.transaction(fn ->
-            thread = fetch_or_create_thread(review, author, thread_id, file_path, side, anchor)
-
-            comment =
-              %Comment{}
-              |> Comment.changeset(%{
-                thread_id: thread.id,
-                author_id: author.id,
-                body: body
-              })
-              |> Repo.insert!()
-
-            %{thread: thread, comment: comment}
-          end)
-
-        case result do
-          {:ok, %{thread: thread, comment: _} = out} ->
-            published_thread = Repo.preload(thread, comments: comments_query())
-
-            Phoenix.PubSub.broadcast(
-              @pubsub,
-              "review:#{review.slug}",
-              {:thread_published, published_thread}
-            )
-
-            {:ok, out}
-
-          {:error, reason} ->
-            {:error, reason}
+        with {:ok, existing} <- fetch_reply_thread(review, thread_id) do
+          insert_comment(review, author, existing, file_path, side, anchor, body)
         end
     end
   rescue
@@ -129,6 +106,40 @@ defmodule Reviews.Threads do
   def publish_comment(%Review{} = review, %User{} = user, params) when is_map(params) do
     with {:ok, identity} <- Accounts.ensure_human_identity(user) do
       publish_comment(review, identity, params)
+    end
+  end
+
+  defp insert_comment(review, author, existing, file_path, side, anchor, body) do
+    result =
+      Repo.transaction(fn ->
+        thread = existing || create_thread(review, author, file_path, side, anchor)
+
+        comment =
+          %Comment{}
+          |> Comment.changeset(%{
+            thread_id: thread.id,
+            author_id: author.id,
+            body: body
+          })
+          |> Repo.insert!()
+
+        %{thread: thread, comment: comment}
+      end)
+
+    case result do
+      {:ok, %{thread: thread, comment: _} = out} ->
+        published_thread = Repo.preload(thread, comments: comments_query())
+
+        Phoenix.PubSub.broadcast(
+          @pubsub,
+          "review:#{review.slug}",
+          {:thread_published, published_thread}
+        )
+
+        {:ok, out}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -143,33 +154,13 @@ defmodule Reviews.Threads do
     with {:ok, id} <- cast_thread_id(thread_id),
          %Thread{review_id: review_id} = thread when review_id == review.id <-
            Repo.get(Thread, id) do
-      attrs =
-        case status do
-          "resolved" ->
-            %{
-              status: "resolved",
-              resolved_by_id: identity.id,
-              resolved_at: DateTime.utc_now(:second)
-            }
-
-          "open" ->
-            %{status: "open", resolved_by_id: nil, resolved_at: nil}
-        end
-
-      case thread |> Thread.changeset(attrs) |> Repo.update() do
-        {:ok, updated} ->
-          updated = Repo.preload(updated, [:author, :resolved_by, comments: comments_query()])
-
-          Phoenix.PubSub.broadcast(
-            @pubsub,
-            "review:#{review.slug}",
-            {:thread_updated, updated}
-          )
-
-          {:ok, updated}
-
-        {:error, changeset} ->
-          {:error, changeset}
+      if thread.status == status do
+        # Already in the requested state. Returning early keeps a repeated
+        # resolve from reattributing the thread to whoever clicked last, and
+        # spares every connected LiveView a snapshot rebuild for a non-change.
+        {:ok, preload_thread(thread)}
+      else
+        write_status(review, thread, identity, status)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -185,11 +176,46 @@ defmodule Reviews.Threads do
 
   def update_status(%Review{}, _thread_id, %Identity{}, _status), do: {:error, :invalid_status}
 
-  defp cast_thread_id(id) when is_integer(id) and id > 0, do: {:ok, id}
+  defp write_status(review, thread, identity, status) do
+    attrs =
+      case status do
+        "resolved" ->
+          %{
+            status: "resolved",
+            resolved_by_id: identity.id,
+            resolved_at: DateTime.utc_now(:second)
+          }
+
+        "open" ->
+          %{status: "open", resolved_by_id: nil, resolved_at: nil}
+      end
+
+    case thread |> Thread.changeset(attrs) |> Repo.update() do
+      {:ok, updated} ->
+        updated = preload_thread(updated)
+
+        Phoenix.PubSub.broadcast(
+          @pubsub,
+          "review:#{review.slug}",
+          {:thread_updated, updated}
+        )
+
+        {:ok, updated}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  defp preload_thread(%Thread{} = thread) do
+    Repo.preload(thread, [:author, :resolved_by, comments: comments_query()])
+  end
+
+  defp cast_thread_id(id) when is_integer(id) and id > 0 and id <= @max_thread_id, do: {:ok, id}
 
   defp cast_thread_id(id) when is_binary(id) do
     case Integer.parse(id) do
-      {parsed, ""} when parsed > 0 -> {:ok, parsed}
+      {parsed, ""} when parsed > 0 and parsed <= @max_thread_id -> {:ok, parsed}
       _ -> {:error, :not_found}
     end
   end
@@ -202,16 +228,18 @@ defmodule Reviews.Threads do
       preload: [:author]
   end
 
-  defp fetch_or_create_thread(review, author, thread_id, file_path, side, anchor)
-       when is_integer(thread_id) do
-    case Repo.get(Thread, thread_id) do
-      %Thread{review_id: rid} = thread when rid == review.id -> thread
-      _ -> create_thread(review, author, file_path, side, anchor)
-    end
-  end
+  # No thread_id starts a new thread. A thread_id that is not a thread of this
+  # review (unparseable, out of range, missing, or from another review) is an
+  # error, so a bad reply never opens a stray thread.
+  defp fetch_reply_thread(_review, nil), do: {:ok, nil}
 
-  defp fetch_or_create_thread(review, author, _thread_id, file_path, side, anchor) do
-    create_thread(review, author, file_path, side, anchor)
+  defp fetch_reply_thread(%Review{id: review_id}, thread_id) do
+    with {:ok, id} <- cast_thread_id(thread_id),
+         %Thread{review_id: ^review_id} = thread <- Repo.get(Thread, id) do
+      {:ok, thread}
+    else
+      _ -> {:error, :thread_not_found}
+    end
   end
 
   defp create_thread(review, author, file_path, side, anchor) do

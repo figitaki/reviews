@@ -51,7 +51,7 @@ fn render_threads(body: &Value) -> Result<String> {
 
     let mut out = String::new();
     for t in threads {
-        let id = t.get("id").and_then(Value::as_i64).unwrap_or(0);
+        let id = t.get("id").and_then(Value::as_i64);
         let status = t.get("status").and_then(Value::as_str).unwrap_or("open");
         let path = t.get("file_path").and_then(Value::as_str).unwrap_or("?");
         let line = t.get("line_hint").and_then(Value::as_i64);
@@ -78,7 +78,13 @@ fn render_threads(body: &Value) -> Result<String> {
             Some(n) => format!("{path}:{n}"),
             None => path.to_string(),
         };
-        out.push_str(&format!("#{id} [{status}] {location} @{author}"));
+        // A server too old to report thread ids leaves the listing unusable as
+        // input to resolve/reopen; `#?` says so instead of printing a fake `#0`.
+        let id_part = match id {
+            Some(n) => format!("#{n}"),
+            None => "#?".to_string(),
+        };
+        out.push_str(&format!("{id_part} [{status}] {location} @{author}"));
         if !first.is_empty() {
             out.push_str(&format!(" — {first}"));
         }
