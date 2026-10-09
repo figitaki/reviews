@@ -405,6 +405,79 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, ~s|#revision-nav #patchset-3.has-packet|)
     end
 
+    test "shows an empty reviewers stack before anyone reviews", %{conn: conn, review: review} do
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      assert has_element?(view, "#decider-stack.is-empty", "No reviews yet")
+    end
+
+    test "renders published reviewers, including agents, for anonymous viewers", %{
+      conn: conn,
+      review: review
+    } do
+      {:ok, reviewer} =
+        Accounts.upsert_from_github(%{
+          github_id: 5678,
+          username: "zara",
+          email: "zara@example.com",
+          avatar_url: nil
+        })
+
+      {:ok, agent} =
+        Accounts.create_agent_identity(reviewer, %{display_name: "Codex", handle: "codex"})
+
+      {:ok, %{comment: zara_comment}} = Threads.publish_comment(review, reviewer, foo_comment())
+      {:ok, %{comment: agent_comment}} = Threads.publish_comment(review, agent, foo_comment())
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      zara = "#decider-stack-#{zara_comment.author_id}"
+      codex = "#decider-stack-#{agent_comment.author_id}"
+
+      assert has_element?(view, ~s|#{zara}.is-commented[title="@zara: commented · 1 comment"]|)
+      assert has_element?(view, ~s|#{zara} .rev-decider-badge .hero-chat-bubble-left-ellipsis|)
+
+      assert has_element?(
+               view,
+               ~s|#{codex}[data-kind="agent"][title="@codex (agent): commented · 1 comment"]|
+             )
+
+      assert has_element?(view, ~s|#{codex} .rev-decider-avatar .hero-cpu-chip|)
+      refute has_element?(view, "#decider-stack-more")
+    end
+
+    test "collapses reviewers past the fifth into a +N chip", %{conn: conn, review: review} do
+      for n <- 1..7 do
+        {:ok, user} =
+          Accounts.upsert_from_github(%{
+            github_id: 9000 + n,
+            username: "reviewer-#{n}",
+            email: "reviewer-#{n}@example.com",
+            avatar_url: "https://example.com/#{n}.png"
+          })
+
+        {:ok, _} = Threads.publish_comment(review, user, foo_comment())
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      assert has_element?(
+               view,
+               ~s|#decider-stack .rev-decider img[src="https://example.com/5.png"]|
+             )
+
+      refute has_element?(
+               view,
+               ~s|#decider-stack .rev-decider img[src="https://example.com/6.png"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#decider-stack-more[title="2 more reviewers: @reviewer-6, @reviewer-7"]|,
+               "+2"
+             )
+    end
+
     test "does not render the old publish review button", %{conn: conn, review: review} do
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
       refute has_element?(view, "#publish-review-button")
@@ -847,6 +920,64 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(packet_view_after_clear, "#packet-section-0 button", "Mark Viewed")
     end
 
+    test "a section decision shows up in the reviewers stack", %{conn: conn, author: author} do
+      {:ok, owner} =
+        Accounts.upsert_from_github(%{
+          github_id: 4321,
+          username: "owner",
+          email: "owner@example.com",
+          avatar_url: nil
+        })
+
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(owner, %{
+          title: "Someone else's packet",
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1 +1 @@
+          -old
+          +new
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1,
+                    "line_start" => 1,
+                    "line_end" => 2
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+      assert has_element?(view, "#decider-stack.is-empty")
+
+      view |> element("#packet-section-0 button", "Approve") |> render_click()
+
+      {:ok, identity} = Accounts.ensure_human_identity(author)
+
+      assert has_element?(
+               view,
+               ~s|#decider-stack-#{identity.id}.is-approved[title="@carey: approved 1 of 1 section"]|
+             )
+
+      assert has_element?(view, "#decider-stack-#{identity.id} .rev-decider-badge .hero-check")
+
+      view |> element("#packet-section-0 button", "Deny") |> render_click()
+      assert has_element?(view, "#decider-stack-#{identity.id}.is-denied")
+    end
+
     test "section decisions persist and later changed sections link to the previous decision", %{
       conn: conn,
       author: author
@@ -1010,5 +1141,20 @@ defmodule ReviewsWeb.ReviewLiveTest do
       carried_view |> element("#packet-section-0 button", "Ignore") |> render_click()
       refute has_element?(carried_view, "#packet-section-0 .review-section-action.is-active")
     end
+  end
+
+  defp foo_comment do
+    %{
+      "file_path" => "lib/foo.ex",
+      "side" => "new",
+      "body" => "ship it",
+      "thread_anchor" => %{
+        "granularity" => "line",
+        "line_text" => "  def bar, do: :new",
+        "context_before" => [],
+        "context_after" => [],
+        "line_number_hint" => 2
+      }
+    }
   end
 end

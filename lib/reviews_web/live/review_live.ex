@@ -476,6 +476,8 @@ defmodule ReviewsWeb.ReviewLive do
             </script>
           </div>
 
+          <ReviewsWeb.DeciderComponents.decider_stack deciders={@review_snapshot.deciders} />
+
           <.user_menu current_user={@current_user} />
         </:actions>
 
