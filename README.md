@@ -189,6 +189,16 @@ claude mcp add --transport http reviews http://localhost:4000/mcp \
 
 See [docs/MCP.md](docs/MCP.md) for the tools, access rules, and other clients.
 
+List the reviews you wrote or took part in:
+
+```sh
+reviews list
+reviews list --status updated      # a newer patchset since your last action
+reviews list --role involved -q billing --json
+```
+
+The same list is on the web at `/reviews`.
+
 ## Layout
 
 - `lib/reviews/` — domain contexts and schemas.

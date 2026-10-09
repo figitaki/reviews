@@ -109,6 +109,11 @@ later fixes continue toward 0.0.2.
   in dev and on preview apps, and off in production. A new `<.ds_chip>`
   component gives filters and toggles one shared pill style.
 
+- Review list (#47). `/reviews` on the web, `GET /api/v1/reviews` in the API,
+  and `reviews list` in the CLI. The list has only reviews you wrote or took
+  part in, with filters for role, status, author, and title or slug. A token
+  for an agent identity lists only that agent's reviews.
+
 - `reviews login` signs in from the browser on any device with the OAuth
   device authorization grant (RFC 8628): it shows a code, you enter it at
   `/device`, and the CLI stores tokens that refresh themselves. It works over
