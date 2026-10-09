@@ -558,7 +558,13 @@ textarea.ds-input{
   
 
   .ds-shell-topbar{
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ds-shell-actions{
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
   }
 
   .ds-shell-nav{
@@ -617,4 +623,63 @@ textarea.ds-input{
   
 
   
+}
+
+/* Narrow phones (#6): keep the topbar on one row down to 320px. The brand
+   collapses to its mark (the link keeps its aria-label), the actions may
+   shrink, and a long account name truncates instead of pushing the row
+   past the right edge. DOM order, and so focus order, does not change. */
+@media (max-width: 480px) {
+  .ds-shell-topbar{
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .design-brand-label{
+    display: none;
+  }
+
+  .ds-shell-actions{
+    gap: 4px;
+  }
+
+  .ds-shell-actions > *{
+    flex-shrink: 0;
+  }
+
+  /* Only the account menu gives up width; its name truncates. */
+  .ds-shell-actions > .dropdown{
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .ds-shell-actions .review-button{
+    max-width: 100%;
+    padding: 0 8px;
+  }
+
+  .ds-shell-actions .review-button > span{
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Touch screens: topbar controls get a 44px tap target. */
+@media (pointer: coarse) {
+  .design-brand,
+  .ds-shell-actions .review-chip,
+  .ds-shell-actions .review-button{
+    min-height: 44px;
+  }
+
+  .design-brand{
+    min-width: 44px;
+    justify-content: center;
+  }
+
+  .ds-shell-actions .review-chip{
+    min-width: 44px;
+  }
 }
