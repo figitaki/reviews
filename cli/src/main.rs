@@ -38,6 +38,15 @@ enum Command {
     /// Publish a comment on a review (requires `reviews login`)
     Comment(commands::comment::CommentArgs),
 
+    /// List review threads with ids for CLI actions
+    Threads(commands::threads::ThreadsArgs),
+
+    /// Resolve a review thread (requires `reviews login`)
+    Resolve(commands::thread_status::ThreadStatusArgs),
+
+    /// Reopen a resolved review thread (requires `reviews login`)
+    Reopen(commands::thread_status::ThreadStatusArgs),
+
     /// Approve, deny, or ignore a packet section
     Section(commands::section::SectionArgs),
 }
@@ -58,6 +67,9 @@ fn run() -> Result<()> {
         Command::Diff(args) => commands::diff::run(args),
         Command::Show(args) => commands::show::run(args),
         Command::Comment(args) => commands::comment::run(args),
+        Command::Threads(args) => commands::threads::run(args),
+        Command::Resolve(args) => commands::thread_status::run(args, "resolved"),
+        Command::Reopen(args) => commands::thread_status::run(args, "open"),
         Command::Section(args) => commands::section::run(args),
     }
 }

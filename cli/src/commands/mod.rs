@@ -4,4 +4,6 @@ pub mod login;
 pub mod push;
 pub mod section;
 pub mod show;
+pub mod thread_status;
+pub mod threads;
 pub mod whoami;

@@ -81,6 +81,7 @@ export class VanillaDiffRenderer {
     threads,
     diffStyle,
     onCreateComment,
+    onUpdateThreadStatus,
   }) {
     this.container = container
     this.filePath = filePath
@@ -89,6 +90,7 @@ export class VanillaDiffRenderer {
     this.threads = threads
     this.diffStyle = diffStyle
     this.onCreateComment = onCreateComment
+    this.onUpdateThreadStatus = onUpdateThreadStatus
     this.composerAt = null
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
@@ -156,6 +158,15 @@ export class VanillaDiffRenderer {
     })
   }
 
+  updateThreadStatus(thread, status) {
+    if (!this.signedIn) return
+    this.onUpdateThreadStatus?.({
+      file_path: thread.file_path,
+      thread_id: thread.id,
+      status,
+    })
+  }
+
   renderAnnotation(annotation) {
     const meta = annotation.metadata || {}
     if (meta.kind === "composer") {
@@ -174,6 +185,9 @@ export class VanillaDiffRenderer {
         threadBubble({
           thread,
           onReply: this.signedIn ? (t, body) => this.replyToThread(t, body) : null,
+          onUpdateStatus: this.signedIn
+            ? (t, status) => this.updateThreadStatus(t, status)
+            : null,
         })
       ),
     ])
