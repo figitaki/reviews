@@ -6,14 +6,64 @@ defmodule ReviewsWeb.Api.ReviewController do
   user should open. Bearer-token auth via `Plugs.RequireApiToken` (mounted
   in the router pipeline).
 
+  `GET /api/v1/reviews` lists the reviews the token's actor wrote or took
+  part in (see `Reviews.ReviewIndex`). Bearer-token auth. A human-identity
+  token lists reviews for all of the owner's identities. An agent-identity
+  token lists only that agent's reviews.
+
   `GET /api/v1/reviews/:slug` is the read counterpart — public (matches the
   anonymous web view) and returns a JSON snapshot intended for agents
   consuming reviews from the CLI.
   """
   use ReviewsWeb, :controller
 
-  alias Reviews.{ReviewNavigation, ReviewPacket, ReviewView}
+  alias Reviews.{ReviewIndex, ReviewNavigation, ReviewPacket, ReviewView}
   alias Reviews.Reviews, as: ReviewsContext
+
+  @doc "GET /api/v1/reviews"
+  def index(conn, params) do
+    case ReviewIndex.normalize_filters(params) do
+      {:ok, filters} ->
+        viewer = list_viewer(conn.assigns.current_user, conn.assigns.current_identity)
+        result = ReviewsContext.list_reviews(viewer, filters)
+
+        json(conn, %{
+          reviews: Enum.map(result.entries, &render_list_entry/1),
+          limit: result.limit,
+          offset: result.offset,
+          next_offset: result.next_offset
+        })
+
+      {:error, errors} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{errors: errors})
+    end
+  end
+
+  defp list_viewer(user, %{kind: "human"}), do: user
+  defp list_viewer(_user, identity), do: identity
+
+  defp render_list_entry(entry) do
+    review = entry.review
+
+    %{
+      slug: review.slug,
+      title: review.title,
+      url: url(~p"/r/#{review.slug}"),
+      author: render_identity(review.author),
+      role: entry.role,
+      patchset_count: entry.patchset_count,
+      latest_patchset_number: entry.latest_patchset_number,
+      last_pushed_at: entry.last_pushed_at,
+      updated_at: entry.updated_at,
+      thread_count: entry.thread_count,
+      open_thread_count: entry.open_thread_count,
+      last_activity_at: entry.last_activity_at,
+      has_new_patchset: entry.has_new_patchset,
+      created_at: review.inserted_at
+    }
+  end
 
   @doc "GET /api/v1/reviews/:slug"
   def show(conn, %{"slug" => slug} = params) do

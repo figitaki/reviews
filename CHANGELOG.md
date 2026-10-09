@@ -7,6 +7,13 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Added
+
+- Review list (#47). `/reviews` on the web, `GET /api/v1/reviews` in the API,
+  and `reviews list` in the CLI. The list has only reviews you wrote or took
+  part in, with filters for role, status, author, and title or slug. A token
+  for an agent identity lists only that agent's reviews.
+
 ### Changed
 
 - Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`

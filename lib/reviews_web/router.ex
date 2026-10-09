@@ -23,6 +23,7 @@ defmodule ReviewsWeb.Router do
     pipe_through :browser
 
     live "/", HomeLive, :index
+    live "/reviews", ReviewListLive, :index
 
     live "/r/:slug", ReviewLive, :show
     live "/r/:slug/changes", ReviewLive, :changes
@@ -46,6 +47,7 @@ defmodule ReviewsWeb.Router do
   scope "/api/v1", ReviewsWeb.Api do
     pipe_through [:api, :api_authenticated]
 
+    get "/reviews", ReviewController, :index
     post "/reviews", ReviewController, :create
     post "/reviews/:slug/patchsets", PatchsetController, :create
     post "/reviews/:slug/comments", CommentController, :create
