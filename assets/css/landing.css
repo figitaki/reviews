@@ -34,11 +34,6 @@
   margin: 0 auto;
 }
 
-.l-wrap-narrow {
-  width: min(960px, calc(100vw - 32px));
-  margin: 0 auto;
-}
-
 /* Top bar — same metrics as the product's review-topbar */
 .l-topbar {
   position: sticky;
@@ -125,19 +120,6 @@
   width: 18px;
   height: 1px;
   background: var(--ds-line-strong);
-}
-
-/* 48×48 grid background — the one texture used in the product. */
-.l-grid-bg {
-  background-image:
-    linear-gradient(to right,  var(--ds-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--ds-line) 1px, transparent 1px);
-  background-size: 48px 48px;
-  background-position: -1px -1px;
-}
-.l-grid-bg-fade {
-  -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%);
-          mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%);
 }
 
 /* ----------------------------------------------------------------------------
@@ -271,7 +253,6 @@
 }
 
 .home-chapter h2 .accent-add { color: var(--ds-add); }
-.home-chapter h2 .accent-del { color: var(--ds-del); }
 
 .home-chapter p {
   margin: 0;
@@ -470,15 +451,6 @@
    Workflow demo — the morphing packet preview that sits next to the chapters
    on wide screens, stacks under them on narrow.
 ---------------------------------------------------------------------------- */
-.home-demo-rail {
-  position: relative;
-}
-
-.home-demo-sticky {
-  position: sticky;
-  top: calc(var(--review-main-nav-h) + 24px);
-}
-
 .home-demo-frame {
   border: 1px solid var(--ds-line);
   border-radius: 12px;
@@ -630,10 +602,6 @@
   max-width: 64ch;
 }
 
-.home-demo-section-tail {
-  margin-top: 14px;
-}
-
 /* Carryover marker — "approved in v1" */
 .home-demo-carryover {
   display: inline-flex;
@@ -651,51 +619,6 @@
   color: var(--ds-add);
   font-family: var(--font-mono);
 }
-
-/* Push diff illustration — the manifesto's wall-of-diff → packet.md graphic */
-.home-diff-illo {
-  margin-top: 20px;
-  border: 1px solid var(--ds-line);
-  border-radius: 8px;
-  background: var(--ds-panel);
-  padding: 16px 20px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--ds-muted);
-}
-
-.home-diff-illo .line {
-  display: flex;
-  gap: 12px;
-}
-
-.home-diff-illo .gutter {
-  color: var(--ds-faint);
-  width: 3ch;
-  text-align: right;
-  user-select: none;
-}
-
-.home-diff-illo .add-row {
-  background: color-mix(in oklab, var(--ds-add) 10%, transparent);
-  padding: 0 6px;
-  margin: 0 -6px;
-  border-radius: 3px;
-  color: var(--ds-text);
-}
-
-.home-diff-illo .del-row {
-  background: color-mix(in oklab, var(--ds-del) 10%, transparent);
-  padding: 0 6px;
-  margin: 0 -6px;
-  border-radius: 3px;
-  color: var(--ds-text);
-  text-decoration: line-through;
-  text-decoration-color: color-mix(in srgb, var(--ds-del) 60%, transparent);
-}
-
-.home-diff-illo .ctx { color: var(--ds-muted); }
 
 /* ----------------------------------------------------------------------------
    Decision actions — three state-pills and three action ovals share the same

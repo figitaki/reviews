@@ -74,7 +74,7 @@ defmodule ReviewsWeb.SettingsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} chrome={false}>
+    <Layouts.app flash={@flash}>
       <main id="settings-page" class="l-page design-page">
         <Layouts.landing_topbar current_user={@current_user} />
 

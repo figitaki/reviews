@@ -1,4 +1,4 @@
-This is **Reviews** — a code-review tool for arbitrary diffs (not just GitHub PRs). Stack: Phoenix 1.8 + LiveView (web), Rust CLI (`cli/`), Postgres, `@pierre/diffs` React island for diff rendering.
+This is **Reviews** — a code-review tool for arbitrary diffs (not just GitHub PRs). Stack: Phoenix 1.8 + LiveView (web), Rust CLI (`cli/`), Postgres, vanilla `@pierre/diffs` mounted from a LiveView hook for diff rendering.
 
 ## Working in this repo
 
@@ -8,10 +8,10 @@ Use `./bin/server` — it sources `.env.local` (your `GITHUB_CLIENT_ID` / `GITHU
 Don't start a second Phoenix server while one is already running on `:4000` — bind clash. Check first: `lsof -iTCP:4000 -sTCP:LISTEN`.
 
 ### Tests
-- `mix test` — full suite (currently 27 tests, all should pass).
+- `mix test` — full suite. All tests should pass.
 - `mix compile --warnings-as-errors` before committing.
 - `mix format --check-formatted`.
-- Postgres test DB is at `reviews_test`; `pg_isready` to check before running.
+- Postgres test DB is `reviews_test` plus `MIX_TEST_PARTITION` if set; `pg_isready` to check before running.
 
 ### Pushing diffs to view as reviews
 The Rust CLI at `cli/target/release/reviews` is how you preview your own changes: `cd <any-git-checkout> && reviews push` posts the current branch's diff to the local Phoenix server and prints a `http://localhost:4000/r/<slug>` URL. `reviews push --update <slug>` adds a patchset to an existing review.
@@ -20,24 +20,23 @@ The Rust CLI at `cli/target/release/reviews` is how you preview your own changes
 Whichever git remote the maintainer has configured as `origin` is the canonical one. Don't add other remotes without checking; don't `git push` anywhere but `origin` unless explicitly asked. If a `github` remote is also configured, it's a mirror that's pushed to as part of the release process — see `docs/RELEASE.md`.
 
 ### Plans and memory
-- `.plans/` — project-scoped design plans, **tracked in git**. Start here when picking up work: read any plan that references the area you're touching. `.plans/a11y-design-fixes.md` is the current open plan (P0/P1/P2 a11y items, two flagged `⚠ overlap` with the deferred Shiki swap).
+- `.plans/` — project-scoped design plans, **tracked in git**. Start here when picking up work: read any plan that references the area you're touching. `.plans/a11y-design-fixes.md` is the current open plan (P0/P1/P2 a11y items).
 - `.claude/` — per-checkout Claude Code state (settings, worktrees, transcripts). **Gitignored.** Don't put anything here you want shared.
 - Auto-memory at `~/.claude/projects/-Users-warbler-src-reviews/memory/` captures user-level feedback (e.g. "brainstorm UX before plans," "don't self-grant permissions"). Read `MEMORY.md` first if you have access.
 
 ### Architectural decisions already made — don't relitigate
 - **Stack:** Elixir/Phoenix 1.8 + LiveView (web) + Rust (CLI) + Postgres.
-- **Diff renderer:** `@pierre/diffs` (React, npm) mounted as a React island via `phx-hook="DiffRenderer"` in `assets/js/hooks/diff_renderer.js`.
+- **Diff renderer:** vanilla `@pierre/diffs` (npm, no React) mounted via `phx-hook="DiffRenderer"` in `assets/js/hooks/diff_renderer.js`. Rendering code lives in `assets/js/diff_renderer/`.
 - **Input:** Rust CLI (`reviews push`) only — no web paste in v1.
 - **Sharing:** link-based; anyone with URL can view anonymously. Commenting requires GitHub OAuth.
-- **Threads:** Gerrit-style — drafts per-viewer, private, until "Publish review" sends the batch.
+- **Threads:** comments publish right away and every viewer sees them. Draft comments were removed (`priv/repo/migrations/20260519120000_drop_draft_review_support.exs`).
 - **Revisions:** `reviews push --update <slug>` adds patchsets; threads carry across via content-hash anchoring (line text + surrounding context), not line numbers.
 - **Config path** for the CLI: `~/.config/reviews/` (cross-platform; matches `gh`, `kubectl`).
-- **Token-level commenting** is deferred to v1.5; schema has the discriminator (`Thread.anchor.granularity`), `Anchoring.relocate/3` has a stubbed `"token_range"` branch returning `{:error, :not_implemented}`. Don't remove the stub.
+- **Token-level commenting:** the UI and API can write `"token_range"` anchors (`Thread.anchor.granularity`), but relocating them across patchsets is deferred to v1.5. `Anchoring.relocate/3` has a stubbed `"token_range"` branch returning `{:error, :not_implemented}`. Don't remove the stub.
 
 ### What's currently deferred / known-not-done
-- **Syntax highlighting** is rendered as plain text. The diff renderer's top comment explains why — the plan to wire `<PatchDiff>` + Shiki via `lineAnnotations` exists in the session transcript / planning agent output. Reach for that plan before starting; don't roll a new design.
 - A11y items in `.plans/a11y-design-fixes.md` are real and prioritized. P0 items are keyboard/screen-reader breaks; P1 are visual/theming; P2 are content/copy.
-- Worker pool for Shiki: intentionally not wired. Single-threaded sync highlighter is the v1 target.
+- Worker pool for `@pierre/diffs` / Shiki: intentionally not wired.
 - CSP headers: none currently. Future work.
 
 ### Permissions (Claude Code)
@@ -48,8 +47,8 @@ Use `isolation: "worktree"` when spawning subagents that will edit files. They l
 
 ### Conventions specific to this repo
 - LiveView review screen at `lib/reviews_web/live/review_live.ex`. Server-side `current_user` flows from the session via `ReviewsWeb.Plugs.FetchCurrentUser`; the LiveView re-derives it from the session in `mount/3` (`load_current_user/1`) because `Plug` assigns don't survive into LiveView.
-- React island is **not** managed by Webpack/Vite — Phoenix's esbuild handles `assets/js/app.js` and its imports. JSX is enabled via the project's esbuild config. If you change build settings, look at `config/config.exs`.
-- daisyUI is the design system; theme toggles between `light` / `dark` / `system` via `data-theme` on `<html>`. Custom diff CSS lives in `assets/css/app.css` with the `.rdr-*` prefix.
+- JS is **not** managed by Webpack/Vite — Phoenix's esbuild handles `assets/js/app.js` and its imports. If you change build settings, look at `config/config.exs`.
+- daisyUI is the design system; theme toggles between `light` / `dark` / `system` via `data-theme` on `<html>`. `assets/css/app.css` imports the app stylesheets (`tokens.css`, `components.css`, `packet.css`, `landing.css`, `product-shell.css`); the review UI CSS is in `packet.css` (`.review-*` / `.rev-*`).
 
 ## Phoenix framework guidelines (generic)
 

@@ -3,10 +3,11 @@
 Reviews is a code-review tool for arbitrary diffs. It gives agents and humans a
 shareable review surface before, during, or outside a GitHub PR workflow.
 
-The app is Phoenix 1.8 + LiveView, with a React diff island powered by
-`@pierre/diffs`, and a Rust CLI (`reviews push`) for uploading diffs.
+The app is Phoenix 1.8 + LiveView, with diffs rendered by vanilla
+`@pierre/diffs` from a LiveView hook, and a Rust CLI (`reviews push`) for
+uploading diffs.
 
-Current alpha version: `0.0.1-alpha.0`.
+Current alpha version: `0.0.1-alpha.2`.
 
 ## What It Provides
 
@@ -16,7 +17,7 @@ Current alpha version: `0.0.1-alpha.0`.
 - Lazy hunk rendering so large diffs do not eagerly mount every diff island.
 - Explicit hunk viewed state shared between packet and Changes views.
 - Packet section decisions for approve, deny, or ignore.
-- Draft comments that can be published as a batch.
+- Line and token comments that every viewer sees as soon as they are posted.
 
 For packet-writing guidance and a reusable packet template, see
 [`skills/writing-review-packets/SKILL.md`](skills/writing-review-packets/SKILL.md).
@@ -74,8 +75,7 @@ At the end of a Codex session, a useful handoff prompt is:
 ```text
 Use the Reviews skills already loaded in this session. Push the current branch
 to Reviews, open the generated review URL, inspect the diff and review packet,
-leave draft comments for any correctness or UX issues, then publish the review
-when the pass is complete.
+leave comments for any correctness or UX issues.
 ```
 
 ## Prereqs
@@ -159,7 +159,8 @@ Use `--range HEAD` when pushing current uncommitted work.
 
 - `lib/reviews/` — domain contexts and schemas.
 - `lib/reviews_web/` — controllers, LiveViews, plugs, and components.
-- `assets/js/hooks/diff_renderer.js` — React diff island LiveView hook.
+- `assets/js/hooks/diff_renderer.js` — `DiffRenderer` LiveView hook; rendering
+  code is in `assets/js/diff_renderer/`.
 - `cli/` — Rust CLI.
 - `docs/CONTRACTS.md` — REST and hook contracts.
 - `CHANGELOG.md` — release notes, starting with `0.0.1-alpha.0`.
