@@ -10,11 +10,21 @@ defmodule Reviews.Release do
   @preview_username "preview"
   @preview_token_name "preview-bootstrap"
 
+  # Each `bin/reviews eval` step in `bin/migrate` starts its own repo, one
+  # after the other. Migrations use Ecto's default pool of 2. The seeds run
+  # one query at a time, so 1 connection is enough. This keeps a release
+  # command at 2 connections or fewer, whatever POOL_SIZE is.
+  @migrate_pool_size 2
+  @seed_pool_size 1
+
   def migrate do
     load_app()
 
     for repo <- repos() do
-      {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true),
+          pool_size: @migrate_pool_size
+        )
     end
   end
 
@@ -146,7 +156,10 @@ defmodule Reviews.Release do
 
       raw ->
         for repo <- repos() do
-          {:ok, _, _} = Ecto.Migrator.with_repo(repo, fn _ -> seed_preview_token(raw) end)
+          {:ok, _, _} =
+            Ecto.Migrator.with_repo(repo, fn _ -> seed_preview_token(raw) end,
+              pool_size: @seed_pool_size
+            )
         end
 
         :ok
@@ -161,10 +174,14 @@ defmodule Reviews.Release do
 
     for repo <- repos() do
       {:ok, _, _} =
-        Ecto.Migrator.with_repo(repo, fn _ ->
-          Reviews.DemoReview.seed!()
-          :ok
-        end)
+        Ecto.Migrator.with_repo(
+          repo,
+          fn _ ->
+            Reviews.DemoReview.seed!()
+            :ok
+          end,
+          pool_size: @seed_pool_size
+        )
     end
 
     :ok

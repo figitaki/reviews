@@ -158,9 +158,13 @@ Each preview app `reviews-pr-<N>` uses its own database,
 **Why.** On 2026-10-09, 14 PRs had previews deployed at the same time,
 and all of them used one shared database. Two problems occurred:
 
-- Four release commands failed with "Could not create schema
-  migrations table", because the apps used all the connections on the
-  server.
+- The preview Postgres pooler refused new connections with
+  `FATAL 08P01 no more connections allowed (max_client_conn)`. Each
+  app opened 10 connections (the default pool), and 14 apps used more
+  than the cap. Four release commands failed with "Could not create
+  schema migrations table", and every page that used the database
+  returned 500 on every preview. The fix for this is in "Connection
+  budget" below, not the per-PR database.
 - Three branches with migrations ran `ALTER TABLE` on the shared
   database. After that, every preview app that was already running
   returned 500 on review pages, because its open connections had
@@ -168,7 +172,8 @@ and all of them used one shared database. Two problems occurred:
   each app was deployed again.
 
 With one database per app, a migration in one PR changes only that
-PR's database.
+PR's database. A per-PR database does not reduce the number of
+connections to the server. See "Connection budget" below.
 
 **How the database is created.**
 
@@ -178,8 +183,6 @@ PR's database.
      not match `reviews_pr_<digits>`.
    - `DATABASE_URL`: `PREVIEW_DATABASE_URL` with its path replaced by
      `/reviews_pr_<N>`.
-   - `POOL_SIZE=3`, so that many previews together do not use all the
-     connections on the server. Prod uses the default of 10.
 2. The release command (`/app/bin/migrate`) runs
    `Reviews.Release.ensure_database/0` first. It connects to the
    `postgres` maintenance database with the same credentials and runs
@@ -237,6 +240,56 @@ which starts empty except for the demo review and the preview user.
 
 ---
 
+## Connection budget
+
+All previews connect to one Postgres server through a pooler that
+accepts at most `max_client_conn` client connections. Previews deploy
+with `fly.preview.toml` (not `fly.toml`) to stay under that cap:
+
+| Setting | Value | Effect |
+| ------- | ----- | ------ |
+| `POOL_SIZE` (in `[env]`) | `2` | A running preview machine holds 2 connections. Prod uses 10. |
+| `--ha=false` and `flyctl scale count 1` | 1 machine | One machine per preview, not two. |
+| `auto_stop_machines = 'stop'`, `min_machines_running = 0` | | Fly stops an idle machine after a few minutes. A stopped machine holds 0 connections. The next request starts it again. |
+| Release command pool | 2 | Migrations use a pool of 2, and the seeds use 1. The steps run one after the other. |
+
+Connections for one preview:
+
+- Stopped (idle): 0.
+- Running: 2.
+- During a deploy: up to 4, because the release command (2) runs while
+  the old machine (2) is still up.
+
+So the cap carries about `max_client_conn / 2` running previews, or
+`max_client_conn / 4` previews that all deploy at the same time. Keep
+some room for other clients and for `fly postgres connect`. For
+example, with `max_client_conn = 100` (the pgbouncer default), 14
+running previews use 28 connections, and 14 deploying at once use 56.
+Before this change, 14 previews used 140 or more.
+
+A browser tab with a review page open keeps a LiveView websocket open,
+so the machine does not go idle until the tab closes.
+
+**When the cap is hit** (`no more connections allowed
+(max_client_conn)` in the app or release logs):
+
+1. Stop idle preview machines. They start again on the next request:
+
+   ```sh
+   fly apps list | grep reviews-pr-
+   fly machine list --app reviews-pr-42
+   fly machine stop <machine-id> --app reviews-pr-42
+   ```
+
+2. Close stale PRs. The close workflow drops the database and destroys
+   the app. For a PR that is already closed, see "Tearing it down
+   manually".
+3. Lower `POOL_SIZE` in `fly.preview.toml` to `1`. It takes effect on
+   each preview's next deploy.
+4. If the server allows it, raise `max_client_conn` on the pooler.
+
+---
+
 ## How a PR flows through
 
 1. **PR opened** by a maintainer/collaborator → workflow fires →
@@ -244,7 +297,7 @@ which starts empty except for the demo review and the preview user.
    waits for approval → `flyctl apps create` makes `reviews-pr-<N>`,
    `flyctl secrets set --stage` writes config, and `flyctl deploy
    --remote-only` builds the image on Fly's builders. The release
-   command in `fly.toml` creates the `reviews_pr_<N>` database if
+   command in `fly.preview.toml` creates the `reviews_pr_<N>` database if
    needed, runs migrations and seeds the preview user.
 
 2. **Subsequent pushes** → workflow re-runs → app redeploys with the
@@ -275,8 +328,8 @@ Then drop its database by hand, as in "If a drop fails" above.
 - **No custom domain.** Previews live at `reviews-pr-<N>.fly.dev` only.
 - **Shared Postgres server.** Each preview has its own database, but
   all previews use one server. They share its connection limit, CPU
-  and memory. `POOL_SIZE=3` keeps each app's share small.
+  and memory. See "Connection budget".
 - **Cost.** Each preview app is a 1GB/1vCPU machine that auto-stops when
-  idle (`auto_stop_machines = 'stop'`, inherited from `fly.toml`).
+  idle (`auto_stop_machines = 'stop'` in `fly.preview.toml`).
   Idle cost is near zero; an active preview is roughly the same as the
   prod machine.

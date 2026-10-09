@@ -124,26 +124,34 @@ jobs:
           DATABASE_URL="$(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(u.urlunsplit(p._replace(path="/" + sys.argv[2])))' "$PREVIEW_DATABASE_URL" "$PREVIEW_DB_NAME")"
           echo "::add-mask::$DATABASE_URL"
 
-          # POOL_SIZE: every preview app connects to the same Postgres
-          # server, so keep each app's pool small (prod default is 10).
+          # POOL_SIZE is not set here: fly.preview.toml sets it in [env].
           flyctl secrets set --stage --app "$APP_NAME" \
             SECRET_KEY_BASE="$PREVIEW_SECRET_KEY_BASE" \
             DATABASE_URL="$DATABASE_URL" \
             PREVIEW_DB_NAME="$PREVIEW_DB_NAME" \
-            POOL_SIZE=3 \
             GITHUB_CLIENT_ID="$PREVIEW_GITHUB_CLIENT_ID" \
             GITHUB_CLIENT_SECRET="$PREVIEW_GITHUB_CLIENT_SECRET" \
             PREVIEW_API_TOKEN="$PREVIEW_API_TOKEN" \
             PHX_HOST="$APP_HOST"
 
+      # fly.preview.toml, not fly.toml: small DB pool and auto-stop when
+      # idle. --ha=false: one machine per preview, not Fly's default of two
+      # on first deploy. Each machine holds POOL_SIZE connections to the
+      # shared preview Postgres server while it runs.
       - name: Deploy preview app
         if: github.event.action != 'closed'
         run: |
           flyctl deploy \
             --app "$APP_NAME" \
-            --config fly.toml \
+            --config fly.preview.toml \
+            --ha=false \
             --remote-only \
             --yes
+
+      # Apps first deployed before --ha=false can have two machines.
+      - name: Keep one machine
+        if: github.event.action != 'closed'
+        run: flyctl scale count 1 --app "$APP_NAME" --yes
 
       # Best effort: a failure here must not block the destroy step below.
       # If it fails, drop the database by hand (docs/PREVIEW_ENVS.md).
