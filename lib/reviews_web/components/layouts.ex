@@ -12,11 +12,10 @@ defmodule ReviewsWeb.Layouts do
   embed_templates "layouts/*"
 
   @doc """
-  Renders your app layout.
+  Renders the app layout: the page content plus the flash group.
 
-  This function is typically invoked from every template,
-  and it often contains your application menu, sidebar,
-  or similar.
+  HomeLive and SettingsLive use it. ReviewLive renders its own shell and
+  calls `flash_group/1` directly.
 
   ## Examples
 
@@ -27,47 +26,12 @@ defmodule ReviewsWeb.Layouts do
   """
   attr :flash, :map, required: true, doc: "the map of flash messages"
 
-  attr :current_scope, :map,
-    default: nil,
-    doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
-
-  attr :chrome, :boolean,
-    default: true,
-    doc: "whether to render the default application chrome"
-
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <header :if={@chrome} class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" height="36" alt="" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-        </ul>
-      </div>
-    </header>
-
-    <div class={if(@chrome, do: "px-4 py-20 sm:px-6 lg:px-8", else: "p-0")}>
-      <div class={if(@chrome, do: "mx-auto max-w-2xl space-y-4", else: "contents")}>
+    <div class="p-0">
+      <div class="contents">
         {render_slot(@inner_block)}
       </div>
     </div>
