@@ -1,4 +1,4 @@
-// Three pure helpers used by the diff renderer's data layer. Do not grow this
+// Two pure helpers used by the diff renderer's data layer. Do not grow this
 // file without a reason — see the patchset v1 brief.
 
 // groupBy(items, keyFn) -> Map<key, T[]>
@@ -18,7 +18,3 @@ export const keyUnion = (...maps) => {
   return out
 }
 
-// pluck(obj, keys[]) -> Partial<obj>
-// Used to strip pushEvent payloads down to wire shape before zod parses them.
-export const pluck = (obj, keys) =>
-  Object.fromEntries(keys.filter((k) => k in obj).map((k) => [k, obj[k]]))
