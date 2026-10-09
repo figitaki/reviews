@@ -37,6 +37,11 @@ defmodule ReviewsWeb.Api.CommentController do
               url: url(~p"/r/#{review.slug}") <> "#file-" <> file_anchor(thread)
             })
 
+          {:error, :thread_not_found} ->
+            conn
+            |> put_status(:not_found)
+            |> json(%{errors: %{detail: "Thread not found"}})
+
           {:error, reason} ->
             conn
             |> put_status(:unprocessable_entity)
@@ -51,23 +56,11 @@ defmodule ReviewsWeb.Api.CommentController do
       "side" => params["side"] || "new",
       "body" => params["body"],
       "thread_anchor" => params["thread_anchor"] || %{},
-      "thread_id" => cast_thread_id(params["thread_id"])
+      # Passed through as given. `publish_comment/3` casts it and returns
+      # `:thread_not_found` when it is not a thread of this review.
+      "thread_id" => params["thread_id"]
     }
   end
-
-  # A reply carries the id of the thread it belongs to. `publish_comment/3`
-  # matches on an integer, so a JSON string id has to be cast here or the
-  # comment silently opens a new thread instead of joining the existing one.
-  defp cast_thread_id(id) when is_integer(id), do: id
-
-  defp cast_thread_id(id) when is_binary(id) do
-    case Integer.parse(id) do
-      {parsed, ""} -> parsed
-      _ -> nil
-    end
-  end
-
-  defp cast_thread_id(_), do: nil
 
   defp file_anchor(%{file_path: path}) when is_binary(path), do: path
   defp file_anchor(_), do: ""

@@ -242,7 +242,7 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
       assert reply["thread_id"] == first["thread_id"]
     end
 
-    test "a thread_id from another review opens a new thread instead of leaking", %{
+    test "returns 404 for a thread_id from another review", %{
       conn: conn,
       raw_token: raw,
       user: user,
@@ -265,21 +265,62 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
           "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
         })
 
-      resp =
-        conn
-        |> put_req_header("authorization", "Bearer #{raw}")
-        |> put_req_header("content-type", "application/json")
-        |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
-          "file_path" => "foo",
-          "side" => "new",
-          "body" => "should not land on the other review",
-          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1},
-          "thread_id" => foreign.id
-        })
-        |> json_response(201)
-
-      refute resp["thread_id"] == foreign.id
+      assert_thread_not_found(conn, raw, review, foreign.id)
       assert [%{comments: [_only_one]}] = ThreadsContext.list_published_threads(other.id)
     end
+
+    test "returns 404 for a thread_id that does not exist", %{
+      conn: conn,
+      raw_token: raw,
+      review: review
+    } do
+      assert_thread_not_found(conn, raw, review, 2_147_483_647)
+    end
+
+    test "returns 404 for a thread_id past the bigint range", %{
+      conn: conn,
+      raw_token: raw,
+      review: review
+    } do
+      assert_thread_not_found(conn, raw, review, 9_223_372_036_854_775_808)
+      assert_thread_not_found(build_conn(), raw, review, "9223372036854775808")
+    end
+
+    test "returns 404 for a negative or zero thread_id", %{
+      conn: conn,
+      raw_token: raw,
+      review: review
+    } do
+      assert_thread_not_found(conn, raw, review, -1)
+      assert_thread_not_found(build_conn(), raw, review, 0)
+      assert_thread_not_found(build_conn(), raw, review, "-7")
+    end
+
+    test "returns 404 for a thread_id that is not an integer", %{
+      conn: conn,
+      raw_token: raw,
+      review: review
+    } do
+      assert_thread_not_found(conn, raw, review, "abc")
+      assert_thread_not_found(build_conn(), raw, review, "7x")
+    end
+  end
+
+  defp assert_thread_not_found(conn, raw, review, thread_id) do
+    resp =
+      conn
+      |> put_req_header("authorization", "Bearer #{raw}")
+      |> put_req_header("content-type", "application/json")
+      |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
+        "file_path" => "foo",
+        "side" => "new",
+        "body" => "reply to a thread that is not here",
+        "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1},
+        "thread_id" => thread_id
+      })
+      |> json_response(404)
+
+    assert resp == %{"errors" => %{"detail" => "Thread not found"}}
+    assert ThreadsContext.list_published_threads(review.id) == []
   end
 end

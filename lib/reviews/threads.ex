@@ -48,9 +48,10 @@ defmodule Reviews.Threads do
   @doc """
   Creates a published comment in one transaction.
 
-  When `"thread_id"` belongs to the review, the comment is appended to that
-  thread. Otherwise a new thread is created from `"file_path"`, `"side"`, and
-  `"thread_anchor"`.
+  When `"thread_id"` is given, the comment is appended to that thread. If the
+  id is not a thread of this review, it returns `{:error, :thread_not_found}`
+  and writes nothing. Without `"thread_id"`, a new thread is created from
+  `"file_path"`, `"side"`, and `"thread_anchor"`.
 
   `params`:
 
@@ -94,36 +95,8 @@ defmodule Reviews.Threads do
         {:error, :unknown_granularity}
 
       true ->
-        result =
-          Repo.transaction(fn ->
-            thread = fetch_or_create_thread(review, author, thread_id, file_path, side, anchor)
-
-            comment =
-              %Comment{}
-              |> Comment.changeset(%{
-                thread_id: thread.id,
-                author_id: author.id,
-                body: body
-              })
-              |> Repo.insert!()
-
-            %{thread: thread, comment: comment}
-          end)
-
-        case result do
-          {:ok, %{thread: thread, comment: _} = out} ->
-            published_thread = Repo.preload(thread, comments: comments_query())
-
-            Phoenix.PubSub.broadcast(
-              @pubsub,
-              "review:#{review.slug}",
-              {:thread_published, published_thread}
-            )
-
-            {:ok, out}
-
-          {:error, reason} ->
-            {:error, reason}
+        with {:ok, existing} <- fetch_reply_thread(review, thread_id) do
+          insert_comment(review, author, existing, file_path, side, anchor, body)
         end
     end
   rescue
@@ -133,6 +106,40 @@ defmodule Reviews.Threads do
   def publish_comment(%Review{} = review, %User{} = user, params) when is_map(params) do
     with {:ok, identity} <- Accounts.ensure_human_identity(user) do
       publish_comment(review, identity, params)
+    end
+  end
+
+  defp insert_comment(review, author, existing, file_path, side, anchor, body) do
+    result =
+      Repo.transaction(fn ->
+        thread = existing || create_thread(review, author, file_path, side, anchor)
+
+        comment =
+          %Comment{}
+          |> Comment.changeset(%{
+            thread_id: thread.id,
+            author_id: author.id,
+            body: body
+          })
+          |> Repo.insert!()
+
+        %{thread: thread, comment: comment}
+      end)
+
+    case result do
+      {:ok, %{thread: thread, comment: _} = out} ->
+        published_thread = Repo.preload(thread, comments: comments_query())
+
+        Phoenix.PubSub.broadcast(
+          @pubsub,
+          "review:#{review.slug}",
+          {:thread_published, published_thread}
+        )
+
+        {:ok, out}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -221,16 +228,18 @@ defmodule Reviews.Threads do
       preload: [:author]
   end
 
-  defp fetch_or_create_thread(review, author, thread_id, file_path, side, anchor)
-       when is_integer(thread_id) and thread_id > 0 and thread_id <= @max_thread_id do
-    case Repo.get(Thread, thread_id) do
-      %Thread{review_id: rid} = thread when rid == review.id -> thread
-      _ -> create_thread(review, author, file_path, side, anchor)
-    end
-  end
+  # No thread_id starts a new thread. A thread_id that is not a thread of this
+  # review (unparseable, out of range, missing, or from another review) is an
+  # error, so a bad reply never opens a stray thread.
+  defp fetch_reply_thread(_review, nil), do: {:ok, nil}
 
-  defp fetch_or_create_thread(review, author, _thread_id, file_path, side, anchor) do
-    create_thread(review, author, file_path, side, anchor)
+  defp fetch_reply_thread(%Review{id: review_id}, thread_id) do
+    with {:ok, id} <- cast_thread_id(thread_id),
+         %Thread{review_id: ^review_id} = thread <- Repo.get(Thread, id) do
+      {:ok, thread}
+    else
+      _ -> {:error, :thread_not_found}
+    end
   end
 
   defp create_thread(review, author, file_path, side, anchor) do
