@@ -30,7 +30,7 @@ Whichever git remote the maintainer has configured as `origin` is the canonical 
 - **Input:** Rust CLI (`reviews push`) only — no web paste in v1.
 - **Sharing:** link-based; anyone with URL can view anonymously. Commenting requires GitHub OAuth.
 - **Threads:** comments publish right away and every viewer sees them. Draft comments were removed (`priv/repo/migrations/20260519120000_drop_draft_review_support.exs`).
-- **Revisions:** `reviews push --update <slug>` adds patchsets; threads carry across via content-hash anchoring (line text + surrounding context), not line numbers.
+- **Revisions:** `reviews push --update <slug>` adds patchsets; threads carry across by content (line text + surrounding context), not line numbers. `Anchoring.relocate/4` is pure and returns a refreshed anchor, `{:error, :outdated}` or `{:error, :ambiguous}`; see its moduledoc for the tiers. Nothing calls it on push yet.
 - **Config path** for the CLI: `~/.config/reviews/` (cross-platform; matches `gh`, `kubectl`).
 - **Token-level commenting:** the UI and API can write `"token_range"` anchors (`Thread.anchor.granularity`), but relocating them across patchsets is deferred to v1.5. `Anchoring.relocate/3` has a stubbed `"token_range"` branch returning `{:error, :not_implemented}`. Don't remove the stub.
 
