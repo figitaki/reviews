@@ -4,9 +4,9 @@
   "private": true,
   "description": "Front-end assets for the Reviews app. Vanilla @pierre/diffs is mounted via the DiffRenderer Phoenix LiveView hook.",
   "dependencies": {
-    "@pierre/diffs": "1.1.22",
-    "@pierre/trees": "1.0.0-beta.4",
+    "@pierre/diffs": "1.5.1",
+    "@pierre/trees": "1.0.0-beta.6",
     "shiki": "^3.23.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   }
 }
