@@ -1309,14 +1309,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp format_hours(minutes) do
     half_hour_steps = max(2, round(minutes / 30))
 
-    label =
-      if rem(half_hour_steps, 2) == 0 do
-        "#{div(half_hour_steps, 2)}hr"
-      else
-        "#{div(half_hour_steps, 2)}.5hr"
-      end
-
-    "~" <> label
+    if rem(half_hour_steps, 2) == 0 do
+      "#{div(half_hour_steps, 2)}hr"
+    else
+      "#{div(half_hour_steps, 2)}.5hr"
+    end
   end
 
   defp effort_label(minutes) when minutes <= 2, do: "Light"
