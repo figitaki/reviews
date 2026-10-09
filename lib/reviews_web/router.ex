@@ -23,6 +23,7 @@ defmodule ReviewsWeb.Router do
     pipe_through :browser
 
     live "/", HomeLive, :index
+    live "/reviews", ReviewListLive, :index
 
     live "/r/:slug", ReviewLive, :show
     live "/r/:slug/changes", ReviewLive, :changes

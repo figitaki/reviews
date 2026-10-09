@@ -84,6 +84,19 @@
   font-size: 13px;
 }
 
+/* Small phones: keep the brand, Reviews, and the account link on one row. */
+@media (max-width: 520px) {
+  .l-nav-optional {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .l-nav-user:has(.l-nav-avatar) .l-nav-user-name {
+    display: none;
+  }
+}
+
 /* Footer */
 .l-footer {
   border-top: 1px solid var(--ds-line);
