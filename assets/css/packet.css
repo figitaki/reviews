@@ -1179,6 +1179,13 @@ details[open] > summary .review-collapse-icon,
   padding: 8px;
 }
 
+/* Context prose belongs to the hunk after it: sit close to that card and
+   leave the wider gap above, so ownership reads at a glance. */
+.review-packet-row.is-markdown:has(+ .review-packet-row.is-hunk) {
+  margin-bottom: -8px;
+  padding-bottom: 0;
+}
+
 .review-packet-row.is-markdown .review-packet-markdown {
   display: block;
   max-height: none;
