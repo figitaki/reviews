@@ -111,6 +111,45 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
       assert body["repository_id"] == repository.public_id
     end
 
+    test "reserve rejects an object format that differs from the review's repository", %{
+      conn: conn,
+      identity: identity
+    } do
+      config = Application.get_env(:reviews, Reviews.CodeStorage)
+
+      Application.put_env(
+        :reviews,
+        Reviews.CodeStorage,
+        Keyword.put(config, :supported_object_formats, ["sha1", "sha256"])
+      )
+
+      {:ok, %{review: review, patchset: patchset}} =
+        ReviewsContext.create_review_with_initial_patchset(identity, %{
+          title: "Base",
+          raw_diff: @diff
+        })
+
+      repository = code_repository_fixture(identity)
+      snap1 = code_snapshot_fixture(identity, repository)
+
+      {:ok, _} =
+        Repo.transaction(fn ->
+          CodeSnapshots.claim_for_patchset(identity, review, patchset, snap1.public_id)
+        end)
+
+      body =
+        @reserve_body
+        |> Map.put("review_slug", review.slug)
+        |> Map.put("object_format", "sha256")
+        |> Map.put("base_oid", String.duplicate("a", 64))
+        |> Map.put("head_oid", String.duplicate("b", 64))
+
+      conn = post(conn, ~p"/api/v1/code-snapshots", body)
+
+      assert %{"errors" => %{"code" => "unsupported_object_format"}} = json_response(conn, 422)
+      assert Repo.aggregate(CodeSnapshot, :count) == 1
+    end
+
     test "reserve with an unknown review slug 404s", %{conn: conn} do
       conn =
         post(conn, ~p"/api/v1/code-snapshots", Map.put(@reserve_body, "review_slug", "nope1234"))

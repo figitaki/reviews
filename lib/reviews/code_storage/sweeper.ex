@@ -1,7 +1,8 @@
 defmodule Reviews.CodeStorage.Sweeper do
   @moduledoc """
   Periodic cleanup for code storage. Expires unclaimed snapshot reservations
-  and deletes expired, never-claimed staging repositories from the provider.
+  and deletes expired, never-claimed repositories (staging or failed) from the
+  provider.
 
   Database status is the source of truth: every step is idempotent, and a
   crashed sweep is simply retried on the next tick. Disabled in the test env
@@ -58,7 +59,11 @@ defmodule Reviews.CodeStorage.Sweeper do
           {:error, reason} ->
             # Leave the row for retry on the next sweep.
             {:ok, _} = CodeSnapshots.record_repository_error(repository, reason)
-            Logger.warning("code storage sweeper failed to delete repository: #{inspect(reason)}")
+
+            Logger.warning(
+              "code storage sweeper failed to delete repository: " <>
+                CodeSnapshots.redact_error(reason)
+            )
         end
       end)
     end)

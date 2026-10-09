@@ -48,7 +48,8 @@ defmodule Reviews.CodeSnapshots do
   """
   def reserve(%Identity{} = identity, attrs) do
     with :ok <- validate_reserve_attrs(attrs),
-         {:ok, repository} <- find_or_create_repository(identity, attrs[:review_slug]),
+         {:ok, repository} <- find_or_create_repository(identity, attrs),
+         :ok <- check_repository_object_format(repository, attrs[:object_format]),
          {:ok, snapshot} <- insert_reserved_snapshot(identity, repository, attrs),
          {:ok, upload} <- CodeStorage.adapter().upload_instructions(repository, snapshot) do
       {:ok, %{snapshot: snapshot, repository: repository, upload: upload}}
@@ -127,20 +128,29 @@ defmodule Reviews.CodeSnapshots do
   # one. Otherwise (new review, or review without code yet) stage a fresh
   # repository; parallel reservations may stage several, the claim step picks
   # the winner and the sweeper expires the rest.
-  defp find_or_create_repository(identity, review_slug) when is_binary(review_slug) do
+  defp find_or_create_repository(identity, %{review_slug: review_slug} = attrs)
+       when is_binary(review_slug) do
     with %Review{} = review <- Repo.get_by(Review, slug: review_slug) do
       case Repo.one(from r in CodeRepository, where: r.review_id == ^review.id) do
         %CodeRepository{} = repository -> {:ok, repository}
-        nil -> create_staging_repository(identity)
+        nil -> create_staging_repository(identity, attrs[:object_format])
       end
     else
       nil -> {:error, :review_not_found}
     end
   end
 
-  defp find_or_create_repository(identity, _no_slug), do: create_staging_repository(identity)
+  defp find_or_create_repository(identity, attrs),
+    do: create_staging_repository(identity, attrs[:object_format])
 
-  defp create_staging_repository(identity) do
+  # A Git repository has one object format. A later patchset must match the
+  # format of the review's existing repository.
+  defp check_repository_object_format(%CodeRepository{object_format: format}, format), do: :ok
+
+  defp check_repository_object_format(_repository, _format),
+    do: {:error, :unsupported_object_format}
+
+  defp create_staging_repository(identity, object_format) do
     public_id = Ecto.UUID.generate()
 
     repository =
@@ -149,7 +159,7 @@ defmodule Reviews.CodeSnapshots do
         public_id: public_id,
         backend: backend_name(),
         storage_key: "reviews/#{public_id}",
-        object_format: "sha1",
+        object_format: object_format,
         status: "staging",
         expires_at: reservation_deadline()
       })
@@ -336,14 +346,16 @@ defmodule Reviews.CodeSnapshots do
   end
 
   @doc """
-  Unclaimed, expired staging repositories eligible for provider deletion.
-  Locks the rows with `SKIP LOCKED` so concurrent sweepers do not double-work.
+  Unclaimed, expired repositories eligible for provider deletion. This covers
+  `staging` repositories nobody claimed and `failed` ones whose provider-side
+  creation errored. Locks the rows with `SKIP LOCKED` so concurrent sweepers
+  do not double-work.
   """
   def stale_staging_repositories(now \\ DateTime.utc_now(), limit \\ 20) do
     Repo.all(
       from r in CodeRepository,
         where:
-          r.status == "staging" and
+          r.status in ["staging", "failed"] and
             is_nil(r.review_id) and
             r.expires_at < ^now,
         limit: ^limit,
@@ -361,8 +373,11 @@ defmodule Reviews.CodeSnapshots do
     |> Repo.update()
   end
 
-  # Keep operational errors readable without leaking URLs, tokens, or keys.
-  defp redact_error(error) do
+  @doc """
+  Render an operational error for storage in `last_error` or for logs.
+  Keeps it readable without leaking URLs, tokens, or keys.
+  """
+  def redact_error(error) do
     error
     |> inspect()
     |> String.replace(~r/https?:\/\/\S+/, "[url]")

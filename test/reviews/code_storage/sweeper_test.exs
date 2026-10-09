@@ -2,6 +2,7 @@
 defmodule Reviews.CodeStorage.SweeperTest do
   use Reviews.DataCase, async: false
 
+  import ExUnit.CaptureLog
   import Reviews.CodeStorageFixtures
 
   alias Reviews.Accounts
@@ -59,11 +60,22 @@ defmodule Reviews.CodeStorage.SweeperTest do
     past = DateTime.add(DateTime.utc_now(), -60) |> DateTime.truncate(:second)
     stale_repo = code_repository_fixture(identity, %{expires_at: past})
 
-    Sweeper.sweep()
+    log = capture_log(fn -> Sweeper.sweep() end)
 
     repo = Repo.get!(CodeRepository, stale_repo.id)
     assert repo.last_error =~ "[url]"
     refute repo.last_error =~ "code.storage"
+    assert log =~ "failed to delete repository"
+    refute log =~ "code.storage"
+  end
+
+  test "deletes expired repositories whose provider creation failed", %{identity: identity} do
+    past = DateTime.add(DateTime.utc_now(), -60) |> DateTime.truncate(:second)
+    failed_repo = code_repository_fixture(identity, %{status: "failed", expires_at: past})
+
+    Sweeper.sweep()
+
+    assert Repo.get(CodeRepository, failed_repo.id) == nil
   end
 
   test "expires unclaimed snapshots", %{identity: identity} do
