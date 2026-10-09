@@ -113,6 +113,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               :if={@show_packet_outline && @diff_style == "split"}
               section={section}
               section_count={@packet_outline.summary.section_count}
+              current_user={@current_user}
             />
 
             <header
@@ -228,7 +229,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 />
               </div>
 
-              <.packet_section_decision section={section} current_user={@current_user} />
+              <.packet_section_decision
+                section={section}
+                current_user={@current_user}
+                next_section={@packet_outline_sections_by_index[section.index + 1]}
+                diff_style={@diff_style}
+                show_nav={@show_packet_outline}
+              />
             </div>
           </article>
 
@@ -295,7 +302,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           type="button"
           class="review-edge-rail-menu"
           data-guide-flyout-toggle
-          aria-label="Open review map"
+          aria-label="Open guide map"
           aria-controls="review-guide-flyout"
           aria-expanded="false"
         >
@@ -356,9 +363,23 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         id="review-guide-flyout"
         class="review-guide-flyout"
         data-guide-flyout-panel
-        aria-label="Packet outline"
-        aria-hidden="true"
+        role="dialog"
+        aria-labelledby="review-guide-flyout-title"
+        inert
       >
+        <div class="review-guide-flyout-head">
+          <h2 id="review-guide-flyout-title" class="review-guide-flyout-heading">Guide map</h2>
+          <button
+            type="button"
+            class="review-guide-flyout-close"
+            data-guide-flyout-close
+            title="Close guide map"
+            aria-label="Close guide map"
+          >
+            <.icon name="hero-x-mark" class="size-4" />
+          </button>
+        </div>
+
         <div class="review-guide-flyout-group">
           <div class="review-guide-flyout-label">Packet</div>
           <button
@@ -442,48 +463,74 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           this.toggle = this.el.querySelector("[data-guide-flyout-toggle]")
           this.panel = this.el.querySelector("[data-guide-flyout-panel]")
 
+          // Closing makes the panel inert, so focus must leave it first.
+          this.setOpen = (open, {focusToggle = false} = {}) => {
+            if (open === this.open) return
+            if (!open && focusToggle) this.toggle?.focus({preventScroll: true})
+            this.open = open
+            this.sync()
+          }
+
           this.onToggle = event => {
             event.preventDefault()
-            this.open = !this.open
-            this.sync()
+            this.setOpen(!this.open)
+            if (!this.open) return
+            // Inert is lifted in this same task; focus after the next frame so
+            // the browser sees the panel as focusable again.
+            window.requestAnimationFrame(() => {
+              if (!this.open) return
+              const first =
+                this.panel?.querySelector(".review-guide-flyout-section") ||
+                this.panel?.querySelector("[data-guide-flyout-close]")
+              first?.focus({preventScroll: true})
+            })
           }
 
           this.onKeyDown = event => {
-            if (event.key !== "Escape") return
-            if (!this.isOpen()) return
-
-            this.open = false
-            this.sync()
-            this.toggle?.focus()
+            if (event.key !== "Escape" || !this.open) return
+            this.setOpen(false, {focusToggle: true})
           }
 
           this.onPanelClick = event => {
+            if (event.target.closest("[data-guide-flyout-close]")) {
+              this.setOpen(false, {focusToggle: true})
+              return
+            }
             if (!event.target.closest("[phx-click]")) return
+            // The jump that follows moves focus to its target; park focus on
+            // the toggle meanwhile so the panel never goes inert around it.
+            this.setOpen(false, {focusToggle: true})
+          }
 
-            this.open = false
-            this.sync()
+          this.onPointerDown = event => {
+            if (!this.open) return
+            if (this.panel?.contains(event.target) || this.toggle?.contains(event.target)) return
+            this.setOpen(false)
           }
 
           this.toggle?.addEventListener("click", this.onToggle)
           this.panel?.addEventListener("click", this.onPanelClick)
+          document.addEventListener("pointerdown", this.onPointerDown)
           window.addEventListener("keydown", this.onKeyDown)
+          this.sync()
+        },
+
+        updated() {
+          // LiveView patches reset the server-rendered attributes; reapply.
           this.sync()
         },
 
         destroyed() {
           this.toggle?.removeEventListener("click", this.onToggle)
           this.panel?.removeEventListener("click", this.onPanelClick)
+          document.removeEventListener("pointerdown", this.onPointerDown)
           window.removeEventListener("keydown", this.onKeyDown)
         },
 
-        isOpen() {
-          return this.open
-        },
-
         sync() {
-          const open = this.isOpen()
+          const open = this.open
           this.el.classList.toggle("is-flyout-open", open)
-          this.panel?.setAttribute("aria-hidden", open ? "false" : "true")
+          if (this.panel) this.panel.inert = !open
           this.toggle?.setAttribute("aria-expanded", open ? "true" : "false")
         },
       }
@@ -554,7 +601,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         <.change_stat additions={@section.estimate.additions} deletions={@section.estimate.deletions} />
         <span>~{@section.estimate.time}</span>
       </div>
-      <div class="review-guide-section-state" aria-label={"Review state for #{@section.title}"}>
+      <div
+        class="review-guide-section-state"
+        role="group"
+        aria-label={"Review state for #{@section.title}"}
+      >
         <span class={[
           "review-section-state-mark",
           "is-#{@section.effective_status || "pending"}"
@@ -599,6 +650,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   attr :section, :map, required: true
   attr :section_count, :integer, required: true
+  attr :current_user, :any, default: nil
 
   defp packet_section_header(assigns) do
     assigns =
@@ -621,7 +673,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             deletions={@section.estimate.deletions}
           />
           <span>~{@section.estimate.time}</span>
-          <span :if={@section.estimate.hunk_count > 0}>
+          <span :if={@current_user && @section.estimate.hunk_count > 0}>
             {@section.estimate.viewed_count} of {@section.estimate.hunk_count} {plural(
               @section.estimate.hunk_count,
               "hunk"
@@ -630,7 +682,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </span>
       </div>
       <h2 id={@title_id} class="review-section-header-title">{@section.title}</h2>
-      <div class="review-section-header-state" aria-label={"Review state for #{@section.title}"}>
+      <div
+        class="review-section-header-state"
+        role="group"
+        aria-label={"Review state for #{@section.title}"}
+      >
         <span class={[
           "review-section-state-mark",
           "is-#{@section.effective_status || "pending"}"
@@ -648,6 +704,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   attr :section, :map, required: true
   attr :current_user, :any, default: nil
+  attr :next_section, :map, default: nil
+  attr :diff_style, :string, default: "split"
+  attr :show_nav, :boolean, default: false
 
   defp packet_section_decision(assigns) do
     ~H"""
@@ -680,9 +739,32 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             <span class="review-section-action-label">{section_status_label(status)}</span>
           </button>
         <% else %>
-          <span class="review-packet-section-signin">Sign in to record a section decision</span>
+          <.link href={~p"/auth/github"} class="review-packet-section-signin">
+            Sign in to record a section decision
+          </.link>
         <% end %>
       </div>
+      <nav :if={@show_nav} class="review-section-next" aria-label="Section navigation">
+        <button
+          :if={@next_section}
+          type="button"
+          class="review-guide-begin review-section-next-button"
+          phx-click={guide_section_nav_event(@diff_style, @next_section.target_id)}
+          phx-value-section_index={@next_section.index}
+          phx-value-target_id={@next_section.target_id}
+        >
+          Next: {pad2(@next_section.index + 1)} {@next_section.title}
+          <span aria-hidden="true">→</span>
+        </button>
+        <button
+          :if={is_nil(@next_section)}
+          type="button"
+          class="review-guide-begin review-section-next-button is-overview"
+          phx-click="select_packet_overview"
+        >
+          Back to overview
+        </button>
+      </nav>
     </footer>
     """
   end
@@ -994,15 +1076,15 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   def packet_nav(assigns) do
     ~H"""
-    <nav id="review-packet-nav" class="review-packet-nav" aria-label="Packet outline">
+    <nav id="review-packet-nav" class="review-packet-nav" aria-label="Review guide">
       <div class="review-packet-nav-header">
-        <span>Packet Outline</span>
+        <span>Guide</span>
         <button
           type="button"
           class="review-packet-nav-hide"
           phx-click="toggle_packet_outline"
-          title="Hide packet outline"
-          aria-label="Hide packet outline"
+          title="Hide guide"
+          aria-label="Hide guide"
         >
           <.icon name="hero-x-mark" class="size-4" />
         </button>

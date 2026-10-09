@@ -38,8 +38,23 @@
   margin-bottom: 18px;
 }
 
+/* Guide mode keeps the review title as the page H1, but drops the kicker,
+   lede and stats so the guide owns the vertical space. */
 .review-header.is-guide-compact {
+  margin-bottom: 10px;
+  padding-inline: 16px;
+}
+
+.review-header.is-guide-compact .review-packet-kicker,
+.review-header.is-guide-compact .review-description,
+.review-header.is-guide-compact .review-header-meta {
   display: none;
+}
+
+.review-header.is-guide-compact .review-title.is-packet-title {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .review-title {
@@ -553,7 +568,7 @@
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--review-faint);
+  color: var(--review-muted);
   cursor: pointer;
 }
 
@@ -562,7 +577,11 @@
   border-color: var(--review-line);
   background: var(--review-panel-raised);
   color: var(--review-text);
-  outline: none;
+}
+
+.review-packet-nav-hide:focus-visible {
+  outline: 2px solid var(--review-focus);
+  outline-offset: 2px;
 }
 
 .review-packet-nav-empty {
@@ -630,7 +649,7 @@
 }
 
 .review-packet-shell.is-guide-split .review-packet-grid {
-  padding-inline: clamp(20px, 4vw, 72px);
+  padding-inline: clamp(16px, 2vw, 32px);
 }
 
 .review-packet-inline-overview {
@@ -1012,9 +1031,16 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-section-signin {
-  color: var(--review-faint);
+  color: var(--review-muted);
   font-size: 12px;
   font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.review-packet-section-signin:hover,
+.review-packet-section-signin:focus-visible {
+  color: var(--review-text);
 }
 
 .review-guide-section-controls {
@@ -1172,6 +1198,13 @@ details[open] > summary .review-collapse-icon,
   width: min(100%, var(--guide-track));
   margin-inline: auto;
   justify-self: center;
+}
+
+/* Code is the one thing that benefits from every pixel: hunk cards bleed
+   past the prose track into the page gutters and stay centered on it, so
+   wide monitors get wider diffs while the copy keeps its reading measure. */
+.review-packet-shell.is-guide-split .review-packet-row.is-hunk {
+  width: 100%;
 }
 
 .review-packet-shell.is-guide-split .review-packet-section-summary {
@@ -1546,7 +1579,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .reviews-diff-header-hunk {
-  color: var(--review-faint);
+  color: var(--review-muted);
 }
 
 .reviews-diff-header-state {
@@ -1727,7 +1760,7 @@ details[open] > summary .review-collapse-icon,
 .review-edge-rail-hide {
   margin-top: auto;
   border: 1px solid transparent;
-  color: var(--review-faint);
+  color: var(--review-muted);
 }
 
 .review-edge-rail-menu:hover,
@@ -1758,9 +1791,9 @@ details[open] > summary .review-collapse-icon,
   border-radius: 6px;
   background: transparent;
   padding-block: 3px;
-  color: var(--review-faint);
+  color: var(--review-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 740;
   line-height: 1;
   transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
@@ -1827,16 +1860,55 @@ details[open] > summary .review-collapse-icon,
   transform: translateX(-12px);
   transition:
     transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 160ms ease,
-    visibility 0s linear 200ms;
-  visibility: hidden;
+    opacity 160ms ease;
 }
 
+/* Closed, the panel is `inert` (set by the hook), which removes it from the
+   tab order, pointer events and the accessibility tree. No visibility swap is
+   needed, so the panel is focusable the moment it opens. */
 .review-guide-shell.is-flyout-open .review-guide-flyout {
   opacity: 1;
   transform: translateX(0);
-  transition-delay: 0s;
-  visibility: visible;
+}
+
+.review-guide-flyout-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.review-guide-flyout-heading {
+  margin: 0;
+  color: var(--review-text);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.2;
+}
+
+.review-guide-flyout-close {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--review-muted);
+  cursor: pointer;
+}
+
+.review-guide-flyout-close:hover,
+.review-guide-flyout-close:focus-visible {
+  border-color: var(--review-line);
+  background: var(--review-hover);
+  color: var(--review-text);
+}
+
+.review-guide-flyout-close:focus-visible {
+  outline: 2px solid var(--review-focus);
+  outline-offset: 2px;
 }
 
 .review-guide-flyout-group + .review-guide-flyout-group {
@@ -1845,8 +1917,8 @@ details[open] > summary .review-collapse-icon,
 
 .review-guide-flyout-label {
   margin-bottom: 8px;
-  color: var(--review-faint);
-  font-size: 10px;
+  color: var(--review-muted);
+  font-size: 11px;
   font-weight: 760;
   letter-spacing: 0.08em;
   line-height: 1;
@@ -1889,7 +1961,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-flyout-num {
   width: 20px;
   flex: 0 0 auto;
-  color: var(--review-faint);
+  color: var(--review-muted);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 720;
@@ -1915,7 +1987,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-flyout-file {
   overflow: hidden;
   border-radius: 4px;
-  color: var(--review-faint);
+  color: var(--review-muted);
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.2;
@@ -1926,7 +1998,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-guide-flyout-file:hover,
 .review-guide-flyout-file:focus-visible {
-  color: var(--review-muted);
+  color: var(--review-text);
 }
 
 .review-guide-panel {
@@ -1943,8 +2015,8 @@ details[open] > summary .review-collapse-icon,
 
 .review-guide-eyebrow {
   display: block;
-  color: var(--review-faint);
-  font-size: 10px;
+  color: var(--review-muted);
+  font-size: 11px;
   font-weight: 760;
   letter-spacing: 0.08em;
   line-height: 1.2;
@@ -1996,6 +2068,24 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-faint);
   font-size: 12px;
   font-weight: 680;
+}
+
+/* Linear flow: after the decision, the next section is one click away. */
+.review-section-next {
+  display: flex;
+  flex-basis: 100%;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.review-section-next-button {
+  margin-top: 4px;
+}
+
+.review-section-next-button.is-overview {
+  border: 1px solid var(--review-line-strong);
+  background: transparent;
+  color: var(--review-text);
 }
 
 .review-guide-begin {
@@ -2485,5 +2575,11 @@ details[open] > summary .review-collapse-icon,
 @media (prefers-reduced-motion: reduce) {
   .review-packet-section.is-open .review-packet-section-body {
     animation: none;
+  }
+
+  .review-guide-flyout,
+  .review-section-action,
+  .review-section-action-label {
+    transition: none;
   }
 }

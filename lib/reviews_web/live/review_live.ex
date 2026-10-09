@@ -156,6 +156,7 @@ defmodule ReviewsWeb.ReviewLive do
       socket
       |> assign(:show_packet_outline, show_packet_outline)
       |> persist_packet_outline_preference(show_packet_outline)
+      |> push_event("packet_outline_toggled", %{show: show_packet_outline})
 
     {:noreply, socket}
   end
@@ -502,10 +503,16 @@ defmodule ReviewsWeb.ReviewLive do
                       pushStyle("unified", "tablet")
                     } else if (!tablet) {
                       const preferred = saved()
-                      if ((preferred === "split" || preferred === "unified") && preferred !== currentStyle()) {
-                        pushStyle(preferred, "wide")
+                      if (preferred === "split" || preferred === "unified") {
+                        if (preferred !== currentStyle()) pushStyle(preferred, "wide")
+                      } else if (this.wasTablet && currentStyle() !== "split") {
+                        // Tablet forced unified; with no saved preference, go
+                        // back to the default once the viewport is wide again.
+                        pushStyle("split", "wide")
                       }
                     }
+
+                    this.wasTablet = tablet
                   }
 
                   this.syncViewport()
@@ -1096,6 +1103,12 @@ defmodule ReviewsWeb.ReviewLive do
           else
             {MapSet.new(), MapSet.new()}
           end
+
+        [first_section | _] ->
+          # The guide lands focused on the first section. Open its hunks the
+          # same way tick navigation does, so landing and navigating match.
+          hunks = section_hunks(first_section, snapshot.hunks_by_path)
+          {MapSet.new(), MapSet.new(section_hunk_ids_to_open(hunks))}
 
         _ ->
           {MapSet.new(), MapSet.new()}

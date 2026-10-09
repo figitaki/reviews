@@ -106,7 +106,9 @@ const scrollToReviewTarget = (target, {highlight = false} = {}) => {
   const top = Math.max(0, target.getBoundingClientRect().top + scrollTop - targetScrollOffset(target))
 
   scrollToTop(top)
-  target.focus({preventScroll: true})
+  // Keep focus where it is when it already sits inside the target (for
+  // example on the hunk header toggle that just collapsed the card).
+  if (!target.contains(document.activeElement)) target.focus({preventScroll: true})
 
   if (!highlight) return
 
@@ -133,6 +135,27 @@ window.addEventListener("phx:packet_nav_jump", ({detail}) => {
   if (!detail?.id) return
 
   window.requestAnimationFrame(() => scrollToReviewTargetId(detail.id, {highlight: true}))
+})
+
+// Hiding or showing the guide removes the button that had focus. Move focus
+// to its counterpart so keyboard users are not dropped on <body>.
+const focusGuideToggle = (show, attempts = 12) => {
+  const target = show
+    ? document.querySelector(".review-edge-rail-hide, .review-packet-nav-hide")
+    : document.querySelector(".review-outline-toggle")
+
+  if (target) {
+    target.focus({preventScroll: true})
+    return
+  }
+
+  if (attempts <= 0) return
+
+  window.requestAnimationFrame(() => focusGuideToggle(show, attempts - 1))
+}
+
+window.addEventListener("phx:packet_outline_toggled", ({detail}) => {
+  window.requestAnimationFrame(() => focusGuideToggle(Boolean(detail?.show)))
 })
 
 window.addEventListener("phx:hunk_collapsed", ({detail}) => {

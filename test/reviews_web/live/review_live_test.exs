@@ -385,7 +385,10 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
     end
 
-    test "selecting a focused packet section expands every hunk", %{conn: conn, author: author} do
+    test "a focused packet section opens its hunks on landing and on selection", %{
+      conn: conn,
+      author: author
+    } do
       {:ok, %{review: packet_review}} =
         ReviewsCtx.create_review_with_initial_patchset(author, %{
           title: "Small section",
@@ -429,9 +432,30 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#packet-section-0.is-open")
       refute has_element?(view, "#packet-section-1")
 
-      refute has_element?(
+      # Landing opens the first section's hunks the same way tick navigation does.
+      assert has_element?(
                view,
-               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-hunk-expanded="true"]|
+               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-file-path="lib/one.ex"][data-hunk-expanded="true"]|
+             )
+
+      # The decision footer leads into the next section.
+      assert has_element?(
+               view,
+               "#packet-section-0-decision .review-section-next-button",
+               "Next: 02 Second section"
+             )
+
+      view
+      |> element("#packet-section-0-decision .review-section-next-button")
+      |> render_click()
+
+      assert has_element?(view, "#packet-section-1.is-open")
+      refute has_element?(view, "#packet-section-0")
+
+      assert has_element?(
+               view,
+               "#packet-section-1-decision .review-section-next-button",
+               "Back to overview"
              )
 
       view
@@ -929,7 +953,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> render_click()
 
       refute has_element?(view, "#review-guide-shell")
-      assert has_element?(view, ".review-outline-toggle", "Show outline")
+      assert has_element?(view, ".review-outline-toggle", "Show guide")
 
       author = Accounts.get_user!(author.id)
       assert Accounts.get_user_preference(author, :packet_outline_visible, true) == false
@@ -943,7 +967,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> render_click()
 
       refute has_element?(next_view, "#review-guide-shell")
-      assert has_element?(next_view, ".review-outline-toggle", "Show outline")
+      assert has_element?(next_view, ".review-outline-toggle", "Show guide")
     end
 
     test "comments are visible immediately once created", %{

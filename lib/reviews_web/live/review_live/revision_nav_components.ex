@@ -34,7 +34,7 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
             class="review-nav-button review-outline-toggle"
             phx-click="toggle_packet_outline"
           >
-            <.icon name="hero-book-open" class="size-4" /> Show outline
+            <.icon name="hero-book-open" class="size-4" /> Show guide
           </button>
         </div>
 

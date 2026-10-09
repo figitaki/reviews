@@ -123,7 +123,28 @@ export class VanillaDiffRenderer {
     const next = hunkUI || null
     if (JSON.stringify(next) === JSON.stringify(this.hunkUI)) return
     this.hunkUI = next
+    const focused = this.focusedHeaderControl()
     this.render()
+    if (focused) this.restoreHeaderFocus(focused)
+  }
+
+  // Re-rendering rebuilds Pierre's header, which destroys the slotted control
+  // that had keyboard focus (expand/collapse, Mark viewed). Remember which one
+  // it was and focus its replacement so focus never drops to <body>.
+  focusedHeaderControl() {
+    const active = document.activeElement
+    if (!active || !this.container.contains(active)) return null
+    const control = active.closest(".reviews-diff-header-toggle, .reviews-diff-header-viewed")
+    return control ? control.classList[0] : null
+  }
+
+  restoreHeaderFocus(className) {
+    const focus = () => {
+      const control = this.container.querySelector(`.${className}`)
+      if (control) control.focus({ preventScroll: true })
+      return Boolean(control)
+    }
+    if (!focus()) window.requestAnimationFrame(focus)
   }
 
   collapsed() {
