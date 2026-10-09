@@ -728,6 +728,12 @@
   gap: 0;
 }
 
+/* Unified prose keeps the same reading measure as split; only code uses the
+   full column width. */
+.review-packet-shell.is-guide-unified .review-packet-row.is-markdown .review-packet-markdown {
+  max-width: var(--guide-measure, 60ch);
+}
+
 .review-packet-section.is-open .review-packet-section-summary {
   margin-bottom: 4px;
 }
