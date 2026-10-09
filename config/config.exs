@@ -35,19 +35,21 @@ config :esbuild,
 
 # Ueberauth: GitHub OAuth strategy. Client id/secret loaded at runtime (see runtime.exs).
 config :ueberauth, Ueberauth,
+  json_library: JSON,
   providers: [
     github: {Ueberauth.Strategy.Github, [default_scope: "read:user user:email"]}
   ]
 
 # Configure tailwind (the version is required)
 config :tailwind,
-  version: "4.1.12",
+  version: "4.3.0",
   reviews: [
     args: ~w(
       --input=assets/css/app.css
       --output=priv/static/assets/css/app.css
     ),
-    cd: Path.expand("..", __DIR__)
+    cd: Path.expand("..", __DIR__),
+    env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ]
 
 # Configure Elixir's Logger
@@ -55,8 +57,9 @@ config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
-# Use Jason for JSON parsing in Phoenix
-config :phoenix, :json_library, Jason
+# Use Elixir's built-in JSON module for Phoenix, Postgrex (jsonb columns) and Ueberauth.
+config :phoenix, :json_library, JSON
+config :postgrex, :json_library, JSON
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

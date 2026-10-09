@@ -95,6 +95,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 section.index
               )
             }
+            :key={section.index}
             id={"packet-section-#{section.index}"}
             class={[
               "review-packet-section",
@@ -209,6 +210,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               <div class="review-packet-row-list">
                 <.packet_unit
                   :for={unit <- packet_units(section, @hunks_by_path)}
+                  :key={unit.row_id}
                   unit={unit}
                   file_diffs={@file_diffs}
                   selected_patchset={@selected_patchset}
@@ -314,6 +316,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
           <button
             :for={section <- @outline.sections}
+            :key={section.index}
             id={"review-guide-tick-#{section.index}"}
             type="button"
             class={[
@@ -370,7 +373,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
         <div class="review-guide-flyout-group">
           <div class="review-guide-flyout-label">Sections</div>
-          <div :for={section <- @outline.sections} class="review-guide-flyout-item">
+          <div
+            :for={section <- @outline.sections}
+            :key={section.index}
+            class="review-guide-flyout-item"
+          >
             <button
               type="button"
               class={[
@@ -397,6 +404,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             >
               <button
                 :for={file <- section.files}
+                :key={file.path}
                 type="button"
                 class="review-guide-flyout-file"
                 phx-click="packet_nav_jump"
@@ -513,6 +521,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </div>
         <button
           :for={file <- @section.files}
+          :key={file.path}
           type="button"
           class={["review-guide-file-row", "is-#{file.view_state.status}"]}
           phx-click="packet_nav_jump"
@@ -953,7 +962,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           class="review-packet-nav-tree"
           phx-hook="PacketNavTree"
           phx-update="ignore"
-          data-nav={Jason.encode!(@nav)}
+          data-nav={JSON.encode!(@nav)}
         >
         </div>
 
@@ -1705,7 +1714,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp hunk_attrs_json(%{grouped_hunks: hunks}) do
     hunks
     |> Enum.map(&hunk_attrs/1)
-    |> Jason.encode!()
+    |> JSON.encode!()
   end
 
   defp hunk_attrs_json(_hunk), do: nil
@@ -1906,6 +1915,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   defp threads_json(threads, file_path) do
     snapshot = %{published_threads: threads}
-    Jason.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
+    JSON.encode!(ReviewView.thread_payloads_for_file(snapshot, file_path))
   end
 end

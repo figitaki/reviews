@@ -89,61 +89,6 @@
   font-size: 13px;
 }
 
-/* Install snippet — looks like a terminal line */
-.l-install {
-  display: flex;
-  align-items: stretch;
-  border: 1px solid var(--ds-line);
-  border-radius: 8px;
-  background: var(--ds-panel);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.4;
-  overflow: hidden;
-  max-width: 100%;
-}
-
-.l-install-prompt {
-  display: inline-grid;
-  place-items: center;
-  padding: 0 12px;
-  border-right: 1px solid var(--ds-line);
-  color: var(--ds-add);
-  background: var(--ds-panel-raised);
-  font-size: 12px;
-  font-weight: 700;
-  user-select: none;
-}
-
-.l-install-cmd {
-  flex: 1;
-  min-width: 0;
-  padding: 12px 14px;
-  color: var(--ds-text);
-  overflow-x: auto;
-  white-space: nowrap;
-  scrollbar-width: none;
-}
-.l-install-cmd::-webkit-scrollbar { display: none; }
-
-.l-install-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  border: 0;
-  border-left: 1px solid var(--ds-line);
-  background: var(--ds-panel);
-  color: var(--ds-muted);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color 160ms ease, background 160ms ease;
-}
-.l-install-copy:hover { color: var(--ds-text); background: var(--ds-hover); }
-.l-install-copy.is-copied { color: var(--ds-add); }
-
 /* Footer */
 .l-footer {
   border-top: 1px solid var(--ds-line);

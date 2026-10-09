@@ -55,7 +55,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
         }
       )
 
-    %{"hunk_attrs" => Jason.encode!(attrs), "hunk_id" => hunk_id}
+    %{"hunk_attrs" => JSON.encode!(attrs), "hunk_id" => hunk_id}
   end
 
   defp changes_hunk_id(review, path) do

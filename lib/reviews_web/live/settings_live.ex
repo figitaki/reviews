@@ -133,6 +133,7 @@ defmodule ReviewsWeb.SettingsLive do
 
                       <.identity_row
                         :for={identity <- @agent_identities}
+                        :key={identity.id}
                         identity={identity}
                         token_stats={Map.get(@identity_token_stats, identity.id, %{count: 0})}
                         id={"identity-agent-#{identity.id}"}
@@ -242,6 +243,7 @@ defmodule ReviewsWeb.SettingsLive do
                     <div :if={@tokens != []} id="tokens-list" class="ds-token-list">
                       <section
                         :for={{identity, tokens} <- tokens_by_identity(@identities, @tokens)}
+                        :key={identity.id}
                         id={"tokens-for-identity-#{identity.id}"}
                         class="ds-token-group"
                         aria-labelledby={"tokens-for-identity-#{identity.id}-title"}
@@ -250,7 +252,12 @@ defmodule ReviewsWeb.SettingsLive do
                           {identity_label(identity)}
                         </h3>
                         <ul>
-                          <li :for={token <- tokens} id={"token-#{token.id}"} class="ds-token-row">
+                          <li
+                            :for={token <- tokens}
+                            :key={token.id}
+                            id={"token-#{token.id}"}
+                            class="ds-token-row"
+                          >
                             <span class="ds-token-row-name" translate="no">
                               {token.name || "(unnamed)"}
                             </span>

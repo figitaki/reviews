@@ -77,6 +77,7 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
           <div class="review-revision-chip-list" aria-label="Revisions">
             <button
               :for={revision <- @nav.revisions}
+              :key={revision.number}
               id={"patchset-#{revision.number}"}
               type="button"
               class={[

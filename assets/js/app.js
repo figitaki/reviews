@@ -27,7 +27,6 @@ import topbar from "../vendor/topbar"
 import DiffRenderer from "./hooks/diff_renderer"
 import GuideFlyout from "./hooks/guide_flyout"
 import PacketNavTree from "./hooks/packet_nav_tree"
-import InstallCopy from "./hooks/install_copy"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -38,7 +37,6 @@ const liveSocket = new LiveSocket("/live", Socket, {
     DiffRenderer,
     GuideFlyout,
     PacketNavTree,
-    InstallCopy,
   },
 })
 

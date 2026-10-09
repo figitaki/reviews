@@ -19,7 +19,7 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
     ~H"""
     <div class="rev-shell is-outline-hidden">
       <section :if={@selected_patchset} id="diff-files" class="review-hunk-list min-w-0">
-        <div :for={fd <- @file_diffs} id={"file-#{fd.id}"} class="review-file-hunks">
+        <div :for={fd <- @file_diffs} :key={fd.id} id={"file-#{fd.id}"} class="review-file-hunks">
           <% file_hunks = Map.get(@hunks_by_path, fd.path, []) %>
           <% file_state = file_view_state(file_hunks) %>
           <PacketComponents.hunk_card
