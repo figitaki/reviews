@@ -68,23 +68,28 @@ protection rules".
 
 ### 2. Fly Postgres for previews
 
-Preview apps share a single Postgres database. This is the simple v1
-trade-off: data leaks across previews, and a migration in one PR can
-affect a preview running on another PR. For a tool with link-based,
-ephemeral data this is acceptable; per-PR databases are a worthwhile
-follow-up.
+All preview apps use one Postgres server, but each preview app has its
+own database on it: `reviews_pr_<N>`. See "Per-PR databases" below.
 
 Either provision a new cluster (`fly postgres create --name
-reviews-preview-pg --region sjc`) or reuse the prod cluster with a
-**separate database name** so prod data isn't touched:
+reviews-preview-pg --region sjc`) or reuse the prod cluster. Prod data
+is not touched: previews only create, use and drop `reviews_pr_<N>`
+databases.
+
+`PREVIEW_DATABASE_URL` gives the server and the credentials. The
+database name in its path does not matter, because the workflow
+replaces it with `reviews_pr_<N>`. The user in the URL must be able to
+create databases (`CREATEDB` or superuser). To give an existing user
+that permission:
 
 ```sh
 fly postgres connect -a reviews-dev-pg <<'SQL'
-CREATE DATABASE reviews_preview;
+ALTER ROLE <preview_user> CREATEDB;
 SQL
 ```
 
-Grab the connection URL — that goes into `PREVIEW_DATABASE_URL` below.
+The server must also have a `postgres` database (Fly Postgres has one).
+The release command connects to it to run `CREATE DATABASE`.
 
 ### 3. GitHub OAuth app for previews
 
@@ -114,7 +119,7 @@ Under **Settings → Secrets and variables → Actions**:
 | ------------------------------- | ----------------------------------------------------- |
 | `FLY_API_TOKEN`                 | Same token as production CI (`fly auth token`)        |
 | `PREVIEW_SECRET_KEY_BASE`       | Output of `mix phx.gen.secret`                        |
-| `PREVIEW_DATABASE_URL`          | Full `postgres://...` URL for the shared preview DB   |
+| `PREVIEW_DATABASE_URL`          | Full `postgres://...` URL for the preview Postgres server. The workflow replaces the database name with `reviews_pr_<N>`. |
 | `PREVIEW_API_TOKEN`             | A bearer token of your choice (e.g. `rev_$(openssl rand -hex 24)`). Used to bootstrap a synthetic "preview" user — see "Pushing diffs to a preview" below. |
 | `PREVIEW_GITHUB_CLIENT_ID`      | _(optional — leave unset to skip OAuth on previews)_  |
 | `PREVIEW_GITHUB_CLIENT_SECRET`  | _(optional — leave unset to skip OAuth on previews)_  |
@@ -145,6 +150,93 @@ previews.
 
 ---
 
+## Per-PR databases
+
+Each preview app `reviews-pr-<N>` uses its own database,
+`reviews_pr_<N>`, on the preview Postgres server.
+
+**Why.** On 2026-10-09, 14 PRs had previews deployed at the same time,
+and all of them used one shared database. Two problems occurred:
+
+- Four release commands failed with "Could not create schema
+  migrations table", because the apps used all the connections on the
+  server.
+- Three branches with migrations ran `ALTER TABLE` on the shared
+  database. After that, every preview app that was already running
+  returned 500 on review pages, because its open connections had
+  cached query plans for the old tables. The 500s stopped only when
+  each app was deployed again.
+
+With one database per app, a migration in one PR changes only that
+PR's database.
+
+**How the database is created.**
+
+1. The "Stage secrets" step in `.github/workflows/fly-review.yml` sets
+   these secrets on the app:
+   - `PREVIEW_DB_NAME=reviews_pr_<N>`. The step stops if the name does
+     not match `reviews_pr_<digits>`.
+   - `DATABASE_URL`: `PREVIEW_DATABASE_URL` with its path replaced by
+     `/reviews_pr_<N>`.
+   - `POOL_SIZE=3`, so that many previews together do not use all the
+     connections on the server. Prod uses the default of 10.
+2. The release command (`/app/bin/migrate`) runs
+   `Reviews.Release.ensure_database/0` first. It connects to the
+   `postgres` maintenance database with the same credentials and runs
+   `CREATE DATABASE reviews_pr_<N>` if the database does not exist.
+   Then it runs migrations and seeds as before.
+
+`ensure_database/0` does nothing when `PREVIEW_DB_NAME` is not set, so
+prod is not affected. When `PREVIEW_DB_NAME` is set, it stops with an
+error if the name is not `reviews_pr_<digits>`, or if `DATABASE_URL`
+names a different database. This prevents a preview from migrating a
+database that it does not own.
+
+**How the database is dropped.** When the PR closes, the "Drop preview
+database" step runs before "Destroy preview app":
+
+1. It sends one HTTP request to the app, so that Fly starts a stopped
+   machine.
+2. It runs this command in the app, up to five times:
+
+   ```sh
+   flyctl ssh console --app reviews-pr-<N> \
+     -C "/app/bin/reviews eval Reviews.Release.drop_preview_database"
+   ```
+
+   `drop_preview_database/0` runs `DROP DATABASE ... WITH (FORCE)`, which
+   also closes the app's open connections. It uses the same checks as
+   `ensure_database/0`, so it drops only `reviews_pr_<digits>`, and only
+   the database that the app's own `DATABASE_URL` names.
+
+The drop step is best effort (`continue-on-error: true`). If it fails,
+the app is still destroyed, and the run shows a warning.
+
+**If a drop fails.** Drop the database by hand. Do this only for a PR
+that is closed:
+
+```sh
+fly postgres connect -a reviews-dev-pg <<'SQL'
+DROP DATABASE IF EXISTS reviews_pr_42 WITH (FORCE);
+SQL
+```
+
+To find databases that were not dropped, list them and compare with
+the open PRs:
+
+```sh
+fly postgres connect -a reviews-dev-pg <<'SQL'
+SELECT datname FROM pg_database WHERE datname LIKE 'reviews_pr_%';
+SQL
+```
+
+Apps that were deployed before this change have no `PREVIEW_DB_NAME`
+and use the old shared database. When such a PR closes, the drop step
+does nothing. On the next push, the app moves to its own database,
+which starts empty except for the demo review and the preview user.
+
+---
+
 ## How a PR flows through
 
 1. **PR opened** by a maintainer/collaborator → workflow fires →
@@ -152,12 +244,14 @@ previews.
    waits for approval → `flyctl apps create` makes `reviews-pr-<N>`,
    `flyctl secrets set --stage` writes config, and `flyctl deploy
    --remote-only` builds the image on Fly's builders. The release
-   command in `fly.toml` runs migrations and seeds the preview user.
+   command in `fly.toml` creates the `reviews_pr_<N>` database if
+   needed, runs migrations and seeds the preview user.
 
 2. **Subsequent pushes** → workflow re-runs → app redeploys with the
    new HEAD.
 
 3. **PR closed (merged or not)** → workflow fires the close path →
+   the `reviews_pr_<N>` database is dropped (best effort), then
    `flyctl apps destroy` removes the Fly app.
 
 ---
@@ -170,6 +264,8 @@ If a preview app gets stuck or the close workflow didn't run:
 fly apps destroy reviews-pr-42
 ```
 
+Then drop its database by hand, as in "If a drop fails" above.
+
 ---
 
 ## Known limitations
@@ -177,11 +273,9 @@ fly apps destroy reviews-pr-42
 - **OAuth doesn't work on previews** unless you set up a proxy or per-PR
   apps. See "GitHub OAuth app for previews" above.
 - **No custom domain.** Previews live at `reviews-pr-<N>.fly.dev` only.
-- **Shared database.** All previews share one Postgres DB; migrations
-  and data are not isolated. Per-PR databases are a worthwhile
-  follow-up but require automation for `CREATE DATABASE` / `DROP
-  DATABASE` and routing the per-PR DB name into each app's
-  `DATABASE_URL`.
+- **Shared Postgres server.** Each preview has its own database, but
+  all previews use one server. They share its connection limit, CPU
+  and memory. `POOL_SIZE=3` keeps each app's share small.
 - **Cost.** Each preview app is a 1GB/1vCPU machine that auto-stops when
   idle (`auto_stop_machines = 'stop'`, inherited from `fly.toml`).
   Idle cost is near zero; an active preview is roughly the same as the
