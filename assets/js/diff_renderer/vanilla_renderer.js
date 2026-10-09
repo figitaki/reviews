@@ -1,4 +1,6 @@
 import * as Diffs from "@pierre/diffs"
+import { isMarkdown, markdownPatchExcerpts } from "../lib/markdown.js"
+import { markdownPreview } from "./markdown_preview.js"
 
 import {
   commentComposer,
@@ -93,6 +95,8 @@ export class VanillaDiffRenderer {
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
     this.virtualizer = null
+    this.preview = false
+    this.hasMarkdownPreview = isMarkdown(filePath) && markdownPatchExcerpts(rawDiff).length > 0
   }
 
   update({ threads }) {
@@ -234,7 +238,7 @@ export class VanillaDiffRenderer {
 
   renderArgs() {
     const args = {
-      containerWrapper: this.container,
+      containerWrapper: this.sourceContainer || this.container,
       lineAnnotations: this.annotations(),
     }
     if (this.fileDiff) args.fileDiff = this.fileDiff
@@ -246,6 +250,29 @@ export class VanillaDiffRenderer {
     this.cleanUp(false)
     this.container.replaceChildren()
     this.container.dataset.virtualized = "false"
+
+    this.sourceContainer = this.container
+    if (this.hasMarkdownPreview) {
+      const toolbar = el("div", { className: "review-markdown-toolbar", role: "group", "aria-label": "Markdown view" })
+      for (const [label, preview] of [["Source", false], ["Preview", true]]) {
+        toolbar.append(el("button", {
+          type: "button", className: "review-button review-button-ghost",
+          "aria-pressed": String(this.preview === preview),
+          onclick: () => {
+            this.preview = preview
+            this.render()
+            this.container.querySelector(`[aria-pressed="true"]`)?.focus()
+          },
+        }, label))
+      }
+      this.container.append(toolbar)
+      if (this.preview) {
+        this.container.append(markdownPreview(this.rawDiff, this.diffStyle))
+        return
+      }
+      this.sourceContainer = el("div")
+      this.container.append(this.sourceContainer)
+    }
 
     const options = this.options()
     const renderArgs = this.renderArgs()
@@ -263,7 +290,7 @@ export class VanillaDiffRenderer {
 
     try {
       const contentWrapper = el("div", { className: "review-virtualized-diff-content" })
-      this.container.append(contentWrapper)
+      this.sourceContainer.append(contentWrapper)
       this.virtualizer = new Diffs.Virtualizer({
         overscrollSize: 800,
         intersectionObserverMargin: 800,
@@ -286,7 +313,7 @@ export class VanillaDiffRenderer {
       // eslint-disable-next-line no-console
       console.warn("[DiffRenderer] virtualized render unavailable; falling back to FileDiff:", err)
       this.cleanUp(false)
-      this.container.replaceChildren()
+      this.sourceContainer.replaceChildren()
       return false
     }
   }

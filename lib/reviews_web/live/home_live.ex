@@ -92,6 +92,14 @@ defmodule ReviewsWeb.HomeLive do
               Turn any diff into a <strong>structured review packet</strong>, optimized for agentic workflows. Install the CLI and skills to start iterating immediately.
             </p>
 
+            <.link
+              id="home-demo-link"
+              navigate={~p"/demo"}
+              class="review-button review-button-primary"
+            >
+              Explore the demo <.icon name="hero-arrow-right" class="size-4" />
+            </.link>
+
             <div class="home-hero-install">
               <.install_snippet id="hero-install" command={@install_command} />
             </div>
