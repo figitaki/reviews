@@ -65,6 +65,7 @@ defmodule ReviewsWeb.Router do
     pipe_through :browser
 
     live "/", HomeLive, :index
+    live "/reviews", ReviewListLive, :index
     live "/settings", SettingsLive, :edit
     # Off in production unless DESIGN_CATALOG is set; see ReviewsWeb.DesignLive.
     live "/design", DesignLive, :index
