@@ -2,6 +2,7 @@
 //!
 //! Endpoints (see docs/CONTRACTS.md):
 //!   GET  /api/v1/me
+//!   GET  /api/v1/reviews
 //!   POST /api/v1/reviews
 //!   POST /api/v1/reviews/:slug/patchsets
 //!   GET  /api/v1/reviews/:slug
@@ -96,6 +97,23 @@ pub struct SectionDecisionResponse {
     pub patchset_number: i64,
     pub section_index: i64,
     pub status: Option<String>,
+}
+
+/// Filters for `GET /api/v1/reviews`. `None` fields are left out of the query.
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct ListReviewsQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub q: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<u32>,
 }
 
 impl ApiClient {
@@ -194,6 +212,19 @@ impl ApiClient {
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 
+    pub fn list_reviews(&self, query: &ListReviewsQuery) -> Result<Value> {
+        let path = "/api/v1/reviews";
+        let _ = self.require_token(&format!("GET {path}"))?;
+        let resp = self
+            .auth(self.http.get(self.url(path)))
+            .query(query)
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<Value>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
     pub fn show_review(&self, slug: &str, patchset: Option<i64>) -> Result<Value> {
         let path = format!("/api/v1/reviews/{slug}");
         let mut req = self.auth(self.http.get(self.url(&path)));
@@ -239,6 +270,7 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
         }
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",
+        StatusCode::BAD_REQUEST => " — the server did not accept a parameter. See the body.",
         _ => "",
     };
     Err(anyhow!("{what} failed: HTTP {status}{hint}\nbody: {body}"))
@@ -473,6 +505,63 @@ mod tests {
         assert_eq!(resp.review, "k7m2qz");
         assert_eq!(resp.status.as_deref(), Some("approved"));
         mock.assert();
+    }
+
+    #[test]
+    fn list_reviews_sends_filters_and_token() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("GET", "/api/v1/reviews")
+            .match_header("authorization", "Bearer tok")
+            .match_query(mockito::Matcher::AllOf(vec![
+                mockito::Matcher::UrlEncoded("role".into(), "involved".into()),
+                mockito::Matcher::UrlEncoded("q".into(), "billing export".into()),
+                mockito::Matcher::UrlEncoded("limit".into(), "5".into()),
+            ]))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"reviews":[],"limit":5,"offset":0,"next_offset":null}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let body = client
+            .list_reviews(&ListReviewsQuery {
+                role: Some("involved".into()),
+                q: Some("billing export".into()),
+                limit: Some(5),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(body["limit"], 5);
+        mock.assert();
+    }
+
+    #[test]
+    fn list_reviews_requires_token() {
+        let client = ApiClient::anonymous("http://example.invalid").unwrap();
+        let err = client
+            .list_reviews(&ListReviewsQuery::default())
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("reviews login"));
+    }
+
+    #[test]
+    fn list_reviews_400_shows_hint() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/api/v1/reviews")
+            .match_query(mockito::Matcher::Any)
+            .with_status(400)
+            .with_body(r#"{"errors":{"role":"must be one of: all, authored, involved"}}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let err = client
+            .list_reviews(&ListReviewsQuery::default())
+            .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("400"), "msg = {msg}");
+        assert!(msg.contains("must be one of"), "msg = {msg}");
     }
 
     #[test]
