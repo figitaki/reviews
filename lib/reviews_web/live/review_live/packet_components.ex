@@ -108,11 +108,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               ) && "is-open"
             ]}
           >
-            <.packet_inline_section_overview
+            <.packet_section_header
               :if={@show_packet_outline && @diff_style == "split"}
-              section={Map.fetch!(@packet_outline_sections_by_index, section.index)}
+              section={section}
               section_count={@packet_outline.summary.section_count}
-              current_user={@current_user}
             />
 
             <header
@@ -151,54 +150,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               </button>
 
               <div class="review-packet-section-controls">
-                <span
-                  :if={section.previous}
-                  class={[
-                    "review-section-state-pill",
-                    "is-previous",
-                    "is-#{section.previous.status}"
-                  ]}
-                  title={"Previously #{section.previous.status} in v#{section.previous.patchset_number}"}
-                  aria-label={"Previously #{section.previous.status} in version #{section.previous.patchset_number}"}
-                >
-                  <.section_status_icon status={section.previous.status} />
-                  <span class="sr-only">
-                    Previously {section.previous.status} in v{section.previous.patchset_number}
-                  </span>
+                <span class="review-section-summary-status">
+                  {section_decision_state_label(section)}
                 </span>
-
-                <.icon
-                  :if={section.previous}
-                  name="hero-chevron-right"
-                  class="review-section-transition-icon"
-                />
-
-                <div
-                  class="review-packet-section-actions"
-                  aria-label={"Decision for #{section.title}"}
-                >
-                  <%= if @current_user do %>
-                    <button
-                      :for={status <- ~w(approved denied ignored)}
-                      type="button"
-                      class={[
-                        "review-section-action",
-                        section.effective_status == status && "is-active",
-                        "is-#{status}"
-                      ]}
-                      title={section_status_label(status)}
-                      aria-label={section_status_label(status)}
-                      phx-click="set_section_status"
-                      phx-value-section_index={section.index}
-                      phx-value-status={status}
-                    >
-                      <.section_status_icon status={status} />
-                      <span class="review-section-action-label">{section_status_label(status)}</span>
-                    </button>
-                  <% else %>
-                    <span class="review-packet-section-signin">Sign in to review</span>
-                  <% end %>
-                </div>
 
                 <button
                   type="button"
@@ -266,11 +220,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                   section_title={section.title}
                   file_labels={@file_labels}
                   dedupe_intro?={
-                    @show_packet_outline && @diff_style in ["split", "unified"] &&
+                    @show_packet_outline && @diff_style == "unified" &&
                       section.index == @active_section_index
                   }
                 />
               </div>
+
+              <.packet_section_decision section={section} current_user={@current_user} />
             </div>
           </article>
 
@@ -362,16 +318,23 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             type="button"
             class={[
               "review-edge-tick",
-              section.index == @active_section_index && "is-active",
-              section.effective_status && "is-#{section.effective_status}"
+              section.index == @active_section_index && "is-active"
             ]}
             phx-click={guide_section_nav_event(@diff_style, section.target_id)}
             phx-value-section_index={section.index}
             phx-value-target_id={section.target_id}
-            aria-label={"#{String.pad_leading(Integer.to_string(section.index + 1), 2, "0")} #{section.title}"}
+            title={"#{section.title} — #{section.status_label}"}
+            aria-label={"#{pad2(section.index + 1)} #{section.title}; decision: #{section.status_label}"}
             aria-current={if(section.index == @active_section_index, do: "true", else: "false")}
           >
-            {String.pad_leading(Integer.to_string(section.index + 1), 2, "0")}
+            <span class="review-edge-tick-number">{pad2(section.index + 1)}</span>
+            <span
+              :if={section.effective_status}
+              class={["review-edge-tick-state", "is-#{section.effective_status}"]}
+              aria-hidden="true"
+            >
+              <.section_status_icon status={section.effective_status} />
+            </span>
           </button>
         </div>
 
@@ -418,10 +381,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               phx-value-section_index={section.index}
               phx-value-target_id={section.target_id}
             >
-              <span class="review-guide-flyout-num">
-                {String.pad_leading(Integer.to_string(section.index + 1), 2, "0")}
-              </span>
+              <span class="review-guide-flyout-num">{pad2(section.index + 1)}</span>
               <span class="review-guide-flyout-title">{section.title}</span>
+              <span
+                :if={section.effective_status}
+                class={["review-guide-flyout-state", "is-#{section.effective_status}"]}
+              >
+                <.section_status_icon status={section.effective_status} /> {section.status_label}
+              </span>
             </button>
 
             <div
@@ -526,53 +493,19 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         <.change_stat additions={@section.estimate.additions} deletions={@section.estimate.deletions} />
         <span>~{@section.estimate.time}</span>
       </div>
-      <div class="review-guide-section-controls">
-        <span
-          :if={@section.previous}
-          class={[
-            "review-section-state-pill",
-            "is-previous",
-            "is-#{@section.previous.status}"
-          ]}
-          title={"Previously #{@section.previous.status} in v#{@section.previous.patchset_number}"}
-          aria-label={"Previously #{@section.previous.status} in version #{@section.previous.patchset_number}"}
-        >
-          <.section_status_icon status={@section.previous.status} />
-          <span class="sr-only">
-            Previously {@section.previous.status} in v{@section.previous.patchset_number}
-          </span>
+      <div class="review-guide-section-state" aria-label={"Review state for #{@section.title}"}>
+        <span class={[
+          "review-section-state-mark",
+          "is-#{@section.effective_status || "pending"}"
+        ]}>
+          <.section_status_icon status={@section.effective_status} />
         </span>
-
-        <.icon
-          :if={@section.previous}
-          name="hero-chevron-right"
-          class="review-section-transition-icon"
-        />
-
-        <div class="review-packet-section-actions" aria-label={"Decision for #{@section.title}"}>
-          <%= if @current_user do %>
-            <button
-              :for={status <- ~w(approved denied ignored)}
-              type="button"
-              class={[
-                "review-section-action",
-                @section.effective_status == status && "is-active",
-                "is-#{status}"
-              ]}
-              title={section_status_label(status)}
-              aria-label={section_status_label(status)}
-              phx-click="set_section_status"
-              phx-value-section_index={@section.index}
-              phx-value-status={status}
-            >
-              <.section_status_icon status={status} />
-              <span class="review-section-action-label">{section_status_label(status)}</span>
-            </button>
-          <% else %>
-            <span class="review-packet-section-signin">Sign in to review</span>
-          <% end %>
-        </div>
+        <span class="review-section-state-text">{section_decision_state_label(@section)}</span>
+        <span :if={@section.decision_history} class="review-section-state-history">
+          {@section.decision_history}
+        </span>
       </div>
+
       <div :if={@section.files != []} class="review-guide-panel-files">
         <div class="review-guide-files-label">
           <span>Files</span>
@@ -604,25 +537,91 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   attr :section, :map, required: true
   attr :section_count, :integer, required: true
-  attr :current_user, :any, default: nil
 
-  defp packet_inline_section_overview(assigns) do
+  defp packet_section_header(assigns) do
     assigns =
       assign(assigns, :title_id, "review-split-section-overview-title-#{assigns.section.index}")
 
     ~H"""
-    <section
+    <header
       id={"review-split-section-overview-#{@section.index}"}
-      class="review-packet-inline-overview is-section"
+      class="review-section-header"
       aria-labelledby={@title_id}
     >
-      <.packet_guide_section_panel
-        section={@section}
-        section_count={@section_count}
-        current_user={@current_user}
-        title_id={@title_id}
-      />
-    </section>
+      <div class="review-section-header-eyebrow">
+        <span class="review-guide-eyebrow">
+          Section {pad2(@section.index + 1)} / {pad2(@section_count)}
+        </span>
+        <span class="review-section-header-meta">
+          <span>{@section.estimate.effort}</span>
+          <.change_stat
+            additions={@section.estimate.additions}
+            deletions={@section.estimate.deletions}
+          />
+          <span>~{@section.estimate.time}</span>
+          <span :if={@section.estimate.hunk_count > 0}>
+            {@section.estimate.viewed_count} of {@section.estimate.hunk_count} {plural(
+              @section.estimate.hunk_count,
+              "hunk"
+            )} viewed
+          </span>
+        </span>
+      </div>
+      <h2 id={@title_id} class="review-section-header-title">{@section.title}</h2>
+      <div class="review-section-header-state" aria-label={"Review state for #{@section.title}"}>
+        <span class={[
+          "review-section-state-mark",
+          "is-#{@section.effective_status || "pending"}"
+        ]}>
+          <.section_status_icon status={@section.effective_status} />
+        </span>
+        <span class="review-section-state-text">{section_decision_state_label(@section)}</span>
+        <span :if={@section.decision_history} class="review-section-state-history">
+          {@section.decision_history}
+        </span>
+      </div>
+    </header>
+    """
+  end
+
+  attr :section, :map, required: true
+  attr :current_user, :any, default: nil
+
+  defp packet_section_decision(assigns) do
+    ~H"""
+    <footer id={"packet-section-#{@section.index}-decision"} class="review-section-decision">
+      <div class="review-section-decision-copy">
+        <span class="review-guide-eyebrow">Section decision</span>
+        <p class="review-section-decision-prompt">{section_decision_prompt(@section)}</p>
+        <p :if={@section.decision_history} class="review-section-decision-history">
+          {@section.decision_history}
+        </p>
+      </div>
+      <div class="review-packet-section-actions" aria-label={"Decision for #{@section.title}"}>
+        <%= if @current_user do %>
+          <button
+            :for={status <- ~w(approved denied ignored)}
+            type="button"
+            class={[
+              "review-section-action",
+              @section.effective_status == status && "is-active",
+              "is-#{status}"
+            ]}
+            title={section_status_label(status)}
+            aria-label={section_status_label(status)}
+            aria-pressed={to_string(@section.effective_status == status)}
+            phx-click="set_section_status"
+            phx-value-section_index={@section.index}
+            phx-value-status={status}
+          >
+            <.section_status_icon status={status} />
+            <span class="review-section-action-label">{section_status_label(status)}</span>
+          </button>
+        <% else %>
+          <span class="review-packet-section-signin">Sign in to record a section decision</span>
+        <% end %>
+      </div>
+    </footer>
     """
   end
 
@@ -652,7 +651,16 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         files = outline_files(section, hunks_by_path, file_by_path)
 
         section
-        |> Map.take([:index, :title, :summary, :effective_status, :previous, :estimate])
+        |> Map.take([
+          :index,
+          :title,
+          :summary,
+          :status,
+          :effective_status,
+          :previous,
+          :decision_history,
+          :estimate
+        ])
         |> Map.put(:status_label, guide_status_label(section.effective_status))
         |> Map.put(:files, files)
         |> Map.put(:file_count, length(files))
@@ -727,10 +735,46 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> Map.put(:status, state.current && state.current.status)
       |> Map.put(:effective_status, state.effective && state.effective.status)
       |> Map.put(:previous, state.previous)
+      |> Map.put(:decision_history, decision_history(state.previous, selected_patchset))
       |> Map.put(:summary, section_summary(section))
       |> Map.put(:estimate, section_estimate(section, assigns.hunks_by_path))
     end)
   end
+
+  defp decision_history(nil, _selected_patchset), do: nil
+
+  defp decision_history(previous, selected_patchset) do
+    sentence =
+      "Previously #{String.downcase(guide_status_label(previous.status))} in v#{previous.patchset_number}"
+
+    case selected_patchset do
+      %{number: number} -> sentence <> "; outdated for v#{number}."
+      _ -> sentence <> "."
+    end
+  end
+
+  defp section_decision_state_label(%{status: status})
+       when status in ~w(approved denied ignored),
+       do: guide_status_label(status)
+
+  defp section_decision_state_label(%{effective_status: status})
+       when status in ~w(approved denied ignored),
+       do: guide_status_label(status) <> " (carried forward)"
+
+  defp section_decision_state_label(%{previous: %{}}), do: "Pending for this revision"
+  defp section_decision_state_label(_section), do: "Pending"
+
+  defp section_decision_prompt(%{status: status})
+       when status in ~w(approved denied ignored),
+       do: "Current decision: #{guide_status_label(status)}."
+
+  defp section_decision_prompt(%{effective_status: status})
+       when status in ~w(approved denied ignored),
+       do: "Current decision: #{guide_status_label(status)} (carried forward)."
+
+  defp section_decision_prompt(_section), do: "Ready to decide?"
+
+  defp pad2(value), do: String.pad_leading(Integer.to_string(value), 2, "0")
 
   defp section_expanded?(expanded_section_ids, section_index) do
     MapSet.member?(expanded_section_ids, section_index)
@@ -1219,13 +1263,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp effort_label(_minutes), do: "Deep"
 
   defp guide_status_label("approved"), do: "Approved"
-  defp guide_status_label("denied"), do: "Denied"
-  defp guide_status_label("ignored"), do: "Ignored"
-  defp guide_status_label(_status), do: "Open"
+  defp guide_status_label("denied"), do: "Changes requested"
+  defp guide_status_label("ignored"), do: "Skipped"
+  defp guide_status_label(_status), do: "Pending"
 
   defp section_status_label("approved"), do: "Approve"
-  defp section_status_label("denied"), do: "Deny"
-  defp section_status_label("ignored"), do: "Ignore"
+  defp section_status_label("denied"), do: "Request changes"
+  defp section_status_label("ignored"), do: "Skip"
   defp section_status_label(status), do: status
 
   defp plural(1, word), do: word
@@ -1316,7 +1360,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             section_title={@section_title}
             file_label={@file_label}
             show_hunk_label?={@show_hunk_label?}
-            sticky_header?={@diff_style == "unified"}
           />
         </div>
       <% @kind == "hunk" -> %>
@@ -1528,7 +1571,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         file_label={@file_label}
         grouped?={@grouped?}
         show_hunk_label?={@show_hunk_label?}
-        sticky_header?={@diff_style == "unified"}
       />
     </div>
     """
@@ -1583,7 +1625,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :grouped?, :boolean, default: false
   attr :show_file_label?, :boolean, default: true
   attr :show_hunk_label?, :boolean, default: true
-  attr :sticky_header?, :boolean, default: false
   attr :view_state, :any, default: nil
   attr :class, :string, default: nil
 
@@ -1594,129 +1635,71 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> assign(:viewed?, assigns.hunk.viewed?)
       |> assign(:partially_viewed?, Map.get(assigns.hunk, :partially_viewed?, false))
       |> assign(
-        :title,
-        hunk_title(
-          assigns.hunk,
-          Map.get(assigns, :file_label),
-          assigns.show_file_label?,
-          assigns.show_hunk_label?
+        :hunk_label,
+        hunk_header_label(
+          hunk_title(
+            assigns.hunk,
+            Map.get(assigns, :file_label),
+            assigns.show_file_label?,
+            assigns.show_hunk_label?
+          )
         )
       )
       |> assign(:details, hunk_details(assigns.hunk))
       |> assign(:hunk_attrs_json, hunk_attrs_json(assigns.hunk))
 
     ~H"""
-    <article class={[
-      "review-hunk-card",
-      @class,
-      @expanded? && "is-open",
-      @viewed? && "is-viewed",
-      @partially_viewed? && "is-partially-viewed",
-      @diff_style == "unified" && "is-unified",
-      @sticky_header? && "is-sticky-header",
-      !@sticky_header? && "is-inline-header"
-    ]}>
-      <header
-        id={"#{@hunk_id}-summary"}
-        class="review-hunk-summary"
-        phx-hook={if(@sticky_header?, do: "StickyHunkHeader")}
-      >
-        <button
-          type="button"
-          class="review-hunk-toggle"
-          phx-click="toggle_hunk_diff"
-          phx-value-hunk_id={@hunk_id}
-          aria-expanded={@expanded?}
-          aria-controls={"#{@hunk_id}-body"}
-          title={@details}
+    <article
+      id={"#{@hunk_id}-summary"}
+      class={[
+        "review-hunk-card",
+        @class,
+        @expanded? && "is-open",
+        @viewed? && "is-viewed",
+        @partially_viewed? && "is-partially-viewed",
+        @diff_style == "unified" && "is-unified"
+      ]}
+    >
+      <div class="review-packet-inline-diff">
+        <div
+          id={"#{@hunk_id}-diff"}
+          phx-hook="DiffRenderer"
+          phx-update="ignore"
+          data-file-id={"hunk-#{@file.id}-#{@hunk_id}"}
+          data-file-path={@file.path}
+          data-file-status={@file.status}
+          data-side="new"
+          data-patchset-number={@selected_patchset && @selected_patchset.number}
+          data-raw-diff={@hunk.display_raw_diff}
+          data-threads={threads_json(@published_threads, @file.path)}
+          data-signed-in={if @current_user, do: "true", else: "false"}
+          data-diff-style={@diff_style}
+          data-hunk-id={@hunk_id}
+          data-hunk-label={@hunk_label}
+          data-hunk-details={@details}
+          data-hunk-expanded={to_string(@expanded?)}
+          data-hunk-viewed={to_string(@viewed?)}
+          data-hunk-partially-viewed={to_string(@partially_viewed?)}
+          data-hunk-view-state={@view_state && @view_state.label}
+          data-hunk-attrs={@hunk_attrs_json}
+          data-row-ref={@hunk.row_ref}
+          data-hunk-fingerprint={@hunk.hunk_fingerprint}
+          data-hunk-index={@hunk.hunk_index}
+          data-line-start={@hunk.line_start}
+          data-line-end={@hunk.line_end}
+          data-section-index={@section_index}
+          data-section-title={@section_title}
         >
-          <.icon name="hero-chevron-down" class="review-collapse-icon" />
-          <span class="review-hunk-title">
-            <span :if={@title.file != ""} class="review-hunk-filename">{@title.file}</span>
-            <span :if={@title.file != "" && @title.hunk != ""} class="review-hunk-separator">·</span>
-            <span :if={@title.hunk != ""} class="review-hunk-index">{@title.hunk}</span>
-            <span :if={@title.hunk != "" && @title.lines != ""} class="review-hunk-separator">·</span>
-            <span :if={@title.lines != ""} class="review-hunk-lines">{@title.lines}</span>
-          </span>
-        </button>
-
-        <div class="review-hunk-meta">
-          <span class="review-hunk-line-stat">
-            <.change_stat additions={@hunk.display_additions} deletions={@hunk.display_deletions} />
-          </span>
-          <span
-            :if={@view_state}
-            class={[
-              "review-file-view-state",
-              "is-#{@view_state.status}"
-            ]}
-          >
-            {@view_state.label}
-          </span>
-          <button
-            :if={@current_user && !@viewed?}
-            type="button"
-            class="review-button review-button-ghost review-hunk-action"
-            phx-click="mark_hunk_viewed"
-            phx-value-file_path={@hunk.file_path}
-            phx-value-row_ref={@hunk.row_ref}
-            phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
-            phx-value-hunk_id={@hunk_id}
-            phx-value-hunk_attrs={@hunk_attrs_json}
-            phx-value-hunk_index={@hunk.hunk_index}
-            phx-value-line_start={@hunk.line_start}
-            phx-value-line_end={@hunk.line_end}
-            phx-value-section_index={@section_index}
-            phx-value-section_title={@section_title}
-          >
-            Mark Viewed
-          </button>
-          <button
-            :if={@current_user && @viewed?}
-            type="button"
-            class="review-hunk-viewed-pill review-hunk-viewed-button"
-            phx-click="mark_hunk_unviewed"
-            phx-value-file_path={@hunk.file_path}
-            phx-value-row_ref={@hunk.row_ref}
-            phx-value-hunk_fingerprint={@hunk.hunk_fingerprint}
-            phx-value-hunk_id={@hunk_id}
-            phx-value-hunk_attrs={@hunk_attrs_json}
-            phx-value-hunk_index={@hunk.hunk_index}
-            phx-value-line_start={@hunk.line_start}
-            phx-value-line_end={@hunk.line_end}
-            phx-value-section_index={@section_index}
-            phx-value-section_title={@section_title}
-            title="Mark unviewed"
-          >
-            Viewed
-          </button>
-          <span :if={@current_user && @partially_viewed?} class="review-hunk-partial-pill">
-            Partially viewed
-          </span>
-        </div>
-      </header>
-
-      <div :if={@expanded?} id={"#{@hunk_id}-body"} class="review-hunk-body">
-        <div class="review-packet-inline-diff">
-          <div
-            id={"#{@hunk_id}-diff"}
-            phx-hook="DiffRenderer"
-            phx-update="ignore"
-            data-file-id={"hunk-#{@file.id}-#{@hunk_id}"}
-            data-file-path={@file.path}
-            data-file-status={@file.status}
-            data-side="new"
-            data-patchset-number={@selected_patchset && @selected_patchset.number}
-            data-raw-diff={@hunk.display_raw_diff}
-            data-threads={threads_json(@published_threads, @file.path)}
-            data-signed-in={if @current_user, do: "true", else: "false"}
-            data-diff-style={@diff_style}
-          >
-          </div>
         </div>
       </div>
     </article>
     """
+  end
+
+  defp hunk_header_label(title) do
+    [title.hunk, title.lines]
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join(" · ")
   end
 
   defp hunk_attrs_json(%{grouped_hunks: hunks}) do

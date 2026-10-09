@@ -72,6 +72,19 @@ function lineTextFromEvent(props) {
   return (props?.lineElement && props.lineElement.textContent) || ""
 }
 
+function stopHeaderEvent(event, callback) {
+  event.preventDefault()
+  event.stopPropagation()
+  callback?.()
+}
+
+export function hunkViewLabel(hunkUI) {
+  if (!hunkUI) return ""
+  if (hunkUI.hunkViewed) return "Viewed"
+  if (hunkUI.hunkPartiallyViewed) return "Partially viewed"
+  return hunkUI.hunkViewState || ""
+}
+
 export class VanillaDiffRenderer {
   constructor({
     container,
@@ -80,7 +93,10 @@ export class VanillaDiffRenderer {
     signedIn,
     threads,
     diffStyle,
+    hunkUI,
     onCreateComment,
+    onToggleHunk,
+    onSetHunkViewed,
   }) {
     this.container = container
     this.filePath = filePath
@@ -88,7 +104,10 @@ export class VanillaDiffRenderer {
     this.signedIn = signedIn
     this.threads = threads
     this.diffStyle = diffStyle
+    this.hunkUI = hunkUI || null
     this.onCreateComment = onCreateComment
+    this.onToggleHunk = onToggleHunk
+    this.onSetHunkViewed = onSetHunkViewed
     this.composerAt = null
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
@@ -100,7 +119,19 @@ export class VanillaDiffRenderer {
     this.render()
   }
 
+  updateHunkUI(hunkUI) {
+    const next = hunkUI || null
+    if (JSON.stringify(next) === JSON.stringify(this.hunkUI)) return
+    this.hunkUI = next
+    this.render()
+  }
+
+  collapsed() {
+    return Boolean(this.hunkUI && !this.hunkUI.hunkExpanded)
+  }
+
   updateStyle(diffStyle) {
+    if (diffStyle === this.diffStyle) return
     this.diffStyle = diffStyle
     this.render()
   }
@@ -221,11 +252,85 @@ export class VanillaDiffRenderer {
     })
   }
 
+  // Reviews controls rendered into Pierre's own file header — this is the
+  // single hunk header. Pierre has no built-in collapse control, so the
+  // toggle lives in the header prefix slot.
+  renderHeaderPrefix() {
+    if (!this.hunkUI) return null
+
+    const expanded = this.hunkUI.hunkExpanded
+
+    return el(
+      "button",
+      {
+        className: `reviews-diff-header-toggle${expanded ? " is-expanded" : ""}`,
+        type: "button",
+        "aria-expanded": expanded ? "true" : "false",
+        "aria-label": expanded ? "Collapse code" : "Expand code",
+        onclick: (event) => stopHeaderEvent(event, this.onToggleHunk),
+      },
+      [el("span", { className: "reviews-diff-header-chevron" }, ">")]
+    )
+  }
+
+  renderHeaderMetadata() {
+    if (!this.hunkUI) return null
+
+    const children = []
+
+    if (this.hunkUI.hunkLabel) {
+      children.push(
+        el(
+          "span",
+          {
+            className: "reviews-diff-header-hunk",
+            title: this.hunkUI.hunkDetails || null,
+          },
+          this.hunkUI.hunkLabel
+        )
+      )
+    }
+
+    const viewLabel = hunkViewLabel(this.hunkUI)
+    if (viewLabel) {
+      children.push(
+        el(
+          "span",
+          {
+            className: `reviews-diff-header-state${this.hunkUI.hunkViewed ? " is-viewed" : ""}`,
+          },
+          viewLabel
+        )
+      )
+    }
+
+    if (this.hunkUI.signedIn) {
+      const viewed = this.hunkUI.hunkViewed
+      children.push(
+        el(
+          "button",
+          {
+            className: "reviews-diff-header-viewed",
+            type: "button",
+            onclick: (event) =>
+              stopHeaderEvent(event, () => this.onSetHunkViewed?.(!viewed)),
+          },
+          viewed ? "Mark unviewed" : "Mark viewed"
+        )
+      )
+    }
+
+    return el("div", { className: "reviews-diff-header-metadata" }, children)
+  }
+
   options() {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
+      collapsed: this.collapsed(),
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS,
+      renderHeaderPrefix: () => this.renderHeaderPrefix(),
+      renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
       onLineNumberClick: (props) => this.handleLineNumberClick(props),
       onTokenClick: (props) => this.handleTokenClick(props),
@@ -250,7 +355,10 @@ export class VanillaDiffRenderer {
     const options = this.options()
     const renderArgs = this.renderArgs()
 
-    if (shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })) {
+    if (
+      !this.collapsed() &&
+      shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
+    ) {
       if (this.tryRenderVirtualized(options, renderArgs)) return
     }
 

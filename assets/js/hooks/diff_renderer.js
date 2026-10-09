@@ -1,8 +1,17 @@
 // DiffRenderer — Phoenix LiveView hook wiring for one vanilla @pierre/diffs
 // renderer per mounted file. Rendering details live in ../diff_renderer/*.
+//
+// The island's `data-*` attributes are the live state channel from LiveView
+// (attributes are patched even under phx-update="ignore"). They are validated
+// and coerced exactly once, here, by the HunkIslandDataset schema.
 
 import { VanillaDiffRenderer } from "../diff_renderer/vanilla_renderer.js"
-import { Thread, CreateCommentPayload } from "../schemas.js"
+import {
+  Thread,
+  CreateCommentPayload,
+  HunkIslandDataset,
+  hunkViewPayload,
+} from "../schemas.js"
 
 function parseInitial(text, schema) {
   try {
@@ -15,6 +24,16 @@ function parseInitial(text, schema) {
   }
 }
 
+function parseIsland(dataset) {
+  try {
+    return HunkIslandDataset.parse({ ...dataset })
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[DiffRenderer] invalid hunk island dataset:", err)
+    return null
+  }
+}
+
 const DiffRenderer = {
   mounted() {
     const ds = this.el.dataset
@@ -23,6 +42,7 @@ const DiffRenderer = {
     const rawDiff = ds.rawDiff || ""
     const initialDiffStyle = ds.diffStyle === "unified" ? "unified" : "split"
     const initialThreads = parseInitial(ds.threads, Thread)
+    this._island = parseIsland(ds)
 
     const onCreateComment = (payload) => {
       try {
@@ -34,6 +54,22 @@ const DiffRenderer = {
       }
     }
 
+    const onToggleHunk = () => {
+      if (!this._island) return
+      this.pushEvent("toggle_hunk_diff", { hunk_id: this._island.hunkId })
+    }
+
+    const onSetHunkViewed = (viewed) => {
+      if (!this._island) return
+      try {
+        const payload = hunkViewPayload(this._island)
+        this.pushEvent(viewed ? "mark_hunk_viewed" : "mark_hunk_unviewed", payload)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[DiffRenderer] invalid hunk view payload:", err)
+      }
+    }
+
     this._renderer = new VanillaDiffRenderer({
       container: this.el,
       filePath,
@@ -41,7 +77,10 @@ const DiffRenderer = {
       signedIn,
       threads: initialThreads,
       diffStyle: initialDiffStyle,
+      hunkUI: this._island,
       onCreateComment,
+      onToggleHunk,
+      onSetHunkViewed,
     })
     this._renderer.render()
 
@@ -53,11 +92,6 @@ const DiffRenderer = {
         // eslint-disable-next-line no-console
         console.error("[DiffRenderer] invalid threads_updated payload:", err, raw)
       }
-    })
-
-    this.handleEvent(`diff_style_updated:${filePath}`, (raw) => {
-      const style = raw?.style === "unified" ? "unified" : "split"
-      this._renderer?.updateStyle(style)
     })
 
     this._themeObserver = new MutationObserver(() => this._renderer?.render())
@@ -77,7 +111,13 @@ const DiffRenderer = {
   },
 
   updated() {
-    // The wrapper is phx-update="ignore"; refreshes flow through push events.
+    // Children are phx-update="ignore"; only the data-* attributes change.
+    // The dataset is the single state channel: diff style and hunk UI state
+    // both sync from the patched attributes.
+    const style = this.el.dataset.diffStyle === "unified" ? "unified" : "split"
+    this._renderer?.updateStyle(style)
+    this._island = parseIsland(this.el.dataset)
+    this._renderer?.updateHunkUI(this._island)
   },
 
   destroyed() {

@@ -141,16 +141,9 @@ defmodule ReviewsWeb.ReviewLive do
 
   def handle_event("select_diff_style", %{"style" => style}, socket)
       when style in ["split", "unified"] do
-    socket = assign(socket, :diff_style, style)
-
-    socket =
-      socket
-      |> mounted_diff_paths()
-      |> Enum.reduce(socket, fn file, acc ->
-        push_event(acc, "diff_style_updated:#{file}", %{style: style})
-      end)
-
-    {:noreply, socket}
+    # Diff islands pick the new style up from their patched data-diff-style
+    # attribute (DiffRenderer.updated/0); no per-file events needed.
+    {:noreply, assign(socket, :diff_style, style)}
   end
 
   def handle_event("select_diff_style", _params, socket), do: {:noreply, socket}
@@ -1076,32 +1069,6 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp active_outline_section_index(_current_index, _patchset, _patchset_changed?), do: nil
 
-  defp mounted_diff_paths(socket) do
-    changes_paths =
-      socket.assigns.file_diffs
-      |> Enum.flat_map(fn file ->
-        hunks = Map.get(socket.assigns.hunks_by_path, file.path, [])
-
-        if MapSet.member?(socket.assigns.expanded_hunk_ids, file_diff_id(file)) ||
-             Enum.any?(hunks, &MapSet.member?(socket.assigns.expanded_hunk_ids, &1.id)) do
-          [file.path]
-        else
-          []
-        end
-      end)
-
-    packet_paths =
-      socket.assigns.expanded_hunk_ids
-      |> Enum.flat_map(fn hunk_id ->
-        socket.assigns.hunks_by_path
-        |> Enum.find_value([], fn {path, hunks} ->
-          if Enum.any?(hunks, &hunk_id_matches?(hunk_id, &1.id)), do: [path], else: nil
-        end)
-      end)
-
-    Enum.uniq(changes_paths ++ packet_paths)
-  end
-
   defp default_expanded_state(socket, snapshot) do
     packet_state = default_expanded_packet_state(snapshot)
     changes_hunk_ids = default_expanded_changes_hunk_ids(socket, snapshot)
@@ -1197,10 +1164,6 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp file_diff_id(file), do: "file-diff-#{file.id}"
-
-  defp hunk_id_matches?(expanded_id, hunk_id) do
-    expanded_id == hunk_id || String.ends_with?(expanded_id, "--#{hunk_id}")
-  end
 
   defp put_section_status(socket, patchset, user, section, status) do
     PacketSectionDecisions.put_section_status(
