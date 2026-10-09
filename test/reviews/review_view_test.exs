@@ -36,7 +36,7 @@ defmodule Reviews.ReviewViewTest do
       "diff --git a/foo b/foo\n" <>
         "--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+newer\n"
 
-    {:ok, ps2} =
+    {:ok, %{patchset: ps2}} =
       ReviewsContext.append_patchset(review, %{
         base_sha: "cafef00d",
         branch_name: "carey/foo",

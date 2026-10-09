@@ -32,12 +32,14 @@ Whichever git remote the maintainer has configured as `origin` is the canonical 
 - **Threads:** comments publish right away and every viewer sees them. Draft comments were removed (`priv/repo/migrations/20260519120000_drop_draft_review_support.exs`).
 - **Revisions:** `reviews push --update <slug>` adds patchsets; threads carry across via content-hash anchoring (line text + surrounding context), not line numbers.
 - **Config path** for the CLI: `~/.config/reviews/` (cross-platform; matches `gh`, `kubectl`).
+- **Code storage:** code.storage (Pierre) is the only Git backend (`Reviews.CodeStorage.CodeDotStorage`); `Disabled` is the default. No `LocalGit` adapter. Repos are addressed as `reviews/<repository public_id>`. Tables use bigserial PKs plus `public_id` UUIDs for anything the API returns. Under the `required` policy the server aborts a push whose snapshot claim fails, but it accepts a push with no snapshot id; the CLI enforces that case. Tests swap in `Reviews.CodeStorage.Stub` (`test/support/code_storage_stub.ex`). Spec: `.plans/lsp-code-storage-integration.md` (PR #74).
 - **Token-level commenting:** the UI and API can write `"token_range"` anchors (`Thread.anchor.granularity`), but relocating them across patchsets is deferred to v1.5. `Anchoring.relocate/3` has a stubbed `"token_range"` branch returning `{:error, :not_implemented}`. Don't remove the stub.
 
 ### What's currently deferred / known-not-done
 - A11y items in `.plans/a11y-design-fixes.md` are real and prioritized. P0 items are keyboard/screen-reader breaks; P1 are visual/theming; P2 are content/copy.
 - Worker pool for `@pierre/diffs` / Shiki: intentionally not wired.
 - CSP headers: none currently. Future work.
+- Code storage Phase 2+ (LSP runner and hover UI), `checkout_source`, provider cleanup on review deletion, upload byte-limit enforcement, and provider ref deletion for expired snapshots on claimed repositories.
 
 ### Permissions (Claude Code)
 The repo's `.claude/settings.local.json` allows broad `mix`/`cargo`/`npm`/`bun`/`git add`/`git commit`/`reviews push` but denies destructive git operations (`push` is allowed to `origin` but the deny list blocks `reset`, `checkout`, `restore`, `clean`, `rebase`, `merge`, `pull`, `fetch`, `rm -rf`, `sudo`). If you're a subagent and find `Edit`/`Write` denied, surface it to the user — don't try to self-grant by editing `settings.local.json` (the classifier will block you, correctly).

@@ -7,6 +7,22 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Added
+
+- Code storage (Phase 0 + 1 of `.plans/lsp-code-storage-integration.md`):
+  every code-enabled patchset gets immutable base/head Git refs stored in a
+  provider-neutral backend. code.storage (Pierre) is the production adapter;
+  storage is off by default (`CODE_STORAGE_ADAPTER=code_storage` enables it).
+- `GET /api/v1/capabilities` for CLI feature discovery, plus
+  `POST /api/v1/code-snapshots` and `POST /api/v1/code-snapshots/:id/complete`
+  with a reserve → upload → verify → claim flow and stable error codes.
+- `reviews push` uploads a code snapshot when the server supports it:
+  resolves exact base/head OIDs, builds synthetic commits for staged or
+  tracked worktree state with a fixed `Reviews Snapshot` identity, verifies
+  the diff matches the snapshot, and pushes exactly two refs atomically with
+  a short-lived ref-scoped credential (never written to URLs, config, or
+  logs). `--no-code-storage` skips the upload where the server allows it.
+
 ### Changed
 
 - Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
@@ -22,6 +38,16 @@ still stabilizing.
   The install snippet's CSS is colocated too via the new
   `ReviewsWeb.ColocatedCSS` module.
 - LiveView test warnings for duplicate DOM ids and forms without ids now raise.
+
+### Fixed
+
+- `reviews push --range A...B` now records the merge base of A and B as the
+  patchset base (matching what `git diff A...B` actually compares) instead
+  of A itself.
+- Diff capture is config-neutral: local `diff.algorithm`, `core.quotePath`,
+  and external diff drivers no longer change the uploaded diff bytes.
+- Appending a patchset no longer crashes when a non-changeset error occurs
+  inside the push transaction.
 
 ## [0.0.1-alpha.2] - 2026-05-21
 

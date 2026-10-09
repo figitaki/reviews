@@ -61,6 +61,16 @@ config :logger, :default_formatter,
 config :phoenix, :json_library, JSON
 config :postgrex, :json_library, JSON
 
+# Code storage: disabled by default. The code.storage adapter and its
+# credentials are selected via env vars in config/runtime.exs.
+config :reviews, Reviews.CodeStorage,
+  adapter: Reviews.CodeStorage.Disabled,
+  policy: :optional,
+  supported_object_formats: ["sha1"],
+  max_upload_bytes: 536_870_912,
+  snapshot_ttl_seconds: 900,
+  upload_token_ttl_seconds: 900
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

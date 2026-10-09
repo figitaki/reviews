@@ -36,6 +36,7 @@ defmodule Reviews.Reviews do
   def create_review_with_initial_patchset(%Identity{} = author, attrs) when is_map(attrs) do
     slug = attrs[:slug] || attrs["slug"] || generate_slug()
     raw_diff = attrs[:raw_diff] || attrs["raw_diff"]
+    code_snapshot_id = attrs[:code_snapshot_id] || attrs["code_snapshot_id"]
 
     review_attrs = %{
       slug: slug,
@@ -61,6 +62,9 @@ defmodule Reviews.Reviews do
     |> Ecto.Multi.run(:files, fn _repo, %{patchset: patchset} ->
       insert_files_for_patchset(patchset, raw_diff)
     end)
+    |> Ecto.Multi.run(:code_snapshot, fn _repo, %{review: review, patchset: patchset} ->
+      Reviews.CodeSnapshots.maybe_claim(author, review, patchset, code_snapshot_id)
+    end)
     |> Repo.transaction()
   end
 
@@ -76,10 +80,17 @@ defmodule Reviews.Reviews do
   Appends a new patchset to an existing review. Auto-numbers to (max+1).
   Also populates the per-file rows for the new patchset so the sidebar
   renders without a re-parse.
+
+  Pass the pushing `Identity` to allow claiming a reserved code snapshot via
+  `attrs.code_snapshot_id`. Returns `{:ok, %{patchset: patchset, code_snapshot: result}}`
+  where `result` is `nil`, a claimed snapshot, or `{:skipped, code}`.
   """
-  def append_patchset(%Review{} = review, attrs) when is_map(attrs) do
+  def append_patchset(identity \\ nil, review, attrs)
+
+  def append_patchset(identity, %Review{} = review, attrs) when is_map(attrs) do
     next_number = next_patchset_number(review.id)
     raw_diff = attrs[:raw_diff] || attrs["raw_diff"]
+    code_snapshot_id = attrs[:code_snapshot_id] || attrs["code_snapshot_id"]
 
     patchset_attrs = %{
       review_id: review.id,
@@ -96,24 +107,52 @@ defmodule Reviews.Reviews do
     |> Ecto.Multi.run(:files, fn _repo, %{patchset: patchset} ->
       insert_files_for_patchset(patchset, raw_diff)
     end)
+    |> Ecto.Multi.run(:code_snapshot, fn _repo, %{patchset: patchset} ->
+      maybe_claim_snapshot(identity, review, patchset, code_snapshot_id)
+    end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{patchset: patchset}} ->
+      {:ok, %{patchset: patchset, code_snapshot: code_snapshot}} ->
         Phoenix.PubSub.broadcast(
           Reviews.PubSub,
           "review:#{review.slug}",
           {:patchset_pushed, patchset.number}
         )
 
-        {:ok, patchset}
+        {:ok, %{patchset: patchset, code_snapshot: code_snapshot}}
 
-      {:error, _step, changeset, _} ->
+      {:error, _step, %Ecto.Changeset{} = changeset, _} ->
         {:error, changeset}
+
+      {:error, :code_snapshot, code, _} when is_atom(code) ->
+        {:error, {:code_snapshot, code}}
+
+      {:error, _step, reason, _} ->
+        {:error, reason}
+    end
+  end
+
+  defp maybe_claim_snapshot(_identity, _review, _patchset, nil), do: {:ok, nil}
+
+  defp maybe_claim_snapshot(%Identity{} = identity, review, patchset, code_snapshot_id) do
+    Reviews.CodeSnapshots.maybe_claim(identity, review, patchset, code_snapshot_id)
+  end
+
+  # A snapshot id without a known pusher identity can never claim.
+  defp maybe_claim_snapshot(nil, _review, _patchset, _code_snapshot_id) do
+    case Reviews.CodeStorage.policy() do
+      :required -> {:error, :snapshot_not_authorized}
+      _optional -> {:ok, {:skipped, :snapshot_not_authorized}}
     end
   end
 
   def list_patchsets(%Review{id: review_id}) do
-    Repo.all(from p in Patchset, where: p.review_id == ^review_id, order_by: [asc: p.number])
+    Repo.all(
+      from p in Patchset,
+        where: p.review_id == ^review_id,
+        order_by: [asc: p.number],
+        preload: [:code_snapshot]
+    )
   end
 
   def get_patchset!(id), do: Repo.get!(Patchset, id)

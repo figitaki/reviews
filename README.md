@@ -131,6 +131,34 @@ GITHUB_CLIENT_SECRET=...
 If the env vars are missing, `/auth/github` redirects home with a flash
 explaining what to set.
 
+## Code Storage (optional)
+
+Reviews can store each patchset's base and head commits as Git refs, so later
+features can read the source around a hunk. The backend is
+[code.storage](https://code.storage). Storage is off by default, and pushes
+work diff-only when it is off.
+
+To turn it on, set these in `.env.local` (or the deploy environment):
+
+```sh
+CODE_STORAGE_ADAPTER=code_storage
+CODE_STORAGE_ORG=<code.storage org>
+CODE_STORAGE_JWT_PRIVATE_KEY="<P-256 private key, PKCS8 PEM>"
+# Optional. "optional" (default) or "required".
+CODE_STORAGE_POLICY=optional
+```
+
+The server signs short-lived ES256 tokens with the private key. The CLI gets a
+token that can write only the two refs of one snapshot.
+
+With the `optional` policy, a failed upload prints a warning and the push
+continues without code. With `required`, the CLI stops before it creates the
+review or patchset. Use `reviews push --no-code-storage` to skip the upload
+when the policy is `optional`.
+
+The CLI asks `GET /api/v1/capabilities` first. Older servers return `404`, and
+the CLI then pushes diff-only. The API contract is in `docs/CONTRACTS.md`.
+
 ## CLI Workflow
 
 Mint an API token from `/settings`, then configure the CLI:

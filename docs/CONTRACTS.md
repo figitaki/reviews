@@ -78,6 +78,14 @@ Response `201`:
 
 Unknown slug → `404`.
 
+Both create endpoints accept an optional `code_snapshot_id` (a snapshot UUID
+from `POST /api/v1/code-snapshots` that has been completed). When present, the
+201 response carries a `code_snapshot` key: `{"id": "<uuid>", "status": "claimed"}`
+on success, or `{"status": "skipped", "code": "<error code>"}` when the claim
+failed under the `optional` storage policy (the push still succeeds diff-only).
+Under the `required` policy a failed claim aborts the whole request with the
+error-code envelope below and creates nothing.
+
 ### `GET /api/v1/reviews/:slug`
 
 Public (no token). Returns a JSON snapshot of the review: `slug`, `title`,
@@ -104,6 +112,85 @@ Publishes one comment right away as the token identity. Request body:
 `side` defaults to `"new"`. Response `201` has `thread_id`, `comment_id`,
 `file_path`, `side`, `anchor`, and `url`. An empty body or a bad anchor →
 `422`. Unknown slug → `404`.
+
+### `GET /api/v1/capabilities`
+
+Unauthenticated feature discovery for the CLI. Older servers have no such
+route; treat a `404` as code storage disabled.
+
+```json
+{
+  "code_storage": {
+    "enabled": false,
+    "required": false,
+    "supported_object_formats": ["sha1"],
+    "max_upload_bytes": 536870912
+  },
+  "lsp": { "enabled": false, "languages": [] }
+}
+```
+
+### `POST /api/v1/code-snapshots`
+
+Reserves a code snapshot for upload. Requires a token. Returns `404` with
+code `code_storage_disabled` when storage is off.
+
+Request body:
+
+```json
+{
+  "review_slug": "k7m2qz",
+  "object_format": "sha1",
+  "base_oid": "<full 40/64-hex object id>",
+  "head_oid": "<full 40/64-hex object id>",
+  "head_kind": "commit"
+}
+```
+
+`review_slug` is omitted for a new review. `head_kind` is one of `commit`,
+`index_snapshot`, `worktree_snapshot`.
+
+Response `201`:
+
+```json
+{
+  "id": "<snapshot uuid>",
+  "repository_id": "<repository uuid>",
+  "expires_at": "2026-09-01T18:30:00Z",
+  "upload": {
+    "remote_url": "https://<org>.code.storage/reviews/<repository uuid>.git",
+    "token": "<short-lived ES256 JWT, scoped to the two refs below>",
+    "expires_at": "2026-09-01T18:15:00Z"
+  },
+  "refs": {
+    "base": "refs/heads/snapshots/<snapshot uuid>/base",
+    "head": "refs/heads/snapshots/<snapshot uuid>/head"
+  }
+}
+```
+
+Push both refs in one atomic `git push`, sending the token as HTTP basic auth
+(user `t`) via header injection — never embed it in the URL, git config, or
+logs.
+
+### `POST /api/v1/code-snapshots/:id/complete`
+
+Asks the server to verify the uploaded refs against the reserved object ids.
+Idempotent. Response `200`:
+
+```json
+{ "id": "<snapshot uuid>", "status": "ready", "base_oid": "...", "head_oid": "..." }
+```
+
+Code-storage errors use a stable machine-readable envelope:
+
+```json
+{ "errors": { "detail": "human message", "code": "ref_mismatch" } }
+```
+
+Codes: `code_storage_disabled` (404), `snapshot_not_authorized` (403),
+`upload_expired` (410), `unsupported_object_format`, `ref_mismatch`,
+`snapshot_not_ready`, `repository_too_large` (422).
 
 ### `GET /api/v1/me`
 

@@ -40,6 +40,7 @@ defmodule ReviewsWeb.Router do
   scope "/api/v1", ReviewsWeb.Api do
     pipe_through :api
 
+    get "/capabilities", CapabilityController, :show
     get "/reviews/:slug", ReviewController, :show
   end
 
@@ -48,6 +49,8 @@ defmodule ReviewsWeb.Router do
 
     post "/reviews", ReviewController, :create
     post "/reviews/:slug/patchsets", PatchsetController, :create
+    post "/code-snapshots", CodeSnapshotController, :create
+    post "/code-snapshots/:id/complete", CodeSnapshotController, :complete
     post "/reviews/:slug/comments", CommentController, :create
     post "/reviews/:slug/sections/:section_index/decision", SectionDecisionController, :create
     get "/me", MeController, :show
