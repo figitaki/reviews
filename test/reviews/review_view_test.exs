@@ -106,20 +106,22 @@ defmodule Reviews.ReviewViewTest do
     assert [%{body: "visible comment"}] = thread.comments
   end
 
-  test "includes one published decider per reviewer" do
+  test "includes one published decider per reviewer, without the review author" do
     author = user!("author")
+    first = user!("first")
     other = user!("other")
     %{review: review} = review_with_patchsets!(author)
 
-    {:ok, _} = Threads.publish_comment(review, author, comment_params("first"))
-    {:ok, _} = Threads.publish_comment(review, author, comment_params("second"))
+    {:ok, _} = Threads.publish_comment(review, author, comment_params("author note"))
+    {:ok, _} = Threads.publish_comment(review, first, comment_params("first"))
+    {:ok, _} = Threads.publish_comment(review, first, comment_params("second"))
     {:ok, _} = Threads.publish_comment(review, other, comment_params("third"))
 
     assert {:ok, snapshot} = ReviewView.get_snapshot_by_slug(review.slug, nil)
 
     assert [
-             %{author: %{handle: "carey-author"}, decision: "reviewed", comment_count: 2},
-             %{author: %{handle: "carey-other"}, decision: "reviewed", comment_count: 1}
+             %{author: %{handle: "carey-first"}, decision: "commented", comment_count: 2},
+             %{author: %{handle: "carey-other"}, decision: "commented", comment_count: 1}
            ] = snapshot.deciders
   end
 

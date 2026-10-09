@@ -1,6 +1,12 @@
 defmodule ReviewsWeb.DeciderComponents do
   @moduledoc """
   Stacked avatar list of the people and agents who reviewed a review.
+
+  Takes the deciders built by `Reviews.ReviewDeciders`. The stack shows the
+  first five avatars, each ringed in its decision color with a small decision
+  badge in the top-left corner, and a `+N` chip for the rest. Hover or focus
+  spreads the stack out. Each avatar has a `title` tooltip and screen-reader
+  text with the reviewer and their decision.
   """
   use Phoenix.Component
 
@@ -13,29 +19,32 @@ defmodule ReviewsWeb.DeciderComponents do
 
   def decider_stack(%{deciders: []} = assigns) do
     ~H"""
-    <div id={@id} class="rev-decider-stack is-empty" aria-label="No published reviews yet">
-      <span class="rev-decider-empty">No reviews</span>
+    <div id={@id} class="rev-decider-stack is-empty">
+      <span class="rev-decider-empty">No reviews yet</span>
     </div>
     """
   end
 
   def decider_stack(assigns) do
+    {visible, hidden} = Enum.split(assigns.deciders, @visible_limit)
+
     assigns =
       assigns
-      |> assign(:visible_deciders, Enum.take(assigns.deciders, @visible_limit))
-      |> assign(:overflow_count, max(length(assigns.deciders) - @visible_limit, 0))
+      |> assign(:visible_deciders, visible)
+      |> assign(:hidden_deciders, hidden)
 
     ~H"""
-    <div id={@id} class="rev-decider-stack" aria-label="Published reviews">
-      <div
+    <ul id={@id} class="rev-decider-stack" aria-label="Reviewers">
+      <li
         :for={decider <- @visible_deciders}
         :key={decider.author.id}
         id={"#{@id}-#{decider.author.id}"}
-        class="rev-decider"
-        title={decider_title(decider)}
-        aria-label={decider_title(decider)}
+        class={["rev-decider", decision_class(decider.decision)]}
+        data-decision={decider.decision}
+        data-kind={decider.author.kind}
+        title={decider_label(decider)}
       >
-        <div class="rev-decider-avatar">
+        <span class="rev-decider-avatar" aria-hidden="true">
           <img
             :if={decider.author.avatar_url}
             src={decider.author.avatar_url}
@@ -44,36 +53,83 @@ defmodule ReviewsWeb.DeciderComponents do
             height="28"
             loading="lazy"
           />
-          <span :if={!decider.author.avatar_url} aria-hidden="true">
+          <.icon
+            :if={!decider.author.avatar_url && decider.author.kind == "agent"}
+            name="hero-cpu-chip"
+            class="size-4"
+          />
+          <span :if={!decider.author.avatar_url && decider.author.kind != "agent"}>
             {initials(decider.author)}
           </span>
-        </div>
-        <span class="rev-decider-badge" aria-hidden="true">
-          <.icon name="hero-chat-bubble-left-ellipsis" class="size-3" />
         </span>
-      </div>
-      <div
-        :if={@overflow_count > 0}
+        <span class="rev-decider-badge" aria-hidden="true">
+          <.icon name={decision_icon(decider.decision)} class="size-3" />
+        </span>
+        <span class="sr-only">{decider_label(decider)}</span>
+      </li>
+      <li
+        :if={@hidden_deciders != []}
         id={"#{@id}-more"}
         class="rev-decider rev-decider-more"
-        title={"#{@overflow_count} more published reviews"}
-        aria-label={"#{@overflow_count} more published reviews"}
+        title={overflow_label(@hidden_deciders)}
       >
-        +{@overflow_count}
-      </div>
-    </div>
+        <span aria-hidden="true">+{length(@hidden_deciders)}</span>
+        <span class="sr-only">{overflow_label(@hidden_deciders)}</span>
+      </li>
+    </ul>
     """
   end
 
-  defp decider_title(%{author: author, decision: decision, comment_count: count}) do
-    base = "#{author.handle}: #{decision}"
-
-    case count do
-      0 -> base
-      1 -> base <> " · 1 comment"
-      n -> base <> " · #{n} comments"
-    end
+  defp decider_label(%{author: author} = decider) do
+    [
+      "#{author_name(author)}: #{decision_label(decider)}",
+      comment_label(decider.comment_count)
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
   end
+
+  defp author_name(%{kind: "agent", handle: handle}), do: "@#{handle} (agent)"
+  defp author_name(%{handle: handle}), do: "@#{handle}"
+
+  defp decision_label(%{decision: "approved", approved: n, section_count: total}),
+    do: "approved #{n} of #{total} #{sections(total)}"
+
+  defp decision_label(%{decision: "denied", denied: n, section_count: total}),
+    do: "denied #{n} of #{total} #{sections(total)}"
+
+  defp decision_label(%{decision: "ignored"}), do: "ignored"
+
+  defp decision_label(%{decision: "in_progress"} = d) do
+    decided = d.approved + d.denied + d.ignored
+    "in progress, #{decided} of #{d.section_count} #{sections(d.section_count)} decided"
+  end
+
+  defp decision_label(%{decision: "pending"}), do: "no decision on this revision"
+  defp decision_label(%{decision: "commented"}), do: "commented"
+
+  defp comment_label(0), do: nil
+  defp comment_label(1), do: "1 comment"
+  defp comment_label(n), do: "#{n} comments"
+
+  defp sections(1), do: "section"
+  defp sections(_), do: "sections"
+
+  defp overflow_label(hidden) do
+    names = Enum.map_join(hidden, ", ", &author_name(&1.author))
+
+    "#{length(hidden)} more #{if length(hidden) == 1, do: "reviewer", else: "reviewers"}: #{names}"
+  end
+
+  defp decision_class("in_progress"), do: "is-in-progress"
+  defp decision_class(decision), do: "is-#{decision}"
+
+  defp decision_icon("approved"), do: "hero-check"
+  defp decision_icon("denied"), do: "hero-x-mark"
+  defp decision_icon("ignored"), do: "hero-minus"
+  defp decision_icon("in_progress"), do: "hero-ellipsis-horizontal"
+  defp decision_icon("pending"), do: "hero-clock"
+  defp decision_icon(_), do: "hero-chat-bubble-left-ellipsis"
 
   defp initials(%{handle: handle}) when is_binary(handle) do
     handle

@@ -736,7 +736,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, ~s|#mobile-revision option[value="1"][selected]|)
     end
 
-    test "renders published reviewers for anonymous viewers", %{
+    test "shows an empty reviewers stack before anyone reviews", %{conn: conn, review: review} do
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      assert has_element?(view, "#decider-stack.is-empty", "No reviews yet")
+    end
+
+    test "renders published reviewers, including agents, for anonymous viewers", %{
       conn: conn,
       review: review
     } do
@@ -748,27 +754,58 @@ defmodule ReviewsWeb.ReviewLiveTest do
           avatar_url: nil
         })
 
-      {:ok, _} =
-        Threads.publish_comment(review, reviewer, %{
-          "file_path" => "lib/foo.ex",
-          "side" => "new",
-          "body" => "ship it",
-          "thread_anchor" => %{
-            "granularity" => "line",
-            "line_text" => "  def bar, do: :new",
-            "context_before" => [],
-            "context_after" => [],
-            "line_number_hint" => 2
-          }
-        })
+      {:ok, agent} =
+        Accounts.create_agent_identity(reviewer, %{display_name: "Codex", handle: "codex"})
+
+      {:ok, %{comment: zara_comment}} = Threads.publish_comment(review, reviewer, foo_comment())
+      {:ok, %{comment: agent_comment}} = Threads.publish_comment(review, agent, foo_comment())
 
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
 
-      assert has_element?(view, "#decider-stack")
+      zara = "#decider-stack-#{zara_comment.author_id}"
+      codex = "#decider-stack-#{agent_comment.author_id}"
+
+      assert has_element?(view, ~s|#{zara}.is-commented[title="@zara: commented · 1 comment"]|)
+      assert has_element?(view, ~s|#{zara} .rev-decider-badge .hero-chat-bubble-left-ellipsis|)
 
       assert has_element?(
                view,
-               ~s|#decider-stack .rev-decider[title="zara: reviewed · 1 comment"]|
+               ~s|#{codex}[data-kind="agent"][title="@codex (agent): commented · 1 comment"]|
+             )
+
+      assert has_element?(view, ~s|#{codex} .rev-decider-avatar .hero-cpu-chip|)
+      refute has_element?(view, "#decider-stack-more")
+    end
+
+    test "collapses reviewers past the fifth into a +N chip", %{conn: conn, review: review} do
+      for n <- 1..7 do
+        {:ok, user} =
+          Accounts.upsert_from_github(%{
+            github_id: 9000 + n,
+            username: "reviewer-#{n}",
+            email: "reviewer-#{n}@example.com",
+            avatar_url: "https://example.com/#{n}.png"
+          })
+
+        {:ok, _} = Threads.publish_comment(review, user, foo_comment())
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      assert has_element?(
+               view,
+               ~s|#decider-stack .rev-decider img[src="https://example.com/5.png"]|
+             )
+
+      refute has_element?(
+               view,
+               ~s|#decider-stack .rev-decider img[src="https://example.com/6.png"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#decider-stack-more[title="2 more reviewers: @reviewer-6, @reviewer-7"]|,
+               "+2"
              )
     end
 
@@ -1961,6 +1998,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
       carried_view |> element("#packet-section-0-decision button", "Skip") |> render_click()
       refute has_element?(carried_view, "#packet-section-0 .review-section-action.is-active")
     end
+  end
+
+  defp foo_comment do
+    %{
+      "file_path" => "lib/foo.ex",
+      "side" => "new",
+      "body" => "ship it",
+      "thread_anchor" => %{
+        "granularity" => "line",
+        "line_text" => "  def bar, do: :new",
+        "context_before" => [],
+        "context_after" => [],
+        "line_number_hint" => 2
+      }
+    }
   end
 
   describe "signed-in viewer who does not own the review" do
