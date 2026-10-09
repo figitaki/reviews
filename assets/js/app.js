@@ -25,7 +25,6 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/reviews"
 import topbar from "../vendor/topbar"
 import DiffRenderer from "./hooks/diff_renderer"
-import GuideFlyout from "./hooks/guide_flyout"
 import PacketNavTree from "./hooks/packet_nav_tree"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -35,7 +34,6 @@ const liveSocket = new LiveSocket("/live", Socket, {
   hooks: {
     ...colocatedHooks,
     DiffRenderer,
-    GuideFlyout,
     PacketNavTree,
   },
 })

@@ -70,6 +70,9 @@ jobs:
       - name: Install JS deps (fail on lockfile drift)
         run: cd assets && bun install --frozen-lockfile
 
+      - name: JS unit tests
+        run: cd assets && bun run test
+
       - run: mix format --check-formatted
 
       - run: mix compile --warnings-as-errors

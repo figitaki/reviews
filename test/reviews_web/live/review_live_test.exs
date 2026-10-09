@@ -696,7 +696,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> render_click()
 
       assert has_element?(view, ".review-packet-shell.is-guide-unified")
-      assert has_element?(view, ~s|#review-guide-shell[phx-hook="GuideFlyout"]|)
+      assert has_element?(view, ~s|#review-guide-shell[phx-hook$=".GuideFlyout"]|)
       assert has_element?(view, "#review-guide-tick-0.is-active")
       refute has_element?(view, "#review-split-inline-overview")
 

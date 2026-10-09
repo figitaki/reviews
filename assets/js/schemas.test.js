@@ -31,6 +31,7 @@ const baseDataset = {
 test("coerces dataset strings into typed island state", () => {
   const island = HunkIslandDataset.parse(baseDataset)
 
+  assert.equal(island.diffStyle, "split")
   assert.equal(island.hunkExpanded, true)
   assert.equal(island.hunkViewed, false)
   assert.equal(island.signedIn, true)
@@ -39,6 +40,15 @@ test("coerces dataset strings into typed island state", () => {
   assert.equal(island.lineEnd, 2)
   assert.equal(island.sectionIndex, 0)
   assert.equal(island.hunkAttrs, undefined)
+})
+
+test("unknown diff style falls back to split", () => {
+  const island = HunkIslandDataset.parse({ ...baseDataset, diffStyle: "bogus" })
+  assert.equal(island.diffStyle, "split")
+  assert.equal(
+    HunkIslandDataset.parse({ ...baseDataset, diffStyle: "unified" }).diffStyle,
+    "unified"
+  )
 })
 
 test("blank optional dataset values become undefined, not 0 or ''", () => {

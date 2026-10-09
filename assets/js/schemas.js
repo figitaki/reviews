@@ -120,6 +120,7 @@ const jsonArray = (schema) =>
     .optional())
 
 export const HunkIslandDataset = z.object({
+  diffStyle: z.enum(["split", "unified"]).catch("split"),
   hunkId: z.string().min(1),
   hunkLabel: z.string().default(""),
   hunkDetails: z.string().default(""),

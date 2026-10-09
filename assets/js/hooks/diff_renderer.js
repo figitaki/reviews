@@ -40,9 +40,9 @@ const DiffRenderer = {
     const filePath = ds.filePath
     const signedIn = ds.signedIn === "true"
     const rawDiff = ds.rawDiff || ""
-    const initialDiffStyle = ds.diffStyle === "unified" ? "unified" : "split"
     const initialThreads = parseInitial(ds.threads, Thread)
     this._island = parseIsland(ds)
+    const initialDiffStyle = this._island?.diffStyle ?? "split"
 
     const onCreateComment = (payload) => {
       try {
@@ -114,9 +114,9 @@ const DiffRenderer = {
     // Children are phx-update="ignore"; only the data-* attributes change.
     // The dataset is the single state channel: diff style and hunk UI state
     // both sync from the patched attributes.
-    const style = this.el.dataset.diffStyle === "unified" ? "unified" : "split"
-    this._renderer?.updateStyle(style)
     this._island = parseIsland(this.el.dataset)
+    if (!this._island) return
+    this._renderer?.updateStyle(this._island.diffStyle)
     this._renderer?.updateHunkUI(this._island)
   },
 
