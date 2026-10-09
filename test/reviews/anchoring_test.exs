@@ -377,4 +377,384 @@ defmodule Reviews.AnchoringTest do
       assert results |> Enum.uniq() |> length() == 1
     end
   end
+
+  # --- Tier and option coverage ---------------------------------------------
+
+  describe "relocate/4 exact tier" do
+    test "a block moved far away is still found exactly, with its context" do
+      filler = for i <- 1..100, do: "  # filler #{i}"
+      v2 = insert_at(@cart, 1, filler)
+
+      assert {:ok, moved} =
+               Anchoring.relocate(
+                 thread(anchor_at(@cart, 11)),
+                 added_file("lib/cart.ex", @cart),
+                 added_file("lib/cart.ex", v2)
+               )
+
+      assert moved["line_number_hint"] == 111
+      assert moved["relocation"]["score"] == 1.0
+    end
+
+    test "a distinctive line moved alone (no context agreement) is accepted" do
+      line = "    Logger.info(\"cart total computed\")"
+      v1 = insert_at(@cart, 10, [line])
+      v2 = @cart |> insert_at(2, [line])
+
+      assert {:ok, moved} =
+               Anchoring.relocate(
+                 thread(anchor_at(v1, 11)),
+                 added_file("lib/cart.ex", v1),
+                 added_file("lib/cart.ex", v2)
+               )
+
+      assert moved["line_number_hint"] == 3
+      assert moved["relocation"]["method"] == "exact"
+    end
+
+    test "a short line with no context agreement is not accepted" do
+      v1 = ["a = 1", "b = 2", "  :ok", "c = 3"]
+      v2 = ["x = 9", "  :ok", "y = 8"]
+
+      assert {:error, :outdated} =
+               Anchoring.relocate(
+                 thread(anchor_at(v1, 3)),
+                 added_file("lib/cart.ex", v1),
+                 added_file("lib/cart.ex", v2)
+               )
+    end
+
+    test "two distinctive copies with no context agreement are ambiguous" do
+      line = "    Logger.info(\"cart total computed\")"
+      v1 = insert_at(@cart, 10, [line])
+      v2 = ["# one", line, "# two", "# three", line, "# four"]
+
+      assert {:error, :ambiguous} =
+               Anchoring.relocate(
+                 thread(anchor_at(v1, 11)),
+                 added_file("lib/cart.ex", v1),
+                 added_file("lib/cart.ex", v2)
+               )
+    end
+
+    test "re-indenting a line counts as unchanged" do
+      v2 = List.replace_at(@cart, 10, "      price  *  qty")
+
+      assert {:ok, moved} =
+               Anchoring.relocate(
+                 thread(anchor_at(@cart, 11)),
+                 added_file("lib/cart.ex", @cart),
+                 added_file("lib/cart.ex", v2)
+               )
+
+      assert moved["relocation"]["method"] == "exact"
+      assert moved["line_text"] == "      price  *  qty"
+    end
+  end
+
+  describe "relocate/4 context tier" do
+    test "a stricter :context_threshold rejects a partly changed neighbourhood" do
+      v2 =
+        @cart
+        |> List.replace_at(10, "    price * item.qty")
+        |> List.replace_at(8, "    price = item.unit_price")
+
+      args = [
+        thread(anchor_at(@cart, 11)),
+        added_file("lib/cart.ex", @cart),
+        added_file("lib/cart.ex", v2)
+      ]
+
+      assert {:ok, %{"relocation" => %{"method" => "context"}}} =
+               apply(Anchoring, :relocate, args)
+
+      assert {:error, :outdated} =
+               apply(
+                 Anchoring,
+                 :relocate,
+                 args ++ [[context_threshold: 1.0, fuzzy_threshold: 1.0]]
+               )
+    end
+
+    test "a rewritten line in the same spot is outdated, not reattached" do
+      v2 = List.replace_at(@cart, 10, "    Decimal.mult(item.price, item.qty)")
+
+      assert {:error, :outdated} =
+               Anchoring.relocate(
+                 thread(anchor_at(@cart, 11)),
+                 added_file("lib/cart.ex", @cart),
+                 added_file("lib/cart.ex", v2)
+               )
+    end
+  end
+
+  describe "relocate/4 fuzzy tier" do
+    setup do
+      line = "    Logger.debug(\"computing line total for item\")"
+      edited = "    Logger.debug(\"computing line totals for items\")"
+      v1 = ["# a", "# b", "# c", line, "# d", "# e"]
+      v2 = ["# one", "# two", "# three", "# four", edited, "# five"]
+      %{v1: v1, v2: v2, edited: edited}
+    end
+
+    test "matches an edited line near the hint", %{v1: v1, v2: v2, edited: edited} do
+      assert {:ok, moved} =
+               Anchoring.relocate(
+                 thread(anchor_at(v1, 4)),
+                 added_file("lib/cart.ex", v1),
+                 added_file("lib/cart.ex", v2)
+               )
+
+      assert moved["line_text"] == edited
+      assert moved["relocation"]["method"] == "fuzzy"
+      assert moved["relocation"]["score"] > 0.9
+    end
+
+    test ":fuzzy_threshold and :fuzzy_window tune the search", %{v1: v1, v2: v2} do
+      args = [
+        thread(anchor_at(v1, 4)),
+        added_file("lib/cart.ex", v1),
+        added_file("lib/cart.ex", v2)
+      ]
+
+      assert {:error, :outdated} = apply(Anchoring, :relocate, args ++ [[fuzzy_threshold: 0.99]])
+
+      far = List.duplicate("# pad", 10) ++ v2
+
+      args = [
+        thread(anchor_at(v1, 4)),
+        added_file("lib/cart.ex", v1),
+        added_file("lib/cart.ex", far)
+      ]
+
+      assert {:error, :outdated} = apply(Anchoring, :relocate, args ++ [[fuzzy_window: 5]])
+      assert {:ok, %{"line_number_hint" => 15}} = apply(Anchoring, :relocate, args)
+    end
+
+    test "two equally similar lines are ambiguous", %{v1: v1, edited: edited} do
+      v2 = ["# one", edited, "# two", "# three", edited, "# four"]
+
+      assert {:error, :ambiguous} =
+               Anchoring.relocate(
+                 thread(anchor_at(v1, 4, context: 0)),
+                 added_file("lib/cart.ex", v1 |> Enum.map(fn _ -> "# x" end)),
+                 added_file("lib/cart.ex", v2)
+               )
+    end
+  end
+
+  describe "relocate/4 inputs and options" do
+    test ":context_size controls how much context is compared and stored" do
+      v2 = insert_at(@cart, 1, ["  @moduledoc false"])
+
+      assert {:ok, moved} =
+               Anchoring.relocate(
+                 thread(anchor_at(@cart, 11)),
+                 added_file("lib/cart.ex", @cart),
+                 added_file("lib/cart.ex", v2),
+                 context_size: 1
+               )
+
+      assert moved["context_before"] == ["    qty = item.qty"]
+      assert moved["context_after"] == ["  end"]
+    end
+
+    test "accepts a %Thread{} struct" do
+      v2 = insert_at(@cart, 1, ["  @moduledoc false"])
+
+      thread = %Reviews.Threads.Thread{
+        file_path: "lib/cart.ex",
+        side: "new",
+        anchor: anchor_at(@cart, 11)
+      }
+
+      assert {:ok, %{"line_number_hint" => 12}} =
+               Anchoring.relocate(
+                 thread,
+                 added_file("lib/cart.ex", @cart),
+                 added_file("lib/cart.ex", v2)
+               )
+    end
+
+    test "accepts string-keyed threads and string-keyed patchsets" do
+      v2 = insert_at(@cart, 1, ["  @moduledoc false"])
+
+      thread = %{"file_path" => "lib/cart.ex", "side" => "new", "anchor" => anchor_at(@cart, 11)}
+
+      assert {:ok, %{"line_number_hint" => 12}} =
+               Anchoring.relocate(
+                 thread,
+                 %{"raw_diff" => added_file_diff("lib/cart.ex", @cart)},
+                 %{"raw_diff" => added_file_diff("lib/cart.ex", v2)}
+               )
+    end
+
+    test "a bare anchor takes :file_path and :side from opts" do
+      v2 = insert_at(@cart, 1, ["  @moduledoc false"])
+
+      assert {:ok, %{"line_number_hint" => 12}} =
+               Anchoring.relocate(
+                 anchor_at(@cart, 11),
+                 added_file("lib/cart.ex", @cart),
+                 added_file("lib/cart.ex", v2),
+                 file_path: "lib/cart.ex",
+                 side: "new"
+               )
+    end
+
+    test "missing line_text is read from the old patchset at the hint" do
+      anchor = %{"granularity" => "line", "line_number_hint" => 11, "line_text" => ""}
+      v2 = insert_at(@cart, 1, ["  @moduledoc false"])
+
+      assert {:ok, moved} =
+               Anchoring.relocate(
+                 thread(anchor),
+                 added_file("lib/cart.ex", @cart),
+                 added_file("lib/cart.ex", v2)
+               )
+
+      assert moved["line_number_hint"] == 12
+      assert moved["line_text"] == "    price * qty"
+    end
+
+    test "a stale hint does not supply context" do
+      # The hint points at a different line than line_text, so the old
+      # patchset's neighbours are not trusted. The short line then has no
+      # context, so it is not matched at all.
+      anchor = %{
+        "granularity" => "line",
+        "line_number_hint" => 2,
+        "line_text" => "  end",
+        "context_before" => [],
+        "context_after" => []
+      }
+
+      assert {:error, :outdated} =
+               Anchoring.relocate(
+                 thread(anchor),
+                 added_file("lib/cart.ex", @cart),
+                 added_file("lib/cart.ex", @cart)
+               )
+    end
+
+    test "follows a file renamed in an earlier patchset and renamed again" do
+      v2 = insert_at(@cart, 1, ["  @moduledoc false"])
+
+      assert {:ok, moved} =
+               Anchoring.relocate(
+                 thread(anchor_at(@cart, 11), "lib/basket.ex"),
+                 rewrite("lib/cart.ex", "lib/basket.ex", @cart, @cart),
+                 rewrite("lib/cart.ex", "lib/trolley.ex", @cart, v2)
+               )
+
+      assert moved["line_number_hint"] == 12
+      assert moved["relocation"]["file_path"] == "lib/trolley.ex"
+    end
+  end
+
+  describe "relocate/3 seeded random edits" do
+    # Not StreamData (the repo has no such dep): a fixed seed makes this a
+    # reproducible table of 200 random edit scripts.
+    test "a distinct line always follows random inserts and deletes elsewhere" do
+      :rand.seed(:exsss, {63, 62, 2026})
+
+      for _round <- 1..200 do
+        base = for i <- 1..40, do: "  value_#{i} = compute(#{i}, :seed)"
+        target_index = :rand.uniform(40) - 1
+        target = Enum.at(base, target_index)
+
+        edited =
+          Enum.reduce(1..:rand.uniform(12), base, fn step, lines ->
+            target_at = Enum.find_index(lines, &(&1 == target))
+
+            case :rand.uniform(2) do
+              1 ->
+                List.insert_at(lines, :rand.uniform(length(lines) + 1) - 1, "  extra_#{step}()")
+
+              2 ->
+                victim = :rand.uniform(length(lines)) - 1
+                if victim == target_at, do: lines, else: List.delete_at(lines, victim)
+            end
+          end)
+
+        expected = Enum.find_index(edited, &(&1 == target)) + 1
+
+        assert {:ok, %{"line_number_hint" => ^expected}} =
+                 Anchoring.relocate(
+                   thread(anchor_at(base, target_index + 1)),
+                   added_file("lib/cart.ex", base),
+                   added_file("lib/cart.ex", edited)
+                 )
+      end
+    end
+  end
+end
+
+defmodule Reviews.Anchoring.DiffLinesTest do
+  use ExUnit.Case, async: true
+
+  alias Reviews.Anchoring.DiffLines
+
+  @diff """
+  diff --git a/lib/a.ex b/lib/a.ex
+  index 1111111..2222222 100644
+  --- a/lib/a.ex
+  +++ b/lib/a.ex
+  @@ -1,3 +1,4 @@
+   one
+  -two
+  +TWO
+  +two and a half
+   three
+  @@ -10,2 +11,2 @@ def tail
+   ten
+  -eleven
+  +ELEVEN
+  \\ No newline at end of file
+  """
+
+  test "side_lines reads each side with real line numbers" do
+    assert DiffLines.side_lines(@diff, "new") == %{
+             1 => "one",
+             2 => "TWO",
+             3 => "two and a half",
+             4 => "three",
+             11 => "ten",
+             12 => "ELEVEN"
+           }
+
+    assert DiffLines.side_lines(@diff, "old") == %{
+             1 => "one",
+             2 => "two",
+             3 => "three",
+             10 => "ten",
+             11 => "eleven"
+           }
+  end
+
+  test "side_lines ignores bad input" do
+    assert DiffLines.side_lines(nil, "new") == %{}
+    assert DiffLines.side_lines(@diff, "left") == %{}
+  end
+
+  test "neighbours stop at gaps between hunks" do
+    lines = DiffLines.side_lines(@diff, "new")
+
+    assert DiffLines.neighbours(lines, 11, -1, 3) == []
+    assert DiffLines.neighbours(lines, 3, -1, 3) == ["one", "TWO"]
+    assert DiffLines.neighbours(lines, 3, 1, 3) == ["three"]
+  end
+
+  test "find_file matches the new path, the pre-rename path, or an extra path" do
+    diff = %{
+      raw_diff:
+        "diff --git a/lib/old.ex b/lib/new.ex\nrename from lib/old.ex\nrename to lib/new.ex\n"
+    }
+
+    assert %{path: "lib/new.ex"} = DiffLines.find_file(diff, "lib/new.ex")
+    assert %{path: "lib/new.ex"} = DiffLines.find_file(diff, "lib/old.ex")
+    assert %{path: "lib/new.ex"} = DiffLines.find_file(diff, "lib/mid.ex", ["lib/old.ex"])
+    assert DiffLines.find_file(diff, "lib/other.ex") == nil
+    assert DiffLines.find_file(%{}, "lib/new.ex") == nil
+  end
 end
