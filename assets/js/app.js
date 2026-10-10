@@ -26,6 +26,8 @@ import {hooks as colocatedHooks} from "phoenix-colocated/reviews"
 import topbar from "../vendor/topbar"
 import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
+import WrapLinesToggle from "./hooks/wrap_lines_toggle"
+import {applyWrapLines, readWrapLinesPref} from "./lib/line_wrap"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -35,8 +37,12 @@ const liveSocket = new LiveSocket("/live", Socket, {
     ...colocatedHooks,
     DiffRenderer,
     PacketNavTree,
+    WrapLinesToggle,
   },
 })
+
+// Apply the saved "Wrap lines" preference before any diff island mounts.
+applyWrapLines(readWrapLinesPref())
 
 // Show progress bar on live navigation and form submits
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
@@ -181,11 +187,23 @@ window.liveSocket = liveSocket
 //     1. stream server logs to the browser console
 //     2. click on elements to jump to their definitions in your code editor
 //
+// esbuild sets process.env.NODE_ENV to "production" for the minified
+// assets.deploy build and "development" otherwise, and the live reload
+// event only fires when Phoenix.LiveReloader is mounted (dev only).
+const serverLogsRequested = () => {
+  try {
+    return window.localStorage.getItem("phxServerLogs") === "1"
+  } catch {
+    return false
+  }
+}
+
 if (process.env.NODE_ENV === "development") {
   window.addEventListener("phx:live_reload:attached", ({detail: reloader}) => {
-    // Enable server log streaming to client.
-    // Disable with reloader.disableServerLogs()
-    reloader.enableServerLogs()
+    // Server log streaming floods the console, so it is opt-in even in dev:
+    //   >> localStorage.phxServerLogs = "1"   // then reload
+    //   >> liveReloader.enableServerLogs()    // or for this page only
+    if (serverLogsRequested()) reloader.enableServerLogs()
 
     // Open configured PLUG_EDITOR at file:line of the clicked element's HEEx component
     //

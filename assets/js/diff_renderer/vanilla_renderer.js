@@ -6,6 +6,8 @@ import {
   threadBubble,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { selectionInProgress } from "./selection.js"
+import { diffOverflow, wrapLinesEnabled } from "../lib/line_wrap.js"
 import {
   annotationSideToSide,
   composerToAnchor,
@@ -232,6 +234,7 @@ export class VanillaDiffRenderer {
   }
 
   handleLineNumberClick(props) {
+    if (selectionInProgress(props?.event, props?.lineElement)) return
     const side = props?.annotationSide || props?.side
     const lineNumber = props?.lineNumber
     if (!side || !lineNumber) return
@@ -249,7 +252,8 @@ export class VanillaDiffRenderer {
     })
   }
 
-  handleTokenClick(props) {
+  handleTokenClick(props, event) {
+    if (selectionInProgress(event, props?.tokenElement)) return
     const side = props?.side
     const lineNumber = props?.lineNumber
     const tokenText = props?.tokenText || ""
@@ -348,13 +352,14 @@ export class VanillaDiffRenderer {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
+      overflow: diffOverflow({ filePath: this.filePath, wrapLines: wrapLinesEnabled() }),
       collapsed: this.collapsed(),
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS,
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
       onLineNumberClick: (props) => this.handleLineNumberClick(props),
-      onTokenClick: (props) => this.handleTokenClick(props),
+      onTokenClick: (props, event) => this.handleTokenClick(props, event),
     }
   }
 
@@ -402,10 +407,13 @@ export class VanillaDiffRenderer {
       this.instance = new Diffs.VirtualizedFileDiff(
         options,
         this.virtualizer,
+        // Partial<VirtualFileMetrics>: Pierre fills in the rest from
+        // DEFAULT_VIRTUAL_FILE_METRICS. There is no annotation estimate:
+        // rows taller than lineHeight (annotations, wrapped lines) are
+        // measured after render.
         {
           lineHeight: 20,
-          fileHeaderHeight: 44,
-          annotationEstimateHeight: 96,
+          diffHeaderHeight: 44,
         }
       )
       this.instance.render({ ...renderArgs, containerWrapper: contentWrapper })
