@@ -42,7 +42,7 @@ defmodule ReviewsWeb.HomeLiveTest do
 
     assert has_element?(
              view,
-             "#home-demo[data-step=\"push\"] .home-demo-section.is-section-1.is-expanded"
+             "#home-demo[data-step=\"push\"] .home-demo-focus-panel.is-section-1"
            )
 
     view
@@ -92,7 +92,7 @@ defmodule ReviewsWeb.HomeLiveTest do
 
     assert has_element?(
              view,
-             "#home-demo[data-step=\"final\"] .home-demo-section.is-section-1.is-approved"
+             "#home-demo[data-step=\"final\"] .home-demo-edge-tick.is-section-1.is-approved"
            )
   end
 
