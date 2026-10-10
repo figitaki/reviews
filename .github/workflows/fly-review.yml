@@ -67,6 +67,9 @@ jobs:
       FLY_ORG: ${{ vars.FLY_ORG }}
       APP_NAME: reviews-pr-${{ github.event.pull_request.number }}
       APP_HOST: reviews-pr-${{ github.event.pull_request.number }}.fly.dev
+      # Each preview app gets its own database on the shared preview
+      # Postgres server. See "Per-PR databases" in docs/PREVIEW_ENVS.md.
+      PREVIEW_DB_NAME: reviews_pr_${{ github.event.pull_request.number }}
 
     # Verbose tracing so a failure is debuggable from the run log without
     # having to reproduce locally.
@@ -102,22 +105,85 @@ jobs:
           PREVIEW_GITHUB_CLIENT_SECRET: ${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
           PREVIEW_API_TOKEN: ${{ secrets.PREVIEW_API_TOKEN }}
         run: |
+          # No tracing in this step: DATABASE_URL below is built from a
+          # secret, and GitHub masks only the exact secret value.
+          set +x
+
+          # The database name goes into SQL (CREATE/DROP DATABASE), so it
+          # must be reviews_pr_<digits> and nothing else.
+          if ! [[ "$PREVIEW_DB_NAME" =~ ^reviews_pr_[0-9]+$ ]]; then
+            echo "::error::bad preview database name: $PREVIEW_DB_NAME"
+            exit 1
+          fi
+
+          # Take the server and credentials from PREVIEW_DATABASE_URL. Keep
+          # the scheme, credentials, host, port and query string; replace
+          # only the path (the database name) with the per-PR name. The
+          # release command creates that database through the server's
+          # `postgres` maintenance database.
+          DATABASE_URL="$(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(u.urlunsplit(p._replace(path="/" + sys.argv[2])))' "$PREVIEW_DATABASE_URL" "$PREVIEW_DB_NAME")"
+          echo "::add-mask::$DATABASE_URL"
+
+          # POOL_SIZE is not set here: fly.preview.toml sets it in [env].
           flyctl secrets set --stage --app "$APP_NAME" \
             SECRET_KEY_BASE="$PREVIEW_SECRET_KEY_BASE" \
-            DATABASE_URL="$PREVIEW_DATABASE_URL" \
+            DATABASE_URL="$DATABASE_URL" \
+            PREVIEW_DB_NAME="$PREVIEW_DB_NAME" \
             GITHUB_CLIENT_ID="$PREVIEW_GITHUB_CLIENT_ID" \
             GITHUB_CLIENT_SECRET="$PREVIEW_GITHUB_CLIENT_SECRET" \
             PREVIEW_API_TOKEN="$PREVIEW_API_TOKEN" \
             PHX_HOST="$APP_HOST"
 
+      # fly.preview.toml, not fly.toml: small DB pool and auto-stop when
+      # idle. --ha=false: one machine per preview, not Fly's default of two
+      # on first deploy. Each machine holds POOL_SIZE connections to the
+      # shared preview Postgres server while it runs.
       - name: Deploy preview app
         if: github.event.action != 'closed'
         run: |
           flyctl deploy \
             --app "$APP_NAME" \
-            --config fly.toml \
+            --config fly.preview.toml \
+            --ha=false \
             --remote-only \
             --yes
+
+      # Apps first deployed before --ha=false can have two machines.
+      - name: Keep one machine
+        if: github.event.action != 'closed'
+        run: flyctl scale count 1 --app "$APP_NAME" --yes
+
+      # Best effort: a failure here must not block the destroy step below.
+      # If it fails, drop the database by hand (docs/PREVIEW_ENVS.md).
+      # The app is still running at this point, so we run the drop inside
+      # it. Its DATABASE_URL and PREVIEW_DB_NAME name the database, and
+      # Reviews.Release.drop_preview_database refuses any name that is not
+      # reviews_pr_<digits>. Apps deployed before per-PR databases have no
+      # PREVIEW_DB_NAME, so for them the drop is a no-op.
+      - name: Drop preview database
+        if: github.event.action == 'closed'
+        continue-on-error: true
+        run: |
+          if ! flyctl status --app "$APP_NAME" > /dev/null 2>&1; then
+            echo "App $APP_NAME does not exist; nothing to drop."
+            exit 0
+          fi
+
+          # Machines auto-stop when idle, and `ssh console` needs a started
+          # machine. One HTTP request makes the Fly proxy start one.
+          curl -sS -o /dev/null --max-time 60 "https://$APP_HOST/" || true
+
+          for attempt in 1 2 3 4 5; do
+            if flyctl ssh console --app "$APP_NAME" \
+                -C "/app/bin/reviews eval Reviews.Release.drop_preview_database"; then
+              echo "Dropped $PREVIEW_DB_NAME."
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "::warning::could not drop $PREVIEW_DB_NAME; drop it by hand (see docs/PREVIEW_ENVS.md)"
+          exit 1
 
       - name: Destroy preview app
         if: github.event.action == 'closed'
