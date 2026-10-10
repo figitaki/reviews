@@ -24,16 +24,18 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/reviews"
 import topbar from "../vendor/topbar"
-import ChangesFileTree from "./hooks/changes_file_tree"
 import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
-import StickyHunkHeader from "./hooks/sticky_hunk_header"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, ChangesFileTree, DiffRenderer, PacketNavTree, StickyHunkHeader},
+  hooks: {
+    ...colocatedHooks,
+    DiffRenderer,
+    PacketNavTree,
+  },
 })
 
 // Show progress bar on live navigation and form submits
@@ -87,12 +89,6 @@ const scrollToTop = top => {
 }
 
 const targetScrollOffset = target => {
-  const hunkHeader = target.matches(".review-hunk-summary")
-    ? target
-    : target.querySelector?.(".review-hunk-summary") || target.closest(".review-hunk-card")?.querySelector(".review-hunk-summary")
-
-  if (hunkHeader) return cssPx(hunkHeader, "top") + 8
-
   const scrollMarginTop = Number.parseFloat(window.getComputedStyle(target).scrollMarginTop)
   if (Number.isFinite(scrollMarginTop) && scrollMarginTop > 0) return scrollMarginTop
 
@@ -110,7 +106,9 @@ const scrollToReviewTarget = (target, {highlight = false} = {}) => {
   const top = Math.max(0, target.getBoundingClientRect().top + scrollTop - targetScrollOffset(target))
 
   scrollToTop(top)
-  target.focus({preventScroll: true})
+  // Keep focus where it is when it already sits inside the target (for
+  // example on the hunk header toggle that just collapsed the card).
+  if (!target.contains(document.activeElement)) target.focus({preventScroll: true})
 
   if (!highlight) return
 
@@ -137,6 +135,27 @@ window.addEventListener("phx:packet_nav_jump", ({detail}) => {
   if (!detail?.id) return
 
   window.requestAnimationFrame(() => scrollToReviewTargetId(detail.id, {highlight: true}))
+})
+
+// Hiding or showing the guide removes the button that had focus. Move focus
+// to its counterpart so keyboard users are not dropped on <body>.
+const focusGuideToggle = (show, attempts = 12) => {
+  const target = show
+    ? document.querySelector(".review-edge-rail-hide, .review-packet-nav-hide")
+    : document.querySelector(".review-outline-toggle")
+
+  if (target) {
+    target.focus({preventScroll: true})
+    return
+  }
+
+  if (attempts <= 0) return
+
+  window.requestAnimationFrame(() => focusGuideToggle(show, attempts - 1))
+}
+
+window.addEventListener("phx:packet_outline_toggled", ({detail}) => {
+  window.requestAnimationFrame(() => focusGuideToggle(Boolean(detail?.show)))
 })
 
 window.addEventListener("phx:hunk_collapsed", ({detail}) => {
