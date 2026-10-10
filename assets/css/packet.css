@@ -653,9 +653,7 @@
 }
 
 .review-packet-inline-overview {
-  width: min(100%, var(--guide-track, 72rem));
-  margin-inline: auto;
-  justify-self: center;
+  width: 100%;
 }
 
 .review-packet-inline-overview .review-guide-panel-inner {
@@ -1193,31 +1191,13 @@ details[open] > summary .review-collapse-icon,
   line-height: 1.55;
 }
 
-/* One shared content track in the focused split guide: the section header,
-   prose, hunks, and decision footer all align to the same left edge. Prose is
-   additionally constrained to a reading measure inside that track — code
-   width and prose width are different layout concerns. */
-.review-packet-shell.is-guide-split {
-  --guide-track: 72rem;
-  --guide-measure: 60ch;
-}
-
-.review-packet-shell.is-guide-split .review-packet-section-summary,
-.review-packet-shell.is-guide-split .review-packet-section-summary-text,
-.review-packet-shell.is-guide-split .review-packet-row.is-markdown,
-.review-packet-shell.is-guide-split .review-section-header,
-.review-packet-shell.is-guide-split .review-section-decision,
-.review-packet-shell.is-guide-split .review-packet-row.is-hunk {
-  width: min(100%, var(--guide-track));
-  margin-inline: auto;
-  justify-self: center;
-}
-
-/* Code is the one thing that benefits from every pixel: hunk cards bleed
-   past the prose track into the page gutters and stay centered on it, so
-   wide monitors get wider diffs while the copy keeps its reading measure. */
-.review-packet-shell.is-guide-split .review-packet-row.is-hunk {
-  width: 100%;
+/* One content track in the focused guide: the section header, prose, hunks
+   and decision footer all start at the grid's left gutter. Code fills the
+   track; prose wraps at a reading measure inside it, so the two share a left
+   edge and read as one column. */
+.review-packet-shell.is-guide-split,
+.review-packet-shell.is-guide-unified {
+  --guide-measure: 72ch;
 }
 
 .review-packet-shell.is-guide-split .review-packet-section-summary {
