@@ -47,5 +47,6 @@ npm-debug.log
 .DS_Store
 
 # Claude Code per-project state (settings, worktrees, transcripts).
-/.claude/
+/.claude/*
+!/.claude/rules/
 
