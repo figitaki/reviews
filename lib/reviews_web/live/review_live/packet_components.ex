@@ -73,7 +73,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
         <div class="review-packet-grid">
           <section
-            :if={@show_packet_outline && @diff_style == "split" && is_nil(@active_section_index)}
+            :if={
+              focused_guide_layout?(@show_packet_outline, @diff_style) &&
+                is_nil(@active_section_index)
+            }
             id="review-split-inline-overview"
             class="review-packet-inline-overview"
             aria-labelledby="review-split-inline-overview-title"
@@ -110,7 +113,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             ]}
           >
             <.packet_section_header
-              :if={@show_packet_outline && @diff_style == "split"}
+              :if={focused_guide_layout?(@show_packet_outline, @diff_style)}
               section={section}
               section_count={@packet_outline.summary.section_count}
               current_user={@current_user}
@@ -222,10 +225,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                   expanded_hunk_ids={@expanded_hunk_ids}
                   section_title={section.title}
                   file_labels={@file_labels}
-                  dedupe_intro?={
-                    @show_packet_outline && @diff_style == "unified" &&
-                      section.index == @active_section_index
-                  }
                 />
               </div>
 
@@ -282,14 +281,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :diff_style, :string, required: true
 
   defp packet_guide_shell(assigns) do
-    assigns =
-      assigns
-      |> assign(
-        :active_section,
-        active_outline_section(assigns.outline, assigns.active_section_index)
-      )
-      |> assign(:first_section, List.first(assigns.outline.sections || []))
-
     ~H"""
     <aside
       id="review-guide-shell"
@@ -333,15 +324,19 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-click={guide_section_nav_event(@diff_style, section.target_id)}
             phx-value-section_index={section.index}
             phx-value-target_id={section.target_id}
-            title={"#{section.title} — #{section.status_label}"}
-            aria-label={"#{pad2(section.index + 1)} #{section.title}; decision: #{section.status_label}"}
+            title={section.title}
+            aria-label={"#{pad2(section.index + 1)} #{section.title}"}
+            aria-describedby={section.effective_status && "review-guide-tick-#{section.index}-state"}
             aria-current={if(section.index == @active_section_index, do: "true", else: "false")}
           >
             <span class="review-edge-tick-number">{pad2(section.index + 1)}</span>
             <span
               :if={section.effective_status}
+              id={"review-guide-tick-#{section.index}-state"}
               class={["review-edge-tick-state", "is-#{section.effective_status}"]}
-              aria-hidden="true"
+              role="img"
+              aria-label={"Decision: #{section.status_label}"}
+              title={"Decision: #{section.status_label}"}
             >
               <.section_status_icon status={section.effective_status} />
             </span>
@@ -380,80 +375,21 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           </button>
         </div>
 
-        <div class="review-guide-flyout-group">
-          <div class="review-guide-flyout-label">Packet</div>
-          <button
-            type="button"
-            class={["review-guide-flyout-section", is_nil(@active_section_index) && "is-active"]}
-            phx-click="select_packet_overview"
-          >
-            <span class="review-guide-flyout-num">★</span>
-            <span>Overview</span>
-          </button>
-        </div>
-
-        <div class="review-guide-flyout-group">
-          <div class="review-guide-flyout-label">Sections</div>
-          <div
-            :for={section <- @outline.sections}
-            :key={section.index}
-            class="review-guide-flyout-item"
-          >
-            <button
-              type="button"
-              class={[
-                "review-guide-flyout-section",
-                section.index == @active_section_index && "is-active"
-              ]}
-              phx-click={guide_section_nav_event(@diff_style, section.target_id)}
-              phx-value-section_index={section.index}
-              phx-value-target_id={section.target_id}
-            >
-              <span class="review-guide-flyout-num">{pad2(section.index + 1)}</span>
-              <span class="review-guide-flyout-title">{section.title}</span>
-              <span
-                :if={section.effective_status}
-                class={["review-guide-flyout-state", "is-#{section.effective_status}"]}
-              >
-                <.section_status_icon status={section.effective_status} /> {section.status_label}
-              </span>
-            </button>
-
-            <div
-              :if={section.index == @active_section_index && section.files != []}
-              class="review-guide-flyout-files"
-            >
-              <button
-                :for={file <- section.files}
-                :key={file.path}
-                type="button"
-                class="review-guide-flyout-file"
-                phx-click="packet_nav_jump"
-                phx-value-section_index={section.index}
-                phx-value-target_id={file.target_id}
-                disabled={is_nil(file.target_id)}
-                translate="no"
-              >
-                {file.basename}
-              </button>
-            </div>
-          </div>
-        </div>
+        <.guide_nav_groups
+          outline={@outline}
+          active_section_index={@active_section_index}
+          diff_style={@diff_style}
+        />
       </div>
 
-      <section id="review-guide-panel" class="review-guide-panel" aria-live="polite">
-        <.packet_guide_overview_panel
-          :if={is_nil(@active_section_index)}
-          outline={@outline}
-          first_section={@first_section}
-        />
-
-        <.packet_guide_section_panel
-          :if={@active_section}
-          section={@active_section}
-          section_count={@outline.summary.section_count}
-          current_user={@current_user}
-        />
+      <section id="review-guide-panel" class="review-guide-panel" aria-label="Section list">
+        <div class="review-guide-panel-inner is-nav">
+          <.guide_nav_groups
+            outline={@outline}
+            active_section_index={@active_section_index}
+            diff_style={@diff_style}
+          />
+        </div>
       </section>
     </aside>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".GuideFlyout">
@@ -539,6 +475,75 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   end
 
   attr :outline, :map, required: true
+  attr :active_section_index, :integer, default: nil
+  attr :diff_style, :string, required: true
+
+  # Section navigation shared by the rail flyout and the unified guide panel.
+  defp guide_nav_groups(assigns) do
+    ~H"""
+    <div class="review-guide-flyout-group">
+      <div class="review-guide-flyout-label">Packet</div>
+      <button
+        type="button"
+        class={["review-guide-flyout-section", is_nil(@active_section_index) && "is-active"]}
+        phx-click="select_packet_overview"
+      >
+        <span class="review-guide-flyout-num">★</span>
+        <span>Overview</span>
+      </button>
+    </div>
+
+    <div class="review-guide-flyout-group">
+      <div class="review-guide-flyout-label">Sections</div>
+      <div
+        :for={section <- @outline.sections}
+        :key={section.index}
+        class="review-guide-flyout-item"
+      >
+        <button
+          type="button"
+          class={[
+            "review-guide-flyout-section",
+            section.index == @active_section_index && "is-active"
+          ]}
+          phx-click={guide_section_nav_event(@diff_style, section.target_id)}
+          phx-value-section_index={section.index}
+          phx-value-target_id={section.target_id}
+        >
+          <span class="review-guide-flyout-num">{pad2(section.index + 1)}</span>
+          <span class="review-guide-flyout-title">{section.title}</span>
+          <span
+            :if={section.effective_status}
+            class={["review-guide-flyout-state", "is-#{section.effective_status}"]}
+          >
+            <.section_status_icon status={section.effective_status} /> {section.status_label}
+          </span>
+        </button>
+
+        <div
+          :if={section.index == @active_section_index && section.files != []}
+          class="review-guide-flyout-files"
+        >
+          <button
+            :for={file <- section.files}
+            :key={file.path}
+            type="button"
+            class="review-guide-flyout-file"
+            phx-click="packet_nav_jump"
+            phx-value-section_index={section.index}
+            phx-value-target_id={file.target_id}
+            disabled={is_nil(file.target_id)}
+            translate="no"
+          >
+            {file.basename}
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :outline, :map, required: true
   attr :first_section, :map, default: nil
   attr :title_id, :string, default: nil
 
@@ -572,78 +577,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       >
         Begin review <span aria-hidden="true">→</span>
       </button>
-    </div>
-    """
-  end
-
-  attr :section, :map, required: true
-  attr :section_count, :integer, required: true
-  attr :current_user, :any, default: nil
-  attr :title_id, :string, default: nil
-
-  defp packet_guide_section_panel(assigns) do
-    ~H"""
-    <div class="review-guide-panel-inner">
-      <span class="review-guide-eyebrow">
-        Section {String.pad_leading(Integer.to_string(@section.index + 1), 2, "0")} / {String.pad_leading(
-          Integer.to_string(@section_count),
-          2,
-          "0"
-        )}
-      </span>
-      <h2 id={@title_id} class="review-guide-panel-title">{@section.title}</h2>
-      <p :if={@section.summary != ""} class="review-guide-panel-prose">
-        {@section.summary}
-      </p>
-      <div class="review-guide-panel-meta">
-        <span>{@section.estimate.effort}</span>
-        <span>{@section.file_count} {plural(@section.file_count, "file")}</span>
-        <.change_stat additions={@section.estimate.additions} deletions={@section.estimate.deletions} />
-        <span>~{@section.estimate.time}</span>
-      </div>
-      <div
-        class="review-guide-section-state"
-        role="group"
-        aria-label={"Review state for #{@section.title}"}
-      >
-        <span class={[
-          "review-section-state-mark",
-          "is-#{@section.effective_status || "pending"}"
-        ]}>
-          <.section_status_icon status={@section.effective_status} />
-        </span>
-        <span class="review-section-state-text">{section_decision_state_label(@section)}</span>
-        <span :if={@section.decision_history} class="review-section-state-history">
-          {@section.decision_history}
-        </span>
-      </div>
-
-      <div :if={@section.files != []} class="review-guide-panel-files">
-        <div class="review-guide-files-label">
-          <span>Files</span>
-          <span></span>
-        </div>
-        <button
-          :for={file <- @section.files}
-          :key={file.path}
-          type="button"
-          class={["review-guide-file-row", "is-#{file.view_state.status}"]}
-          phx-click="packet_nav_jump"
-          phx-value-section_index={@section.index}
-          phx-value-target_id={file.target_id}
-          disabled={is_nil(file.target_id)}
-        >
-          <.icon name="hero-document-text" class="review-guide-file-icon" />
-          <span class="review-guide-file-name" translate="no">{file.basename}</span>
-          <span :if={file.directory != ""} class="review-guide-file-path" translate="no">
-            {file.directory}
-          </span>
-          <span class="review-guide-file-stat">
-            <.change_stat additions={file.additions} deletions={file.deletions} />
-          </span>
-          <span class="review-guide-file-state">{file.view_state.label}</span>
-        </button>
-      </div>
     </div>
     """
   end
@@ -1044,12 +977,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
     Map.put(file, :view_state, state)
   end
-
-  defp active_outline_section(%{sections: sections}, index) when is_integer(index) do
-    Enum.find(sections, &(&1.index == index))
-  end
-
-  defp active_outline_section(_outline, _index), do: nil
 
   defp outline_directory(path) do
     case Path.dirname(path || "") do

@@ -208,6 +208,6 @@
   /* Packet guide layout primitives */
   --guide-rail-w:   48px;
   --guide-flyout-w: 320px;
-  --guide-panel-min: 380px;
-  --guide-panel-max: 460px;
+  --guide-panel-min: 260px;
+  --guide-panel-max: 300px;
 }

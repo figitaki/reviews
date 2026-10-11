@@ -725,15 +725,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
       refute has_element?(view, "#review-split-inline-overview")
 
       assert has_element?(view, "#packet-section-0.is-open")
-      assert has_element?(view, "#review-guide-panel", "Primary reasoning")
 
-      assert has_element?(
-               view,
-               "#review-guide-panel",
-               "entrypoint change matters"
-             )
-
-      refute has_element?(view, "#packet-section-0", "entrypoint change matters")
+      # Unified reads like split: header, lead prose, hunks, decision in one
+      # column. The side panel is navigation only and lists no files.
+      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
+      assert has_element?(view, "#packet-section-0-decision")
+      assert has_element?(view, "#packet-section-0", "entrypoint change matters")
+      assert has_element?(view, "#review-guide-panel .review-guide-flyout-section.is-active")
+      refute has_element?(view, "#review-guide-panel", "entrypoint change matters")
+      refute has_element?(view, ".review-guide-panel-files")
       assert has_element?(view, "#packet-section-0", "interspersed commentary")
       assert has_element?(view, "#review-guide-flyout .review-guide-flyout-file", "first.ex")
       refute has_element?(view, "#packet-section-0", "stay out of the way")
@@ -746,15 +746,9 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-guide-tick-1.is-active")
 
       assert has_element?(view, "#packet-section-1.is-open")
-      assert has_element?(view, "#review-guide-panel", "Secondary consequence")
-
-      assert has_element?(
-               view,
-               "#review-guide-panel",
-               "stay out of the way"
-             )
-
-      refute has_element?(view, "#packet-section-1", "stay out of the way")
+      assert has_element?(view, "#review-split-section-overview-1", "Secondary consequence")
+      assert has_element?(view, "#packet-section-1", "stay out of the way")
+      refute has_element?(view, "#review-guide-panel", "stay out of the way")
       refute has_element?(view, "#packet-section-1", "entrypoint change matters")
 
       view
@@ -762,6 +756,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> render_click()
 
       assert has_element?(view, "#review-guide-overview-tick.is-active")
+      assert has_element?(view, "#review-split-inline-overview", "Packet-level overview")
+      refute has_element?(view, "#review-guide-panel", "Packet-level overview")
     end
 
     test "changes route renders one collapsible diff island per file", %{
@@ -1250,6 +1246,17 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#packet-section-0.is-open")
 
       assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
+
+      # The rail glyph carries the decision label; the tick keeps a neutral name.
+      assert has_element?(
+               view,
+               ~s|#review-guide-tick-0[aria-label="01 Main change"][aria-describedby="review-guide-tick-0-state"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#review-guide-tick-0-state[role="img"][aria-label="Decision: Approved"]|
+             )
 
       assert has_element?(
                view,
