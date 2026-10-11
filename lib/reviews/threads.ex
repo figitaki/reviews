@@ -39,6 +39,38 @@ defmodule Reviews.Threads do
     |> Repo.preload(comments: :author)
   end
 
+  @doc """
+  Published comment activity for a review, one entry per comment author.
+
+  Returns `%{author: Identity.t(), comment_count: integer, last_commented_at:
+  DateTime.t()}` maps. `Reviews.ReviewDeciders` merges these with section
+  decisions to build the published reviewers list.
+  """
+  def list_comment_authors(review_id) when is_integer(review_id) do
+    rows =
+      Repo.all(
+        from c in Comment,
+          join: t in assoc(c, :thread),
+          where: t.review_id == ^review_id,
+          group_by: c.author_id,
+          select: {c.author_id, count(c.id), max(c.inserted_at)}
+      )
+
+    author_ids = Enum.map(rows, &elem(&1, 0))
+
+    authors_by_id =
+      Repo.all(from i in Identity, where: i.id in ^author_ids)
+      |> Map.new(&{&1.id, &1})
+
+    Enum.map(rows, fn {author_id, comment_count, last_commented_at} ->
+      %{
+        author: Map.fetch!(authors_by_id, author_id),
+        comment_count: comment_count,
+        last_commented_at: last_commented_at
+      }
+    end)
+  end
+
   ## Commenting
 
   @doc """
