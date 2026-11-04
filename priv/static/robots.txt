@@ -1,5 +1,7 @@
-# See https://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
-#
-# To ban all spiders from the entire site uncomment the next two lines:
-# User-agent: *
-# Disallow: /
+# Crawler guidance, not access control. The public landing page remains crawlable.
+User-agent: *
+Disallow: /r/
+Disallow: /api/
+Disallow: /settings
+Disallow: /auth/
+Disallow: /dev/
