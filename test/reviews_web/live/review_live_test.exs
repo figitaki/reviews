@@ -96,6 +96,25 @@ defmodule ReviewsWeb.ReviewLiveTest do
   describe "anonymous viewer" do
     setup :seed!
 
+    test "current and historical review pages discourage indexing", %{review: review} do
+      {:ok, _patchset} =
+        ReviewsCtx.append_patchset(review, %{
+          raw_diff: "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+        })
+
+      for path <- [
+            ~p"/r/#{review.slug}",
+            ~p"/r/#{review.slug}/changes",
+            ~p"/r/#{review.slug}?patchset=1",
+            ~p"/r/#{review.slug}/changes?patchset=1"
+          ] do
+        conn = get(build_conn(), path)
+
+        assert html_response(conn, 200)
+        assert get_resp_header(conn, "x-robots-tag") == ["noindex, nofollow, noarchive"]
+      end
+    end
+
     test "renders collapsed diff islands through the single Pierre header", %{
       conn: conn,
       review: review
