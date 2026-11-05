@@ -363,6 +363,10 @@
   outline-offset: 2px;
 }
 
+.review-code-view-icon {
+  display: none;
+}
+
 .review-revision-chip-list {
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -2591,6 +2595,9 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-toolbar .review-code-view-switcher {
+    gap: 0;
+    border: 0;
+    background: transparent;
     padding: 0;
   }
 
@@ -2598,6 +2605,40 @@ details[open] > summary .review-collapse-icon,
   .review-toolbar .review-outline-toggle {
     min-width: 44px;
     min-height: 44px;
+  }
+
+  .review-toolbar .review-code-view-tab,
+  .review-toolbar .review-code-view-tab.is-active {
+    position: relative;
+    isolation: isolate;
+    width: 44px;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .review-toolbar .review-code-view-tab::before {
+    position: absolute;
+    z-index: -1;
+    inset: 6px;
+    border-radius: 5px;
+    content: "";
+  }
+
+  .review-toolbar .review-code-view-tab:hover::before {
+    background: var(--review-hover);
+  }
+
+  .review-toolbar .review-code-view-tab.is-active::before {
+    background: var(--review-text);
+  }
+
+  .review-code-view-icon {
+    display: inline-block;
+  }
+
+  .review-code-view-label {
+    display: none;
   }
 
   .review-toolbar .review-revision-nav,

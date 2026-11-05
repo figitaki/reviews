@@ -75,6 +75,8 @@ This supersedes the earlier shared-left-edge treatment below.
   replacing the desktop chip strip when multiple revisions exist.
 - Truncate the title visually and keep its complete text in the heading.
   Preserve 44px touch targets and use a shorter navigation restore label.
+- Use icon-only Guide/Diff tabs on phones, with compact selected surfaces,
+  accessible names, and the text labels retained on desktop.
 - Count only sticky/fixed app headers in the measured scroll offset. Use the
   stable small viewport for minimum page height and the mobile guide flyout.
 - Use native smooth scrolling for section jumps, with instant scrolling for

@@ -16,8 +16,8 @@ still stabilizing.
 - Review titles, revisions and matching view controls share a sticky toolbar.
   Single-revision reviews omit redundant revision controls.
 - Mobile review navigation uses one compact sticky row; the brand/account row
-  scrolls away, and multiple revisions use a native selector. Anonymous sign-in
-  prompts stay in the section flow on phones.
+  scrolls away, Guide/Diff use icons, and multiple revisions use a native
+  selector. Anonymous sign-in prompts stay in the section flow on phones.
 - Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
   now requires Elixir `~> 1.20`.
 - Phoenix 1.8.13, LiveView 1.2.11, Phoenix LiveDashboard 0.9.1, Bandit 1.12.5,

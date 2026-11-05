@@ -124,17 +124,29 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
           aria-label="Code view"
         >
           <.link
+            id="code-view-guide"
             navigate={guide_path(@review, @selected_patchset)}
             class={["review-code-view-tab", @live_action != :changes && "is-active"]}
             role="tab"
+            aria-label="Guide"
+            title="Guide"
             aria-selected={if(@live_action != :changes, do: "true", else: "false")}
-          >Guide</.link>
+          >
+            <.icon name="hero-book-open" class="review-code-view-icon size-[18px]" />
+            <span class="review-code-view-label">Guide</span>
+          </.link>
           <.link
+            id="code-view-diff"
             navigate={diff_path(@review, @selected_patchset)}
             class={["review-code-view-tab", @live_action == :changes && "is-active"]}
             role="tab"
+            aria-label="Diff"
+            title="Diff"
             aria-selected={if(@live_action == :changes, do: "true", else: "false")}
-          >Diff</.link>
+          >
+            <.icon name="hero-code-bracket" class="review-code-view-icon size-[18px]" />
+            <span class="review-code-view-label">Diff</span>
+          </.link>
         </div>
         <.diff_style_switcher diff_style={@diff_style} />
       </div>
