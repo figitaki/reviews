@@ -13,6 +13,13 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
   slot :inner_block, required: true
 
   def revision_nav(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :revision_form,
+        to_form(%{"number" => assigns.selected_patchset && assigns.selected_patchset.number})
+      )
+
     ~H"""
     <section
       id="review-toolbar"
@@ -30,8 +37,25 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
           phx-click="toggle_packet_outline"
           aria-label="Show section navigation"
         >
-          Show navigation
+          <span class="review-outline-toggle-full">Show navigation</span>
+          <span class="review-outline-toggle-short" aria-hidden="true">Sections</span>
         </button>
+        <.form
+          :if={@nav.revision_count > 1}
+          for={@revision_form}
+          id="revision-mobile-nav"
+          class="review-mobile-revision-nav"
+          phx-change="select_patchset"
+        >
+          <.input
+            field={@revision_form[:number]}
+            id="mobile-revision"
+            type="select"
+            class="review-revision-select"
+            aria-label="Revision"
+            options={Enum.map(@nav.revisions, &{"v#{&1.number}", &1.number})}
+          />
+        </.form>
         <nav
           :if={@nav.revision_count > 1}
           id="revision-nav"
@@ -122,7 +146,10 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
             this.layoutStyle = document.createElement("style")
             document.head.append(this.layoutStyle)
             this.measure = () => {
-              const appbarHeight = this.appbar.getBoundingClientRect().height
+              const appbarPosition = getComputedStyle(this.appbar).position
+              const appbarHeight = ["sticky", "fixed"].includes(appbarPosition)
+                ? this.appbar.getBoundingClientRect().height
+                : 0
               const toolbarHeight = this.el.getBoundingClientRect().height
               this.layoutStyle.textContent = `.review-page {
                 --review-app-nav-h: ${appbarHeight}px;

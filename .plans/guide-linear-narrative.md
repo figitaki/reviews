@@ -68,6 +68,21 @@ This supersedes the earlier shared-left-edge treatment below.
   button across its header, use a rotating SVG chevron and a file-specific
   accessible name, and keep the viewed toggle independent of collapse.
 
+### Mobile chrome correction (2026-11-05)
+
+- Let the brand/account row scroll away on phones. Keep only the review title
+  and view controls pinned in one 48px row, with a single revision selector
+  replacing the desktop chip strip when multiple revisions exist.
+- Truncate the title visually and keep its complete text in the heading.
+  Preserve 44px touch targets and use a shorter navigation restore label.
+- Count only sticky/fixed app headers in the measured scroll offset. Use the
+  stable small viewport for minimum page height and the mobile guide flyout.
+- Use native smooth scrolling for section jumps, with instant scrolling for
+  reduced motion, instead of issuing scrollTo on every animation frame.
+- Keep anonymous sign-in prompts in the section flow on phones. Authenticated
+  decision controls remain pinned; the browser's own toolbar behavior still
+  needs verification in Brave on iOS.
+
 Reading order inside a section:
 
 1. **Section header** — number + title, meta, and review state (current

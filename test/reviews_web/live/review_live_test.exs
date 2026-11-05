@@ -261,6 +261,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-toolbar .review-toolbar-views > #code-view-switcher")
       assert has_element?(view, "#review-toolbar .review-toolbar-views > #diff-style-toggle")
       refute has_element?(view, "#revision-nav")
+      refute has_element?(view, "#revision-mobile-nav")
+      assert has_element?(view, "#packet-section-0-decision.is-readonly")
 
       view
       |> element("#diff-style-unified")
@@ -560,6 +562,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       view |> element("#next-revision") |> render_click()
       assert has_element?(view, "#patchset-2.is-active")
+
+      assert has_element?(view, ~s|#mobile-revision option[value="2"][selected]|)
+
+      view
+      |> form("#revision-mobile-nav", %{"number" => "1"})
+      |> render_change()
+
+      assert has_element?(view, "#patchset-1.is-active")
+      assert has_element?(view, ~s|#mobile-revision option[value="1"][selected]|)
     end
 
     test "does not render the old publish review button", %{conn: conn, review: review} do

@@ -504,7 +504,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   defp packet_section_decision(assigns) do
     ~H"""
-    <footer id={"packet-section-#{@section.index}-decision"} class="review-section-decision">
+    <footer
+      id={"packet-section-#{@section.index}-decision"}
+      class={["review-section-decision", !@current_user && "is-readonly"]}
+    >
       <div class="review-section-decision-copy">
         <span class="review-guide-eyebrow">Section decision</span>
         <p class="review-section-decision-prompt">{section_decision_prompt(@section)}</p>
