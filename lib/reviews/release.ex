@@ -4,6 +4,8 @@ defmodule Reviews.Release do
   run Ecto migrations inside the release without a `mix` install.
   """
 
+  import Ecto.Query
+
   @app :reviews
 
   @preview_github_id 0
@@ -31,7 +33,7 @@ defmodule Reviews.Release do
   set no `PREVIEW_API_TOKEN`, so this only takes effect on preview apps.
 
   Idempotent: re-running with the same token is a no-op; rotating the
-  token inserts a new row alongside the old one.
+  token replaces prior preview-bootstrap tokens for the preview user.
   """
   def seed_preview_user do
     load_app()
@@ -76,27 +78,49 @@ defmodule Reviews.Release do
   Exposed for tests.
   """
   def seed_preview_token(raw) when is_binary(raw) do
-    user =
-      Reviews.Repo.get_by(Reviews.Accounts.User, github_id: @preview_github_id) ||
-        Reviews.Repo.insert!(%Reviews.Accounts.User{
-          github_id: @preview_github_id,
-          username: @preview_username
-        })
+    {:ok, :ok} =
+      Reviews.Repo.transaction(fn ->
+        Reviews.Repo.insert!(
+          %Reviews.Accounts.User{
+            github_id: @preview_github_id,
+            username: @preview_username
+          },
+          on_conflict: :nothing,
+          conflict_target: :github_id
+        )
 
-    {:ok, identity} = Reviews.Accounts.ensure_human_identity(user)
+        user =
+          Reviews.Repo.one!(
+            from u in Reviews.Accounts.User,
+              where: u.github_id == @preview_github_id,
+              lock: "FOR UPDATE"
+          )
 
-    hash = :crypto.hash(:sha256, raw)
+        {:ok, identity} = Reviews.Accounts.ensure_human_identity(user)
+        hash = :crypto.hash(:sha256, raw)
 
-    Reviews.Repo.insert!(
-      %Reviews.Accounts.ApiToken{
-        user_id: user.id,
-        identity_id: identity.id,
-        token_hash: hash,
-        name: @preview_token_name
-      },
-      on_conflict: :nothing,
-      conflict_target: :token_hash
-    )
+        Reviews.Repo.delete_all(
+          from t in Reviews.Accounts.ApiToken,
+            where:
+              t.user_id == ^user.id and t.name == @preview_token_name and t.token_hash != ^hash
+        )
+
+        unless Reviews.Repo.exists?(
+                 from t in Reviews.Accounts.ApiToken,
+                   where:
+                     t.user_id == ^user.id and t.name == @preview_token_name and
+                       t.token_hash == ^hash
+               ) do
+          Reviews.Repo.insert!(%Reviews.Accounts.ApiToken{
+            user_id: user.id,
+            identity_id: identity.id,
+            token_hash: hash,
+            name: @preview_token_name
+          })
+        end
+
+        :ok
+      end)
 
     :ok
   end
