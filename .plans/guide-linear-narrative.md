@@ -11,6 +11,80 @@ A linear reviewer narrative per section, with **code width and prose width as
 different layout concerns**, and review state visible without competing with
 section navigation.
 
+### Reading column correction (2026-10-30)
+
+The guide-open layout has the right overall shape, but its 60ch prose sits at
+the left edge of a wider centered track. The guide-hidden layout has the
+preferred compact typography and spacing, but its prose runs full width.
+
+- Give section headings and prose one centered column, capped at 52rem and
+  shrinking to the available width on small screens.
+- Use the shared reading typography in both guide states: 20px/600 section
+  headings, 17px/400 sans prose at 1.6 leading, and 17px/600 sans annotation
+  headings.
+- Let hunk cards use the full content width independently of the prose.
+- Use the same section header and complete prose in split and unified modes.
+  The guide contains navigation only, with no separate prose or file panel.
+- With the rail visible, focus the selected section. Hiding it shows all
+  sections, including their headings and prose, without switching to accordions.
+- Keep prose-only sections together without empty file panels or zero-change
+  statistics.
+- Keep section decision controls sticky at the bottom of the viewport, with
+  section navigation following them in the document flow.
+
+This supersedes the earlier shared-left-edge treatment below.
+
+### Typography correction (2026-10-30)
+
+- Define semantic reading, heading, UI, metadata, label, and code roles in
+  `tokens.css`; use regular 400, medium 500, and semibold 600 for product text.
+- Keep the centered 52rem reading column and full-width hunk cards.
+- Use 13px metadata and 14px actions; reserve tracked uppercase for section
+  markers. Keep paragraph and list spacing consistent across annotations.
+- Render annotation headings in the primary text color. Soften inline code
+  backgrounds and remove their borders to keep identifier-heavy prose readable.
+- Use system sans for prose, headings and controls, and system mono for code
+  and identifiers. The Source Serif experiment was dropped on 2026-11-03.
+- Give the sticky decision bar a bordered, rounded surface, interior padding,
+  and a gap above the viewport edge. On small screens the actions can wrap
+  below the prompt while keeping their labels visible.
+- Related: #102 tracks the guide layout and hidden-rail rendering; #100 is the
+  open layout PR. Neither tracks the complete typography scale. #103 concerns
+  authored links and is not resolved by this visual treatment.
+
+### Review chrome correction (2026-11-03)
+
+- Keep the review title and revision navigation together in a padded, sticky
+  toolbar below the app navigation. Hide revision controls for a single revision.
+- Group Guide/Diff and Split/Stacked controls with matching dimensions and
+  selected states. Keep account controls in the app navigation.
+- Keep the hamburger out of the toolbar. Offer a text navigation restore
+  action beside the title only while the rail is hidden.
+- Measure both header heights so rail sizing and scroll offsets agree with the
+  visible chrome, including when the toolbar wraps on mobile.
+- Preserve document scrolling for long diffs without adding a viewport-height
+  rail beneath an unaccounted header on short sections.
+- For #96, keep Pierre's path, status icon and counts, stretch a native disclosure
+  button across its header, use a rotating SVG chevron and a file-specific
+  accessible name, and keep the viewed toggle independent of collapse.
+
+### Mobile chrome correction (2026-11-05)
+
+- Let the brand/account row scroll away on phones. Keep only the review title
+  and view controls pinned in one 48px row, with a single revision selector
+  replacing the desktop chip strip when multiple revisions exist.
+- Truncate the title visually and keep its complete text in the heading.
+  Preserve 44px touch targets and use a shorter navigation restore label.
+- Use icon-only Guide/Diff tabs on phones, with compact selected surfaces,
+  accessible names, and the text labels retained on desktop.
+- Count only sticky/fixed app headers in the measured scroll offset. Use the
+  stable small viewport for minimum page height and the mobile guide flyout.
+- Use native smooth scrolling for section jumps, with instant scrolling for
+  reduced motion, instead of issuing scrollTo on every animation frame.
+- Keep anonymous sign-in prompts in the section flow on phones. Authenticated
+  decision controls remain pinned; the browser's own toolbar behavior still
+  needs verification in Brave on iOS.
+
 Reading order inside a section:
 
 1. **Section header** — number + title, meta, and review state (current

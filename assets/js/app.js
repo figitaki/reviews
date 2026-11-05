@@ -51,41 +51,9 @@ const cssPx = (el, property) => {
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
-let scrollAnimationFrame = null
-
 const scrollToTop = top => {
-  if (scrollAnimationFrame) window.cancelAnimationFrame(scrollAnimationFrame)
-
-  if (prefersReducedMotion()) {
-    window.scrollTo({top, behavior: "auto"})
-    return
-  }
-
-  const start = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0
-  const distance = top - start
-
-  if (Math.abs(distance) < 2) {
-    window.scrollTo({top, behavior: "auto"})
-    return
-  }
-
-  const duration = Math.min(220, Math.max(120, Math.abs(distance) * 0.18))
-  const startedAt = window.performance.now()
-
-  const tick = now => {
-    const progress = Math.min(1, (now - startedAt) / duration)
-    const eased = 1 - Math.pow(1 - progress, 3)
-
-    window.scrollTo({top: start + distance * eased, behavior: "auto"})
-
-    if (progress < 1) {
-      scrollAnimationFrame = window.requestAnimationFrame(tick)
-    } else {
-      scrollAnimationFrame = null
-    }
-  }
-
-  scrollAnimationFrame = window.requestAnimationFrame(tick)
+  // Let the browser coordinate scrolling with touch gestures and its chrome.
+  window.scrollTo({top, behavior: prefersReducedMotion() ? "instant" : "smooth"})
 }
 
 const targetScrollOffset = target => {

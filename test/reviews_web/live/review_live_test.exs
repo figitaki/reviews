@@ -277,6 +277,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-packet", "Keep packet.md editable.")
       assert has_element?(view, "#review-packet", "Run the smoke test.")
 
+      assert has_element?(view, "#review-toolbar .review-toolbar-views > #code-view-switcher")
+      assert has_element?(view, "#review-toolbar .review-toolbar-views > #diff-style-toggle")
+      refute has_element?(view, "#revision-nav")
+      refute has_element?(view, "#revision-mobile-nav")
+      assert has_element?(view, "#packet-section-0-decision.is-readonly")
+
       view
       |> element("#diff-style-unified")
       |> render_click()
@@ -460,12 +466,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
       # The decision footer leads into the next section.
       assert has_element?(
                view,
-               "#packet-section-0-decision .review-section-next-button",
+               "#packet-section-0-nav .review-section-next-button",
                "Next: 02 Second section"
              )
 
       view
-      |> element("#packet-section-0-decision .review-section-next-button")
+      |> element("#packet-section-0-nav .review-section-next-button")
       |> render_click()
 
       assert has_element?(view, "#packet-section-1.is-open")
@@ -473,9 +479,24 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#packet-section-1-decision .review-section-next-button",
+               "#packet-section-1-nav .review-section-next-button",
                "Back to overview"
              )
+
+      view |> element("#diff-style-unified") |> render_click()
+
+      assert has_element?(view, "#review-split-section-overview-1", "Second section")
+
+      assert has_element?(
+               view,
+               "#packet-section-1-body .review-packet-markdown",
+               "No hunks here."
+             )
+
+      refute has_element?(view, "#review-guide-panel")
+      refute has_element?(view, "#packet-section-1 [phx-hook=DiffRenderer]")
+
+      view |> element("#diff-style-split") |> render_click()
 
       view
       |> element("#review-guide-tick-0")
@@ -553,6 +574,22 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, ~s|#revision-nav #patchset-3.is-active|, "v3")
       assert has_element?(view, ~s|#revision-nav #patchset-1.has-packet|)
       assert has_element?(view, ~s|#revision-nav #patchset-3.has-packet|)
+
+      view |> element("#patchset-1") |> render_click()
+      assert has_element?(view, "#patchset-1.is-active")
+      assert has_element?(view, "#previous-revision[disabled]")
+
+      view |> element("#next-revision") |> render_click()
+      assert has_element?(view, "#patchset-2.is-active")
+
+      assert has_element?(view, ~s|#mobile-revision option[value="2"][selected]|)
+
+      view
+      |> form("#revision-mobile-nav", %{"number" => "1"})
+      |> render_change()
+
+      assert has_element?(view, "#patchset-1.is-active")
+      assert has_element?(view, ~s|#mobile-revision option[value="1"][selected]|)
     end
 
     test "does not render the old publish review button", %{conn: conn, review: review} do
@@ -640,7 +677,10 @@ defmodule ReviewsWeb.ReviewLiveTest do
       refute has_element?(changes_view, "#review-guide-shell")
     end
 
-    test "unified guide rail focuses the active section overview", %{conn: conn, author: author} do
+    test "guide rail preserves section layout across diff styles and when hidden", %{
+      conn: conn,
+      author: author
+    } do
       {:ok, %{review: packet_review}} =
         ReviewsCtx.create_review_with_initial_patchset(author, %{
           title: "Packet active section",
@@ -675,7 +715,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
                   %{
                     "kind" => "markdown",
                     "body" =>
-                      "This interspersed commentary stays with the code hunk after the lead paragraph moves into the guide panel."
+                      "This interspersed commentary stays with the code hunk after the lead paragraph."
                   }
                 ]
               },
@@ -696,8 +736,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
-      assert has_element?(view, ".review-packet-shell.is-guide-split")
-      assert has_element?(view, "#review-guide-shell.is-split")
+      assert has_element?(view, ".review-packet-shell.has-outline")
+      assert has_element?(view, "#review-guide-shell")
       assert has_element?(view, "#review-guide-flyout")
       refute has_element?(view, "#review-split-inline-overview")
       assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
@@ -738,21 +778,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-unified")
       |> render_click()
 
-      assert has_element?(view, ".review-packet-shell.is-guide-unified")
+      assert has_element?(view, ".review-packet-shell.has-outline")
       assert has_element?(view, ~s|#review-guide-shell[phx-hook$=".GuideFlyout"]|)
       assert has_element?(view, "#review-guide-tick-0.is-active")
       refute has_element?(view, "#review-split-inline-overview")
 
       assert has_element?(view, "#packet-section-0.is-open")
-      assert has_element?(view, "#review-guide-panel", "Primary reasoning")
+      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
 
       assert has_element?(
                view,
-               "#review-guide-panel",
+               "#packet-section-0-body",
                "entrypoint change matters"
              )
 
-      refute has_element?(view, "#packet-section-0", "entrypoint change matters")
+      refute has_element?(view, "#review-guide-panel")
       assert has_element?(view, "#packet-section-0", "interspersed commentary")
       assert has_element?(view, "#review-guide-flyout .review-guide-flyout-file", "first.ex")
       refute has_element?(view, "#packet-section-0", "stay out of the way")
@@ -765,15 +805,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-guide-tick-1.is-active")
 
       assert has_element?(view, "#packet-section-1.is-open")
-      assert has_element?(view, "#review-guide-panel", "Secondary consequence")
+      assert has_element?(view, "#review-split-section-overview-1", "Secondary consequence")
 
       assert has_element?(
                view,
-               "#review-guide-panel",
+               "#packet-section-1-body",
                "stay out of the way"
              )
 
-      refute has_element?(view, "#packet-section-1", "stay out of the way")
+      refute has_element?(view, "#packet-section-0")
       refute has_element?(view, "#packet-section-1", "entrypoint change matters")
 
       view
@@ -781,6 +821,23 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> render_click()
 
       assert has_element?(view, "#review-guide-overview-tick.is-active")
+
+      view |> element("#review-guide-tick-1") |> render_click()
+      view |> element("#review-guide-shell .review-packet-nav-hide") |> render_click()
+
+      refute has_element?(view, "#review-guide-shell")
+      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
+      assert has_element?(view, "#review-split-section-overview-1", "Secondary consequence")
+      assert has_element?(view, "#packet-section-0-body", "entrypoint change matters")
+      assert has_element?(view, "#packet-section-1-body", "stay out of the way")
+      refute has_element?(view, "#packet-section-0 .review-packet-section-summary")
+      refute has_element?(view, "#packet-section-1 .review-packet-section-summary")
+
+      view |> element(".review-outline-toggle") |> render_click()
+
+      assert has_element?(view, "#review-guide-tick-1.is-active")
+      assert has_element?(view, "#packet-section-1-body", "stay out of the way")
+      refute has_element?(view, "#packet-section-0")
     end
 
     test "changes route renders one collapsible diff island per file", %{
@@ -958,21 +1015,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
-      assert has_element?(view, "#review-guide-shell.is-split")
+      assert has_element?(view, "#review-guide-shell")
 
       view
       |> element("#diff-style-unified")
       |> render_click()
 
       assert has_element?(view, "#review-guide-shell")
-      refute has_element?(view, ".review-outline-toggle")
+      refute has_element?(view, "#review-outline-toggle")
 
       view
       |> element("#review-guide-shell .review-packet-nav-hide")
       |> render_click()
 
       refute has_element?(view, "#review-guide-shell")
-      assert has_element?(view, ".review-outline-toggle", "Show guide")
+      assert has_element?(view, ~s|#review-outline-toggle[aria-label="Show section navigation"]|)
 
       author = Accounts.get_user!(author.id)
       assert Accounts.get_user_preference(author, :packet_outline_visible, true) == false
@@ -986,7 +1043,11 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> render_click()
 
       refute has_element?(next_view, "#review-guide-shell")
-      assert has_element?(next_view, ".review-outline-toggle", "Show guide")
+
+      assert has_element?(
+               next_view,
+               ~s|#review-outline-toggle[aria-label="Show section navigation"]|
+             )
     end
 
     test "comments are visible immediately once created", %{
