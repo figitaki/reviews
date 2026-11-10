@@ -19,8 +19,8 @@ pub struct ListArgs {
     #[arg(long, value_enum, default_value_t = Role::All)]
     pub role: Role,
 
-    /// Show only reviews with open threads, or with a patchset newer than
-    /// your last comment, decision, or viewed hunk.
+    /// Show only reviews with open threads, or reviews by others with a
+    /// patchset newer than your last comment, decision, or viewed hunk.
     #[arg(long, value_enum, default_value_t = Status::All)]
     pub status: Status,
 

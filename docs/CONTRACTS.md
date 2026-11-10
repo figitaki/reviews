@@ -43,7 +43,7 @@ Query params (all optional):
 | Param    | Values                           | Default | Meaning |
 | -------- | -------------------------------- | ------- | ------- |
 | `role`   | `all`, `authored`, `involved`    | `all`   | `authored`: one of your identities wrote it. `involved`: someone else wrote it and you took part. |
-| `status` | `all`, `open`, `updated`         | `all`   | `open`: has open threads. `updated`: has a patchset newer than your last action on it. |
+| `status` | `all`, `open`, `updated`         | `all`   | `open`: has open threads. `updated`: someone else wrote it and it has a patchset newer than your last action on it. |
 | `author` | identity handle, `@` is optional | none    | Author handle. Case does not matter. |
 | `q`      | text                             | none    | Finds the text in the title or slug. Case does not matter. |
 | `limit`  | 1 to 100                         | 25      | Page size. |
@@ -90,7 +90,8 @@ Response `200`:
 `next_offset` is the `offset` for the next page, or `null` on the last page.
 `last_activity_at` is your last comment, decision, or viewed hunk on the
 review, or `null`. `has_new_patchset` is `true` when a patchset is newer than
-`last_activity_at`.
+`last_activity_at`. It is always `false` on reviews you wrote, since only the
+author's account can push patchsets.
 
 A bad param value gives `400` with one message per param:
 

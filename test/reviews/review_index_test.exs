@@ -188,6 +188,19 @@ defmodule Reviews.ReviewIndexTest do
       assert entry.review.slug == ctx.involved.slug
       assert entry.has_new_patchset
     end
+
+    test "your own pushes do not count as a new patchset", ctx do
+      comment!(ctx.authored, ctx.carey, "Note to self", at: at(20))
+      patchset!(ctx.authored, at(1))
+
+      assert slugs(ReviewsContext.list_reviews(ctx.carey, %{"status" => "updated"})) == []
+
+      entry =
+        ReviewsContext.list_reviews(ctx.carey).entries
+        |> Enum.find(&(&1.review.slug == ctx.authored.slug))
+
+      refute entry.has_new_patchset
+    end
   end
 
   describe "pagination" do
