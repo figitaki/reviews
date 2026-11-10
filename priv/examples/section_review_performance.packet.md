@@ -1,9 +1,31 @@
 # Structured Markdown review packets
 
-This branch turns review packets into an authored guide through a diff: agents can write structured Markdown, the CLI validates complete hunk coverage, and reviewers get a narrative surface with inline diff context, section decisions, revision navigation, and a lighter large-diff path.
+**Review the intent, then the code.** This demo is a real review of the change that introduced structured Markdown packets to Reviews. The bundled diff is a historical snapshot, not a claim that every implementation detail still matches today's application.
+
+A packet is an *authored reading order* for a diff. Instead of making you infer the story from an alphabetical file list, it puts the explanation beside the changes it describes.
+
+1. **Choose a section** in the guide map, or select **Begin review** below.
+2. Read the context, open the inline diffs, and leave a line comment when something needs discussion.
+3. Sign in to record a section decision: **Approve**, **Request changes**, or **Skip**.
+
+![Review interaction flow between the user, agent, and Reviews service: request a change, share a review link, give feedback, and review the agent's next revision.](/images/demo-packet-flow.svg)
+
+**Three parties, one feedback loop.** The agent prepares the change and its packet; Reviews hosts the diff, comments, and decisions; you review the work and ask for revisions. The agent reads that feedback and uploads the next patchset—Reviews does not automatically push feedback to the agent or merge the change.
+
+On a narrow screen, scroll the diagram sideways or [open it full-size](/images/demo-packet-flow.svg). It is rendered from bundled Mermaid source, without an external image service.
+
+Prefer a file-by-file pass? Switch to **Diff** in the toolbar. For the authoring workflow, see the [Reviews README](https://github.com/figitaki/reviews#readme).
 
 ## Canonical packet storage and API shape
-This section establishes the persisted contract: packets are stored as canonical JSON on patchsets, exposed as compact metadata, and wrapped in read helpers so the server does not need to understand Markdown at render time.
+**The storage boundary is JSON, not Markdown.** Authors work in Markdown; each patchset stores the parsed packet alongside its diff. This keeps the reading guide and the code it explains on the same revision.
+
+As you read, check three compatibility guarantees:
+
+- **Optional packets:** existing diff-only reviews must still work.
+- **One source of truth:** packet content belongs to the patchset, not a separate document that can drift away from it.
+- **Small responses:** clients can discover packet metadata without first rendering the complete narrative.
+
+*Focus your review on the write/read symmetry.* Initial creation and later revisions should accept and expose the same packet shape.
 
 The packet starts as a nullable JSON field on patchsets, so older revisions and packetless pushes keep working while new revisions can carry authored context.
 
@@ -86,7 +108,20 @@ Controller tests and response shaping stay focused on JSON, leaving Markdown as 
 @hunk lib/reviews_web/controllers/api/review_controller.ex#4
 
 ## CLI authoring and packet validation
-This section is the authoring path: structured Markdown is discovered or passed explicitly, converted into canonical JSON, validated against the exact diff, and uploaded through the existing push flow.
+**Catch incomplete coverage before upload.** The CLI reads the packet, resolves its hunk references against the exact diff, and sends canonical JSON through the existing push flow.
+
+The intended authoring loop is:
+
+1. Draft a packet with `##` sections and `@hunk path#number` references.
+2. Pass it explicitly with `--packet`, or use the branch-specific discovery path.
+3. Fix malformed references or uncovered changes *locally*, before creating a remote revision.
+
+```sh
+reviews push --packet path/to/packet.md
+reviews push --update REVIEW_SLUG --packet path/to/packet.md
+```
+
+**Review question:** do initial uploads and `--update` share the same validation, rather than allowing a later revision to bypass it?
 
 The CLI gets a packet flag on push, making authored review packets part of the normal local workflow.
 
@@ -185,7 +220,15 @@ Integration coverage exercises packet upload through the CLI-facing path rather 
 @hunk cli/tests/integration.rs#1
 
 ## Narrative packet rendering
-This section makes the packet the primary review experience: sections own the reading order, prose can be interleaved with inline diff views, and the classic changes route remains available when file grouping is useful.
+**The guide is the reading order; the diff is the evidence.** Prose and inline hunks alternate so a reviewer can evaluate an argument without hunting through unrelated files.
+
+- **Guide:** follow the author's sections and review the relevant slices in context.
+- **Diff:** inspect the same revision grouped by file.
+- **Revisions:** return to an earlier patchset without losing which code the packet describes.
+
+> A good packet explains *why a change belongs here*. It should not just translate each changed line into English.
+
+Pay particular attention to **shared state**: changing diff style, selecting a revision, and opening a large file should behave consistently in both views.
 
 The router splits the packet narrative and full changes view into separate URLs while keeping the same review slug.
 
@@ -235,7 +278,7 @@ Large file rendering is deferred until a collapsed file is opened, which keeps b
 
 @hunk lib/reviews_web/live/review_live.ex#11
 
-The LiveView now pushes enough structured data to the React diff island to render only the requested slice.
+The LiveView pushes structured data to the diff island so it can render only the requested slice. This historical patch predates the current vanilla renderer.
 
 @hunk lib/reviews_web/live/review_live.ex#12
 
@@ -280,7 +323,13 @@ Responsive rules keep packet controls and revision navigation usable on smaller 
 @hunk assets/css/app.css#7
 
 ## Section decisions across revisions
-This section adds reviewer state at the packet-section level, then uses best-effort matching so unchanged sections keep decisions while changed sections surface prior state as context.
+**An approval is about code, not just a heading.** Decisions belong to a reviewer, a section, and a patchset. Later revisions can use prior decisions as context, but changed code must not silently look approved.
+
+- **Unchanged section:** carry the decision forward when the matching logic establishes that the covered lines are unchanged.
+- **Changed section:** show the earlier decision as *outdated context*, not a fresh approval.
+- **No match:** leave the new section pending.
+
+The key question is asymmetric: changing the explanation alone and changing the covered code are not necessarily the same event. Read the matching rules before trusting a carried-forward badge.
 
 Section decisions are persisted separately from packet content so reviewer state can survive across revisions.
 
@@ -295,7 +344,14 @@ Decision matching carries approvals forward when a section still describes the s
 @hunk lib/reviews/packet_section_decisions.ex#1
 
 ## Large diff performance path
-This section addresses large generated diffs: store per-file payloads once, avoid repeated full-diff scans, and defer expensive diff islands until a reviewer asks for a file.
+**Do less work before the reviewer asks for it.** A generated diff can be large even when a reviewer only needs one file or one section.
+
+This change takes two complementary steps:
+
+1. Store per-file payloads and line counts instead of repeatedly scanning the entire raw diff.
+2. Defer expensive diff rendering until the reviewer opens the relevant file.
+
+*Compatibility matters as much as speed:* older patchsets without stored per-file payloads still need a working fallback. These hunks establish that data path; they are not a benchmark.
 
 Per-file diff payloads are stored so the app does not have to repeatedly scan one giant raw diff.
 
@@ -310,7 +366,16 @@ Backwards-compatible helpers allow older patchsets to fall back gracefully when 
 @hunk lib/reviews/reviews/file.ex#2
 
 ## Regression coverage
-This section keeps the branch reviewable by testing each contract boundary: packet accessors, API storage, packet rendering, section decisions, lazy rendering, and CLI-visible metadata.
+**Test the boundaries a reviewer relies on.** The suite connects the authoring format to persistence, API responses, and the page the reviewer actually reads.
+
+- Packet accessors normalize the stored shape.
+- API tests cover both packet-bearing and packetless uploads.
+- LiveView tests exercise narrative rendering, revisions, decisions, and deferred diffs.
+- CLI integration tests check the upload path, not just the parser in isolation.
+
+When deciding whether these tests are sufficient, ask: *which plausible regression would make the wrong code look reviewed?* That is a stronger bar than checking that the page mounts.
+
+After this section, try switching back to **Overview** from the guide map, or explore the source in the [Reviews repository](https://github.com/figitaki/reviews).
 
 Packet tests lock down normalization so templates can depend on a stable read shape.
 
