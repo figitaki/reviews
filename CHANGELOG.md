@@ -9,6 +9,15 @@ still stabilizing.
 
 ### Changed
 
+- Review packets use one centered heading and prose layout in split and stacked
+  diffs. Hiding section navigation shows every section in that layout.
+- Typography uses shared system-sans reading and interface roles. Decision
+  controls have a padded, rounded sticky surface.
+- Review titles, revisions and matching view controls share a sticky toolbar.
+  Single-revision reviews omit redundant revision controls.
+- Mobile review navigation uses one compact sticky row; the brand/account row
+  scrolls away, Guide/Diff use icons, and multiple revisions use a native
+  selector. Anonymous sign-in prompts stay in the section flow on phones.
 - Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
   now requires Elixir `~> 1.20`.
 - Phoenix 1.8.13, LiveView 1.2.11, Phoenix LiveDashboard 0.9.1, Bandit 1.12.5,
@@ -22,6 +31,15 @@ still stabilizing.
   The install snippet's CSS is colocated too via the new
   `ReviewsWeb.ColocatedCSS` module.
 - LiveView test warnings for duplicate DOM ids and forms without ids now raise.
+
+### Fixed
+
+- Rail height and section jumps account for both headers, including wrapped
+  mobile controls.
+- Section jumps use native scrolling instead of a frame-by-frame animation,
+  and mobile page height uses the stable small viewport.
+- Diff file headers toggle across the whole row with a rotating chevron.
+  Viewed state uses one independent toggle.
 
 ## [0.0.1-alpha.2] - 2026-05-21
 

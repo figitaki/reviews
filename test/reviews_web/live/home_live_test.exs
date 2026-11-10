@@ -3,6 +3,31 @@ defmodule ReviewsWeb.HomeLiveTest do
 
   import Phoenix.LiveViewTest
 
+  test "landing page remains indexable", %{conn: conn} do
+    conn = get(conn, ~p"/")
+
+    assert html_response(conn, 200)
+    assert get_resp_header(conn, "x-robots-tag") == []
+  end
+
+  test "robots policy discourages sensitive routes without blocking the landing page", %{
+    conn: conn
+  } do
+    conn = get(conn, "/robots.txt")
+    policy = response(conn, 200)
+
+    assert policy =~ "User-agent: *"
+
+    disallowed =
+      for line <- String.split(policy, "\n"),
+          String.starts_with?(line, "Disallow:"),
+          do: line |> String.replace_prefix("Disallow:", "") |> String.trim()
+
+    assert Enum.sort(disallowed) == ["/api/", "/auth/", "/dev/", "/r/", "/settings"]
+    refute "/" in disallowed
+    assert get_resp_header(conn, "x-robots-tag") == []
+  end
+
   test "renders hero and install snippet", %{conn: conn} do
     {:ok, view, html} = live(conn, ~p"/")
 
@@ -42,7 +67,7 @@ defmodule ReviewsWeb.HomeLiveTest do
 
     assert has_element?(
              view,
-             "#home-demo[data-step=\"push\"] .home-demo-section.is-section-1.is-expanded"
+             "#home-demo[data-step=\"push\"] .home-demo-focus-panel.is-section-1"
            )
 
     view
@@ -92,7 +117,7 @@ defmodule ReviewsWeb.HomeLiveTest do
 
     assert has_element?(
              view,
-             "#home-demo[data-step=\"final\"] .home-demo-section.is-section-1.is-approved"
+             "#home-demo[data-step=\"final\"] .home-demo-edge-tick.is-section-1.is-approved"
            )
   end
 
