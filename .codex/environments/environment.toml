@@ -14,7 +14,12 @@ copy_if_exists() {
 
   if [ -e "$from" ] && [ ! -e "$to" ]; then
     mkdir -p "$(dirname "$to")"
-    cp -Rc "$from" "$to"
+    # -c clones files on macOS (APFS). GNU cp has no -c, so fall back to a
+    # plain copy, clearing anything a failed clone left behind.
+    if ! cp -Rc "$from" "$to" 2>/dev/null; then
+      rm -rf "$to"
+      cp -R "$from" "$to"
+    fi
   fi
 }
 
