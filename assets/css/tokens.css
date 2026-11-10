@@ -16,15 +16,15 @@
 /* ----------------------------------------------------------------------------
    Fonts
    ----------------------------------------------------------------------------
-   Reviews ships system fonts only — no webfonts. UI text is the host OS
-   sans, code/diff text is the host OS monospace. This is intentional: the
-   product is code-first, dense, and benefits from familiar OS metrics.
+   UI text, headings and packet prose use the host OS sans. Code and
+   identifiers use the host OS monospace.
 ---------------------------------------------------------------------------- */
 :root {
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
                "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
                Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-prose: var(--font-sans);
 }
 
 /* ----------------------------------------------------------------------------
@@ -116,17 +116,18 @@
   --review-focus:        var(--ds-focus);
   --review-add:          var(--ds-add);
   --review-del:          var(--ds-del);
+  --review-blue:         var(--ds-blue);
+  --review-warn:         var(--ds-warn);
 }
 
 /* ----------------------------------------------------------------------------
    Type scale
    ----------------------------------------------------------------------------
-   Reviews uses a compact, code-first scale. Body sits at 13–14px; headings
-   are pushed hard at the marketing/header level (clamp 46–108px) for
-   contrast against the dense interior. Weight runs hot — 700–800 for hero
-   text, 650–750 for UI titles, 450–550 for body.
-
-   Custom property names follow `--font-<role>-<axis>`.
+   Reading roles pair size, weight and leading. Packet prose uses the reading
+   scale; navigation and metadata use the compact UI scale. Keep headings and
+   prose in the same reading column while allowing diffs their own width.
+   Custom property names follow `--font-<role>-<axis>`; primitive sizes below
+   remain available for marketing and legacy components.
 ---------------------------------------------------------------------------- */
 :root {
   /* Sizes (px) */
@@ -149,11 +150,34 @@
   --leading-relax:  1.55;  /* lede / markdown */
 
   /* Weights */
-  --weight-regular: 450;
-  --weight-medium:  550;
-  --weight-semi:    650;
-  --weight-bold:    720;
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semi:    600;
+  --weight-bold:    700;
   --weight-heavy:   800;
+
+  /* Reading and product UI roles */
+  --font-prose-size:       1.0625rem;
+  --font-prose-weight:     var(--weight-regular);
+  --font-prose-leading:    1.6;
+  --font-section-size:     1.25rem;
+  --font-section-weight:   var(--weight-semi);
+  --font-section-leading:  1.3;
+  --font-subheading-size:  1.0625rem;
+  --font-subheading-weight: var(--weight-semi);
+  --font-subheading-leading: 1.4;
+  --font-ui-size:          0.875rem;
+  --font-ui-weight:        var(--weight-medium);
+  --font-ui-leading:       1.4;
+  --font-meta-size:        0.8125rem;
+  --font-meta-weight:      var(--weight-regular);
+  --font-meta-leading:     1.45;
+  --font-label-size:       0.75rem;
+  --font-label-weight:     var(--weight-semi);
+  --font-label-leading:    1.4;
+  --font-code-size:        0.8125rem;
+  --font-code-weight:      var(--weight-regular);
+  --font-code-leading:     20px; /* Keep Pierre's virtual line metric in sync. */
 
   /* Tracking */
   --tracking-tight:  -0.01em;
@@ -202,4 +226,10 @@
   /* Header heights (used in sticky offsets) */
   --review-main-nav-h:      64px;
   --review-section-sticky-h: 46px;
+
+  /* Packet guide layout primitives */
+  --guide-rail-w:   48px;
+  --guide-flyout-w: 320px;
+  --guide-panel-min: 380px;
+  --guide-panel-max: 460px;
 }

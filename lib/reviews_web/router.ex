@@ -19,14 +19,22 @@ defmodule ReviewsWeb.Router do
     plug ReviewsWeb.Plugs.RequireApiToken
   end
 
+  pipeline :review_content do
+    plug :put_review_robots_header
+  end
+
   scope "/", ReviewsWeb do
     pipe_through :browser
 
     live "/", HomeLive, :index
+    live "/settings", SettingsLive, :edit
+  end
+
+  scope "/", ReviewsWeb do
+    pipe_through [:browser, :review_content]
 
     live "/r/:slug", ReviewLive, :show
     live "/r/:slug/changes", ReviewLive, :changes
-    live "/settings", SettingsLive, :edit
   end
 
   scope "/auth", ReviewsWeb do
@@ -38,7 +46,7 @@ defmodule ReviewsWeb.Router do
   end
 
   scope "/api/v1", ReviewsWeb.Api do
-    pipe_through :api
+    pipe_through [:api, :review_content]
 
     get "/reviews/:slug", ReviewController, :show
   end
@@ -62,5 +70,10 @@ defmodule ReviewsWeb.Router do
 
       live_dashboard "/dashboard", metrics: ReviewsWeb.Telemetry
     end
+  end
+
+  # Crawler directives only; review links remain anonymously accessible.
+  defp put_review_robots_header(conn, _opts) do
+    put_resp_header(conn, "x-robots-tag", "noindex, nofollow, noarchive")
   end
 end
