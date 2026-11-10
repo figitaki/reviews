@@ -1,6 +1,9 @@
 # Code storage and LSP integration for review hunks
 
-**Status:** Draft for discussion
+**Status:** Draft for discussion. Storage backend decided: code.storage (Pierre)
+only, with no `LocalGit` adapter (see "Decisions already made" in `CLAUDE.md`).
+Phases 0 and 1 are implemented in #80, which is not merged yet; main still has
+no code storage.
 
 **Created:** 2026-08-23
 
@@ -361,16 +364,15 @@ The exact checkout callback can instead live on a private code-storage service
 API. The important boundary is that Phoenix and the LSP runner use opaque
 repository keys. They do not construct filesystem or object-store paths.
 
-Provide these implementations in order:
+Provide these implementations:
 
-1. `Disabled`, for the current behavior and tests that do not need source.
-2. `LocalGit`, backed by bare repositories on a persistent volume for local
-   development and self-hosting.
-3. A remote service adapter when the production storage target is selected.
+1. `Disabled`, the default, for the current behavior and tests that do not need
+   source.
+2. `CodeDotStorage`, backed by code.storage (Pierre). It serves Git smart HTTP
+   and owns the objects, so Reviews does not run its own Git storage.
 
-An object bucket alone is not a Git smart-HTTP remote. A bucket-backed provider
-therefore needs either a code-storage service in front of it or a different
-bundle-upload contract behind the same behavior.
+There is no `LocalGit` adapter. Tests use a stub adapter, and CLI integration
+tests push to a temporary bare repository.
 
 ## Data model
 
@@ -627,7 +629,7 @@ use ref names, local paths, repository names, or source text as metric labels.
 ### Phase 1: source snapshot upload
 
 - Implement CLI ref resolution and synthetic commits.
-- Implement `LocalGit` storage and upload verification.
+- Implement the code.storage adapter and upload verification.
 - Show snapshot status to the review author and operators.
 - Exercise create-review and append-patchset uploads end to end.
 - Do not expose an LSP UI yet.
@@ -639,9 +641,8 @@ use ref names, local paths, repository names, or source text as metric labels.
 - Enforce sign-in, rate limits, timeouts, and audit events.
 - Measure cold starts and storage cost before adding languages.
 
-### Phase 3: navigation and remote storage
+### Phase 3: navigation
 
-- Add the production code-storage adapter.
 - Add more languages through the registry.
 - Add definition and reference navigation only with an approved unchanged-code
   access policy.
@@ -680,7 +681,8 @@ use ref names, local paths, repository names, or source text as metric labels.
 
 ### End to end
 
-Use a temporary Git repository, `LocalGit`, and a fake LSP server:
+Use a temporary Git repository, a stub storage adapter backed by a temporary
+bare repository, and a fake LSP server:
 
 1. Create two committed files and one staged change.
 2. Run `reviews push` and verify the base/head refs.
@@ -714,8 +716,9 @@ Use a temporary Git repository, `LocalGit`, and a fake LSP server:
 ## Open questions
 
 1. **Which production code-storage service should own Git smart HTTP and
-   persistent objects?** `LocalGit` is enough for development, but the cloud
-   adapter determines the upload credential and checkout contracts.
+   persistent objects?** Resolved: code.storage (Pierre). It issues the scoped
+   upload credential, so its JWT `refs` claim sets the upload contract. The
+   checkout contract for the LSP runner is still open.
 2. **Who may receive semantic results?** The recommended first policy requires
    sign-in and restricts results, but Reviews does not yet have review
    membership or repository-level grants.
