@@ -809,6 +809,97 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
     end
 
+    test "reloads the reviewers stack when a section decision changes", %{conn: conn} do
+      {:ok, owner} =
+        Accounts.upsert_from_github(%{
+          github_id: 8765,
+          username: "owner",
+          email: "owner@example.com",
+          avatar_url: nil
+        })
+
+      {:ok, reviewer} =
+        Accounts.upsert_from_github(%{
+          github_id: 8766,
+          username: "zara",
+          email: "zara@example.com",
+          avatar_url: nil
+        })
+
+      {:ok, %{review: packet_review, patchset: patchset}} =
+        ReviewsCtx.create_review_with_initial_patchset(owner, %{
+          title: "Packet for a reviewer",
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1 +1 @@
+          -old
+          +new
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1,
+                    "line_start" => 1,
+                    "line_end" => 2
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+      assert has_element?(view, "#decider-stack.is-empty")
+
+      section = Reviews.ReviewPacket.section_at(patchset.packet, 0)
+      {:ok, zara} = Accounts.ensure_human_identity(reviewer)
+      {:ok, owner_identity} = Accounts.ensure_human_identity(owner)
+
+      # Only the owner may decide today (`Reviews.Policy`); another account's
+      # decision is one recorded before that rule, so it is written directly.
+      %Reviews.Reviews.PacketSectionDecision{}
+      |> Reviews.Reviews.PacketSectionDecision.changeset(%{
+        review_id: packet_review.id,
+        patchset_id: patchset.id,
+        account_id: reviewer.id,
+        author_id: zara.id,
+        section_index: section.index,
+        section_title: section.title,
+        section_fingerprint: section.fingerprint,
+        section_refs: section.refs,
+        status: "approved"
+      })
+      |> Reviews.Repo.insert!()
+
+      # The owner's decision broadcasts, so open pages reload; the owner's own
+      # account stays out of the reviewers stack.
+      {:ok, _} =
+        Reviews.PacketSectionDecisions.decide(
+          packet_review,
+          patchset,
+          owner_identity,
+          section,
+          "denied"
+        )
+
+      assert has_element?(
+               view,
+               ~s|#decider-stack-#{zara.id}.is-approved[title="@zara: approved 1 of 1 section"]|
+             )
+
+      assert has_element?(view, "#decider-stack-#{zara.id} .rev-decider-badge .hero-check")
+      refute has_element?(view, "#decider-stack-#{owner_identity.id}")
+    end
+
     test "does not render the old publish review button", %{conn: conn, review: review} do
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
       refute has_element?(view, "#publish-review-button")

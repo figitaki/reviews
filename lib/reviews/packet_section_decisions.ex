@@ -112,6 +112,7 @@ defmodule Reviews.PacketSectionDecisions do
 
         fun.(identity, list_for_review(review, identity))
       end)
+      |> tap(&broadcast_change(&1, review, patchset))
     else
       _ -> {:error, :forbidden}
     end
@@ -160,6 +161,19 @@ defmodule Reviews.PacketSectionDecisions do
       {:error, changeset} -> Repo.rollback(changeset)
     end
   end
+
+  # Lets every open review screen refresh its reviewers stack, whether the
+  # decision came from the web UI or from an agent through the API. Runs after
+  # the transaction commits, so subscribers reload the new state.
+  defp broadcast_change({:ok, _decision}, %Review{slug: slug}, %Patchset{number: number}) do
+    Phoenix.PubSub.broadcast(
+      Reviews.PubSub,
+      "review:#{slug}",
+      {:section_decision_changed, number}
+    )
+  end
+
+  defp broadcast_change(_result, _review, _patchset), do: :ok
 
   def section_state(section, decisions, selected_patchset, patchsets) do
     patchset_number_by_id = Map.new(patchsets, &{&1.id, &1.number})
