@@ -81,6 +81,8 @@ Push current uncommitted work:
 cli/target/release/reviews push --update <slug> --range HEAD --packet /path/to/packet.md
 ```
 
+When the server has code storage on, `reviews push` also uploads the base and head commits. Add `--no-code-storage` to push the diff only; a server that requires code storage rejects that flag. Local servers have code storage off unless `CODE_STORAGE_*` is set.
+
 If the sandbox blocks localhost networking, rerun the CLI with escalation. If the token is rejected, mint a token in the same local database as the running server.
 
 ## Codex Workflow

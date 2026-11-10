@@ -36,6 +36,7 @@ defmodule Reviews.Reviews do
   def create_review_with_initial_patchset(%Identity{} = author, attrs) when is_map(attrs) do
     slug = attrs[:slug] || attrs["slug"] || generate_slug()
     raw_diff = attrs[:raw_diff] || attrs["raw_diff"]
+    code_snapshot_id = attrs[:code_snapshot_id] || attrs["code_snapshot_id"]
 
     review_attrs = %{
       slug: slug,
@@ -61,6 +62,9 @@ defmodule Reviews.Reviews do
     |> Ecto.Multi.run(:files, fn _repo, %{patchset: patchset} ->
       insert_files_for_patchset(patchset, raw_diff)
     end)
+    |> Ecto.Multi.run(:code_snapshot, fn _repo, %{review: review, patchset: patchset} ->
+      Reviews.CodeSnapshots.maybe_claim(author, review, patchset, code_snapshot_id)
+    end)
     |> Repo.transaction()
   end
 
@@ -78,32 +82,45 @@ defmodule Reviews.Reviews do
   no editor grant model; link access does not grant revision upload access.
 
   Returns `{:error, :forbidden}` without writing when the actor is not an owner.
+  Otherwise returns `{:ok, %{patchset: patchset, code_snapshot: result}}`, where
+  `result` is `nil`, a claimed snapshot, or `{:skipped, code}`.
   """
-  def append_patchset(%Review{} = review, %Identity{owner_user_id: owner_id}, attrs)
-      when not is_nil(owner_id) and is_map(attrs) do
-    owner? =
-      Repo.exists?(
-        from i in Identity,
-          where: i.id == ^review.author_id and i.owner_user_id == ^owner_id
-      )
-
-    if owner?, do: append_patchset(review, attrs), else: {:error, :forbidden}
+  def append_patchset(%Review{} = review, %Identity{} = identity, attrs) when is_map(attrs) do
+    if revision_uploader?(review, identity),
+      do: insert_patchset(identity, review, attrs),
+      else: {:error, :forbidden}
   end
 
   def append_patchset(%Review{}, _actor, attrs) when is_map(attrs),
     do: {:error, :forbidden}
 
   @doc """
-  Appends a new patchset to an existing review. Auto-numbers to (max+1).
-  Also populates the per-file rows for the new patchset so the sidebar
-  renders without a re-parse.
-
-  Trusted internal setup path without authorization. User-facing callers must
-  use `append_patchset/3` with the authenticated identity instead.
+  True when `identity` may upload revisions (patchsets and their code
+  snapshots) to `review`: it must be owned by the same user as the review
+  author's identity.
   """
-  def append_patchset(%Review{} = review, attrs) when is_map(attrs) do
+  def revision_uploader?(%Review{} = review, %Identity{owner_user_id: owner_id})
+      when not is_nil(owner_id) do
+    Repo.exists?(
+      from i in Identity,
+        where: i.id == ^review.author_id and i.owner_user_id == ^owner_id
+    )
+  end
+
+  def revision_uploader?(%Review{}, _identity), do: false
+
+  @doc """
+  Trusted internal setup path without authorization. User-facing callers must
+  use `append_patchset/3` with the authenticated identity instead. It returns
+  the same map, and a snapshot id is only honored under the code storage policy.
+  """
+  def append_patchset(%Review{} = review, attrs) when is_map(attrs),
+    do: insert_patchset(nil, review, attrs)
+
+  defp insert_patchset(identity, %Review{} = review, attrs) do
     next_number = next_patchset_number(review.id)
     raw_diff = attrs[:raw_diff] || attrs["raw_diff"]
+    code_snapshot_id = attrs[:code_snapshot_id] || attrs["code_snapshot_id"]
 
     patchset_attrs = %{
       review_id: review.id,
@@ -120,24 +137,52 @@ defmodule Reviews.Reviews do
     |> Ecto.Multi.run(:files, fn _repo, %{patchset: patchset} ->
       insert_files_for_patchset(patchset, raw_diff)
     end)
+    |> Ecto.Multi.run(:code_snapshot, fn _repo, %{patchset: patchset} ->
+      maybe_claim_snapshot(identity, review, patchset, code_snapshot_id)
+    end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{patchset: patchset}} ->
+      {:ok, %{patchset: patchset, code_snapshot: code_snapshot}} ->
         Phoenix.PubSub.broadcast(
           Reviews.PubSub,
           "review:#{review.slug}",
           {:patchset_pushed, patchset.number}
         )
 
-        {:ok, patchset}
+        {:ok, %{patchset: patchset, code_snapshot: code_snapshot}}
 
-      {:error, _step, changeset, _} ->
+      {:error, _step, %Ecto.Changeset{} = changeset, _} ->
         {:error, changeset}
+
+      {:error, :code_snapshot, code, _} when is_atom(code) ->
+        {:error, {:code_snapshot, code}}
+
+      {:error, _step, reason, _} ->
+        {:error, reason}
+    end
+  end
+
+  defp maybe_claim_snapshot(_identity, _review, _patchset, nil), do: {:ok, nil}
+
+  defp maybe_claim_snapshot(%Identity{} = identity, review, patchset, code_snapshot_id) do
+    Reviews.CodeSnapshots.maybe_claim(identity, review, patchset, code_snapshot_id)
+  end
+
+  # A snapshot id without a known pusher identity can never claim.
+  defp maybe_claim_snapshot(nil, _review, _patchset, _code_snapshot_id) do
+    case Reviews.CodeStorage.policy() do
+      :required -> {:error, :snapshot_not_authorized}
+      _optional -> {:ok, {:skipped, :snapshot_not_authorized}}
     end
   end
 
   def list_patchsets(%Review{id: review_id}) do
-    Repo.all(from p in Patchset, where: p.review_id == ^review_id, order_by: [asc: p.number])
+    Repo.all(
+      from p in Patchset,
+        where: p.review_id == ^review_id,
+        order_by: [asc: p.number],
+        preload: [:code_snapshot]
+    )
   end
 
   def get_patchset!(id), do: Repo.get!(Patchset, id)

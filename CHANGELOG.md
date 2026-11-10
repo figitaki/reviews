@@ -7,6 +7,22 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Added
+
+- Code storage (Phase 0 and 1 of the code storage plan in #74):
+  every code-enabled patchset gets immutable base/head Git refs stored in a
+  provider-neutral backend. code.storage (Pierre) is the production adapter;
+  storage is off by default (`CODE_STORAGE_ADAPTER=code_storage` enables it).
+- `GET /api/v1/capabilities` for CLI feature discovery, plus
+  `POST /api/v1/code-snapshots` and `POST /api/v1/code-snapshots/:id/complete`
+  with a reserve → upload → verify → claim flow and stable error codes.
+- `reviews push` uploads a code snapshot when the server supports it:
+  resolves exact base/head OIDs, builds synthetic commits for staged or
+  tracked worktree state with a fixed `Reviews Snapshot` identity, verifies
+  the diff matches the snapshot, and pushes exactly two refs atomically with
+  a short-lived ref-scoped credential (never written to URLs, config, or
+  logs). `--no-code-storage` skips the upload where the server allows it.
+
 ### Changed
 
 - Section diffs and the Changes view open without line-count or file-count
@@ -53,6 +69,13 @@ still stabilizing.
 
 ### Fixed
 
+- `reviews push --range A...B` now records the merge base of A and B as the
+  patchset base (matching what `git diff A...B` actually compares) instead
+  of A itself.
+- Diff capture is config-neutral: local `diff.algorithm`, `core.quotePath`,
+  and external diff drivers no longer change the uploaded diff bytes.
+- Appending a patchset no longer crashes when a non-changeset error occurs
+  inside the push transaction.
 - Rail height and section jumps account for both headers, including wrapped
   mobile controls.
 - Section jumps use native scrolling instead of a frame-by-frame animation,

@@ -12,6 +12,9 @@ defmodule ReviewsWeb.Api.ReviewController do
   """
   use ReviewsWeb, :controller
 
+  import ReviewsWeb.Api.ApiHelpers
+
+  alias Reviews.CodeStorage.Errors
   alias Reviews.{ReviewNavigation, ReviewPacket, ReviewView}
   alias Reviews.Reviews, as: ReviewsContext
 
@@ -64,8 +67,18 @@ defmodule ReviewsWeb.Api.ReviewController do
       branch_name: ps.branch_name,
       pushed_at: ps.pushed_at,
       packet_present: ReviewPacket.present?(ps.packet),
+      code_snapshot_status: code_snapshot_status(ps),
       stats: ReviewNavigation.patchset_stats(ps)
     }
+  end
+
+  # Availability only — this endpoint is unauthenticated, so never expose
+  # storage keys, refs, or provider identifiers.
+  defp code_snapshot_status(ps) do
+    case Map.get(ps, :code_snapshot) do
+      %{status: status} -> status
+      _ -> nil
+    end
   end
 
   defp render_patchset(snapshot) do
@@ -129,18 +142,23 @@ defmodule ReviewsWeb.Api.ReviewController do
     author = conn.assigns.current_identity
 
     with %{} = attrs <- normalize_params(params),
-         {:ok, %{review: review, patchset: patchset}} <-
+         {:ok, %{review: review, patchset: patchset} = result} <-
            ReviewsContext.create_review_with_initial_patchset(author, attrs) do
-      conn
-      |> put_status(:created)
-      |> json(%{
+      response = %{
         id: review.id,
         slug: review.slug,
         url: url(~p"/r/#{review.slug}"),
         patchset_number: patchset.number
-      })
+      }
+
+      conn
+      |> put_status(:created)
+      |> json(maybe_put_code_snapshot(response, result[:code_snapshot]))
     else
-      {:error, _step, changeset, _} ->
+      {:error, :code_snapshot, code, _} when is_atom(code) ->
+        error_json(conn, Errors.http_status(code), code, Errors.message(code))
+
+      {:error, _step, %Ecto.Changeset{} = changeset, _} ->
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{errors: format_changeset(changeset)})
@@ -162,17 +180,22 @@ defmodule ReviewsWeb.Api.ReviewController do
       base_sha: params["base_sha"],
       branch_name: params["branch_name"],
       raw_diff: params["raw_diff"],
-      packet: params["packet"]
+      packet: params["packet"],
+      code_snapshot_id: params["code_snapshot_id"]
     }
   end
 
   defp normalize_params(_), do: nil
 
-  defp format_changeset(%Ecto.Changeset{} = cs) do
-    Ecto.Changeset.traverse_errors(cs, fn {msg, opts} ->
-      Regex.replace(~r/%{(\w+)}/, msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
+  # Absent when the push carried no snapshot id; "claimed" or "skipped"+code
+  # otherwise so the CLI can warn without a second request.
+  defp maybe_put_code_snapshot(response, nil), do: response
+
+  defp maybe_put_code_snapshot(response, {:skipped, code}) do
+    Map.put(response, :code_snapshot, %{status: "skipped", code: Atom.to_string(code)})
+  end
+
+  defp maybe_put_code_snapshot(response, snapshot) do
+    Map.put(response, :code_snapshot, %{id: snapshot.public_id, status: snapshot.status})
   end
 end

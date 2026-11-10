@@ -545,7 +545,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
           }
         })
 
-      {:ok, _ps2} =
+      {:ok, %{patchset: _ps2}} =
         ReviewsCtx.append_patchset(packet_review, %{
           raw_diff: """
           diff --git a/lib/two.ex b/lib/two.ex
@@ -557,7 +557,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
           """
         })
 
-      {:ok, _ps3} =
+      {:ok, %{patchset: _ps3}} =
         ReviewsCtx.append_patchset(packet_review, %{
           raw_diff: """
           diff --git a/lib/three.ex b/lib/three.ex
@@ -1427,7 +1427,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#packet-section-0-decision button", "Approve") |> render_click()
       assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
 
-      {:ok, _ps2} =
+      {:ok, %{patchset: _ps2}} =
         ReviewsCtx.append_patchset(packet_review, %{
           raw_diff: """
           diff --git a/lib/packet.ex b/lib/packet.ex
@@ -1507,7 +1507,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
                "Skip"
              )
 
-      {:ok, _ps3} =
+      {:ok, %{patchset: _ps3}} =
         ReviewsCtx.append_patchset(packet_review, %{
           raw_diff: """
           diff --git a/lib/packet.ex b/lib/packet.ex
