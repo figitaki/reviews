@@ -38,7 +38,9 @@ on:
 
 concurrency:
   group: fly-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  # Finish an in-flight deploy before close-time destruction. Cancelling the
+  # runner does not necessarily stop Fly's remote release machine.
+  cancel-in-progress: false
 
 jobs:
   review_app:
@@ -120,7 +122,7 @@ jobs:
           # only the path (the database name) with the per-PR name. The
           # release command creates that database through the server's
           # `postgres` maintenance database.
-          DATABASE_URL="$(python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(u.urlunsplit(p._replace(path="/" + sys.argv[2])))' "$PREVIEW_DATABASE_URL" "$PREVIEW_DB_NAME")"
+          DATABASE_URL="$(python3 -c 'import os, urllib.parse as u; p = u.urlsplit(os.environ["PREVIEW_DATABASE_URL"]); print(u.urlunsplit(p._replace(path="/" + os.environ["PREVIEW_DB_NAME"])))')"
           echo "::add-mask::$DATABASE_URL"
 
           # POOL_SIZE is not set here: fly.preview.toml sets it in [env].
@@ -153,40 +155,18 @@ jobs:
         if: github.event.action != 'closed'
         run: flyctl scale count 1 --app "$APP_NAME" --yes
 
-      # Best effort: a failure here must not block the destroy step below.
-      # If it fails, drop the database by hand (docs/PREVIEW_ENVS.md).
-      # The app is still running at this point, so we run the drop inside
-      # it. Its DATABASE_URL and PREVIEW_DB_NAME name the database, and
-      # Reviews.Release.drop_preview_database refuses any name that is not
-      # reviews_pr_<digits>. Apps deployed before per-PR databases have no
-      # PREVIEW_DB_NAME, so for them the drop is a no-op.
-      - name: Drop preview database
+      - name: Install Postgres client for cleanup
         if: github.event.action == 'closed'
-        continue-on-error: true
-        # A hung `ssh console` must not hold the destroy step back.
-        timeout-minutes: 5
-        run: |
-          if ! flyctl status --app "$APP_NAME" > /dev/null 2>&1; then
-            echo "App $APP_NAME does not exist; nothing to drop."
-            exit 0
-          fi
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
 
-          # Machines auto-stop when idle, and `ssh console` needs a started
-          # machine. One HTTP request makes the Fly proxy start one.
-          curl -sS -o /dev/null --max-time 60 "https://$APP_HOST/" || true
-
-          for _ in 1 2 3 4 5; do
-            if flyctl ssh console --app "$APP_NAME" \
-                -C "/app/bin/reviews eval Reviews.Release.drop_preview_database"; then
-              echo "Dropped $PREVIEW_DB_NAME."
-              exit 0
-            fi
-            sleep 10
-          done
-
-          echo "::warning::could not drop $PREVIEW_DB_NAME; drop it by hand (see docs/PREVIEW_ENVS.md)"
-          exit 1
-
-      - name: Destroy preview app
+      # Once the client is installed, cleanup destroys the app first, even if
+      # the database proxy later fails. Installation failure leaves resources
+      # unchanged; follow the manual teardown runbook in that case.
+      # Cleanup uses the database endpoint, never code or SSH in a preview.
+      # Failure remains a failed job so orphan databases cannot go unnoticed.
+      - name: Destroy preview app and drop database
         if: github.event.action == 'closed'
-        run: flyctl apps destroy "$APP_NAME" --yes || true
+        timeout-minutes: 8
+        env:
+          PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+        run: python3 .github/scripts/cleanup_preview.py

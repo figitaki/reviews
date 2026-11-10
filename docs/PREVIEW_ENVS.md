@@ -76,20 +76,23 @@ is the strongest isolation boundary; reviewer gating does not narrow its scope.
 All preview apps use one Postgres server, but each preview app has its
 own database on it: `reviews_pr_<N>`. See "Per-PR databases" below.
 
-Either provision a new cluster (`fly postgres create --name
-reviews-preview-pg --region sjc`) or reuse the prod cluster. Prod data
-is not touched: previews only create, use and drop `reviews_pr_<N>`
-databases.
+Provision a dedicated preview cluster (`fly postgres create --name
+reviews-preview-pg --region sjc`). Do not reuse the production cluster
+or its credentials. Per-PR database names isolate schema changes, not
+privileges: approved preview code receives the database credentials,
+and a shared owner role can read or drop other previews' databases.
+Use only synthetic data in previews.
 
 `PREVIEW_DATABASE_URL` gives the server and the credentials. The
 database name in its path does not matter, because the workflow
 replaces it with `reviews_pr_<N>`. The user in the URL must be able to
-create databases (`CREATEDB` or superuser). To give an existing user
-that permission:
+create databases. Use a dedicated preview role with `CREATEDB`, not
+superuser or role-administration privileges. To configure that role
+on the preview cluster:
 
 ```sh
-fly postgres connect -a reviews-dev-pg <<'SQL'
-ALTER ROLE <preview_user> CREATEDB;
+fly postgres connect -a reviews-preview-pg <<'SQL'
+ALTER ROLE <preview_user> NOSUPERUSER NOCREATEROLE CREATEDB;
 SQL
 ```
 
@@ -100,6 +103,18 @@ If a pooler such as PgBouncer sits in front of the server, it must
 accept connections for any database name, or at least for `postgres`
 and every `reviews_pr_<N>`. A pooler that lists only one database
 refuses the new connections, and the release command fails.
+
+The close workflow connects through `flyctl proxy` to the host and port
+in `PREVIEW_DATABASE_URL`, using the `FLY_ORG` private network. The preview
+Fly token must permit that proxy connection to the database endpoint,
+as well as app creation/destruction. Prefer a direct Postgres endpoint
+if the pooler cannot expose the maintenance database. Before enabling
+the workflow, verify create/drop with the preview role on this endpoint;
+neither role permissions nor pooler routing are inferred from the URL.
+The endpoint must be on the preview organization's default private network;
+custom networks and public database endpoints are not supported by this
+proxy path. Check `fly wireguard list` after the first close: fresh CI runners
+may leave WireGuard peers that need separate retirement.
 
 ### 3. GitHub OAuth app for previews
 
@@ -206,49 +221,54 @@ error if the name is not `reviews_pr_<digits>`, or if `DATABASE_URL`
 names a different database. This prevents a preview from migrating a
 database that it does not own.
 
-**How the database is dropped.** When the PR closes, the "Drop preview
-database" step runs before "Destroy preview app":
+**How the database is dropped.** When the PR closes, the runner executes
+`.github/scripts/cleanup_preview.py`:
 
-1. It sends one HTTP request to the app, so that Fly starts a stopped
-   machine.
-2. It runs this command in the app, up to five times:
+1. Validate that the app and database names identify the same PR.
+2. List apps in `FLY_ORG` and destroy this preview if it exists. A failed
+   list or destroy stops cleanup rather than guessing that the app is gone.
+3. Open a private `flyctl proxy` to the database endpoint. Connect to
+   `postgres` with the preview credentials, then run
+   `DROP DATABASE IF EXISTS "reviews_pr_<N>" WITH (FORCE)`.
 
-   ```sh
-   flyctl ssh console --app reviews-pr-<N> \
-     -C "/app/bin/reviews eval Reviews.Release.drop_preview_database"
-   ```
+Cleanup does not need a healthy app, an SSH session, or a particular
+release version. An already-deleted app can still have its orphan database
+removed. A missing database is harmless. Credentials stay in the child
+environment, not command arguments; connection errors are not echoed.
 
-   `drop_preview_database/0` runs `DROP DATABASE ... WITH (FORCE)`, which
-   also closes the app's open connections. It uses the same checks as
-   `ensure_database/0`, so it drops only `reviews_pr_<digits>`, and only
-   the database that the app's own `DATABASE_URL` names.
-
-The drop step is best effort (`continue-on-error: true`) and stops
-after 5 minutes. If it fails or times out, the app is still destroyed,
-and the run shows a warning.
+Database cleanup failure fails the job, after app destruction. The whole
+step has an eight-minute limit. Follow the manual runbook on failure.
+Per-PR workflow runs are serialized without cancelling an in-flight deploy,
+so a close event waits for that deploy before destroying its machines.
+The close job still requires preview-environment approval. If an older
+deploy is waiting for approval after its PR closes, reject that deployment
+so it cannot block the queued close run; then approve cleanup itself.
 
 **If a drop fails.** Drop the database by hand. Do this only for a PR
 that is closed:
 
 ```sh
-fly postgres connect -a reviews-dev-pg <<'SQL'
+fly postgres connect -a reviews-preview-pg <<'SQL'
 DROP DATABASE IF EXISTS reviews_pr_42 WITH (FORCE);
 SQL
 ```
 
 To find databases that were not dropped, list them and compare with
-the open PRs:
+the open PRs. Include PRs closed with merge conflicts, since GitHub may not
+start their close workflow at all:
 
 ```sh
-fly postgres connect -a reviews-dev-pg <<'SQL'
+fly postgres connect -a reviews-preview-pg <<'SQL'
 SELECT datname FROM pg_database WHERE datname LIKE 'reviews_pr_%';
 SQL
 ```
 
-Apps that were deployed before this change have no `PREVIEW_DB_NAME`
-and use the old shared database. When such a PR closes, the drop step
-does nothing. On the next push, the app moves to its own database,
-which starts empty except for the demo review and the preview user.
+Apps deployed before this change use the old shared database. Closing
+one still destroys the app and attempts to drop only its per-PR database
+(which may not exist); it never drops the shared database. On the next
+push, the app moves to its own database, initially containing only the
+demo review and preview user. Once all old apps have moved or closed,
+retire the old shared database separately after confirming it is unused.
 
 ---
 
@@ -279,6 +299,10 @@ example, with `max_client_conn = 100` (the pgbouncer default), 14
 running previews use 28 connections, and 14 deploying at once use 56.
 Before this change, 14 previews used 140 or more.
 
+Existing deployments keep their old pool sizes and machine counts until
+redeployed. As part of rollout, redeploy open previews or stop obsolete
+ones; merging this workflow alone does not reduce existing connections.
+
 A browser tab with a review page open keeps a LiveView websocket open,
 so the machine does not go idle until the tab closes.
 
@@ -293,8 +317,8 @@ so the machine does not go idle until the tab closes.
    fly machine stop <machine-id> --app reviews-pr-42
    ```
 
-2. Close stale PRs. The close workflow drops the database and destroys
-   the app. For a PR that is already closed, see "Tearing it down
+2. Close stale PRs. The close workflow destroys the app, then drops
+   its database. For a PR that is already closed, see "Tearing it down
    manually".
 3. Lower `POOL_SIZE` in `fly.preview.toml` to `1`. It takes effect on
    each preview's next deploy.
@@ -316,14 +340,22 @@ so the machine does not go idle until the tab closes.
    new HEAD.
 
 3. **PR closed (merged or not)** → workflow fires the close path →
-   the `reviews_pr_<N>` database is dropped (best effort), then
-   `flyctl apps destroy` removes the Fly app.
+   the app is destroyed, then the runner drops `reviews_pr_<N>` through
+   a private database proxy. Database cleanup failure fails the run.
 
 ---
 
 ## Tearing it down manually
 
 If a preview app gets stuck or the close workflow didn't run:
+
+- GitHub [does not run `pull_request` workflows for conflicted
+  PRs](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request).
+  A closed, unmerged PR with conflicts can therefore leave both resources
+  behind with no failed cleanup job. Check its app and database manually.
+- Reject any outstanding deployment approval for a closed PR before manual
+  teardown, and ensure no deployment remains in progress. Cleanup jobs also
+  wait for required approval; an unapproved close job has removed nothing.
 
 ```sh
 fly apps destroy reviews-pr-42

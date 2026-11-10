@@ -53,39 +53,22 @@ defmodule Reviews.ReleasePreviewDbTest do
     end
   end
 
-  describe "ensure_database/2 and drop_preview_database/2" do
-    test "creates the database, is idempotent, then drops it" do
+  describe "ensure_database/2" do
+    test "creates the database and is idempotent" do
       config = config_for(@db_name)
       refute database_exists?(@db_name)
 
       assert :ok = Release.ensure_database(@db_name, config)
       assert database_exists?(@db_name)
       assert :ok = Release.ensure_database(@db_name, config)
-
-      assert :ok = Release.drop_preview_database(@db_name, config)
-      refute database_exists?(@db_name)
-      assert :ok = Release.drop_preview_database(@db_name, config)
-    end
-
-    test "drop succeeds while another connection is open" do
-      config = config_for(@db_name)
-      assert :ok = Release.ensure_database(@db_name, config)
-
-      conn = start_supervised!({Postgrex, Keyword.drop(config, [:pool, :pool_size])})
-      assert {:ok, _} = Postgrex.query(conn, "SELECT 1", [])
-
-      assert :ok = Release.drop_preview_database(@db_name, config)
-      refute database_exists?(@db_name)
     end
 
     test "refuses a name that is not reviews_pr_<digits>" do
-      for name <- ["reviews_test", "postgres", "reviews_pr_1x"] do
+      # Never hand a real database name to destructive code, even when
+      # testing the guard that is supposed to reject it.
+      for name <- ["not_a_preview_#{System.pid()}", "reviews_pr_1x", "reviews_pr_1\n"] do
         assert_raise ArgumentError, ~r/must match reviews_pr_<digits>/, fn ->
           Release.ensure_database(name, config_for(name))
-        end
-
-        assert_raise ArgumentError, ~r/must match reviews_pr_<digits>/, fn ->
-          Release.drop_preview_database(name, config_for(name))
         end
       end
     end
@@ -97,10 +80,6 @@ defmodule Reviews.ReleasePreviewDbTest do
         Release.ensure_database(@db_name, shared)
       end
 
-      assert_raise ArgumentError, ~r/DATABASE_URL names "reviews_preview"/, fn ->
-        Release.drop_preview_database(@db_name, shared)
-      end
-
       refute database_exists?(@db_name)
     end
   end
@@ -109,7 +88,6 @@ defmodule Reviews.ReleasePreviewDbTest do
     test "are no-ops without PREVIEW_DB_NAME" do
       System.delete_env("PREVIEW_DB_NAME")
       assert :ok = Release.ensure_database()
-      assert :ok = Release.drop_preview_database()
     end
 
     test "refuse a PREVIEW_DB_NAME that DATABASE_URL does not name" do
@@ -117,10 +95,6 @@ defmodule Reviews.ReleasePreviewDbTest do
       on_exit(fn -> System.delete_env("PREVIEW_DB_NAME") end)
 
       assert_raise ArgumentError, ~r/DATABASE_URL names/, fn -> Release.ensure_database() end
-
-      assert_raise ArgumentError, ~r/DATABASE_URL names/, fn ->
-        Release.drop_preview_database()
-      end
 
       refute database_exists?(@db_name)
     end
@@ -130,7 +104,6 @@ defmodule Reviews.ReleasePreviewDbTest do
       on_exit(fn -> System.delete_env("PREVIEW_DB_NAME") end)
 
       assert_raise ArgumentError, ~r/must match/, fn -> Release.ensure_database() end
-      assert_raise ArgumentError, ~r/must match/, fn -> Release.drop_preview_database() end
     end
   end
 end

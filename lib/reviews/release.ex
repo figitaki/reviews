@@ -67,38 +67,6 @@ defmodule Reviews.Release do
   end
 
   @doc """
-  Drops the per-PR preview database. The preview workflow calls this
-  when the PR closes, before it destroys the Fly app.
-
-  It is a no-op unless `PREVIEW_DB_NAME` is set. It drops only a database
-  whose name matches `reviews_pr_<digits>` and that `DATABASE_URL` also
-  names. It uses `DROP DATABASE ... WITH (FORCE)`, because the running
-  app holds open connections to the database.
-  """
-  def drop_preview_database do
-    load_app()
-
-    with {:ok, name} <- preview_db_name_from_env() do
-      drop_preview_database(name, Reviews.Repo.config())
-    end
-  end
-
-  @doc """
-  Drops the preview database `name` with the connection settings in
-  `repo_config`. Returns `:ok` when the database is gone after the call.
-  Exposed for tests.
-  """
-  def drop_preview_database(name, repo_config) do
-    name = check_preview_target!(name, repo_config)
-
-    case Reviews.Repo.__adapter__().storage_down(Keyword.put(repo_config, :force_drop, true)) do
-      :ok -> :ok
-      {:error, :already_down} -> :ok
-      {:error, reason} -> raise "could not drop preview database #{name}: #{inspect(reason)}"
-    end
-  end
-
-  @doc """
   Returns `true` when `name` is a valid preview database name:
   `reviews_pr_` followed by digits only.
   """
