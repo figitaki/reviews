@@ -71,8 +71,7 @@ defmodule Reviews.ReleasePreviewDbTest do
       config = config_for(@db_name)
       assert :ok = Release.ensure_database(@db_name, config)
 
-      {:ok, conn} = Postgrex.start_link(Keyword.drop(config, [:pool, :pool_size]))
-      Process.unlink(conn)
+      conn = start_supervised!({Postgrex, Keyword.drop(config, [:pool, :pool_size])})
       assert {:ok, _} = Postgrex.query(conn, "SELECT 1", [])
 
       assert :ok = Release.drop_preview_database(@db_name, config)
