@@ -303,6 +303,8 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
     } do
       assert_thread_not_found(conn, raw, review, "abc")
       assert_thread_not_found(build_conn(), raw, review, "7x")
+      assert_thread_not_found(build_conn(), raw, review, false)
+      assert_thread_not_found(build_conn(), raw, review, true)
     end
   end
 

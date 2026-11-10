@@ -93,6 +93,17 @@ defmodule Reviews.ThreadsTest do
       assert listed_second.id == second.id
     end
 
+    test "rejects false reply IDs with either key type instead of creating a thread" do
+      %{author: author, review: review} = setup_review!()
+
+      for key <- ["thread_id", :thread_id] do
+        params = Map.put(line_params("reply"), key, false)
+        assert {:error, :thread_not_found} = Threads.publish_comment(review, author, params)
+      end
+
+      assert Threads.list_published_threads(review.id) == []
+    end
+
     test "rejects empty body" do
       %{author: author, review: review} = setup_review!()
 

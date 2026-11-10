@@ -76,7 +76,7 @@ defmodule Reviews.Threads do
     side = params["side"] || params[:side]
     body = String.trim(to_string(params["body"] || params[:body] || ""))
     anchor = params["thread_anchor"] || params[:thread_anchor] || %{}
-    thread_id = params["thread_id"] || params[:thread_id]
+    thread_id = Map.get(params, "thread_id", params[:thread_id])
 
     cond do
       body == "" ->
@@ -152,19 +152,31 @@ defmodule Reviews.Threads do
   def update_status(%Review{} = review, thread_id, %Identity{} = identity, status)
       when status in ["open", "resolved"] do
     with {:ok, id} <- cast_thread_id(thread_id),
-         %Thread{review_id: review_id} = thread when review_id == review.id <-
-           Repo.get(Thread, id) do
-      if thread.status == status do
-        # Already in the requested state. Returning early keeps a repeated
-        # resolve from reattributing the thread to whoever clicked last, and
-        # spares every connected LiveView a snapshot rebuild for a non-change.
-        {:ok, preload_thread(thread)}
-      else
-        write_status(review, thread, identity, status)
+         {:ok, {thread, changed?}} <-
+           Repo.transaction(fn ->
+             # The no-op check and write must share the row lock. A concurrent
+             # resolver must see the first transition, not overwrite it.
+             case Repo.one(
+                    from t in Thread,
+                      where: t.id == ^id and t.review_id == ^review.id,
+                      lock: "FOR UPDATE"
+                  ) do
+               %Thread{status: ^status} = thread -> {thread, false}
+               %Thread{} = thread -> {write_status(thread, identity, status), true}
+               nil -> Repo.rollback(:not_found)
+             end
+           end) do
+      thread = preload_thread(thread)
+
+      if changed? do
+        Phoenix.PubSub.broadcast(
+          @pubsub,
+          "review:#{review.slug}",
+          {:thread_updated, thread}
+        )
       end
-    else
-      {:error, reason} -> {:error, reason}
-      _ -> {:error, :not_found}
+
+      {:ok, thread}
     end
   end
 
@@ -176,7 +188,7 @@ defmodule Reviews.Threads do
 
   def update_status(%Review{}, _thread_id, %Identity{}, _status), do: {:error, :invalid_status}
 
-  defp write_status(review, thread, identity, status) do
+  defp write_status(thread, identity, status) do
     attrs =
       case status do
         "resolved" ->
@@ -191,19 +203,8 @@ defmodule Reviews.Threads do
       end
 
     case thread |> Thread.changeset(attrs) |> Repo.update() do
-      {:ok, updated} ->
-        updated = preload_thread(updated)
-
-        Phoenix.PubSub.broadcast(
-          @pubsub,
-          "review:#{review.slug}",
-          {:thread_updated, updated}
-        )
-
-        {:ok, updated}
-
-      {:error, changeset} ->
-        {:error, changeset}
+      {:ok, updated} -> updated
+      {:error, changeset} -> Repo.rollback(changeset)
     end
   end
 
