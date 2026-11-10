@@ -85,19 +85,29 @@ defmodule Reviews.Reviews do
   Otherwise returns `{:ok, %{patchset: patchset, code_snapshot: result}}`, where
   `result` is `nil`, a claimed snapshot, or `{:skipped, code}`.
   """
-  def append_patchset(%Review{} = review, %Identity{owner_user_id: owner_id} = identity, attrs)
-      when not is_nil(owner_id) and is_map(attrs) do
-    owner? =
-      Repo.exists?(
-        from i in Identity,
-          where: i.id == ^review.author_id and i.owner_user_id == ^owner_id
-      )
-
-    if owner?, do: insert_patchset(identity, review, attrs), else: {:error, :forbidden}
+  def append_patchset(%Review{} = review, %Identity{} = identity, attrs) when is_map(attrs) do
+    if revision_uploader?(review, identity),
+      do: insert_patchset(identity, review, attrs),
+      else: {:error, :forbidden}
   end
 
   def append_patchset(%Review{}, _actor, attrs) when is_map(attrs),
     do: {:error, :forbidden}
+
+  @doc """
+  True when `identity` may upload revisions (patchsets and their code
+  snapshots) to `review`: it must be owned by the same user as the review
+  author's identity.
+  """
+  def revision_uploader?(%Review{} = review, %Identity{owner_user_id: owner_id})
+      when not is_nil(owner_id) do
+    Repo.exists?(
+      from i in Identity,
+        where: i.id == ^review.author_id and i.owner_user_id == ^owner_id
+    )
+  end
+
+  def revision_uploader?(%Review{}, _identity), do: false
 
   @doc """
   Trusted internal setup path without authorization. User-facing callers must

@@ -25,7 +25,9 @@ defmodule Reviews.CodeStorage.Errors do
   def message(:upload_expired), do: "the snapshot reservation expired before it was claimed"
   def message(:ref_mismatch), do: "the uploaded refs do not match the reserved object ids"
   def message(:snapshot_not_ready), do: "the code snapshot is not ready to be claimed"
-  def message(:snapshot_not_authorized), do: "the code snapshot was reserved by another identity"
+
+  def message(:snapshot_not_authorized),
+    do: "this identity cannot upload code for that review or snapshot"
 
   def http_status(:code_storage_disabled), do: :not_found
   def http_status(:snapshot_not_authorized), do: :forbidden

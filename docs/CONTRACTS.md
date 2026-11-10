@@ -147,8 +147,10 @@ Request body:
 }
 ```
 
-`review_slug` is omitted for a new review. `head_kind` is one of `commit`,
-`index_snapshot`, `worktree_snapshot`.
+`review_slug` is omitted for a new review. When it is present, the caller
+must be allowed to add patchsets to that review; otherwise the server returns
+`403` with code `snapshot_not_authorized` and reserves nothing. `head_kind` is
+one of `commit`, `index_snapshot`, `worktree_snapshot`.
 
 Response `201`:
 

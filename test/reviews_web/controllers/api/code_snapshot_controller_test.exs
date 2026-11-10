@@ -150,6 +150,33 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
       assert Repo.aggregate(CodeSnapshot, :count) == 1
     end
 
+    test "reserve with another author's review slug is forbidden and writes nothing", %{
+      conn: conn
+    } do
+      {:ok, other_user} =
+        Accounts.upsert_from_github(%{
+          github_id: 52_525,
+          username: "someone-else",
+          email: "someone-else@example.com",
+          avatar_url: nil
+        })
+
+      {:ok, other} = Accounts.ensure_human_identity(other_user)
+
+      {:ok, %{review: review}} =
+        ReviewsContext.create_review_with_initial_patchset(other, %{
+          title: "Not yours",
+          raw_diff: @diff
+        })
+
+      conn =
+        post(conn, ~p"/api/v1/code-snapshots", Map.put(@reserve_body, "review_slug", review.slug))
+
+      assert %{"errors" => %{"code" => "snapshot_not_authorized"}} = json_response(conn, 403)
+      assert Repo.aggregate(CodeSnapshot, :count) == 0
+      assert Repo.aggregate(Reviews.Reviews.CodeRepository, :count) == 0
+    end
+
     test "reserve with an unknown review slug 404s", %{conn: conn} do
       conn =
         post(conn, ~p"/api/v1/code-snapshots", Map.put(@reserve_body, "review_slug", "nope1234"))

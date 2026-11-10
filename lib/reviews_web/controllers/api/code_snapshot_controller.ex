@@ -33,13 +33,8 @@ defmodule ReviewsWeb.Api.CodeSnapshotController do
       {:error, :review_not_found} ->
         error_json(conn, :not_found, "Review not found")
 
-      {:error, :unsupported_object_format} ->
-        error_json(
-          conn,
-          :unprocessable_entity,
-          :unsupported_object_format,
-          Errors.message(:unsupported_object_format)
-        )
+      {:error, code} when code in [:unsupported_object_format, :snapshot_not_authorized] ->
+        error_json(conn, Errors.http_status(code), code, Errors.message(code))
 
       {:error, code} when code in [:invalid_oid, :invalid_head_kind] ->
         error_json(conn, :unprocessable_entity, "Invalid snapshot parameters")

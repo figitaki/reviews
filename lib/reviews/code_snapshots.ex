@@ -128,15 +128,25 @@ defmodule Reviews.CodeSnapshots do
   # one. Otherwise (new review, or review without code yet) stage a fresh
   # repository; parallel reservations may stage several, the claim step picks
   # the winner and the sweeper expires the rest.
+  #
+  # Only identities that may upload revisions to the review can reserve
+  # against it. Otherwise any token holder could write refs into another
+  # review's storage repository.
   defp find_or_create_repository(identity, %{review_slug: review_slug} = attrs)
        when is_binary(review_slug) do
-    with %Review{} = review <- Repo.get_by(Review, slug: review_slug) do
-      case Repo.one(from r in CodeRepository, where: r.review_id == ^review.id) do
-        %CodeRepository{} = repository -> {:ok, repository}
-        nil -> create_staging_repository(identity, attrs[:object_format])
-      end
-    else
-      nil -> {:error, :review_not_found}
+    case Repo.get_by(Review, slug: review_slug) do
+      nil ->
+        {:error, :review_not_found}
+
+      %Review{} = review ->
+        if Reviews.Reviews.revision_uploader?(review, identity) do
+          case Repo.one(from r in CodeRepository, where: r.review_id == ^review.id) do
+            %CodeRepository{} = repository -> {:ok, repository}
+            nil -> create_staging_repository(identity, attrs[:object_format])
+          end
+        else
+          {:error, :snapshot_not_authorized}
+        end
     end
   end
 
