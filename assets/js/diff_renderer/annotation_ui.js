@@ -14,10 +14,8 @@ const colors = {
   add: "var(--ds-add, #25d0a0)",
 }
 
-const fontStack =
-  'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-const monoStack =
-  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+const fontStack = "var(--font-sans, system-ui, sans-serif)"
+const monoStack = "var(--font-mono, ui-monospace, monospace)"
 
 const bubbleBaseStyle = {
   border: `1px solid ${colors.line}`,

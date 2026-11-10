@@ -27,10 +27,10 @@ name: Fly Review App
 #   1. The PR head must live in this repo (no forks) AND the author's
 #      association must be OWNER / MEMBER / COLLABORATOR. Enforced in
 #      the YAML below.
-#   2. The job targets the `preview` GitHub Environment, which can be
-#      configured in repo settings with required reviewers so a maintainer
-#      has to click "Approve" before the deploy step runs. See
-#      docs/PREVIEW_ENVS.md for setup.
+#   2. Deployment credentials live only in the `preview` GitHub Environment,
+#      with required maintainer review configured outside this editable file.
+#      Removing the environment must not grant access to repository secrets.
+#      See docs/PREVIEW_ENVS.md for setup.
 
 on:
   pull_request:
@@ -71,11 +71,10 @@ jobs:
       # Postgres server. See "Per-PR databases" in docs/PREVIEW_ENVS.md.
       PREVIEW_DB_NAME: reviews_pr_${{ github.event.pull_request.number }}
 
-    # Verbose tracing so a failure is debuggable from the run log without
-    # having to reproduce locally.
+    # Never trace commands that consume deployment or application secrets.
     defaults:
       run:
-        shell: bash -eo pipefail -x {0}
+        shell: bash -eo pipefail {0}
 
     steps:
       - uses: actions/checkout@v4
@@ -125,14 +124,15 @@ jobs:
           echo "::add-mask::$DATABASE_URL"
 
           # POOL_SIZE is not set here: fly.preview.toml sets it in [env].
-          flyctl secrets set --stage --app "$APP_NAME" \
-            SECRET_KEY_BASE="$PREVIEW_SECRET_KEY_BASE" \
-            DATABASE_URL="$DATABASE_URL" \
-            PREVIEW_DB_NAME="$PREVIEW_DB_NAME" \
-            GITHUB_CLIENT_ID="$PREVIEW_GITHUB_CLIENT_ID" \
-            GITHUB_CLIENT_SECRET="$PREVIEW_GITHUB_CLIENT_SECRET" \
-            PREVIEW_API_TOKEN="$PREVIEW_API_TOKEN" \
-            PHX_HOST="$APP_HOST"
+          # Secrets go in on stdin, not argv, so they stay out of the process list.
+          printf '%s\n' \
+            "SECRET_KEY_BASE=$PREVIEW_SECRET_KEY_BASE" \
+            "DATABASE_URL=$DATABASE_URL" \
+            "PREVIEW_DB_NAME=$PREVIEW_DB_NAME" \
+            "GITHUB_CLIENT_ID=$PREVIEW_GITHUB_CLIENT_ID" \
+            "GITHUB_CLIENT_SECRET=$PREVIEW_GITHUB_CLIENT_SECRET" \
+            "PREVIEW_API_TOKEN=$PREVIEW_API_TOKEN" \
+            "PHX_HOST=$APP_HOST" | flyctl secrets import --stage --app "$APP_NAME"
 
       # fly.preview.toml, not fly.toml: small DB pool and auto-stop when
       # idle. --ha=false: one machine per preview, not Fly's default of two
@@ -173,7 +173,7 @@ jobs:
           # machine. One HTTP request makes the Fly proxy start one.
           curl -sS -o /dev/null --max-time 60 "https://$APP_HOST/" || true
 
-          for attempt in 1 2 3 4 5; do
+          for _ in 1 2 3 4 5; do
             if flyctl ssh console --app "$APP_NAME" \
                 -C "/app/bin/reviews eval Reviews.Release.drop_preview_database"; then
               echo "Dropped $PREVIEW_DB_NAME."
