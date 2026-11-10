@@ -9,7 +9,7 @@ still stabilizing.
 
 ### Added
 
-- Code storage (Phase 0 + 1 of `.plans/lsp-code-storage-integration.md`):
+- Code storage (Phase 0 and 1 of the code storage plan in #74):
   every code-enabled patchset gets immutable base/head Git refs stored in a
   provider-neutral backend. code.storage (Pierre) is the production adapter;
   storage is off by default (`CODE_STORAGE_ADAPTER=code_storage` enables it).
