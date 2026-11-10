@@ -2552,6 +2552,18 @@ details[open] > summary .review-collapse-icon,
     max-width: 60vw;
   }
 
+  /* Keep the signed-out button compact without shrinking its tap area. */
+  .review-page .ds-shell-actions > a.review-button {
+    position: relative;
+    min-height: 32px;
+  }
+
+  .review-page .ds-shell-actions > a.review-button::after {
+    content: "";
+    position: absolute;
+    inset: -7px 0;
+  }
+
   .review-page .ds-shell-actions .review-button > span {
     min-width: 0;
     overflow: hidden;
