@@ -78,6 +78,25 @@ defmodule Reviews.CodeStorage.SweeperTest do
     assert Repo.get(CodeRepository, failed_repo.id) == nil
   end
 
+  test "keeps stale repository rows while storage is disabled", %{identity: identity} do
+    config = Application.get_env(:reviews, Reviews.CodeStorage)
+
+    Application.put_env(
+      :reviews,
+      Reviews.CodeStorage,
+      Keyword.put(config, :adapter, Reviews.CodeStorage.Disabled)
+    )
+
+    past = DateTime.add(DateTime.utc_now(), -60) |> DateTime.truncate(:second)
+    stale_repo = code_repository_fixture(identity, %{expires_at: past})
+
+    Sweeper.sweep()
+
+    # The disabled adapter cannot delete the provider repository, so dropping
+    # the row would orphan it. It waits until storage is turned back on.
+    assert Repo.get(CodeRepository, stale_repo.id)
+  end
+
   test "expires unclaimed snapshots", %{identity: identity} do
     past = DateTime.add(DateTime.utc_now(), -60) |> DateTime.truncate(:second)
     repo = code_repository_fixture(identity)

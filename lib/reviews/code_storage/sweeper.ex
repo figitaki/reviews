@@ -42,7 +42,9 @@ defmodule Reviews.CodeStorage.Sweeper do
       Logger.info("code storage sweeper expired #{expired} unclaimed snapshot(s)")
     end
 
-    delete_stale_repositories(now)
+    # With storage turned off the Disabled adapter "deletes" nothing, so
+    # dropping rows would orphan provider repositories made while it was on.
+    if CodeStorage.enabled?(), do: delete_stale_repositories(now), else: :ok
   end
 
   defp delete_stale_repositories(now) do
