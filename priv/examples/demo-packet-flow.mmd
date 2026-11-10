@@ -1,0 +1,109 @@
+---
+config:
+  theme: neutral
+  htmlLabels: false
+  fontSize: 14
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+  themeVariables:
+    fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+    fontSize: 14px
+  themeCSS: |
+    /* Palette mirrors assets/css/tokens.css. Variables are scoped to SVG
+       descendants so Mermaid's selector scoping needs no postprocessing. */
+    * {
+      --diagram-text: #111;
+      --diagram-muted: #5f5f59;
+      --diagram-stroke: #8a8a82;
+      --diagram-line: #deded8;
+      --diagram-fill: #fbfbf8;
+    }
+    @media (prefers-color-scheme: dark) {
+      * {
+        --diagram-text: #f5f5f5;
+        --diagram-muted: #a3a3a3;
+        --diagram-stroke: #707073;
+        --diagram-line: #242426;
+        --diagram-fill: #0b0b0c;
+      }
+    }
+    text.actor, text.actor > tspan {
+      fill: var(--diagram-text) !important;
+      font-weight: 600 !important;
+    }
+    rect.actor {
+      fill: var(--diagram-fill) !important;
+      stroke: var(--diagram-line) !important;
+      stroke-width: 1px !important;
+      rx: 6px;
+      ry: 6px;
+    }
+    .messageText {
+      fill: var(--diagram-text) !important;
+    }
+    .actor-line {
+      stroke: var(--diagram-line) !important;
+      stroke-width: 1px !important;
+    }
+    .messageLine0, .messageLine1 {
+      stroke: var(--diagram-stroke) !important;
+      stroke-width: 1px !important;
+    }
+    [id$="-arrowhead"] path {
+      fill: var(--diagram-stroke) !important;
+      stroke: var(--diagram-stroke) !important;
+    }
+    .loopLine {
+      stroke: var(--diagram-line) !important;
+      stroke-width: 1px !important;
+      stroke-dasharray: 3 4 !important;
+    }
+    .labelBox {
+      fill: var(--diagram-fill) !important;
+      stroke: var(--diagram-line) !important;
+      stroke-width: 1px !important;
+    }
+    .loopText, .loopText > tspan, .labelText, .labelText > tspan {
+      fill: var(--diagram-muted) !important;
+      font-size: 13px !important;
+    }
+  sequence:
+    useMaxWidth: false
+    actorFontSize: 14
+    messageFontSize: 14
+    noteFontSize: 13
+    actorMargin: 50
+    width: 144
+    height: 42
+    diagramMarginX: 20
+    diagramMarginY: 8
+    boxMargin: 6
+    boxTextMargin: 4
+    mirrorActors: false
+---
+%% Render locally with @mermaid-js/mermaid-cli@11.17.1 and installed Chromium:
+%% Mermaid protects themeCSS in frontmatter: also pass this trusted config to CLI.
+%% With Python + PyYAML, extract disposable JSON (remove it after rendering):
+%% python3 -c 'import json,pathlib,yaml; print(json.dumps(yaml.safe_load(pathlib.Path("priv/examples/demo-packet-flow.mmd").read_text().split("---",2)[1])["config"]))' > /tmp/reviews-mermaid-config.json
+%% PUPPETEER_EXECUTABLE_PATH=<browser> mmdc -c /tmp/reviews-mermaid-config.json -i priv/examples/demo-packet-flow.mmd -o priv/static/images/demo-packet-flow.svg -b transparent
+%% No postprocess. The embedding img must inherit the app's explicit color-scheme
+%% so its prefers-color-scheme media query follows manual light/dark selection.
+sequenceDiagram
+  accTitle: Review a change with an agent
+  accDescr: The user requests a change. The agent authors a diff and packet locally and uploads them with the CLI. Reviews returns a link that the agent shares with the user. The user reads and comments or decides in Reviews. For revisions, the agent explicitly pulls feedback and uploads a revised patchset, then the user reviews the update.
+  participant U as User
+  participant A as Agent
+  participant R as Reviews service
+  U->>A: Request a change
+  A->>A: Author diff + packet locally
+  A->>R: Upload diff + packet via CLI
+  R-->>A: Return review link
+  A-->>U: Share review link
+  U->>R: Read packet + diff
+  U->>R: Comment or decide
+  loop When revisions are needed
+    A->>R: Pull feedback via CLI
+    R-->>A: Return comments + decisions
+    A->>A: Revise diff + packet locally
+    A->>R: Upload revised patchset via CLI
+    U->>R: Review update and respond
+  end

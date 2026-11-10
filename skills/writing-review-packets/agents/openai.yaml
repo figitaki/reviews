@@ -1,4 +1,4 @@
 interface:
   display_name: "Writing Review Packets"
-  short_description: "Draft packet markdown with hunk refs."
-  default_prompt: "Use $writing-review-packets to draft or update a Reviews packet for the current diff."
+  short_description: "Write rich review narratives with hunk refs."
+  default_prompt: "Use $writing-review-packets to draft or update a Reviews packet for the current diff, with an outcome-first Overview, useful rich Markdown, and reasoning interwoven with hunk refs."
