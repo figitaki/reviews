@@ -61,7 +61,12 @@ defmodule Reviews.CodeStorage.CodeDotStorage.Client do
       method: method,
       url: base_url(config) <> path,
       auth: {:bearer, token},
-      retry: false
+      retry: false,
+      # Reserve and complete run inside CLI requests; a slow provider must
+      # fail fast so the push can fall back to diff-only.
+      connect_options: [timeout: 5_000],
+      pool_timeout: 5_000,
+      receive_timeout: 15_000
     ]
     |> Keyword.merge(opts)
     |> Keyword.merge(config[:req_options] || [])
