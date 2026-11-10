@@ -192,7 +192,7 @@ pub fn capture_diff(repo: &Path, range: Option<&str>) -> Result<CapturedDiff> {
 /// the base commit. A single revision `X` means worktree-vs-X.
 fn resolve_range(repo: &Path, range: &str) -> Result<(String, HeadSource)> {
     if let Some(idx) = range.find("...") {
-        let (a, b) = (&range[..idx], &range[idx + 3..]);
+        let (a, b) = (or_head(&range[..idx]), or_head(&range[idx + 3..]));
         let base = run_git(repo, &["merge-base", a, b])
             .with_context(|| format!("could not resolve merge base of `{a}` and `{b}`"))?
             .trim()
@@ -200,7 +200,7 @@ fn resolve_range(repo: &Path, range: &str) -> Result<(String, HeadSource)> {
         let head = rev_parse_commit(repo, b)?;
         Ok((base, HeadSource::Commit(head)))
     } else if let Some(idx) = range.find("..") {
-        let (a, b) = (&range[..idx], &range[idx + 2..]);
+        let (a, b) = (or_head(&range[..idx]), or_head(&range[idx + 2..]));
         let base = rev_parse_commit(repo, a)
             .with_context(|| format!("could not resolve `{a}` (from --range {range})"))?;
         let head = rev_parse_commit(repo, b)?;
@@ -209,6 +209,15 @@ fn resolve_range(repo: &Path, range: &str) -> Result<(String, HeadSource)> {
         let base = rev_parse_commit(repo, range)
             .with_context(|| format!("could not resolve `{range}`"))?;
         Ok((base, HeadSource::Worktree))
+    }
+}
+
+/// Like `git diff`, an omitted side of `A..`, `..B` or `A...` means HEAD.
+fn or_head(side: &str) -> &str {
+    if side.is_empty() {
+        "HEAD"
+    } else {
+        side
     }
 }
 
@@ -531,6 +540,26 @@ mod tests {
             HeadSource::Commit(rev_parse(&repo, "HEAD").unwrap())
         );
         assert_eq!(cap.object_format, "sha1");
+    }
+
+    #[test]
+    fn capture_diff_accepts_open_ended_ranges() {
+        // `git diff A..` and `git diff A...` default the missing side to HEAD.
+        let (_g, repo) = init_repo();
+        commit_file(&repo, "a.txt", "1\n", "c1");
+        commit_file(&repo, "a.txt", "1\n2\n", "c2");
+        let base = rev_parse(&repo, "HEAD~1").unwrap();
+        let head = HeadSource::Commit(rev_parse(&repo, "HEAD").unwrap());
+
+        for range in ["HEAD~1..", "HEAD~1..."] {
+            let cap = capture_diff(&repo, Some(range)).unwrap();
+            assert_eq!(cap.base_oid, base, "range {range}");
+            assert_eq!(cap.head, head, "range {range}");
+            assert!(cap.raw_diff.contains("+2"), "range {range}");
+        }
+
+        let cap = capture_diff(&repo, Some("..HEAD")).unwrap_err();
+        assert!(format!("{cap:#}").contains("no changes"));
     }
 
     #[test]
