@@ -297,6 +297,52 @@ mod dry_run {
         }
     }
 
+    #[test]
+    fn blank_title_fails_the_dry_run_and_the_real_push_without_a_request() {
+        let mut server = Server::new();
+        let mocks = refuse_all_requests(&mut server);
+        let repo = repo();
+        let home = home(&server.url());
+        write_packet(repo.path(), VALID_PACKET);
+
+        let out = push(repo.path(), home.path(), &["--dry-run", "--title", "  "]);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(1), "out = {out:?}");
+        assert!(stdout.contains("Push has 1 problem:"), "stdout = {stdout}");
+        assert!(
+            stdout.contains("the review title is empty"),
+            "stdout = {stdout}"
+        );
+        assert!(
+            !stdout.contains("without --dry-run to push it"),
+            "stdout = {stdout}"
+        );
+        assert!(
+            stderr.contains("a real push would fail"),
+            "stderr = {stderr}"
+        );
+
+        let out = push(repo.path(), home.path(), &["--title", ""]);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(1), "out = {out:?}");
+        assert!(
+            stderr.contains("the review title is empty"),
+            "stderr = {stderr}"
+        );
+
+        let out = push(repo.path(), home.path(), &["--update", ""]);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(1), "out = {out:?}");
+        assert!(
+            stderr.contains("--update needs a review slug"),
+            "stderr = {stderr}"
+        );
+        for mock in mocks {
+            mock.assert();
+        }
+    }
+
     /// Control for the tests above: the same setup without --dry-run does
     /// reach the fake server, so `expect(0)` there means something.
     #[test]

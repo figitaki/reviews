@@ -45,6 +45,7 @@ pub fn run(args: PushArgs) -> Result<()> {
     let cwd = env::current_dir().context("could not read current directory")?;
     let cap = git::capture_diff(&cwd, args.range.as_deref())?;
     let check = check_packet_for_push(&cwd, &cap.branch_name, args.packet.as_ref(), &cap.raw_diff)?;
+    let problems = request_problems(&args, &cap);
 
     if args.dry_run {
         let server = cfg
@@ -53,17 +54,22 @@ pub fn run(args: PushArgs) -> Result<()> {
             .map_err(|err| format!("{err:#}"));
         print!(
             "{}",
-            dry_run_report(&cwd, &args, &cap, server, check.as_ref())
+            dry_run_report(&cwd, &args, &cap, server, check.as_ref(), &problems)
         );
-        return match check {
-            Some(check) if !check.is_valid() => Err(anyhow!(
-                "the packet has problems, so a real push would fail. Fix the problems above, then run again."
-            )),
-            _ => Ok(()),
+        let packet_ok = check.as_ref().is_none_or(PacketCheck::is_valid);
+        return if packet_ok && problems.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "a real push would fail. Fix the problems above, then run again."
+            ))
         };
     }
 
     let cfg = cfg?;
+    if !problems.is_empty() {
+        return Err(anyhow!("{}", problems.join("\n")));
+    }
     let packet = check.map(PacketCheck::into_packet).transpose()?;
     let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
 
@@ -110,6 +116,21 @@ fn review_title(args: &PushArgs, cap: &CapturedDiff) -> String {
         .unwrap_or_else(|| cap.branch_name.clone())
 }
 
+/// Problems with the request itself that the server would reject: an empty
+/// review title (the server requires one) or an empty `--update` slug.
+fn request_problems(args: &PushArgs, cap: &CapturedDiff) -> Vec<String> {
+    match &args.update {
+        Some(slug) if slug.trim().is_empty() => {
+            vec!["--update needs a review slug, such as `--update k7m2qz`.".to_string()]
+        }
+        Some(_) => Vec::new(),
+        None if review_title(args, cap).trim().is_empty() => {
+            vec!["the review title is empty. Pass --title with some text.".to_string()]
+        }
+        None => Vec::new(),
+    }
+}
+
 /// Find the packet for this push (explicit path first, then the branch
 /// default) and check it against the diff. `None` means no packet.
 fn check_packet_for_push(
@@ -147,6 +168,7 @@ fn dry_run_report(
     cap: &CapturedDiff,
     server: std::result::Result<&str, String>,
     check: Option<&PacketCheck>,
+    problems: &[String],
 ) -> String {
     let mut out = String::new();
     let _ = writeln!(out, "Dry run: nothing was sent to the server.\n");
@@ -221,10 +243,12 @@ fn dry_run_report(
             out,
             "Packet:  none. The review will show the diff without a packet."
         );
-        let _ = writeln!(
-            out,
-            "\nReady to push. Run the same command without --dry-run to send it."
-        );
+        if !write_problems(&mut out, problems) {
+            let _ = writeln!(
+                out,
+                "\nReady to push. Run the same command without --dry-run to send it."
+            );
+        }
         return out;
     };
 
@@ -251,11 +275,14 @@ fn dry_run_report(
         }
     }
 
+    let has_problems = write_problems(&mut out, problems);
     if check.is_valid() {
-        let _ = writeln!(
-            out,
-            "\nPacket is valid. Run the same command without --dry-run to push it."
-        );
+        let next = if has_problems {
+            "Fix the push problems above before you push."
+        } else {
+            "Run the same command without --dry-run to push it."
+        };
+        let _ = writeln!(out, "\nPacket is valid. {next}");
     } else {
         let _ = writeln!(
             out,
@@ -267,6 +294,18 @@ fn dry_run_report(
         }
     }
     out
+}
+
+/// Write the push problems, if any. Returns whether there were any.
+fn write_problems(out: &mut String, problems: &[String]) -> bool {
+    if problems.is_empty() {
+        return false;
+    }
+    let _ = writeln!(out, "\nPush has {}:", plural(problems.len(), "problem"));
+    for problem in problems {
+        let _ = writeln!(out, "  {problem}");
+    }
+    true
 }
 
 /// The packet path relative to the working directory when it is inside it.
