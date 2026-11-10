@@ -45,11 +45,12 @@ preview deploy. The workflow enforces this in two layers:
    — those mean "has merged commits in the past", not "has write
    access".
 
-2. **GitHub Environment with required reviewers.** The job targets
-   the `preview` GitHub Environment. If you add required reviewers to
-   that environment (repo Settings → Environments → preview → Required
-   reviewers), the deploy step will pause until a maintainer clicks
-   "Approve" in the Actions UI.
+2. **GitHub Environment with required reviewers and secrets.** The job targets
+   the `preview` GitHub Environment. Store all preview credentials there, not
+   as repository secrets, and require maintainer review before deployment.
+   Review the PR code and workflow before approving: the approved code runs
+   with preview credentials. Removing `environment` from a PR-editable workflow
+   must not make deployment credentials available.
 
 Layer (1) stops fork PRs from running the workflow at all. Layer (2)
 protects against the case where a maintainer pushes to a branch a
@@ -63,8 +64,12 @@ opener, not the pusher).
 ### 1. GitHub Environment
 
 Create an Environment named `preview` (Settings → Environments → New
-environment). Optionally configure required reviewers under "Deployment
-protection rules".
+environment). Configure required maintainer reviewers under "Deployment
+protection rules" and disable administrator bypass. Production uses a separate
+`production` environment restricted to the `main` branch, with an app-scoped
+Fly token. Never expose the production token to previews. If preview automation
+needs an organization-scoped token to create apps, a separate Fly organization
+is the strongest isolation boundary; reviewer gating does not narrow its scope.
 
 ### 2. Fly Postgres for previews
 
@@ -98,7 +103,7 @@ viewing of reviews (link-based sharing is the v1 model). Commenting
 requires sign-in and will fail on previews. For most "show me what
 this PR looks like" use cases this is fine.
 
-### 4. Repo secrets and variables
+### 4. Environment secrets and repository variables
 
 Under **Settings → Secrets and variables → Actions**:
 
@@ -108,11 +113,11 @@ Under **Settings → Secrets and variables → Actions**:
 | ----------- | -------------------------------- |
 | `FLY_ORG`   | Your Fly organization slug. **This variable is the on/off switch — the workflow is skipped until it's set.** |
 
-**Repository secrets** (encrypted):
+**`preview` environment secrets** (encrypted; do not duplicate at repository scope):
 
 | Secret                          | Value                                                 |
 | ------------------------------- | ----------------------------------------------------- |
-| `FLY_API_TOKEN`                 | Same token as production CI (`fly auth token`)        |
+| `FLY_API_TOKEN`                 | Dedicated, expiring preview deploy token; never the production token |
 | `PREVIEW_SECRET_KEY_BASE`       | Output of `mix phx.gen.secret`                        |
 | `PREVIEW_DATABASE_URL`          | Full `postgres://...` URL for the shared preview DB   |
 | `PREVIEW_API_TOKEN`             | A bearer token of your choice (e.g. `rev_$(openssl rand -hex 24)`). Used to bootstrap a synthetic "preview" user — see "Pushing diffs to a preview" below. |
@@ -141,7 +146,8 @@ reviews push
 
 The seeding step is a no-op in production (the prod app has no
 `PREVIEW_API_TOKEN` env var), so the synthetic user only exists on
-previews.
+previews. Changing this token replaces prior named preview-bootstrap tokens
+when the updated seed runs; unrelated user tokens are preserved.
 
 ---
 

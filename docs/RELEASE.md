@@ -218,15 +218,17 @@ On push to `main` only, after tests pass, it runs `flyctl deploy -a reviews-dev`
 
 ### Required GitHub repo secrets
 
-Set under **Repo → Settings → Secrets and variables → Actions → New repository
-secret**:
+Create a **production** environment under **Repo → Settings → Environments**,
+restrict its deployment branches to `main`, and set its environment secret:
 
 | Secret          | How to get it                                              |
 | --------------- | ---------------------------------------------------------- |
-| `FLY_API_TOKEN` | `fly auth token` — paste the output. Rotate periodically.  |
+| `FLY_API_TOKEN` | Create an app-scoped deploy token for `reviews-dev` with an explicit expiry. |
 
-That's it. The deploy job uses `superfly/flyctl-actions/setup-flyctl` and reads
-`FLY_API_TOKEN` from the env to authenticate.
+Do not duplicate this secret at repository scope or in the preview environment.
+The deploy job targets `production`, uses `superfly/flyctl-actions/setup-flyctl`,
+and reads that environment's `FLY_API_TOKEN` to authenticate. Preview deployment
+uses a distinct token and required maintainer approval; see `PREVIEW_ENVS.md`.
 
 ### What the deploy job does
 
