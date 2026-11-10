@@ -27,10 +27,10 @@ name: Fly Review App
 #   1. The PR head must live in this repo (no forks) AND the author's
 #      association must be OWNER / MEMBER / COLLABORATOR. Enforced in
 #      the YAML below.
-#   2. The job targets the `preview` GitHub Environment, which can be
-#      configured in repo settings with required reviewers so a maintainer
-#      has to click "Approve" before the deploy step runs. See
-#      docs/PREVIEW_ENVS.md for setup.
+#   2. Deployment credentials live only in the `preview` GitHub Environment,
+#      with required maintainer review configured outside this editable file.
+#      Removing the environment must not grant access to repository secrets.
+#      See docs/PREVIEW_ENVS.md for setup.
 
 on:
   pull_request:
@@ -68,11 +68,10 @@ jobs:
       APP_NAME: reviews-pr-${{ github.event.pull_request.number }}
       APP_HOST: reviews-pr-${{ github.event.pull_request.number }}.fly.dev
 
-    # Verbose tracing so a failure is debuggable from the run log without
-    # having to reproduce locally.
+    # Never trace commands that consume deployment or application secrets.
     defaults:
       run:
-        shell: bash -eo pipefail -x {0}
+        shell: bash -eo pipefail {0}
 
     steps:
       - uses: actions/checkout@v4
@@ -102,13 +101,13 @@ jobs:
           PREVIEW_GITHUB_CLIENT_SECRET: ${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
           PREVIEW_API_TOKEN: ${{ secrets.PREVIEW_API_TOKEN }}
         run: |
-          flyctl secrets set --stage --app "$APP_NAME" \
-            SECRET_KEY_BASE="$PREVIEW_SECRET_KEY_BASE" \
-            DATABASE_URL="$PREVIEW_DATABASE_URL" \
-            GITHUB_CLIENT_ID="$PREVIEW_GITHUB_CLIENT_ID" \
-            GITHUB_CLIENT_SECRET="$PREVIEW_GITHUB_CLIENT_SECRET" \
-            PREVIEW_API_TOKEN="$PREVIEW_API_TOKEN" \
-            PHX_HOST="$APP_HOST"
+          printf '%s\n' \
+            "SECRET_KEY_BASE=$PREVIEW_SECRET_KEY_BASE" \
+            "DATABASE_URL=$PREVIEW_DATABASE_URL" \
+            "GITHUB_CLIENT_ID=$PREVIEW_GITHUB_CLIENT_ID" \
+            "GITHUB_CLIENT_SECRET=$PREVIEW_GITHUB_CLIENT_SECRET" \
+            "PREVIEW_API_TOKEN=$PREVIEW_API_TOKEN" \
+            "PHX_HOST=$APP_HOST" | flyctl secrets import --stage --app "$APP_NAME"
 
       - name: Deploy preview app
         if: github.event.action != 'closed'
