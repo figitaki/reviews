@@ -1,9 +1,16 @@
 import { el } from "./dom.js"
 import { markdownPatchExcerpts, renderMarkdown } from "../lib/markdown.js"
 
-export function markdownPreview(patch, diffStyle = "split") {
+export function previewNotice(threadCount = 0) {
+  const notice = "Rendered patch excerpts. Omitted file content is unavailable. Use Source to review exact changes and add comments."
+  if (threadCount === 0) return notice
+  const discussions = threadCount === 1 ? "1 discussion is" : `${threadCount} discussions are`
+  return `${notice} ${discussions} shown in Source.`
+}
+
+export function markdownPreview(patch, diffStyle = "split", threadCount = 0) {
   const preview = el("div", { className: "review-markdown-preview", dataset: { diffStyle } }, [
-    el("p", { className: "review-markdown-notice" }, "Rendered patch excerpts. Omitted file content is unavailable. Use Source to review exact changes and add comments."),
+    el("p", { className: "review-markdown-notice" }, previewNotice(threadCount)),
   ])
   for (const excerpt of markdownPatchExcerpts(patch)) {
     const pair = el("div", { className: "review-markdown-pair" })

@@ -134,7 +134,8 @@ export class VanillaDiffRenderer {
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
     this.virtualizer = null
-    this.preview = false
+    // Markdown files open rendered; Source shows the exact lines and comments.
+    this.preview = true
     this.hasMarkdownPreview = isMarkdown(filePath) && markdownPatchExcerpts(rawDiff).length > 0
   }
 
@@ -422,12 +423,18 @@ export class VanillaDiffRenderer {
         }, label))
       }
       this.container.append(toolbar)
-      if (this.preview) {
-        this.container.append(markdownPreview(this.rawDiff, this.diffStyle))
-        return
-      }
       this.sourceContainer = el("div")
       this.container.append(this.sourceContainer)
+      if (this.preview) {
+        // Keep Pierre's header (path, counts, expand and Mark viewed) and
+        // show the rendered excerpts below it unless the hunk is collapsed.
+        this.instance = new Diffs.FileDiff({ ...this.options(), collapsed: true })
+        this.instance.render(this.renderArgs())
+        if (!this.collapsed()) {
+          this.container.append(markdownPreview(this.rawDiff, this.diffStyle, this.threads?.length || 0))
+        }
+        return
+      }
     }
 
     const options = this.options()
