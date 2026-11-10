@@ -11,6 +11,11 @@ defmodule ReviewsWeb.DemoLiveTest do
     assert has_element?(hub, "#demo-hub")
     refute has_element?(hub, "#demo-open-markdown")
     assert has_element?(hub, "#demo-check-theme")
+
+    # The hook owns every checkbox it restores, so LiveView must not patch them.
+    assert has_element?(hub, "#demo-checklist[phx-hook='DemoChecklist'][phx-update='ignore']")
+    assert has_element?(hub, "#demo-checklist #demo-check-markdown-0[data-demo-check]")
+    assert has_element?(hub, "#demo-checklist #demo-reset-checks")
   end
 
   test "every seeded sample opens anonymously with its real review controls", %{conn: conn} do

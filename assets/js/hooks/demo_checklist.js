@@ -1,7 +1,9 @@
+// Saves the hub's checklist in this browser only. The hook's element has
+// phx-update="ignore", so LiveView never resets the checkboxes it manages.
 const key = "reviews-demo-qa-v1"
 export default {
   mounted() {
-    this.root = this.el.closest("#demo-checklist")
+    this.root = this.el
     this.restore = () => {
       let saved = []
       try { saved = JSON.parse(localStorage.getItem(key) || "[]") } catch {}
@@ -27,7 +29,6 @@ export default {
     this.root.querySelector("#demo-reset-checks").addEventListener("click", this.onReset)
     this.restore()
   },
-  updated() { this.restore() },
   destroyed() {
     this.root.removeEventListener("change", this.onChange)
     this.root.querySelector("#demo-reset-checks")?.removeEventListener("click", this.onReset)

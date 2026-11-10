@@ -18,7 +18,7 @@ defmodule ReviewsWeb.DemoLive do
      socket
      |> assign(:page_title, "Demo & QA")
      |> assign(:current_user, user)
-     |> stream(:scenarios, scenarios)}
+     |> assign(:scenarios, scenarios)}
   end
 
   @impl true
@@ -37,18 +37,19 @@ defmodule ReviewsWeb.DemoLive do
             Browse without an account. Sign in to comment and record decisions. These are shared samples; your comments are visible to other visitors.
           </p>
         </header>
-        <div id="demo-checklist">
-          <div
-            id="demo-checklist-controls"
-            class="demo-checklist-header"
-            phx-hook="DemoChecklist"
-            phx-update="ignore"
-          >
+        <%!-- DemoChecklist owns the checkbox state, so LiveView must not patch it. --%>
+        <div id="demo-checklist" phx-hook="DemoChecklist" phx-update="ignore">
+          <div id="demo-checklist-controls" class="demo-checklist-header">
             <p id="demo-progress" role="status" aria-live="polite">Check off what you have tried.</p>
             <button id="demo-reset-checks" type="button" class="review-button review-button-ghost">Reset checklist</button>
           </div>
-          <div id="demo-scenarios" phx-update="stream" class="demo-grid">
-            <article :for={{id, scenario} <- @streams.scenarios} id={id} class="demo-card">
+          <div id="demo-scenarios" class="demo-grid">
+            <article
+              :for={scenario <- @scenarios}
+              :key={scenario.id}
+              id={"demo-scenario-#{scenario.id}"}
+              class="demo-card"
+            >
               <h2>{scenario.title}</h2>
               <p>{scenario.description}</p>
               <.link
@@ -66,6 +67,7 @@ defmodule ReviewsWeb.DemoLive do
                 <legend>Try it / QA checklist</legend>
                 <.input
                   :for={{check, index} <- Enum.with_index(scenario.checks)}
+                  :key={index}
                   type="checkbox"
                   id={"demo-check-#{scenario.id}-#{index}"}
                   name={"#{scenario.id}-#{index}"}
