@@ -8,6 +8,7 @@ import {
   threadBubble,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
   annotationSideToSide,
   composerToAnchor,
@@ -18,11 +19,36 @@ const VIRTUAL_LINE_THRESHOLD = 1500
 const VIRTUAL_BYTE_THRESHOLD = 200 * 1024
 const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
   :host {
-    --diffs-font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    --diffs-header-font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --diffs-font-size: 13px;
-    --diffs-line-height: 20px;
+    --diffs-font-family: var(--font-mono);
+    --diffs-header-font-family: var(--font-sans);
+    --diffs-font-size: var(--font-code-size);
+    --diffs-line-height: var(--font-code-leading);
     --diffs-font-features: "liga" 0, "calt" 0;
+  }
+`
+
+// The prefix slot holds a native disclosure button stretched across Pierre's
+// header. Metadata controls sit above it as siblings, not nested buttons.
+const REVIEWS_DIFF_HEADER_CSS = `
+  [data-diffs-header] {
+    position: relative;
+    min-height: 44px;
+    padding-inline: 12px;
+    transition: background-color 140ms ease;
+  }
+  [data-diffs-header]:hover {
+    background: var(--review-hover);
+  }
+  [data-header-content] {
+    position: static;
+  }
+  [data-metadata] {
+    pointer-events: none;
+  }
+  ::slotted(.reviews-diff-header-metadata) {
+    position: relative;
+    z-index: 2;
+    pointer-events: none;
   }
 `
 
@@ -74,6 +100,13 @@ function lineTextFromEvent(props) {
   return (props?.lineElement && props.lineElement.textContent) || ""
 }
 
+export function hunkViewLabel(hunkUI) {
+  if (!hunkUI) return ""
+  if (hunkUI.hunkViewed) return "Viewed"
+  if (hunkUI.hunkPartiallyViewed) return "Partially viewed"
+  return hunkUI.hunkViewState || ""
+}
+
 export class VanillaDiffRenderer {
   constructor({
     container,
@@ -82,7 +115,10 @@ export class VanillaDiffRenderer {
     signedIn,
     threads,
     diffStyle,
+    hunkUI,
     onCreateComment,
+    onToggleHunk,
+    onSetHunkViewed,
   }) {
     this.container = container
     this.filePath = filePath
@@ -90,7 +126,10 @@ export class VanillaDiffRenderer {
     this.signedIn = signedIn
     this.threads = threads
     this.diffStyle = diffStyle
+    this.hunkUI = hunkUI || null
     this.onCreateComment = onCreateComment
+    this.onToggleHunk = onToggleHunk
+    this.onSetHunkViewed = onSetHunkViewed
     this.composerAt = null
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
@@ -104,7 +143,40 @@ export class VanillaDiffRenderer {
     this.render()
   }
 
+  updateHunkUI(hunkUI) {
+    const next = hunkUI || null
+    if (JSON.stringify(next) === JSON.stringify(this.hunkUI)) return
+    this.hunkUI = next
+    const focused = this.focusedHeaderControl()
+    this.render()
+    if (focused) this.restoreHeaderFocus(focused)
+  }
+
+  // Re-rendering rebuilds Pierre's header, which destroys the slotted control
+  // that had keyboard focus (expand/collapse, Mark viewed). Remember which one
+  // it was and focus its replacement so focus never drops to <body>.
+  focusedHeaderControl() {
+    const active = document.activeElement
+    if (!active || !this.container.contains(active)) return null
+    const control = active.closest(".reviews-diff-header-toggle, .reviews-diff-header-viewed")
+    return control ? control.classList[0] : null
+  }
+
+  restoreHeaderFocus(className) {
+    const focus = () => {
+      const control = this.container.querySelector(`.${className}`)
+      if (control) control.focus({ preventScroll: true })
+      return Boolean(control)
+    }
+    if (!focus()) window.requestAnimationFrame(focus)
+  }
+
+  collapsed() {
+    return Boolean(this.hunkUI && !this.hunkUI.hunkExpanded)
+  }
+
   updateStyle(diffStyle) {
+    if (diffStyle === this.diffStyle) return
     this.diffStyle = diffStyle
     this.render()
   }
@@ -225,11 +297,95 @@ export class VanillaDiffRenderer {
     })
   }
 
+  // Keep Pierre's path, status icon and counts. The disclosure button uses
+  // its prefix slot and covers the row; the viewed control stays independent.
+  renderHeaderPrefix() {
+    if (!this.hunkUI) return null
+
+    const expanded = this.hunkUI.hunkExpanded
+
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    icon.setAttribute("class", "reviews-diff-header-chevron")
+    icon.setAttribute("viewBox", "0 0 24 24")
+    icon.setAttribute("aria-hidden", "true")
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path")
+    path.setAttribute("d", "m9 5 7 7-7 7")
+    icon.append(path)
+
+    const toggle = el("button",
+      {
+        className: `reviews-diff-header-toggle${expanded ? " is-expanded" : ""}`,
+        type: "button",
+        "aria-expanded": expanded ? "true" : "false",
+        "aria-label": headerToggleLabel(this.filePath, this.hunkUI),
+        title: this.hunkUI.hunkDetails || this.filePath,
+        onclick: (event) => stopHeaderEvent(event, this.onToggleHunk),
+      },
+      [icon]
+    )
+    return el("span", { className: "reviews-diff-header-prefix" }, [toggle])
+  }
+
+  renderHeaderMetadata() {
+    if (!this.hunkUI) return null
+
+    const children = []
+
+    if (this.hunkUI.hunkLabel) {
+      children.push(
+        el(
+          "span",
+          {
+            className: "reviews-diff-header-hunk",
+            title: this.hunkUI.hunkDetails || null,
+          },
+          this.hunkUI.hunkLabel
+        )
+      )
+    }
+
+    const viewLabel = hunkViewLabel(this.hunkUI)
+    if (viewLabel && !this.hunkUI.signedIn) {
+      children.push(
+        el(
+          "span",
+          {
+            className: `reviews-diff-header-state${this.hunkUI.hunkViewed ? " is-viewed" : ""}`,
+          },
+          viewLabel
+        )
+      )
+    }
+
+    if (this.hunkUI.signedIn) {
+      const viewed = this.hunkUI.hunkViewed
+      children.push(
+        el(
+          "button",
+          {
+            className: "reviews-diff-header-viewed",
+            type: "button",
+            "aria-pressed": viewed ? "true" : "false",
+            "aria-label": `${viewed ? "Mark unviewed" : "Mark viewed"}: ${this.filePath}${this.hunkUI.hunkLabel ? ` · ${this.hunkUI.hunkLabel}` : ""}`,
+            onclick: (event) =>
+              stopHeaderEvent(event, () => this.onSetHunkViewed?.(!viewed)),
+          },
+          viewed ? "Viewed" : viewLabel || "Mark viewed"
+        )
+      )
+    }
+
+    return el("div", { className: "reviews-diff-header-metadata" }, children)
+  }
+
   options() {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
-      unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS,
+      collapsed: this.collapsed(),
+      unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
+      renderHeaderPrefix: () => this.renderHeaderPrefix(),
+      renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
       onLineNumberClick: (props) => this.handleLineNumberClick(props),
       onTokenClick: (props) => this.handleTokenClick(props),
@@ -277,7 +433,10 @@ export class VanillaDiffRenderer {
     const options = this.options()
     const renderArgs = this.renderArgs()
 
-    if (shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })) {
+    if (
+      !this.collapsed() &&
+      shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
+    ) {
       if (this.tryRenderVirtualized(options, renderArgs)) return
     }
 
