@@ -597,6 +597,12 @@
   grid-template-columns: var(--guide-rail-w) minmax(0, 1fr);
 }
 
+/* Split diffs only run on wide screens, so split guide prose gets a
+   character-based measure instead of the 52rem default. */
+.review-packet-shell.is-guide-split {
+  --guide-measure: 72ch;
+}
+
 .review-packet-shell.is-outline-hidden {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -2945,17 +2951,11 @@ details[open] > summary .review-collapse-icon,
   }
 }
 
-/* Phone type scale for the guide: the review title stays the largest text,
-   then the section heading, then prose. The section header reads eyebrow →
-   title → meta → state, and the copy uses the same 16px gutter as the
-   toolbar rows above it. */
+/* Phone section header: the section heading leads, then its meta and
+   state. Eyebrow → title → meta → state, instead of the meta row sitting
+   between the eyebrow and the heading. The review title stays in the
+   compact toolbar at its toolbar size. */
 @media (max-width: 480px) {
-  .review-header.is-guide-compact .review-title.is-packet-title {
-    font-size: clamp(24px, 6.8vw, 28px);
-    font-weight: 760;
-    line-height: 1.2;
-  }
-
   .review-section-header-eyebrow {
     display: contents;
   }
@@ -2977,18 +2977,4 @@ details[open] > summary .review-collapse-icon,
   .review-section-header-state {
     order: 3;
   }
-
-  .review-packet-shell.is-guide-split .review-packet-grid {
-    padding-inline: 16px;
-  }
-
-  .review-packet-shell.is-guide-split .review-packet-row.is-markdown .review-packet-markdown {
-    font-size: 17px;
-    line-height: 1.5;
-  }
-}
-
-/* Guide measure: split prose uses a 72ch reading column (#100). */
-.review-packet-shell.is-guide-split {
-  --guide-measure: 72ch;
 }
