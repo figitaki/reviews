@@ -160,7 +160,7 @@ fn render_markdown(body: &Value) -> Result<String> {
                 };
                 let id_part = id.map(|n| format!("#{n} ")).unwrap_or_default();
                 out.push_str(&format!(
-                    "### {id_part}`{location}` — {status} by @{author}\n\n"
+                    "### {id_part}`{location}` — {status} (opened by @{author})\n\n"
                 ));
                 if let Some(comments) = t.get("comments").and_then(Value::as_array) {
                     for c in comments {
@@ -230,9 +230,29 @@ mod tests {
         assert!(md.contains("-old"));
         assert!(md.contains("+new"));
         assert!(md.contains("## Threads"));
-        assert!(md.contains("### #7 `foo:1` — open by @carey"));
+        assert!(md.contains("### #7 `foo:1` — open (opened by @carey)"));
         assert!(md.contains("> nit: rename?"));
         assert!(md.contains("> see bug #42"));
+    }
+
+    #[test]
+    fn markdown_labels_thread_author_separately_from_resolution() {
+        let body = json!({
+            "title": "x",
+            "threads": [{
+                "id": 7,
+                "file_path": "foo",
+                "line_hint": 1,
+                "status": "resolved",
+                "author": {"handle": "carey"},
+                "resolved_by": {"handle": "codex"},
+                "comments": []
+            }]
+        });
+
+        let md = render_markdown(&body).unwrap();
+        assert!(md.contains("### #7 `foo:1` — resolved (opened by @carey)"));
+        assert!(!md.contains("resolved by @carey"));
     }
 
     #[test]

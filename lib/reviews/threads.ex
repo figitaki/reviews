@@ -141,39 +141,28 @@ defmodule Reviews.Threads do
   def update_status(%Review{} = review, thread_id, %Identity{} = identity, status)
       when status in ["open", "resolved"] do
     with {:ok, id} <- cast_thread_id(thread_id),
-         %Thread{review_id: review_id} = thread when review_id == review.id <-
-           Repo.get(Thread, id) do
-      attrs =
-        case status do
-          "resolved" ->
-            %{
-              status: "resolved",
-              resolved_by_id: identity.id,
-              resolved_at: DateTime.utc_now(:second)
-            }
+         {:ok, updated} <-
+           Repo.transaction(fn ->
+             # Read and write under the same lock so Ecto never builds changes
+             # from stale resolution metadata during concurrent transitions.
+             case Repo.one(
+                    from t in Thread,
+                      where: t.id == ^id and t.review_id == ^review.id,
+                      lock: "FOR UPDATE"
+                  ) do
+               %Thread{} = thread -> write_status(thread, identity, status)
+               nil -> Repo.rollback(:not_found)
+             end
+           end) do
+      updated = Repo.preload(updated, [:author, :resolved_by, comments: comments_query()])
 
-          "open" ->
-            %{status: "open", resolved_by_id: nil, resolved_at: nil}
-        end
+      Phoenix.PubSub.broadcast(
+        @pubsub,
+        "review:#{review.slug}",
+        {:thread_updated, updated}
+      )
 
-      case thread |> Thread.changeset(attrs) |> Repo.update() do
-        {:ok, updated} ->
-          updated = Repo.preload(updated, [:author, :resolved_by, comments: comments_query()])
-
-          Phoenix.PubSub.broadcast(
-            @pubsub,
-            "review:#{review.slug}",
-            {:thread_updated, updated}
-          )
-
-          {:ok, updated}
-
-        {:error, changeset} ->
-          {:error, changeset}
-      end
-    else
-      {:error, reason} -> {:error, reason}
-      _ -> {:error, :not_found}
+      {:ok, updated}
     end
   end
 
@@ -184,6 +173,26 @@ defmodule Reviews.Threads do
   end
 
   def update_status(%Review{}, _thread_id, %Identity{}, _status), do: {:error, :invalid_status}
+
+  defp write_status(thread, identity, status) do
+    attrs =
+      case status do
+        "resolved" ->
+          %{
+            status: "resolved",
+            resolved_by_id: identity.id,
+            resolved_at: DateTime.utc_now(:second)
+          }
+
+        "open" ->
+          %{status: "open", resolved_by_id: nil, resolved_at: nil}
+      end
+
+    case thread |> Thread.changeset(attrs) |> Repo.update() do
+      {:ok, updated} -> updated
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
+  end
 
   defp cast_thread_id(id) when is_integer(id) and id > 0, do: {:ok, id}
 
