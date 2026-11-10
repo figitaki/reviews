@@ -1308,6 +1308,19 @@ details[open] > summary .review-collapse-icon,
   padding: 16px 20px;
   background: var(--review-panel-raised);
   box-shadow: 0 8px 28px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.08);
+  --decision-accent: var(--ds-warn);
+}
+
+.review-section-decision.is-approved {
+  --decision-accent: var(--ds-add);
+}
+
+.review-section-decision.is-denied {
+  --decision-accent: var(--ds-del);
+}
+
+.review-section-decision.is-ignored {
+  --decision-accent: var(--ds-muted);
 }
 
 .review-section-decision-copy {
@@ -1315,7 +1328,19 @@ details[open] > summary .review-collapse-icon,
   gap: 6px;
 }
 
+.review-section-decision-heading {
+  color: var(--review-muted);
+  font-size: var(--font-meta-size);
+}
+
+.review-section-decision-toggle {
+  display: none;
+}
+
 .review-section-decision-prompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   color: var(--review-text);
   font-size: var(--font-ui-size);
@@ -1335,6 +1360,10 @@ details[open] > summary .review-collapse-icon,
   max-width: 100%;
 }
 
+.review-section-decision-prompt .review-section-state-icon {
+  color: var(--decision-accent);
+}
+
 /* Decision buttons in the footer read as explicit labeled actions instead of
    the icon-only, expand-on-hover form. */
 .review-section-decision .review-section-action,
@@ -1348,23 +1377,127 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-section-decision .review-section-action .review-section-action-label {
-  max-width: none;
+  display: inline-grid;
+  max-width: 160px;
   opacity: 1;
+  transition: max-width 180ms ease, opacity 160ms ease;
+}
+
+.review-section-decision .review-section-action {
+  transition: gap 180ms ease, padding 180ms ease,
+    background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.review-section-action-verb,
+.review-section-action-result {
+  grid-area: 1 / 1;
+  max-width: 160px;
+  overflow: hidden;
+  transition: max-width 180ms ease, opacity 160ms ease;
+}
+
+.review-section-action-result,
+.review-section-action.is-active .review-section-action-verb {
+  max-width: 0;
+  opacity: 0;
+}
+
+.review-section-action.is-active .review-section-action-result {
+  max-width: 160px;
+  opacity: 1;
+}
+
+.review-section-decision:not(.is-pending):not(.is-editing)
+  .review-section-action:not(.is-active):not(:hover):not(:focus-visible) {
+  gap: 0;
+  padding: 0 8px;
+}
+
+.review-section-decision:not(.is-pending):not(.is-editing)
+  .review-section-action:not(.is-active):not(:hover):not(:focus-visible)
+  .review-section-action-label {
+  max-width: 0;
+  opacity: 0;
 }
 
 @media (max-width: 640px) {
   .review-section-decision {
     --review-decision-action-padding: 0 8px;
 
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    padding: 14px;
+    padding: 12px;
+    border-radius: 16px;
+    gap: 12px;
+  }
+
+  .review-section-decision:not(.is-editing):not(.is-readonly) {
+    width: 56px;
+    margin-left: auto;
+    margin-right: 0;
+    justify-self: end;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .review-section-decision:not(.is-editing):not(.is-readonly) .review-section-decision-copy,
+  .review-section-decision:not(.is-editing) .review-packet-section-actions {
+    display: none;
+  }
+
+  .review-section-decision-toggle {
+    display: inline-flex;
+    flex: 0 0 56px;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border: 1px solid var(--review-line-strong);
+    border-radius: 16px;
+    background: var(--review-panel-raised);
+    color: var(--decision-accent);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
+  }
+
+  .review-section-decision-toggle:hover {
+    background: var(--review-hover);
+  }
+
+  .review-section-decision-toggle:focus-visible {
+    outline: 2px solid var(--decision-accent);
+    outline-offset: 3px;
+  }
+
+  .review-section-decision-toggle > span {
+    width: 24px;
+    height: 24px;
+  }
+
+  .review-section-decision.is-editing .review-section-decision-toggle {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--review-muted);
+  }
+
+  .review-section-decision.is-editing .review-section-decision-copy {
+    flex: 1;
+    min-width: 0;
   }
 
   .review-section-decision .review-packet-section-actions {
     width: 100%;
+    flex-basis: 100%;
     justify-content: flex-start;
   }
 
+  .review-section-decision .review-section-action {
+    min-height: 44px;
+  }
 }
 
 .review-section-summary-status {
@@ -1968,12 +2101,13 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-edge-tick {
+  position: relative;
   display: grid;
   width: 24px;
-  min-height: 24px;
+  height: 28px;
+  flex: 0 0 auto;
   cursor: pointer;
   place-items: center;
-  row-gap: 2px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -1999,20 +2133,26 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-bg);
 }
 
-/* The number stays neutral in every state; decision state renders as its own
-   explicit glyph below it. */
+/* Every number shares one fixed slot. The status marker never affects layout. */
 .review-edge-tick-number {
   display: block;
 }
 
 .review-edge-tick-state {
+  position: absolute;
+  right: 0;
+  bottom: 0;
   display: inline-grid;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--review-panel);
   place-items: center;
 }
 
 .review-edge-tick-state .review-section-state-icon {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 .review-edge-tick-state.is-approved {
@@ -2028,6 +2168,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-edge-tick.is-active .review-edge-tick-state {
+  background: var(--review-text);
   color: var(--review-bg);
 }
 
@@ -2041,7 +2182,6 @@ details[open] > summary .review-collapse-icon,
   overflow-y: auto;
   border-right: 1px solid var(--review-line-strong);
   background: color-mix(in oklab, var(--review-panel) 96%, var(--review-bg));
-  box-shadow: 18px 0 60px rgb(0 0 0 / 0.42);
   opacity: 0;
   padding: 28px;
   transform: translateX(-12px);
@@ -2942,7 +3082,11 @@ details[open] > summary .review-collapse-icon,
   .review-guide-flyout,
   .review-edge-rail-ticks .review-edge-tick,
   .review-section-action,
-  .review-section-action-label {
+  .review-section-action-label,
+  .review-section-decision .review-section-action,
+  .review-section-decision .review-section-action .review-section-action-label,
+  .review-section-action-verb,
+  .review-section-action-result {
     transition: none;
   }
 }
