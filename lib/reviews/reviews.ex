@@ -79,9 +79,33 @@ defmodule Reviews.Reviews do
   ## Patchsets
 
   @doc """
+  Appends a patchset on behalf of an authenticated identity. Only identities
+  owned by the review author's user may upload revisions. There is currently
+  no editor grant model; link access does not grant revision upload access.
+
+  Returns `{:error, :forbidden}` without writing when the actor is not an owner.
+  """
+  def append_patchset(%Review{} = review, %Identity{owner_user_id: owner_id}, attrs)
+      when not is_nil(owner_id) and is_map(attrs) do
+    owner? =
+      Repo.exists?(
+        from i in Identity,
+          where: i.id == ^review.author_id and i.owner_user_id == ^owner_id
+      )
+
+    if owner?, do: append_patchset(review, attrs), else: {:error, :forbidden}
+  end
+
+  def append_patchset(%Review{}, _actor, attrs) when is_map(attrs),
+    do: {:error, :forbidden}
+
+  @doc """
   Appends a new patchset to an existing review. Auto-numbers to (max+1).
   Also populates the per-file rows for the new patchset so the sidebar
   renders without a re-parse.
+
+  Trusted internal setup path without authorization. User-facing callers must
+  use `append_patchset/3` with the authenticated identity instead.
   """
   def append_patchset(%Review{} = review, attrs) when is_map(attrs) do
     next_number = next_patchset_number(review.id)
