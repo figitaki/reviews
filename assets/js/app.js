@@ -24,16 +24,18 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/reviews"
 import topbar from "../vendor/topbar"
-import ChangesFileTree from "./hooks/changes_file_tree"
 import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
-import StickyHunkHeader from "./hooks/sticky_hunk_header"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, ChangesFileTree, DiffRenderer, PacketNavTree, StickyHunkHeader},
+  hooks: {
+    ...colocatedHooks,
+    DiffRenderer,
+    PacketNavTree,
+  },
 })
 
 // Show progress bar on live navigation and form submits
@@ -49,50 +51,12 @@ const cssPx = (el, property) => {
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
-let scrollAnimationFrame = null
-
 const scrollToTop = top => {
-  if (scrollAnimationFrame) window.cancelAnimationFrame(scrollAnimationFrame)
-
-  if (prefersReducedMotion()) {
-    window.scrollTo({top, behavior: "auto"})
-    return
-  }
-
-  const start = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0
-  const distance = top - start
-
-  if (Math.abs(distance) < 2) {
-    window.scrollTo({top, behavior: "auto"})
-    return
-  }
-
-  const duration = Math.min(220, Math.max(120, Math.abs(distance) * 0.18))
-  const startedAt = window.performance.now()
-
-  const tick = now => {
-    const progress = Math.min(1, (now - startedAt) / duration)
-    const eased = 1 - Math.pow(1 - progress, 3)
-
-    window.scrollTo({top: start + distance * eased, behavior: "auto"})
-
-    if (progress < 1) {
-      scrollAnimationFrame = window.requestAnimationFrame(tick)
-    } else {
-      scrollAnimationFrame = null
-    }
-  }
-
-  scrollAnimationFrame = window.requestAnimationFrame(tick)
+  // Let the browser coordinate scrolling with touch gestures and its chrome.
+  window.scrollTo({top, behavior: prefersReducedMotion() ? "instant" : "smooth"})
 }
 
 const targetScrollOffset = target => {
-  const hunkHeader = target.matches(".review-hunk-summary")
-    ? target
-    : target.querySelector?.(".review-hunk-summary") || target.closest(".review-hunk-card")?.querySelector(".review-hunk-summary")
-
-  if (hunkHeader) return cssPx(hunkHeader, "top") + 8
-
   const scrollMarginTop = Number.parseFloat(window.getComputedStyle(target).scrollMarginTop)
   if (Number.isFinite(scrollMarginTop) && scrollMarginTop > 0) return scrollMarginTop
 
@@ -110,7 +74,9 @@ const scrollToReviewTarget = (target, {highlight = false} = {}) => {
   const top = Math.max(0, target.getBoundingClientRect().top + scrollTop - targetScrollOffset(target))
 
   scrollToTop(top)
-  target.focus({preventScroll: true})
+  // Keep focus where it is when it already sits inside the target (for
+  // example on the hunk header toggle that just collapsed the card).
+  if (!target.contains(document.activeElement)) target.focus({preventScroll: true})
 
   if (!highlight) return
 
@@ -137,6 +103,27 @@ window.addEventListener("phx:packet_nav_jump", ({detail}) => {
   if (!detail?.id) return
 
   window.requestAnimationFrame(() => scrollToReviewTargetId(detail.id, {highlight: true}))
+})
+
+// Hiding or showing the guide removes the button that had focus. Move focus
+// to its counterpart so keyboard users are not dropped on <body>.
+const focusGuideToggle = (show, attempts = 12) => {
+  const target = show
+    ? document.querySelector(".review-edge-rail-hide, .review-packet-nav-hide")
+    : document.querySelector(".review-outline-toggle")
+
+  if (target) {
+    target.focus({preventScroll: true})
+    return
+  }
+
+  if (attempts <= 0) return
+
+  window.requestAnimationFrame(() => focusGuideToggle(show, attempts - 1))
+}
+
+window.addEventListener("phx:packet_outline_toggled", ({detail}) => {
+  window.requestAnimationFrame(() => focusGuideToggle(Boolean(detail?.show)))
 })
 
 window.addEventListener("phx:hunk_collapsed", ({detail}) => {

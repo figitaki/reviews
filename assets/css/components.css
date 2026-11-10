@@ -31,9 +31,9 @@
   background: var(--ds-panel);
   color: var(--ds-text);
   font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 550;
-  line-height: 1;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
   padding: 0 12px;
   white-space: nowrap;
   cursor: pointer;

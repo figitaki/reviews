@@ -82,6 +82,35 @@ defmodule Reviews.AccountsTest do
              Accounts.mint_token(owner, %{name: "not-owned", identity_id: other_identity.id})
   end
 
+  test "revoking a token deletes it and leaves other tokens working" do
+    user = user!("owner")
+    {:ok, token, raw} = Accounts.mint_token(user)
+    {:ok, other_token, other_raw} = Accounts.mint_token(user)
+
+    assert {:ok, _} = Accounts.authenticate_token(raw)
+    assert :ok = Accounts.revoke_token(user, to_string(token.id))
+    assert Repo.get(Reviews.Accounts.ApiToken, token.id) == nil
+    assert {:error, :invalid_token} = Accounts.authenticate_token(raw)
+    assert {:ok, _} = Accounts.authenticate_token(other_raw)
+    assert [%{id: id}] = Accounts.list_tokens_for(user)
+    assert id == other_token.id
+    assert {:error, :not_found} = Accounts.revoke_token(user, token.id)
+  end
+
+  test "outsiders and malformed IDs cannot revoke tokens" do
+    owner = user!("owner")
+    outsider = user!("outsider")
+    {:ok, token, raw} = Accounts.mint_token(owner)
+
+    assert {:error, :not_found} = Accounts.revoke_token(outsider, token.id)
+
+    for id <- ["invalid", "#{token.id}junk", nil] do
+      assert {:error, :not_found} = Accounts.revoke_token(owner, id)
+    end
+
+    assert {:ok, _} = Accounts.authenticate_token(raw)
+  end
+
   test "keeps the human handle when a GitHub rename conflicts with an agent" do
     user = user!("old-handle")
 
