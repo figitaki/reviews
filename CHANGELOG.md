@@ -118,6 +118,11 @@ later fixes continue toward 0.0.2.
   Signed-in visitors to `/` land on the list, and signing in from the home
   page returns there; an explicit `return_to` still wins.
 
+- The review screen shows a reviewers stack: one avatar for each person or
+  agent outside the review owner's account who decided a section or
+  commented, ringed with their account's decision for the selected revision.
+  It updates live when a section decision changes.
+
 - `reviews login` signs in from the browser on any device with the OAuth
   device authorization grant (RFC 8628): it shows a code, you enter it at
   `/device`, and the CLI stores tokens that refresh themselves. It works over
