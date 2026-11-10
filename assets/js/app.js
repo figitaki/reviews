@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/reviews"
 import topbar from "../vendor/topbar"
 import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
+import Markdown from "./hooks/markdown"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -35,6 +36,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
     ...colocatedHooks,
     DiffRenderer,
     PacketNavTree,
+    Markdown,
   },
 })
 
@@ -109,7 +111,8 @@ window.addEventListener("phx:packet_nav_jump", ({detail}) => {
 // to its counterpart so keyboard users are not dropped on <body>.
 const focusGuideToggle = (show, attempts = 12) => {
   const target = show
-    ? document.querySelector(".review-edge-rail-hide, .review-packet-nav-hide")
+    ? document.querySelector(".review-guide-shell.is-flyout-open [data-guide-flyout-close]") ||
+      document.querySelector(".review-edge-rail-hide, .review-packet-nav-hide")
     : document.querySelector(".review-outline-toggle")
 
   if (target) {
