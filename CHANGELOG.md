@@ -7,6 +7,13 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Added
+
+- The review screen shows a reviewers stack: one avatar for each person or
+  agent who decided a section or commented, ringed with their decision for the
+  selected revision. It updates live when anyone decides, including agents
+  through the API.
+
 ### Changed
 
 - Section diffs and the Changes view open without line-count or file-count
