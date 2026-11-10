@@ -2665,6 +2665,14 @@ details[open] > summary .review-collapse-icon,
     max-width: 60vw;
   }
 
+  /* Below 480px the brand shows only its mark, so the account name can use
+     the width the label gave up. */
+  @media (max-width: 480px) {
+    .review-page .ds-shell-actions .review-button {
+      max-width: 100%;
+    }
+  }
+
   /* Keep the signed-out button compact without shrinking its tap area. */
   .review-page .ds-shell-actions > a.review-button {
     position: relative;
