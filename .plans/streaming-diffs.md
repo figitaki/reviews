@@ -1,8 +1,10 @@
 # Streaming diffs — all-expanded Changes view on one Pierre CodeView
 
-**Status (2026-10-09):** The Phase 1 CodeView code from this plan was not merged. Main renders diffs with the vanilla `@pierre/diffs` renderer (commit 298c47c, "migrate diffs from react to vanilla"), so the `CodeView` renderer and the `@pierre/diffs` 1.1.22 to 1.2.1 bump described below do not apply as written. This plan is kept as a design reference for the streaming and all-expanded ideas, not as a work queue.
+**Status (2026-10-09):** The Phase 1 CodeView code from this plan was not merged. Main still renders every diff with the vanilla `@pierre/diffs` renderer (`vanilla_renderer.js`, from commit 298c47c, "migrate diffs from react to vanilla"), and `assets/package.json` still pins `@pierre/diffs` 1.1.22, so the `CodeView` renderer below would start from scratch and the 1.1.22 to 1.2.1 bump needs a fresh target version. This plan is kept as a design reference for the streaming and all-expanded ideas, not as a work queue.
 
-Goal: make the classic Changes view (`/r/:slug`) render **every file diff
+**Stale references (checked 2026-11-10):** file and line references below come from the original branch and no longer match main. `@changes_auto_open_line_limit`, `@section_expand_all_line_limit`, `@section_expand_all_file_limit`, `ChangesFileTree` (`changes_file_tree.js`) and the `StickyHunkHeader` hook do not exist on main; `data-raw-diff` is now at `packet_components.ex:1510`; the section budget constants are `@section_auto_open_*` at `review_live.ex:29-31`. `@pierre/diffs` 1.2.1 is no longer the latest release. Re-check every reference before picking any of this up.
+
+Goal: make the classic Changes view (`/r/:slug/changes`) render **every file diff
 expanded by default**, fast, by (1) collapsing the per-hunk `@pierre/diffs`
 islands into a single virtualized `CodeView`, and (2) streaming the raw diff
 payloads to the client over the LiveView socket instead of inlining them in the
