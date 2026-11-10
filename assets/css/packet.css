@@ -715,6 +715,7 @@
   position: relative;
   z-index: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 40px;
   min-width: 0;
   padding: 20px clamp(16px, 2vw, 28px) 72px;
@@ -1442,6 +1443,89 @@ details[open] > summary .review-collapse-icon,
   overflow-wrap: anywhere;
 }
 
+[data-markdown-output] > * {
+  margin-block: 0;
+}
+
+[data-markdown-output] > * + * {
+  margin-top: 1em;
+}
+
+[data-markdown-output] :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--review-text);
+  font-size: var(--font-subheading-size);
+  font-weight: var(--font-subheading-weight);
+  line-height: var(--font-subheading-leading);
+}
+
+[data-markdown-output] :is(ul, ol) {
+  padding-left: 1.4em;
+}
+
+[data-markdown-output] ul {
+  list-style: disc;
+}
+
+[data-markdown-output] ol {
+  list-style: decimal;
+}
+
+[data-markdown-output] li + li {
+  margin-top: 0.4em;
+}
+
+[data-markdown-output] strong {
+  font-weight: var(--font-subheading-weight);
+}
+
+[data-markdown-output] a {
+  color: var(--review-text);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+[data-markdown-output] a:hover {
+  color: var(--review-blue);
+}
+
+[data-markdown-output] blockquote {
+  border-left: 2px solid var(--review-line-strong);
+  padding-left: 1em;
+  color: var(--review-muted);
+}
+
+[data-markdown-output] pre {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--review-line);
+  border-radius: 8px;
+  background: var(--review-panel-raised);
+  padding: 1em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+[data-markdown-output] p:has(> img) {
+  max-width: 100%;
+  margin-block: 1.5em;
+  border: 1px solid var(--ds-line);
+  border-radius: 10px;
+  background: var(--ds-panel);
+  padding: clamp(12px, 2vw, 20px);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ds-line-strong) transparent;
+}
+
+[data-markdown-output] img {
+  display: block;
+  width: 100%;
+  min-width: 36rem;
+  max-width: 40rem;
+  height: auto;
+  margin-inline: auto;
+}
+
 .review-packet-md-heading {
   margin: 0 0 0.5em;
   color: var(--review-text);
@@ -1486,6 +1570,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-inline-code,
+.review-packet-markdown :not(pre) > code,
 .review-guide-panel-prose code {
   border: 0;
   border-radius: 4px;
@@ -1870,6 +1955,18 @@ details[open] > summary .review-collapse-icon,
   gap: 9px;
 }
 
+.review-edge-rail-ticks .review-edge-tick {
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 150ms ease, transform 180ms ease;
+  transition-delay: var(--guide-item-delay, 0ms);
+}
+
+.review-guide-shell.is-flyout-open .review-edge-rail-ticks .review-edge-tick {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+
 .review-edge-tick {
   display: grid;
   width: 24px;
@@ -1957,8 +2054,24 @@ details[open] > summary .review-collapse-icon,
    tab order, pointer events and the accessibility tree. No visibility swap is
    needed, so the panel is focusable the moment it opens. */
 .review-guide-shell.is-flyout-open .review-guide-flyout {
+  left: 0;
   opacity: 1;
   transform: translateX(0);
+}
+
+.review-guide-shell.is-flyout-open .review-edge-rail {
+  display: none;
+}
+
+@media (min-width: 769px) {
+  .review-packet-shell.has-outline:has(> .review-guide-shell.is-flyout-open) {
+    grid-template-columns: var(--guide-flyout-w) minmax(0, 1fr);
+  }
+
+  .review-guide-shell.is-flyout-open {
+    grid-template-columns: var(--guide-flyout-w);
+    min-height: calc(100vh - var(--rev-header-h));
+  }
 }
 
 .review-guide-flyout-head {
@@ -2753,6 +2866,14 @@ details[open] > summary .review-collapse-icon,
     border-radius: 0 8px 8px 0;
   }
 
+  .review-guide-shell.is-flyout-open .review-guide-flyout {
+    position: relative;
+    top: 0;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
   .review-guide-panel {
     max-height: none;
     overflow: visible;
@@ -2819,6 +2940,7 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-guide-flyout,
+  .review-edge-rail-ticks .review-edge-tick,
   .review-section-action,
   .review-section-action-label {
     transition: none;
