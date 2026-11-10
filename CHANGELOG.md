@@ -7,7 +7,19 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Added
+
+- Markdown files in a diff open in a rendered Preview with Before and After
+  excerpts. Source shows the exact lines and comments. Raw HTML, scripts and
+  unsafe links stay escaped.
+- A Demo & QA page at `/demo` links four sample reviews (Markdown, revisions
+  and discussions, file statuses, a large diff) with a checklist saved in the
+  browser.
+
 ### Changed
+
+- Reseeding keeps the demo reviews and their comments. The main demo review is
+  replaced only when its bundled fixture changes.
 
 - Section diffs and the Changes view open without line-count or file-count
   limits. Large diffs use the existing virtualized renderer; manual collapse
