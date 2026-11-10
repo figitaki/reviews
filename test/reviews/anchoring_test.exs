@@ -652,6 +652,172 @@ defmodule Reviews.AnchoringTest do
     end
   end
 
+  describe "relocate/3 edge cases" do
+    @c_file [
+      "int a(void) {",
+      "  foo();",
+      "  return 0;",
+      "}",
+      "",
+      "int b(void) {",
+      "  bar();",
+      "  return 0;",
+      "}",
+      ""
+    ]
+
+    test "a deleted copy of a repeated line does not jump to the other copy" do
+      v2 = Enum.drop(@c_file, 5)
+      anchor = anchor_at(@c_file, 3)
+      no_context = %{anchor | "context_before" => [], "context_after" => []}
+
+      for anchor <- [anchor, no_context] do
+        assert {:error, :outdated} =
+                 Anchoring.relocate(
+                   thread(anchor, "a.c"),
+                   added_file("a.c", @c_file),
+                   added_file("a.c", v2)
+                 )
+      end
+    end
+
+    test "a repeated line still follows its own context" do
+      v2 = insert_at(@c_file, 0, ["#include <stdio.h>", ""])
+
+      assert {:ok, moved} =
+               Anchoring.relocate(
+                 thread(anchor_at(@c_file, 8), "a.c"),
+                 added_file("a.c", @c_file),
+                 added_file("a.c", v2)
+               )
+
+      assert moved["line_number_hint"] == 10
+    end
+
+    test "a deleted line among near-identical lines is outdated, not moved to a sibling" do
+      v1 = for i <- 1..60, do: "  assert parse(\"row #{i}\") == {:ok, #{i}}"
+      v2 = List.delete_at(v1, 29)
+
+      assert {:error, :outdated} =
+               Anchoring.relocate(
+                 thread(anchor_at(v1, 30)),
+                 added_file("lib/cart.ex", v1),
+                 added_file("lib/cart.ex", v2)
+               )
+    end
+
+    test "first and last lines relocate" do
+      v2 = ["# header"] ++ @cart ++ ["# footer"]
+      last = length(@cart)
+
+      for {from, to} <- [{1, 2}, {last, last + 1}] do
+        assert {:ok, %{"line_number_hint" => ^to}} =
+                 Anchoring.relocate(
+                   thread(anchor_at(@cart, from)),
+                   added_file("lib/cart.ex", @cart),
+                   added_file("lib/cart.ex", v2)
+                 )
+      end
+    end
+
+    test "a CRLF diff relocates and compares text without the carriage return" do
+      crlf = fn lines -> Enum.map(lines, &(&1 <> "\r")) end
+      v2 = insert_at(@cart, 0, ["# header"])
+
+      assert {:ok, moved} =
+               Anchoring.relocate(
+                 thread(anchor_at(crlf.(@cart), 11)),
+                 added_file("lib/cart.ex", crlf.(@cart)),
+                 added_file("lib/cart.ex", crlf.(v2))
+               )
+
+      assert moved["line_number_hint"] == 12
+      assert moved["relocation"]["method"] == "exact"
+    end
+
+    test "a deleted file: new-side threads are outdated, old-side threads are found" do
+      deleted = %{
+        raw_diff:
+          "diff --git a/lib/cart.ex b/lib/cart.ex\ndeleted file mode 100644\n" <>
+            "--- a/lib/cart.ex\n+++ /dev/null\n@@ -1,#{length(@cart)} +0,0 @@\n" <>
+            Enum.map_join(@cart, "", &"-#{&1}\n")
+      }
+
+      modified = rewrite("lib/cart.ex", "lib/cart.ex", @cart, ["# rewritten"])
+
+      assert {:error, :outdated} =
+               Anchoring.relocate(
+                 thread(anchor_at(@cart, 11)),
+                 added_file("lib/cart.ex", @cart),
+                 deleted
+               )
+
+      assert {:ok, %{"line_number_hint" => 11}} =
+               Anchoring.relocate(
+                 thread(anchor_at(@cart, 11), "lib/cart.ex", "old"),
+                 modified,
+                 deleted
+               )
+    end
+
+    test "a line moved to another file is outdated; relocation stays within the file" do
+      moved_line = Enum.at(@cart, 10)
+
+      v2 =
+        added_file("lib/cart.ex", List.delete_at(@cart, 10)).raw_diff <>
+          added_file("lib/pricing.ex", [moved_line]).raw_diff
+
+      assert {:error, :outdated} =
+               Anchoring.relocate(
+                 thread(anchor_at(@cart, 11)),
+                 added_file("lib/cart.ex", @cart),
+                 %{raw_diff: v2}
+               )
+    end
+
+    test "a removed line that starts with dashes is read as content, not a file header" do
+      diff = %{
+        raw_diff: """
+        diff --git a/q.sql b/q.sql
+        --- a/q.sql
+        +++ b/q.sql
+        @@ -1,3 +1,3 @@
+         select 1;
+        --- old comment
+        +-- new comment
+         select 2;
+        """
+      }
+
+      anchor = %{
+        "granularity" => "line",
+        "line_number_hint" => 2,
+        "line_text" => "-- old comment"
+      }
+
+      assert {:ok, %{"line_number_hint" => 2}} =
+               Anchoring.relocate(thread(anchor, "q.sql", "old"), diff, diff)
+    end
+
+    test "long, nearly identical lines are compared quickly" do
+      long = for i <- 1..2000, do: String.duplicate("abcdefghij", 49) <> "#{rem(i, 10)}"
+      anchor = %{anchor_at(long, 1000) | "line_text" => String.duplicate("abcdefghij", 49) <> "Z"}
+
+      {micros, result} =
+        :timer.tc(fn ->
+          Anchoring.relocate(
+            thread(anchor),
+            added_file("lib/cart.ex", long),
+            added_file("lib/cart.ex", long)
+          )
+        end)
+
+      assert {:error, _} = result
+      # This took about 18 seconds before the edit distance stopped early.
+      assert micros < 5_000_000
+    end
+  end
+
   describe "relocate/3 seeded random edits" do
     # Not StreamData (the repo has no such dep): a fixed seed makes this a
     # reproducible table of 200 random edit scripts.
@@ -686,6 +852,106 @@ defmodule Reviews.AnchoringTest do
                    added_file("lib/cart.ex", edited)
                  )
       end
+    end
+
+    test "an anchor carried through many patchsets in a row does not drift" do
+      :rand.seed(:exsss, {84, 1, 2026})
+
+      for round <- 1..40 do
+        base = for i <- 1..40, do: "  value_#{i} = compute(#{i}, :seed)"
+        target_index = :rand.uniform(40) - 1
+        start = {base, Enum.at(base, target_index), anchor_at(base, target_index + 1)}
+
+        Enum.reduce(1..12, start, fn patchset, {lines, target, anchor} ->
+          {next_lines, next_target} = random_step(lines, target, "#{round}_#{patchset}")
+
+          assert {:ok, moved} =
+                   Anchoring.relocate(
+                     thread(anchor),
+                     added_file("lib/cart.ex", lines),
+                     added_file("lib/cart.ex", next_lines)
+                   )
+
+          assert moved["line_number_hint"] ==
+                   Enum.find_index(next_lines, &(&1 == next_target)) + 1
+
+          assert moved["line_text"] == next_target
+
+          {next_lines, next_target, moved}
+        end)
+      end
+    end
+
+    test "a deleted line never moves to a different line, except an exact copy with matching context" do
+      :rand.seed(:exsss, {84, 2, 2026})
+      common = ["}", "", "end", "  return 0;", "  else {", "  i++;"]
+
+      for round <- 1..200 do
+        v1 =
+          for i <- 1..30 do
+            if :rand.uniform(2) == 1, do: Enum.random(common), else: "  step_#{i}(state, #{i});"
+          end
+
+        index = :rand.uniform(30) - 1
+        target = Enum.at(v1, index)
+
+        v2 =
+          v1
+          |> List.delete_at(index)
+          |> List.insert_at(:rand.uniform(29) - 1, "  inserted_#{round}();")
+
+        case Anchoring.relocate(
+               thread(anchor_at(v1, index + 1)),
+               added_file("lib/cart.ex", v1),
+               added_file("lib/cart.ex", v2)
+             ) do
+          {:error, reason} ->
+            assert reason in [:outdated, :ambiguous]
+
+          {:ok, moved} ->
+            # Only another copy of the same text, with enough shared context.
+            assert moved["line_text"] == target
+            assert moved["relocation"]["method"] == "exact"
+            assert moved["relocation"]["score"] >= 0.5
+        end
+      end
+    end
+
+    test "re-indenting the whole file and switching to CRLF keeps every distinct line" do
+      :rand.seed(:exsss, {84, 3, 2026})
+
+      for _round <- 1..50 do
+        indent = String.duplicate(Enum.random([" ", "\t"]), :rand.uniform(4))
+        v2 = Enum.map(@cart, &(indent <> &1 <> "\r"))
+        n = Enum.random([2, 4, 5, 8, 9, 10, 11])
+
+        assert {:ok, %{"line_number_hint" => ^n, "relocation" => %{"method" => "exact"}}} =
+                 Anchoring.relocate(
+                   thread(anchor_at(@cart, n)),
+                   added_file("lib/cart.ex", @cart),
+                   added_file("lib/cart.ex", v2)
+                 )
+      end
+    end
+  end
+
+  # One random patchset step: a small edit to the anchored line, a fresh line
+  # elsewhere, or another line removed. Returns the new lines and target text.
+  defp random_step(lines, target, tag) do
+    target_at = Enum.find_index(lines, &(&1 == target))
+
+    case :rand.uniform(4) do
+      1 ->
+        edited = target <> " # v#{tag}"
+        {List.replace_at(lines, target_at, edited), edited}
+
+      2 ->
+        position = :rand.uniform(length(lines) + 1) - 1
+        {List.insert_at(lines, position, "  extra_#{tag}()"), target}
+
+      _ ->
+        victim = :rand.uniform(length(lines)) - 1
+        if victim == target_at, do: {lines, target}, else: {List.delete_at(lines, victim), target}
     end
   end
 end

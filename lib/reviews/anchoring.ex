@@ -34,10 +34,13 @@ defmodule Reviews.Anchoring do
   Tiers, first hit wins:
 
     1. **Exact** — lines whose normalized text equals the target. The
-       candidate with the highest context agreement wins. If that agreement
-       is zero, the match is accepted only for a distinctive line (at least
-       `:min_unique_length` characters) — so a deleted `end` never jumps to
-       another `end`.
+       candidate with the highest context agreement wins. A line that is
+       short (under `:min_unique_length` characters) or appeared more than
+       once in the old patchset needs at least `:context_threshold`
+       agreement, so a deleted `end` or a deleted copy of `return 0;` never
+       jumps to another copy just because a blank line or a brace is nearby.
+       A distinctive line that was unique, with no context agreement, is
+       still accepted.
     2. **Context** — the line was edited in place: every side of the anchor's
        context reaches `:context_threshold` agreement, and the line's text
        similarity is at least `:context_line_similarity`.
@@ -47,8 +50,10 @@ defmodule Reviews.Anchoring do
     4. Otherwise `{:error, :outdated}`.
 
   Similarity is `1 - levenshtein(a, b) / max(len(a), len(b))` on normalized
-  text. Tiers 2 and 3 skip a candidate whose text equals the nearest anchor
-  context line: that is a neighbour that slid into a deleted line's place.
+  text. Tiers 2 and 3 skip a candidate whose text was already in the old
+  patchset or equals one of the anchor's context lines: that is a line that
+  was there all along, often a neighbour that slid into a deleted line's
+  place, not an edit of the anchored line.
 
   When the best score in a tier is shared by two or more lines, the result is
   `{:error, :ambiguous}` — the relocator never picks one arbitrarily.
@@ -175,9 +180,13 @@ defmodule Reviews.Anchoring do
     after_ = context(anchor["context_after"], hint_valid?, old_lines, hint, 1, size)
 
     if is_binary(text) do
+      old_texts = Enum.map(old_lines, fn {_line_no, line} -> norm(line) end)
+
       {:ok,
        %{
          text: norm(text),
+         old_texts: MapSet.new(old_texts),
+         copies_in_old: Enum.count(old_texts, &(&1 == norm(text))),
          hint: hint,
          before: before |> Enum.take(-size) |> Enum.map(&norm/1),
          after: after_ |> Enum.take(size) |> Enum.map(&norm/1)
@@ -196,15 +205,18 @@ defmodule Reviews.Anchoring do
 
   defp context(_given, _hint_valid?, _old_lines, _hint, _dir, _size), do: []
 
+  # Tiers and scoring work on normalized text, computed once per line.
   defp locate(target, new_lines, opts) do
-    candidates =
-      new_lines
-      |> Enum.sort()
-      |> Enum.map(fn {line_no, text} -> %{line_no: line_no, text: norm(text)} end)
+    normed = Map.new(new_lines, fn {line_no, text} -> {line_no, norm(text)} end)
 
-    with :next <- exact_tier(target, candidates, new_lines, opts),
-         :next <- context_tier(target, candidates, new_lines, opts),
-         :next <- fuzzy_tier(target, candidates, new_lines, opts) do
+    candidates =
+      normed
+      |> Enum.sort()
+      |> Enum.map(fn {line_no, text} -> %{line_no: line_no, text: text} end)
+
+    with :next <- exact_tier(target, candidates, normed, opts),
+         :next <- context_tier(target, candidates, normed, opts),
+         :next <- fuzzy_tier(target, candidates, normed, opts) do
       {:error, :outdated}
     end
   end
@@ -216,11 +228,16 @@ defmodule Reviews.Anchoring do
       end
 
     best = scored |> Enum.map(&elem(&1, 1)) |> Enum.max(fn -> 0.0 end)
-    distinctive? = distinctive?(target.text, opts)
+    # Text alone identifies a line only when it is long enough and was the
+    # only copy in the old patchset. Otherwise (`}`, `end`, a `return 0;`
+    # that appears twice) it needs real context agreement: a blank line and
+    # a brace nearby are not enough to tell copies apart.
+    distinctive? = distinctive?(target.text, opts) and target.copies_in_old <= 1
+    min_agreement = if distinctive?, do: 0, else: opts[:context_threshold]
 
     cond do
       scored == [] -> :next
-      best > 0 -> pick(scored, "exact")
+      best > 0 and best >= min_agreement -> pick(scored, "exact")
       distinctive? -> pick(scored, "exact", 1.0)
       true -> :next
     end
@@ -236,7 +253,7 @@ defmodule Reviews.Anchoring do
       scored =
         for cand <- candidates,
             cand.text != target.text,
-            not slid_neighbour?(cand, target),
+            not existing_line?(cand, target),
             agreement = agreement(target, new_lines, cand.line_no, opts),
             side_ok?(agreement.before, threshold) and side_ok?(agreement.after, threshold),
             sim = similarity(cand.text, target.text, min_sim, opts),
@@ -260,7 +277,7 @@ defmodule Reviews.Anchoring do
             abs(cand.line_no - target.hint) <= window,
             cand.text != target.text,
             distinctive?(cand.text, opts),
-            not slid_neighbour?(cand, target),
+            not existing_line?(cand, target),
             sim = similarity(cand.text, target.text, min_sim, opts),
             sim >= min_sim do
           # Context only breaks near-ties; similarity stays the score.
@@ -298,11 +315,11 @@ defmodule Reviews.Anchoring do
   # --- Scoring --------------------------------------------------------------
 
   # Share of the anchor's context lines found near `line_no`, per side and
-  # overall. Each side is `{hits, total}`.
-  defp agreement(target, new_lines, line_no, opts) do
+  # overall. Each side is `{hits, total}`. `normed` holds normalized lines.
+  defp agreement(target, normed, line_no, opts) do
     reach = opts[:context_size] + 1
-    above = new_lines |> DiffLines.neighbours(line_no, -1, reach) |> Enum.map(&norm/1)
-    below = new_lines |> DiffLines.neighbours(line_no, 1, reach) |> Enum.map(&norm/1)
+    above = DiffLines.neighbours(normed, line_no, -1, reach)
+    below = DiffLines.neighbours(normed, line_no, 1, reach)
 
     before = {hits(target.before, above), length(target.before)}
     after_ = {hits(target.after, below), length(target.after)}
@@ -328,45 +345,72 @@ defmodule Reviews.Anchoring do
   defp side_ok?({_hits, 0}, _threshold), do: true
   defp side_ok?({hits, total}, threshold), do: hits / total >= threshold
 
-  defp slid_neighbour?(cand, target) do
-    cand.text == List.last(target.before) or cand.text == List.first(target.after)
+  # A candidate whose text was already in the old patchset, or is one of the
+  # anchor's context lines, is a different line that was there all along
+  # (often a neighbour that slid into a deleted line's place), not an edit
+  # of the anchored line.
+  defp existing_line?(cand, target) do
+    MapSet.member?(target.old_texts, cand.text) or cand.text in target.before or
+      cand.text in target.after
   end
 
   defp distinctive?(text, opts), do: String.length(text) >= opts[:min_unique_length]
 
   # Levenshtein ratio. Returns 0.0 early when the length difference alone
-  # rules out reaching `min`, or when a line is too long to compare cheaply.
+  # rules out reaching `min`, when a line is too long to compare cheaply, or
+  # as soon as the edit distance must exceed what `min` allows.
   defp similarity(a, b, min, opts) do
     la = String.length(a)
     lb = String.length(b)
     longest = max(la, lb)
 
     cond do
-      longest == 0 -> 1.0
-      longest > opts[:max_fuzzy_length] -> 0.0
-      min(la, lb) / longest < min -> 0.0
-      true -> 1 - levenshtein(String.graphemes(a), String.graphemes(b)) / longest
+      longest == 0 ->
+        1.0
+
+      longest > opts[:max_fuzzy_length] ->
+        0.0
+
+      min(la, lb) / longest < min ->
+        0.0
+
+      true ->
+        limit = floor((1 - min) * longest)
+
+        case levenshtein(String.graphemes(a), String.graphemes(b), limit) do
+          :over -> 0.0
+          distance -> 1 - distance / longest
+        end
     end
   end
 
-  defp levenshtein(a, b) do
+  # Row-by-row edit distance. Gives up with `:over` once every cell in a row
+  # exceeds `limit`, because the distance can only grow from there.
+  defp levenshtein(a, b, limit) do
     first_row = Enum.to_list(0..length(b))
+    lev_rows(a, b, first_row, 1, limit)
+  end
 
-    a
-    |> Enum.with_index(1)
-    |> Enum.reduce(first_row, fn {char_a, i}, prev ->
-      {row, _left} =
-        [b, prev, tl(prev)]
-        |> Enum.zip()
-        |> Enum.reduce({[i], i}, fn {char_b, diag, up}, {acc, left} ->
-          cost = if char_a == char_b, do: 0, else: 1
-          value = Enum.min([left + 1, up + 1, diag + cost])
-          {[value | acc], value}
-        end)
+  defp lev_rows([], _b, row, _i, limit) do
+    distance = List.last(row)
+    if distance > limit, do: :over, else: distance
+  end
 
-      Enum.reverse(row)
-    end)
-    |> List.last()
+  defp lev_rows([char_a | rest], b, [diag | ups], i, limit) do
+    {row, row_min} = lev_row(char_a, b, diag, ups, i, [i], i)
+
+    if row_min > limit,
+      do: :over,
+      else: lev_rows(rest, b, row, i + 1, limit)
+  end
+
+  defp lev_row(_char_a, [], _diag, [], _left, acc, row_min),
+    do: {:lists.reverse(acc), row_min}
+
+  defp lev_row(char_a, [char_b | bs], diag, [up | ups], left, acc, row_min) do
+    cost = if char_a == char_b, do: 0, else: 1
+    value = min(min(left + 1, up + 1), diag + cost)
+    lev_row(char_a, bs, up, ups, value, [value | acc], min(row_min, value))
   end
 
   defp norm(text), do: text |> String.trim() |> String.replace(~r/\s+/u, " ")
