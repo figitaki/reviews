@@ -406,17 +406,13 @@ defmodule ReviewsWeb.ReviewListLive do
         </li>
       </ul>
 
-      <.ds_empty_state
-        :if={@count == 0}
-        icon="hero-queue-list"
-        title={if(filters_active?(@filters), do: "No reviews match", else: "No reviews yet")}
-        body={
-          if(filters_active?(@filters),
-            do: "Change or clear the filters to see more reviews.",
-            else: "Push a diff with reviews push, or comment on a review. It then shows up here."
-          )
-        }
-      />
+      <div :if={@count == 0} id="reviews-empty">
+        <.ds_empty_state
+          icon="hero-queue-list"
+          title={empty_title(@filters, @offset)}
+          body={empty_body(@filters, @offset)}
+        />
+      </div>
 
       <nav
         :if={@offset > 0 or @next_offset}
@@ -424,12 +420,12 @@ defmodule ReviewsWeb.ReviewListLive do
         class="rl-pager"
         aria-label="Pages"
       >
-        <span>Showing {@offset + 1} to {@offset + @count}</span>
+        <span :if={@count > 0} id="pager-range">Showing {@offset + 1} to {@offset + @count}</span>
         <span class="rl-pager-links">
           <.link
             :if={@offset > 0}
             id="pager-newer"
-            patch={list_path(@filters, max(@offset - @filters.limit, 0))}
+            patch={list_path(@filters, newer_offset(@offset, @count, @filters.limit))}
             class="ds-button"
           >
             Newer
@@ -469,6 +465,24 @@ defmodule ReviewsWeb.ReviewListLive do
     filters
     |> Map.take([:q, :role, :status, :author])
     |> Enum.any?(fn {key, value} -> not default_param?(Atom.to_string(key), value) end)
+  end
+
+  # Past the last page (a stale or hand-edited URL) "Newer" goes to the start.
+  defp newer_offset(_offset, 0, _limit), do: 0
+  defp newer_offset(offset, _count, limit), do: max(offset - limit, 0)
+
+  defp empty_title(_filters, offset) when offset > 0, do: "No reviews on this page"
+
+  defp empty_title(filters, _offset),
+    do: if(filters_active?(filters), do: "No reviews match", else: "No reviews yet")
+
+  defp empty_body(_filters, offset) when offset > 0,
+    do: "This page is past the end of the list. Go back to the first page."
+
+  defp empty_body(filters, _offset) do
+    if filters_active?(filters),
+      do: "Change or clear the filters to see more reviews.",
+      else: "Push a diff with reviews push, or comment on a review. It then shows up here."
   end
 
   defp role_label("authored"), do: "You wrote it"

@@ -107,6 +107,21 @@ defmodule ReviewsWeb.ReviewListLiveTest do
     assert_patch(view, ~p"/reviews")
   end
 
+  test "an offset past the end links back to the first page", %{conn: conn} do
+    carey = user!("carey")
+    review = review!(carey, "Only one")
+
+    {:ok, view, _html} = conn |> sign_in(carey) |> live(~p"/reviews?offset=500")
+
+    refute has_element?(view, "#review-#{review.id}")
+    assert has_element?(view, "#reviews-empty", "No reviews on this page")
+    refute has_element?(view, "#pager-range")
+
+    view |> element("#pager-newer") |> render_click()
+    assert_patch(view, ~p"/reviews")
+    assert has_element?(view, "#review-#{review.id}")
+  end
+
   test "relative_time/2" do
     now = ~U[2026-10-09 12:00:00Z]
     assert ReviewListLive.relative_time(~U[2026-10-09 11:59:30Z], now) == "just now"
