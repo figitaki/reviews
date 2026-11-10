@@ -67,7 +67,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
         <div class="review-packet-grid">
           <section
-            :if={@show_packet_outline && is_nil(@active_section_index)}
+            :if={is_nil(@active_section_index)}
             id="review-split-inline-overview"
             class="review-packet-inline-overview"
             aria-labelledby="review-split-inline-overview-title"
@@ -215,6 +215,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-section_index={section.index}
             phx-value-target_id={section.target_id}
             title={"#{section.title} — #{section.status_label}"}
+            style={"--guide-item-delay: #{min(section.index + 1, 6) * 24}ms"}
             aria-label={"#{pad2(section.index + 1)} #{section.title}; decision: #{section.status_label}"}
             aria-current={if(section.index == @active_section_index, do: "true", else: "false")}
           >
@@ -325,16 +326,21 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     <script :type={Phoenix.LiveView.ColocatedHook} name=".GuideFlyout">
       export default {
         mounted() {
-          this.open = false
+          const savedOpen = localStorage.getItem("reviews:guide-map-open")
+          this.open = savedOpen === null
+            ? window.matchMedia("(min-width: 769px)").matches
+            : savedOpen === "true"
           this.toggle = this.el.querySelector("[data-guide-flyout-toggle]")
           this.panel = this.el.querySelector("[data-guide-flyout-panel]")
+          this.ticks = this.el.querySelector(".review-edge-rail-ticks")
 
-          // Closing makes the panel inert, so focus must leave it first.
+          // Reveal the rail before restoring focus to its menu button.
           this.setOpen = (open, {focusToggle = false} = {}) => {
             if (open === this.open) return
-            if (!open && focusToggle) this.toggle?.focus({preventScroll: true})
             this.open = open
+            localStorage.setItem("reviews:guide-map-open", String(open))
             this.sync()
+            if (!open && focusToggle) this.toggle?.focus({preventScroll: true})
           }
 
           this.onToggle = event => {
@@ -360,23 +366,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           this.onPanelClick = event => {
             if (event.target.closest("[data-guide-flyout-close]")) {
               this.setOpen(false, {focusToggle: true})
-              return
             }
-            if (!event.target.closest("[phx-click]")) return
-            // The jump that follows moves focus to its target; park focus on
-            // the toggle meanwhile so the panel never goes inert around it.
-            this.setOpen(false, {focusToggle: true})
-          }
-
-          this.onPointerDown = event => {
-            if (!this.open) return
-            if (this.panel?.contains(event.target) || this.toggle?.contains(event.target)) return
-            this.setOpen(false)
           }
 
           this.toggle?.addEventListener("click", this.onToggle)
           this.panel?.addEventListener("click", this.onPanelClick)
-          document.addEventListener("pointerdown", this.onPointerDown)
           window.addEventListener("keydown", this.onKeyDown)
           this.sync()
         },
@@ -389,7 +383,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         destroyed() {
           this.toggle?.removeEventListener("click", this.onToggle)
           this.panel?.removeEventListener("click", this.onPanelClick)
-          document.removeEventListener("pointerdown", this.onPointerDown)
           window.removeEventListener("keydown", this.onKeyDown)
         },
 
@@ -397,7 +390,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           const open = this.open
           this.el.classList.toggle("is-flyout-open", open)
           if (this.panel) this.panel.inert = !open
+          if (this.ticks) this.ticks.inert = open
           this.toggle?.setAttribute("aria-expanded", open ? "true" : "false")
+          this.toggle?.setAttribute("aria-label", open ? "Close guide map" : "Open guide map")
         },
       }
     </script>
@@ -417,6 +412,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       <h2 id={@title_id} class="review-guide-panel-title">{@outline.overview.title}</h2>
       <.markdown
         :if={@outline.overview.summary != ""}
+        id={"#{@title_id}-markdown"}
         body={@outline.overview.summary}
         class="review-guide-panel-prose"
       />
@@ -1263,6 +1259,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         >
           <.markdown
             :if={@body != ""}
+            id={"#{@row_id}-markdown"}
             body={@body}
             class="review-packet-markdown"
           />
@@ -1600,6 +1597,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     "#{hunk.file_path} · hunk #{hunk.hunk_index} · #{line_ref} · #{stats}"
   end
 
+  attr :id, :string, required: true
   attr :body, :string, required: true
   attr :class, :string, default: "review-packet-markdown"
 
@@ -1607,29 +1605,31 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     assigns = assign(assigns, :blocks, markdown_blocks(assigns.body))
 
     ~H"""
-    <div class={@class}>
-      <%= for block <- @blocks do %>
-        <h3
-          :if={block.kind == :heading && block.level == 3}
-          class="review-packet-md-heading is-h3"
-        >
-          <.inline segments={block.segments} />
-        </h3>
-        <h4
-          :if={block.kind == :heading && block.level == 4}
-          class="review-packet-md-heading is-h4"
-        >
-          <.inline segments={block.segments} />
-        </h4>
-        <ul :if={block.kind == :list} class="review-packet-md-list">
-          <li :for={item <- block.items}>
-            <.inline segments={item} />
-          </li>
-        </ul>
-        <p :if={block.kind == :paragraph} class="review-packet-md-paragraph">
-          <.inline segments={block.segments} />
-        </p>
-      <% end %>
+    <div id={@id} class={@class} phx-hook="Markdown" data-markdown={@body}>
+      <div id={"#{@id}-output"} data-markdown-output phx-update="ignore">
+        <%= for block <- @blocks do %>
+          <h3
+            :if={block.kind == :heading && block.level == 3}
+            class="review-packet-md-heading is-h3"
+          >
+            <.inline segments={block.segments} />
+          </h3>
+          <h4
+            :if={block.kind == :heading && block.level == 4}
+            class="review-packet-md-heading is-h4"
+          >
+            <.inline segments={block.segments} />
+          </h4>
+          <ul :if={block.kind == :list} class="review-packet-md-list">
+            <li :for={item <- block.items}>
+              <.inline segments={item} />
+            </li>
+          </ul>
+          <p :if={block.kind == :paragraph} class="review-packet-md-paragraph">
+            <.inline segments={block.segments} />
+          </p>
+        <% end %>
+      </div>
     </div>
     """
   end

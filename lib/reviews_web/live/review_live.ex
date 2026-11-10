@@ -29,10 +29,6 @@ defmodule ReviewsWeb.ReviewLive do
   @section_auto_open_loc_budget 25
   @section_auto_open_min_hunk_loc 6
   @section_auto_open_max_hunk_loc 500
-  @single_section_auto_open_line_limit 100
-  @section_expand_all_line_limit 1000
-  @section_expand_all_file_limit 25
-  @changes_auto_open_line_limit 1_000
 
   @impl true
   def mount(%{"slug" => slug}, session, socket) do
@@ -489,6 +485,7 @@ defmodule ReviewsWeb.ReviewLive do
               </h1>
               <PacketComponents.markdown
                 :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
+                id="review-packet-lede-markdown"
                 body={ReviewPacket.text(packet, "summary")}
                 class="review-description review-packet-lede"
               />
@@ -708,11 +705,7 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp section_hunk_ids_to_open(hunks) do
-    if expand_all_section_hunks?(hunks) do
-      Enum.map(hunks, & &1.id)
-    else
-      preview_hunk_ids(hunks)
-    end
+    Enum.map(hunks, & &1.id)
   end
 
   defp preview_hunk_ids(hunks) do
@@ -941,9 +934,7 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:published_threads, snapshot.published_threads)
   end
 
-  defp active_outline_section_index(_current_index, %{packet: packet}, true) do
-    if ReviewPacket.sections(packet || %{}) == [], do: nil, else: 0
-  end
+  defp active_outline_section_index(_current_index, _patchset, true), do: nil
 
   defp active_outline_section_index(current_index, %{packet: packet}, false) do
     sections = ReviewPacket.sections(packet || %{})
@@ -982,26 +973,17 @@ defmodule ReviewsWeb.ReviewLive do
   defp default_expanded_packet_state(snapshot) do
     sections = ReviewPacket.sections(snapshot.selected_patchset.packet || %{})
 
-    {section_ids, hunk_ids} =
+    section_ids =
       case sections do
-        [section] ->
-          hunks = section_hunks(section, snapshot.hunks_by_path)
-
-          if section_changed_lines(hunks) < @single_section_auto_open_line_limit do
-            {MapSet.new([section.index]), MapSet.new(section_hunk_ids_to_open(hunks))}
-          else
-            {MapSet.new(), MapSet.new()}
-          end
-
-        [first_section | _] ->
-          # The guide lands focused on the first section. Open its hunks the
-          # same way tick navigation does, so landing and navigating match.
-          hunks = section_hunks(first_section, snapshot.hunks_by_path)
-          {MapSet.new(), MapSet.new(section_hunk_ids_to_open(hunks))}
-
-        _ ->
-          {MapSet.new(), MapSet.new()}
+        [section] -> MapSet.new([section.index])
+        _ -> MapSet.new()
       end
+
+    hunk_ids =
+      sections
+      |> Enum.flat_map(&section_hunks(&1, snapshot.hunks_by_path))
+      |> section_hunk_ids_to_open()
+      |> MapSet.new()
 
     %{section_ids: section_ids, hunk_ids: hunk_ids}
   end
@@ -1009,7 +991,6 @@ defmodule ReviewsWeb.ReviewLive do
   defp default_expanded_changes_hunk_ids(socket, snapshot) do
     if socket.assigns[:live_action] == :changes do
       snapshot.file_diffs
-      |> Enum.filter(&(file_changed_lines(&1) < @changes_auto_open_line_limit))
       |> Enum.map(&file_diff_id/1)
       |> MapSet.new()
     else
@@ -1042,27 +1023,6 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp maybe_mark_changes_default_expanded(expanded_patchset_ids, _patchset_id, _apply?) do
     expanded_patchset_ids
-  end
-
-  defp expand_all_section_hunks?(hunks) do
-    section_changed_lines(hunks) < @section_expand_all_line_limit &&
-      section_file_count(hunks) < @section_expand_all_file_limit
-  end
-
-  defp section_changed_lines(hunks) do
-    hunks
-    |> Enum.reduce(0, fn hunk, changed_lines ->
-      changed_lines + hunk.display_additions + hunk.display_deletions
-    end)
-  end
-
-  defp file_changed_lines(file), do: file.additions + file.deletions
-
-  defp section_file_count(hunks) do
-    hunks
-    |> Enum.map(& &1.file_path)
-    |> MapSet.new()
-    |> MapSet.size()
   end
 
   defp file_diff_id(file), do: "file-diff-#{file.id}"
