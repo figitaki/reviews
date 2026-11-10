@@ -27,7 +27,7 @@ still stabilizing.
 - Mobile review navigation uses one compact sticky row; the brand/account row
   scrolls away, Guide/Diff use icons, and multiple revisions use a native
   selector. Anonymous sign-in prompts stay in the section flow on phones.
-- Toolchain moved to Elixir 1.20.4 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
+- Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI). `mix.exs`
   now requires Elixir `~> 1.20`. Elixir 1.20.4 includes the fix for
   CVE-2026-75758.
 - Phoenix 1.8.15, LiveView 1.2.12, Phoenix LiveDashboard 0.9.1, Ecto SQL 3.14,
