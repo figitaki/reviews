@@ -40,6 +40,16 @@ still stabilizing.
   The install snippet's CSS is colocated too via the new
   `ReviewsWeb.ColocatedCSS` module.
 - LiveView test warnings for duplicate DOM ids and forms without ids now raise.
+- Each preview app `reviews-pr-<N>` uses its own database, `reviews_pr_<N>`,
+  created on deploy and dropped when the PR closes. Previews deploy with
+  `fly.preview.toml`: one machine, a pool of 2 connections, and auto-stop
+  when idle. See `docs/PREVIEW_ENVS.md`.
+- Preview cleanup destroys the app before dropping its database through
+  a private proxy. It works without a healthy preview release and reports
+  database cleanup failures as failed jobs. Preview database credentials
+  must belong to a dedicated preview cluster, not production.
+- `bin/migrate` stops at the first failed step, so a failed migration now
+  fails the release command instead of being ignored.
 
 ### Fixed
 
