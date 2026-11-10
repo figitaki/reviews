@@ -163,6 +163,8 @@ jobs:
       - name: Drop preview database
         if: github.event.action == 'closed'
         continue-on-error: true
+        # A hung `ssh console` must not hold the destroy step back.
+        timeout-minutes: 5
         run: |
           if ! flyctl status --app "$APP_NAME" > /dev/null 2>&1; then
             echo "App $APP_NAME does not exist; nothing to drop."

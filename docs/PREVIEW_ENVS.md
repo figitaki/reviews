@@ -96,6 +96,11 @@ SQL
 The server must also have a `postgres` database (Fly Postgres has one).
 The release command connects to it to run `CREATE DATABASE`.
 
+If a pooler such as PgBouncer sits in front of the server, it must
+accept connections for any database name, or at least for `postgres`
+and every `reviews_pr_<N>`. A pooler that lists only one database
+refuses the new connections, and the release command fails.
+
 ### 3. GitHub OAuth app for previews
 
 Preview apps live at unique hostnames (`reviews-pr-42.fly.dev` etc.),
@@ -218,8 +223,9 @@ database" step runs before "Destroy preview app":
    `ensure_database/0`, so it drops only `reviews_pr_<digits>`, and only
    the database that the app's own `DATABASE_URL` names.
 
-The drop step is best effort (`continue-on-error: true`). If it fails,
-the app is still destroyed, and the run shows a warning.
+The drop step is best effort (`continue-on-error: true`) and stops
+after 5 minutes. If it fails or times out, the app is still destroyed,
+and the run shows a warning.
 
 **If a drop fails.** Drop the database by hand. Do this only for a PR
 that is closed:
