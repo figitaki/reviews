@@ -9,7 +9,7 @@ on:
 env:
   MIX_ENV: test
   ELIXIR_VERSION: "1.20.4"
-  OTP_VERSION: "28.5"
+  OTP_VERSION: "28.5.0.7"
   BUN_VERSION: "1.2.13"
 
 permissions:
