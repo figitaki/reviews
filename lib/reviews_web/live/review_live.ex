@@ -29,10 +29,6 @@ defmodule ReviewsWeb.ReviewLive do
   @section_auto_open_loc_budget 25
   @section_auto_open_min_hunk_loc 6
   @section_auto_open_max_hunk_loc 500
-  @single_section_auto_open_line_limit 100
-  @section_expand_all_line_limit 1000
-  @section_expand_all_file_limit 25
-  @changes_auto_open_line_limit 1_000
 
   @impl true
   def mount(%{"slug" => slug}, session, socket) do
@@ -206,14 +202,10 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("select_packet_overview", _params, socket) do
-    socket = assign(socket, :active_outline_section_index, nil)
-
     socket =
-      if socket.assigns.diff_style == "split" do
-        push_event(socket, "packet_nav_jump", %{id: "review-split-inline-overview"})
-      else
-        socket
-      end
+      socket
+      |> assign(:active_outline_section_index, nil)
+      |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
 
     {:noreply, socket}
   end
@@ -235,11 +227,7 @@ defmodule ReviewsWeb.ReviewLive do
     socket =
       case parse_int(section_index) do
         index when is_integer(index) ->
-          if socket.assigns.diff_style == "split" do
-            push_event(socket, "packet_nav_jump", %{id: "review-split-section-overview-#{index}"})
-          else
-            socket
-          end
+          push_event(socket, "packet_nav_jump", %{id: "review-split-section-overview-#{index}"})
 
         _ ->
           socket
@@ -445,111 +433,6 @@ defmodule ReviewsWeb.ReviewLive do
     <div class="review-page min-h-screen">
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
-          <div
-            class="review-diff-style"
-            id="diff-style-toggle"
-            role="group"
-            aria-label="Diff layout"
-            phx-hook=".DiffStylePref"
-            data-tablet-query="(max-width: 1024px)"
-          >
-            <button
-              id="diff-style-split"
-              type="button"
-              phx-click="select_diff_style"
-              phx-value-style="split"
-              aria-pressed={if @diff_style == "split", do: "true", else: "false"}
-              aria-label="Split view"
-              title="Split view"
-              data-requires-wide="true"
-              class={["review-chip", @diff_style == "split" && "is-active"]}
-            >
-              <.icon name="hero-table-cells" class="w-4 h-4" />
-            </button>
-            <button
-              id="diff-style-unified"
-              type="button"
-              phx-click="select_diff_style"
-              phx-value-style="unified"
-              aria-pressed={if @diff_style == "unified", do: "true", else: "false"}
-              aria-label="Unified view"
-              title="Unified view"
-              class={["review-chip", @diff_style == "unified" && "is-active"]}
-            >
-              <.icon name="hero-queue-list" class="w-4 h-4" />
-            </button>
-            <script :type={Phoenix.LiveView.ColocatedHook} name=".DiffStylePref">
-              export default {
-                mounted() {
-                  const KEY = "reviews:diffStyle"
-                  const tabletQuery = this.el.dataset.tabletQuery || "(max-width: 1024px)"
-                  const media = window.matchMedia(tabletQuery)
-                  const splitButton = this.el.querySelector("#diff-style-split")
-                  const saved = () => localStorage.getItem(KEY)
-                  const currentStyle = () => {
-                    const currentBtn = this.el.querySelector('[aria-pressed="true"]')
-                    return currentBtn?.id === "diff-style-unified" ? "unified" : "split"
-                  }
-                  const pushStyle = (style, viewport = media.matches ? "tablet" : "wide") => {
-                    this.pushEvent("select_diff_style", { style, viewport })
-                  }
-                  this.syncViewport = () => {
-                    const tablet = media.matches
-                    this.el.classList.toggle("is-tablet-locked", tablet)
-                    splitButton?.toggleAttribute("disabled", tablet)
-                    splitButton?.setAttribute("aria-disabled", tablet ? "true" : "false")
-
-                    if (tablet && currentStyle() !== "unified") {
-                      pushStyle("unified", "tablet")
-                    } else if (!tablet) {
-                      const preferred = saved()
-                      if (preferred === "split" || preferred === "unified") {
-                        if (preferred !== currentStyle()) pushStyle(preferred, "wide")
-                      } else if (this.wasTablet && currentStyle() !== "split") {
-                        // Tablet forced unified; with no saved preference, go
-                        // back to the default once the viewport is wide again.
-                        pushStyle("split", "wide")
-                      }
-                    }
-
-                    this.wasTablet = tablet
-                  }
-
-                  this.syncViewport()
-
-                  const onMediaChange = () => this.syncViewport()
-                  if (media.addEventListener) media.addEventListener("change", onMediaChange)
-                  else media.addListener(onMediaChange)
-                  this.cleanupMedia = () => {
-                    if (media.removeEventListener) media.removeEventListener("change", onMediaChange)
-                    else media.removeListener(onMediaChange)
-                  }
-
-                  this.el.addEventListener("click", (e) => {
-                    const btn = e.target.closest("[phx-value-style]")
-                    if (!btn) return
-                    const style = btn.getAttribute("phx-value-style")
-                    if (media.matches && style === "split") {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      pushStyle("unified", "tablet")
-                      return
-                    }
-                    if (style === "split" || style === "unified") {
-                      localStorage.setItem(KEY, style)
-                    }
-                  })
-                },
-                updated() {
-                  this.syncViewport?.()
-                },
-                destroyed() {
-                  this.cleanupMedia?.()
-                }
-              }
-            </script>
-          </div>
-
           <.user_menu current_user={@current_user} />
         </:actions>
 
@@ -557,7 +440,7 @@ defmodule ReviewsWeb.ReviewLive do
         <% has_packet = ReviewPacket.present?(packet) %>
 
         <div class={[
-          "design-main",
+          "design-main is-review-view",
           has_packet && @live_action != :changes && "is-guide-view",
           has_packet && @live_action == :changes && "is-packet-diff-view"
         ]}>
@@ -576,48 +459,6 @@ defmodule ReviewsWeb.ReviewLive do
               )
             end %>
 
-          <header class={[
-            "review-header",
-            has_packet && @live_action != :changes && "is-guide-compact"
-          ]}>
-            <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
-            <h1
-              id={if(has_packet, do: "review-packet-title", else: "review-title")}
-              class={["review-title", has_packet && "is-packet-title"]}
-              translate="no"
-            >
-              {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
-            </h1>
-            <PacketComponents.markdown
-              :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
-              body={ReviewPacket.text(packet, "summary")}
-              class="review-description review-packet-lede"
-            />
-            <p
-              :if={!has_packet && (@review.description || @file_diffs != [])}
-              class="review-description"
-            >
-              {@review.description || review_summary(@file_diffs)}
-            </p>
-            <div :if={@selected_patchset} class="review-header-meta">
-              <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
-              <span class="review-header-change-stat">
-                <PacketComponents.change_stat
-                  additions={diff_stats.additions}
-                  deletions={diff_stats.deletions}
-                />
-              </span>
-              <span
-                :if={has_packet && packet_effort}
-                class="review-header-estimate"
-                title="Estimated review time"
-              >
-                <strong>{packet_effort.time}</strong>
-                <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
-              </span>
-            </div>
-          </header>
-
           <RevisionNavComponents.revision_nav
             nav={revision_nav}
             review={@review}
@@ -626,7 +467,51 @@ defmodule ReviewsWeb.ReviewLive do
             has_packet={has_packet}
             outline_available={has_packet && @live_action != :changes}
             show_packet_outline={show_packet_outline}
-          />
+            diff_style={@diff_style}
+          >
+            <header class={[
+              "review-header",
+              has_packet && @live_action != :changes && "is-guide-compact"
+            ]}>
+              <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
+              <h1
+                id={if(has_packet, do: "review-packet-title", else: "review-title")}
+                class={["review-title", has_packet && "is-packet-title"]}
+                translate="no"
+              >
+                {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
+              </h1>
+              <PacketComponents.markdown
+                :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
+                id="review-packet-lede-markdown"
+                body={ReviewPacket.text(packet, "summary")}
+                class="review-description review-packet-lede"
+              />
+              <p
+                :if={!has_packet && (@review.description || @file_diffs != [])}
+                class="review-description"
+              >
+                {@review.description || review_summary(@file_diffs)}
+              </p>
+              <div :if={@selected_patchset} class="review-header-meta">
+                <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
+                <span class="review-header-change-stat">
+                  <PacketComponents.change_stat
+                    additions={diff_stats.additions}
+                    deletions={diff_stats.deletions}
+                  />
+                </span>
+                <span
+                  :if={has_packet && packet_effort}
+                  class="review-header-estimate"
+                  title="Estimated review time"
+                >
+                  <strong>{packet_effort.time}</strong>
+                  <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
+                </span>
+              </div>
+            </header>
+          </RevisionNavComponents.revision_nav>
 
           <%!-- Patchset-pushed banner --%>
           <div
@@ -652,7 +537,6 @@ defmodule ReviewsWeb.ReviewLive do
             published_threads={@published_threads}
             current_user={@current_user}
             diff_style={@diff_style}
-            expanded_section_ids={@expanded_section_ids}
             expanded_hunk_ids={@expanded_hunk_ids}
             show_packet_outline={show_packet_outline}
             active_section_index={@active_outline_section_index}
@@ -819,11 +703,7 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp section_hunk_ids_to_open(hunks) do
-    if expand_all_section_hunks?(hunks) do
-      Enum.map(hunks, & &1.id)
-    else
-      preview_hunk_ids(hunks)
-    end
+    Enum.map(hunks, & &1.id)
   end
 
   defp preview_hunk_ids(hunks) do
@@ -1052,9 +932,7 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:published_threads, snapshot.published_threads)
   end
 
-  defp active_outline_section_index(_current_index, %{packet: packet}, true) do
-    if ReviewPacket.sections(packet || %{}) == [], do: nil, else: 0
-  end
+  defp active_outline_section_index(_current_index, _patchset, true), do: nil
 
   defp active_outline_section_index(current_index, %{packet: packet}, false) do
     sections = ReviewPacket.sections(packet || %{})
@@ -1093,26 +971,17 @@ defmodule ReviewsWeb.ReviewLive do
   defp default_expanded_packet_state(snapshot) do
     sections = ReviewPacket.sections(snapshot.selected_patchset.packet || %{})
 
-    {section_ids, hunk_ids} =
+    section_ids =
       case sections do
-        [section] ->
-          hunks = section_hunks(section, snapshot.hunks_by_path)
-
-          if section_changed_lines(hunks) < @single_section_auto_open_line_limit do
-            {MapSet.new([section.index]), MapSet.new(section_hunk_ids_to_open(hunks))}
-          else
-            {MapSet.new(), MapSet.new()}
-          end
-
-        [first_section | _] ->
-          # The guide lands focused on the first section. Open its hunks the
-          # same way tick navigation does, so landing and navigating match.
-          hunks = section_hunks(first_section, snapshot.hunks_by_path)
-          {MapSet.new(), MapSet.new(section_hunk_ids_to_open(hunks))}
-
-        _ ->
-          {MapSet.new(), MapSet.new()}
+        [section] -> MapSet.new([section.index])
+        _ -> MapSet.new()
       end
+
+    hunk_ids =
+      sections
+      |> Enum.flat_map(&section_hunks(&1, snapshot.hunks_by_path))
+      |> section_hunk_ids_to_open()
+      |> MapSet.new()
 
     %{section_ids: section_ids, hunk_ids: hunk_ids}
   end
@@ -1120,7 +989,6 @@ defmodule ReviewsWeb.ReviewLive do
   defp default_expanded_changes_hunk_ids(socket, snapshot) do
     if socket.assigns[:live_action] == :changes do
       snapshot.file_diffs
-      |> Enum.filter(&(file_changed_lines(&1) < @changes_auto_open_line_limit))
       |> Enum.map(&file_diff_id/1)
       |> MapSet.new()
     else
@@ -1153,27 +1021,6 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp maybe_mark_changes_default_expanded(expanded_patchset_ids, _patchset_id, _apply?) do
     expanded_patchset_ids
-  end
-
-  defp expand_all_section_hunks?(hunks) do
-    section_changed_lines(hunks) < @section_expand_all_line_limit &&
-      section_file_count(hunks) < @section_expand_all_file_limit
-  end
-
-  defp section_changed_lines(hunks) do
-    hunks
-    |> Enum.reduce(0, fn hunk, changed_lines ->
-      changed_lines + hunk.display_additions + hunk.display_deletions
-    end)
-  end
-
-  defp file_changed_lines(file), do: file.additions + file.deletions
-
-  defp section_file_count(hunks) do
-    hunks
-    |> Enum.map(& &1.file_path)
-    |> MapSet.new()
-    |> MapSet.size()
   end
 
   defp file_diff_id(file), do: "file-diff-#{file.id}"

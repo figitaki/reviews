@@ -157,6 +157,19 @@ defmodule Reviews.Accounts do
 
   def authenticate_token(_), do: {:error, :invalid_token}
 
+  @doc """
+  Revokes a token owned by `user`. Missing and unowned IDs return the same error.
+  """
+  def revoke_token(%User{id: user_id}, id) do
+    with token_id when is_integer(token_id) <- parse_id(id),
+         {1, _} <-
+           Repo.delete_all(from t in ApiToken, where: t.id == ^token_id and t.user_id == ^user_id) do
+      :ok
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
   def list_tokens_for(%User{id: user_id}) do
     Repo.all(
       from t in ApiToken,

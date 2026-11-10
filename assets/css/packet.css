@@ -8,12 +8,16 @@
    Review surface
 ---------------------------------------------------------------------------- */
 .review-page {
-  --review-main-nav-h: 64px;
+  --review-app-nav-h: 64px;
+  --review-toolbar-h: 64px;
+  --rev-header-h: calc(var(--review-app-nav-h) + var(--review-toolbar-h));
+  --review-main-nav-h: var(--rev-header-h);
   --review-section-sticky-h: 46px;
 
   color-scheme: light;
   background: var(--review-bg);
   color: var(--review-text);
+  font-family: var(--font-sans);
 }
 
 [data-theme="dark"] .review-page {
@@ -96,8 +100,9 @@
   gap: 8px 14px;
   margin-top: 14px;
   color: var(--review-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-leading);
 }
 
 .review-header-meta > span + span {
@@ -178,50 +183,125 @@
   opacity: 0.5;
 }
 
-.review-revision-nav {
-  display: grid;
-  gap: 12px;
-  margin: -4px 0 28px;
-  border-block: 1px solid var(--review-line);
-  padding-block: 14px;
-}
-
-.review-revision-row {
+.review-toolbar {
+  position: sticky;
+  top: var(--review-app-nav-h);
+  z-index: 40;
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 16px 24px;
+  border-bottom: 1px solid var(--review-line);
+  background: var(--review-bg);
+  padding: 14px 20px;
 }
 
-.review-revision-copy {
+.review-toolbar-context {
   display: flex;
   min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 16px;
 }
 
-.review-revision-copy-main {
-  display: grid;
+.review-toolbar .review-header {
   min-width: 0;
-  gap: 3px;
+  margin: 0;
+  padding: 0;
 }
 
-.review-revision-label {
-  color: var(--review-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.review-revision-title {
-  min-width: 0;
-  color: var(--review-text);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
+.review-toolbar .review-title,
+.review-toolbar .review-header .review-title.is-packet-title {
+  max-width: none;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.review-toolbar .review-packet-kicker,
+.review-toolbar .review-description,
+.review-toolbar .review-header-meta {
+  display: none;
+}
+
+.review-toolbar-views {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-revision-nav {
+  display: flex;
+  max-width: min(420px, 100%);
+  align-items: center;
+  gap: 4px;
+}
+
+.review-revision-nav .review-revision-chip-list {
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.review-revision-nav .review-nav-button {
+  flex: 0 0 auto;
+}
+
+.review-toolbar .review-code-view-switcher,
+.review-toolbar .review-diff-style {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--review-line-strong);
+  border-radius: 7px;
+  background: var(--review-panel);
+  padding: 2px;
+}
+
+.review-toolbar .review-code-view-tab,
+.review-layout-button {
+  display: inline-flex;
+  min-width: 30px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 8px;
+  color: var(--review-muted);
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
+  cursor: pointer;
+}
+
+.review-toolbar .review-code-view-tab.is-active,
+.review-layout-button.is-active {
+  background: var(--review-text);
+  color: var(--review-bg);
+  box-shadow: none;
+}
+
+.review-layout-button:hover:not(.is-active) {
+  background: var(--review-hover);
+  color: var(--review-text);
+}
+
+.review-toolbar .review-diff-style.is-tablet-locked {
+  display: none;
+}
+
+.review-toolbar :is(button, a):focus-visible {
+  outline: 2px solid var(--review-focus);
+  outline-offset: 2px;
 }
 
 .review-outline-toggle {
@@ -231,7 +311,11 @@
   padding-inline: 8px;
 }
 
-.review-revision-controls,
+.review-mobile-revision-nav,
+.review-outline-toggle-short {
+  display: none;
+}
+
 .review-revision-chip-list {
   display: inline-flex;
   align-items: center;
@@ -255,9 +339,9 @@
   justify-content: center;
   border-radius: 5px;
   color: var(--review-muted);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
   padding: 0 9px;
   text-decoration: none;
   transition: background-color 160ms ease, color 160ms ease;
@@ -279,6 +363,10 @@
   outline-offset: 2px;
 }
 
+.review-code-view-icon {
+  display: none;
+}
+
 .review-revision-chip-list {
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -295,9 +383,9 @@
   border-radius: 6px;
   background: transparent;
   color: var(--review-muted);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
@@ -348,9 +436,9 @@
   border-radius: 6px;
   background: var(--review-panel);
   color: var(--review-text);
-  font-size: 12px;
-  font-weight: 550;
-  line-height: 1;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
@@ -497,30 +585,16 @@
 }
 
 .review-packet-shell {
+  --guide-measure: 52rem;
+
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
   align-items: start;
 }
 
-.review-packet-shell.is-guide-unified {
-  grid-template-columns: minmax(
-      calc(var(--guide-rail-w) + var(--guide-panel-min)),
-      calc(var(--guide-rail-w) + var(--guide-panel-max))
-    )
-    minmax(0, 1fr);
-}
-
-.review-packet-shell.is-guide-split {
+.review-packet-shell.has-outline {
   grid-template-columns: var(--guide-rail-w) minmax(0, 1fr);
-}
-
-.review-packet-shell.is-guide-split .review-guide-shell {
-  grid-template-columns: var(--guide-rail-w);
-}
-
-.review-packet-shell.is-guide-split .review-guide-panel {
-  display: none;
 }
 
 .review-packet-shell.is-outline-hidden {
@@ -614,8 +688,6 @@
 }
 
 .is-packet-nav-target {
-  outline: 2px solid color-mix(in oklab, var(--review-text) 34%, transparent);
-  outline-offset: 5px;
   animation: review-packet-nav-target 1100ms ease-out;
 }
 
@@ -643,17 +715,26 @@
   position: relative;
   z-index: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 40px;
   min-width: 0;
   padding: 20px clamp(16px, 2vw, 28px) 72px;
 }
 
-.review-packet-shell.is-guide-split .review-packet-grid {
+.review-packet-shell.has-outline .review-packet-grid {
   padding-inline: clamp(16px, 2vw, 32px);
 }
 
+@media (min-width: 769px) {
+  .review-packet-shell.has-outline .review-packet-grid {
+    padding-right: calc(clamp(16px, 2vw, 32px) + var(--guide-rail-w));
+  }
+}
+
 .review-packet-inline-overview {
-  width: 100%;
+  width: min(100%, var(--guide-measure));
+  margin-inline: auto;
+  justify-self: center;
 }
 
 .review-packet-inline-overview .review-guide-panel-inner {
@@ -661,7 +742,7 @@
 }
 
 .review-packet-inline-overview .review-guide-panel-prose {
-  max-width: var(--guide-measure, 60ch);
+  max-width: none;
 }
 
 .review-effort-pill {
@@ -713,33 +794,6 @@
   list-style: none;
 }
 
-.review-packet-shell.is-guide-unified .review-packet-section:not(.is-open) {
-  display: none;
-}
-
-.review-packet-shell.is-guide-unified .review-packet-section-summary,
-.review-packet-shell.is-guide-unified .review-packet-section-summary-text {
-  display: none;
-}
-
-.review-packet-shell.is-guide-unified .review-packet-grid {
-  gap: 0;
-}
-
-/* Unified prose keeps the same reading measure as split; only code uses the
-   full column width. */
-.review-packet-shell.is-guide-unified .review-packet-row.is-markdown {
-  padding-inline: 0;
-}
-
-.review-packet-shell.is-guide-unified .review-packet-row.is-markdown .review-packet-markdown {
-  max-width: var(--guide-measure, 60ch);
-  color: var(--review-text);
-  font-size: 16px;
-  font-weight: 450;
-  line-height: 1.55;
-}
-
 .review-packet-section.is-open .review-packet-section-summary {
   margin-bottom: 4px;
 }
@@ -787,9 +841,9 @@ details[open] > summary .review-collapse-icon,
 .review-packet-section-title {
   margin: 0;
   color: var(--review-text);
-  font-size: 17px;
-  font-weight: 550;
-  line-height: 1.25;
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-leading);
 }
 
 .review-packet-section-heading {
@@ -827,9 +881,10 @@ details[open] > summary .review-collapse-icon,
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1;
+  font-size: var(--font-meta-size);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--font-meta-leading);
 }
 
 .review-change-stat-add {
@@ -922,8 +977,9 @@ details[open] > summary .review-collapse-icon,
 
 .review-section-state-text {
   color: var(--review-text);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
 }
 
 .review-section-state-history {
@@ -986,9 +1042,9 @@ details[open] > summary .review-collapse-icon,
   max-width: 0;
   overflow: hidden;
   opacity: 0;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
   transition: max-width 360ms cubic-bezier(0.22, 1, 0.36, 1) 120ms, opacity 240ms ease 140ms;
 }
 
@@ -1036,8 +1092,9 @@ details[open] > summary .review-collapse-icon,
 
 .review-packet-section-signin {
   color: var(--review-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -1079,48 +1136,12 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-revision-nav {
-    margin-bottom: 24px;
-  }
-
-  .review-revision-row {
-    display: grid;
-    gap: 10px;
-  }
-
-  .review-revision-copy {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .review-revision-label {
-    font-size: 10px;
-  }
-
-  .review-revision-controls {
-    width: 100%;
-    min-width: 0;
-    overflow-x: auto;
-    padding-bottom: 3px;
-    scrollbar-width: none;
-  }
-
-  .review-revision-controls::-webkit-scrollbar {
-    display: none;
-  }
-
-  .review-revision-chip-list {
-    flex: 0 0 auto;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
+    margin-bottom: 0;
   }
 
   .review-nav-button,
   .review-revision-chip {
     flex: 0 0 auto;
-  }
-
-  .review-nav-button-label {
-    display: none;
   }
 
   .review-section-action.is-active {
@@ -1188,53 +1209,38 @@ details[open] > summary .review-collapse-icon,
   display: block;
   max-height: none;
   overflow: visible;
-  line-height: 1.55;
+  line-height: var(--font-prose-leading);
 }
 
-/* One content track in the focused guide: the section header, prose, hunks
-   and decision footer all start at the grid's left gutter. Code fills the
-   track; prose wraps at a reading measure inside it, so the two share a left
-   edge and read as one column. */
-.review-packet-shell.is-guide-split,
-.review-packet-shell.is-guide-unified {
-  --guide-measure: 72ch;
+/* Headings and prose share a centered reading column in every guide state.
+   Hunk cards use the full content area independently of that column. */
+.review-packet-section-summary,
+.review-packet-section-summary-text,
+.review-packet-row.is-markdown,
+.review-section-header,
+.review-section-decision,
+.review-section-next {
+  width: min(100%, var(--guide-measure));
+  margin-inline: auto;
+  justify-self: center;
 }
 
-.review-packet-shell.is-guide-split .review-packet-section-summary {
-  align-items: baseline;
+.review-packet-section-summary {
   padding-inline: 0;
 }
 
-.review-packet-shell.is-guide-split .review-packet-section-summary-text {
-  color: var(--review-muted);
-  font-size: 14px;
-  font-weight: 450;
-  line-height: 1.45;
+.review-packet-section-summary-text {
+  max-width: none;
 }
 
-.review-packet-shell.is-guide-split .review-packet-row.is-markdown {
+.review-packet-row.is-markdown {
   padding-inline: 0;
-}
-
-.review-packet-shell.is-guide-split .review-packet-row.is-markdown .review-packet-markdown {
-  max-width: var(--guide-measure);
-  color: var(--review-text);
-  font-size: 16px;
-  font-weight: 450;
-  line-height: 1.55;
-}
-
-.review-packet-shell.is-guide-split .review-packet-row.is-markdown .review-packet-md-heading {
-  color: var(--review-text);
-  font-size: 18px;
-  font-weight: 800;
 }
 
 .review-section-header {
   display: grid;
   gap: 10px;
-  padding-top: clamp(22px, 3vw, 36px);
-  padding-bottom: 12px;
+  padding-block: 8px 12px;
 }
 
 .review-section-header-eyebrow {
@@ -1250,16 +1256,31 @@ details[open] > summary .review-collapse-icon,
   align-items: baseline;
   gap: 10px;
   color: var(--review-muted);
-  font-size: 12px;
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-leading);
+  font-variant-numeric: tabular-nums;
 }
 
-.review-section-header-title {
+.review-section-header-title,
+.review-packet-shell .review-guide-panel-title {
   margin: 0;
   color: var(--review-text);
-  font-size: 26px;
-  font-weight: 780;
-  letter-spacing: -0.015em;
-  line-height: 1.2;
+  font-size: var(--font-section-size);
+  font-weight: var(--font-section-weight);
+  line-height: var(--font-section-leading);
+}
+
+.review-packet-shell .review-guide-panel-title {
+  margin-top: 12px;
+}
+
+.review-packet-shell .review-guide-panel-prose {
+  margin-top: 16px;
+  font-family: var(--font-prose);
+  font-size: var(--font-prose-size);
+  font-weight: var(--font-prose-weight);
+  line-height: var(--font-prose-leading);
 }
 
 .review-section-header-state {
@@ -1270,14 +1291,22 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-section-decision {
+  --review-decision-action-padding: 0 12px 0 10px;
+
+  position: sticky;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 8;
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  margin-top: 14px;
-  border-top: 1px solid var(--review-line);
-  padding-top: 20px;
+  gap: 12px 20px;
+  margin-top: 24px;
+  border: 1px solid var(--review-line-strong);
+  border-radius: 12px;
+  padding: 16px 20px;
+  background: var(--review-panel-raised);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.08);
 }
 
 .review-section-decision-copy {
@@ -1288,14 +1317,21 @@ details[open] > summary .review-collapse-icon,
 .review-section-decision-prompt {
   margin: 0;
   color: var(--review-text);
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
 }
 
 .review-section-decision-history {
   margin: 0;
   color: var(--review-warn);
-  font-size: 13px;
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-leading);
+}
+
+.review-section-decision .review-packet-section-actions {
+  max-width: 100%;
 }
 
 /* Decision buttons in the footer read as explicit labeled actions instead of
@@ -1307,12 +1343,27 @@ details[open] > summary .review-collapse-icon,
   width: auto;
   height: 32px;
   gap: 6px;
-  padding: 0 12px 0 10px;
+  padding: var(--review-decision-action-padding);
 }
 
 .review-section-decision .review-section-action .review-section-action-label {
   max-width: none;
   opacity: 1;
+}
+
+@media (max-width: 640px) {
+  .review-section-decision {
+    --review-decision-action-padding: 0 8px;
+
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    padding: 14px;
+  }
+
+  .review-section-decision .review-packet-section-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
 }
 
 .review-section-summary-status {
@@ -1324,7 +1375,7 @@ details[open] > summary .review-collapse-icon,
 .review-packet-row.is-markdown.is-annotation {
   position: static;
   z-index: auto;
-  margin: 8px 0 -8px;
+  margin: 8px auto -8px;
   overflow: visible;
   border-bottom: 0;
   padding: 2px 0;
@@ -1339,15 +1390,14 @@ details[open] > summary .review-collapse-icon,
   max-height: none;
   overflow: visible;
   -webkit-line-clamp: unset;
-  line-height: 1.45;
+  line-height: var(--font-prose-leading);
 }
 
 .review-packet-row.is-markdown.is-annotation .review-packet-md-heading {
-  margin: 0;
-  color: var(--review-muted);
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.35;
+  color: var(--review-text);
+  font-size: var(--font-subheading-size);
+  font-weight: var(--font-subheading-weight);
+  line-height: var(--font-subheading-leading);
 }
 
 .review-packet-point-list {
@@ -1377,28 +1427,118 @@ details[open] > summary .review-collapse-icon,
 
 .review-packet-point-body {
   color: var(--review-text);
-  font-size: 16px;
-  line-height: 1.5;
+  font-family: var(--font-prose);
+  font-size: var(--font-prose-size);
+  font-weight: var(--font-prose-weight);
+  line-height: var(--font-prose-leading);
 }
 
 .review-packet-markdown {
   color: var(--review-text);
-  line-height: 1.55;
+  font-family: var(--font-prose);
+  font-size: var(--font-prose-size);
+  font-weight: var(--font-prose-weight);
+  line-height: var(--font-prose-leading);
+  overflow-wrap: anywhere;
+}
+
+[data-markdown-output] > * {
+  margin-block: 0;
+}
+
+[data-markdown-output] > * + * {
+  margin-top: 1em;
+}
+
+[data-markdown-output] :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--review-text);
+  font-size: var(--font-subheading-size);
+  font-weight: var(--font-subheading-weight);
+  line-height: var(--font-subheading-leading);
+}
+
+[data-markdown-output] :is(ul, ol) {
+  padding-left: 1.4em;
+}
+
+[data-markdown-output] ul {
+  list-style: disc;
+}
+
+[data-markdown-output] ol {
+  list-style: decimal;
+}
+
+[data-markdown-output] li + li {
+  margin-top: 0.4em;
+}
+
+[data-markdown-output] strong {
+  font-weight: var(--font-subheading-weight);
+}
+
+[data-markdown-output] a {
+  color: var(--review-text);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+[data-markdown-output] a:hover {
+  color: var(--review-blue);
+}
+
+[data-markdown-output] blockquote {
+  border-left: 2px solid var(--review-line-strong);
+  padding-left: 1em;
+  color: var(--review-muted);
+}
+
+[data-markdown-output] pre {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--review-line);
+  border-radius: 8px;
+  background: var(--review-panel-raised);
+  padding: 1em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+[data-markdown-output] p:has(> img) {
+  max-width: 100%;
+  margin-block: 1.5em;
+  border: 1px solid var(--ds-line);
+  border-radius: 10px;
+  background: var(--ds-panel);
+  padding: clamp(12px, 2vw, 20px);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ds-line-strong) transparent;
+}
+
+[data-markdown-output] img {
+  display: block;
+  width: 100%;
+  min-width: 36rem;
+  max-width: 40rem;
+  height: auto;
+  margin-inline: auto;
 }
 
 .review-packet-md-heading {
-  margin: 0 0 10px;
+  margin: 0 0 0.5em;
   color: var(--review-text);
-  font-weight: 800;
-  line-height: 1.25;
+  font-family: var(--font-sans);
+  font-weight: var(--font-subheading-weight);
+  line-height: var(--font-subheading-leading);
 }
 
 .review-packet-md-heading.is-h3 {
-  font-size: 18px;
+  font-size: var(--font-subheading-size);
 }
 
 .review-packet-md-heading.is-h4 {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .review-packet-md-paragraph {
@@ -1407,29 +1547,39 @@ details[open] > summary .review-collapse-icon,
 
 .review-packet-md-paragraph + .review-packet-md-paragraph,
 .review-packet-md-paragraph + .review-packet-md-list,
-.review-packet-md-list + .review-packet-md-paragraph,
-.review-packet-md-list + .review-packet-md-heading,
+.review-packet-md-list + .review-packet-md-paragraph {
+  margin-top: 1em;
+}
+
+.review-packet-markdown > * + .review-packet-md-heading {
+  margin-top: 1.75em;
+}
+
 .review-packet-md-heading + .review-packet-md-paragraph,
 .review-packet-md-heading + .review-packet-md-list {
-  margin-top: 10px;
+  margin-top: 0.5em;
 }
 
 .review-packet-md-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
   padding-left: 18px;
   list-style: disc;
 }
 
-.review-packet-inline-code {
-  border: 1px solid var(--review-line);
+.review-packet-inline-code,
+.review-packet-markdown :not(pre) > code,
+.review-guide-panel-prose code {
+  border: 0;
   border-radius: 4px;
-  background: var(--review-panel-raised);
-  padding: 1px 4px;
-  color: var(--review-text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: color-mix(in srgb, var(--review-text) 7%, transparent);
+  padding: 0.08em 0.22em;
+  color: inherit;
+  font-family: var(--font-mono);
   font-size: 0.9em;
+  font-weight: var(--font-code-weight);
+  font-variant-ligatures: none;
 }
 
 .review-packet-hunk {
@@ -1530,32 +1680,47 @@ details[open] > summary .review-collapse-icon,
 /* Reviews controls slotted into Pierre's file header — the single hunk
    header. These elements are created by the diff renderer (light DOM,
    slotted into the Pierre shadow root). */
-.reviews-diff-header-toggle {
-  display: inline-grid;
-  width: 24px;
-  height: 24px;
+.reviews-diff-header-prefix {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid transparent;
-  border-radius: 6px;
+}
+
+.reviews-diff-header-toggle {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  width: auto;
+  height: auto;
+  align-items: center;
+  padding: 0 12px;
+  border: 0;
+  border-radius: inherit;
   background: transparent;
   color: var(--review-muted);
   cursor: pointer;
 }
 
-.reviews-diff-header-toggle:hover,
-.reviews-diff-header-toggle:focus-visible {
-  border-color: var(--review-line-strong);
-  background: var(--review-hover);
+.reviews-diff-header-toggle:hover {
   color: var(--review-text);
 }
 
+.reviews-diff-header-toggle:focus-visible {
+  outline: 2px solid var(--review-focus);
+  outline-offset: -3px;
+}
+
 .reviews-diff-header-chevron {
-  display: inline-block;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   transform: rotate(0deg);
   transition: transform 140ms ease;
 }
@@ -1568,8 +1733,10 @@ details[open] > summary .review-collapse-icon,
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--font-meta-size);
+  font-weight: var(--font-meta-weight);
+  line-height: var(--font-meta-leading);
 }
 
 .reviews-diff-header-hunk {
@@ -1578,7 +1745,7 @@ details[open] > summary .review-collapse-icon,
 
 .reviews-diff-header-state {
   color: var(--review-muted);
-  font-weight: 700;
+  font-weight: var(--weight-medium);
 }
 
 .reviews-diff-header-state.is-viewed {
@@ -1586,16 +1753,18 @@ details[open] > summary .review-collapse-icon,
 }
 
 .reviews-diff-header-viewed {
-  min-height: 24px;
+  position: relative;
+  min-height: 28px;
+  pointer-events: auto;
   cursor: pointer;
   border: 1px solid var(--review-line);
   border-radius: 6px;
   background: transparent;
   padding: 0 8px;
   color: var(--review-muted);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
+  font-size: var(--font-meta-size);
+  font-weight: var(--weight-medium);
+  line-height: var(--font-meta-leading);
 }
 
 .reviews-diff-header-viewed:hover,
@@ -1603,6 +1772,17 @@ details[open] > summary .review-collapse-icon,
   border-color: var(--review-line-strong);
   background: var(--review-hover);
   color: var(--review-text);
+}
+
+.reviews-diff-header-viewed[aria-pressed="true"] {
+  border-color: var(--review-line-strong);
+  color: var(--review-text);
+}
+
+@media (pointer: coarse) {
+  .reviews-diff-header-viewed {
+    min-height: 44px;
+  }
 }
 
 .review-packet-task,
@@ -1711,7 +1891,7 @@ details[open] > summary .review-collapse-icon,
   z-index: 30;
   top: var(--rev-header-h);
   display: grid;
-  grid-template-columns: var(--guide-rail-w) minmax(var(--guide-panel-min), var(--guide-panel-max));
+  grid-template-columns: var(--guide-rail-w);
   align-self: start;
   min-width: 0;
   max-height: calc(100vh - var(--rev-header-h));
@@ -1772,6 +1952,18 @@ details[open] > summary .review-collapse-icon,
   flex-direction: column;
   align-items: center;
   gap: 9px;
+}
+
+.review-edge-rail-ticks .review-edge-tick {
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 150ms ease, transform 180ms ease;
+  transition-delay: var(--guide-item-delay, 0ms);
+}
+
+.review-guide-shell.is-flyout-open .review-edge-rail-ticks .review-edge-tick {
+  opacity: 0;
+  transform: translateX(-6px);
 }
 
 .review-edge-tick {
@@ -1861,8 +2053,24 @@ details[open] > summary .review-collapse-icon,
    tab order, pointer events and the accessibility tree. No visibility swap is
    needed, so the panel is focusable the moment it opens. */
 .review-guide-shell.is-flyout-open .review-guide-flyout {
+  left: 0;
   opacity: 1;
   transform: translateX(0);
+}
+
+.review-guide-shell.is-flyout-open .review-edge-rail {
+  display: none;
+}
+
+@media (min-width: 769px) {
+  .review-packet-shell.has-outline:has(> .review-guide-shell.is-flyout-open) {
+    grid-template-columns: var(--guide-flyout-w) minmax(0, 1fr);
+  }
+
+  .review-guide-shell.is-flyout-open {
+    grid-template-columns: var(--guide-flyout-w);
+    min-height: calc(100vh - var(--rev-header-h));
+  }
 }
 
 .review-guide-flyout-head {
@@ -2007,19 +2215,13 @@ details[open] > summary .review-collapse-icon,
   padding: 48px 40px;
 }
 
-/* The unified guide panel is navigation only; the section reads in the
-   content column. */
-.review-guide-panel-inner.is-nav {
-  padding: 28px 20px;
-}
-
 .review-guide-eyebrow {
   display: block;
   color: var(--review-muted);
-  font-size: 11px;
-  font-weight: 760;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
+  font-size: var(--font-label-size);
+  font-weight: var(--font-label-weight);
+  letter-spacing: 0.06em;
+  line-height: var(--font-label-leading);
   text-transform: uppercase;
 }
 
@@ -2046,16 +2248,6 @@ details[open] > summary .review-collapse-icon,
 
 .review-guide-panel-prose p + p {
   margin-top: 0.9em;
-}
-
-.review-guide-panel-prose code {
-  border: 1px solid var(--review-line);
-  border-radius: 4px;
-  background: var(--review-panel-raised);
-  padding: 1px 5px;
-  color: var(--review-text);
-  font-family: var(--font-mono);
-  font-size: 0.86em;
 }
 
 .review-guide-panel-meta,
@@ -2444,8 +2636,170 @@ details[open] > summary .review-collapse-icon,
 }
 
 @media (max-width: 768px) {
-  .review-page {
-    --review-main-nav-h: 64px;
+  .review-page,
+  .review-page .ds-shell {
+    min-height: 100svh;
+  }
+
+  .review-page .ds-shell-topbar {
+    position: static;
+    min-height: 48px;
+    gap: 8px;
+    background: var(--review-bg);
+    padding-inline: 12px;
+    backdrop-filter: none;
+  }
+
+  .review-page .design-brand,
+  .review-page .ds-shell-actions .review-button {
+    min-height: 44px;
+  }
+
+  .review-page .ds-shell-actions {
+    min-width: 0;
+  }
+
+  .review-page .ds-shell-actions .review-button {
+    min-width: 0;
+    max-width: 60vw;
+  }
+
+  /* Keep the signed-out button compact without shrinking its tap area. */
+  .review-page .ds-shell-actions > a.review-button {
+    position: relative;
+    min-height: 32px;
+  }
+
+  .review-page .ds-shell-actions > a.review-button::after {
+    content: "";
+    position: absolute;
+    inset: -7px 0;
+  }
+
+  .review-page .ds-shell-actions .review-button > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .review-page .ds-shell-actions img {
+    flex: 0 0 auto;
+  }
+
+  .review-toolbar {
+    min-height: 48px;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .review-toolbar-context {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .review-toolbar .review-header {
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .review-toolbar .review-title,
+  .review-toolbar .review-header .review-title.is-packet-title {
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .review-toolbar-views {
+    width: auto;
+  }
+
+  .review-toolbar .review-code-view-switcher {
+    gap: 0;
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .review-toolbar .review-code-view-tab,
+  .review-toolbar .review-outline-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .review-toolbar .review-code-view-tab,
+  .review-toolbar .review-code-view-tab.is-active {
+    position: relative;
+    isolation: isolate;
+    width: 44px;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .review-toolbar .review-code-view-tab::before {
+    position: absolute;
+    z-index: -1;
+    inset: 6px;
+    border-radius: 5px;
+    content: "";
+  }
+
+  .review-toolbar .review-code-view-tab:hover::before {
+    background: var(--review-hover);
+  }
+
+  .review-toolbar .review-code-view-tab.is-active::before {
+    background: var(--review-text);
+  }
+
+  .review-code-view-icon {
+    display: inline-block;
+  }
+
+  .review-code-view-label {
+    display: none;
+  }
+
+  .review-toolbar .review-revision-nav,
+  .review-outline-toggle-full {
+    display: none;
+  }
+
+  .review-outline-toggle-short {
+    display: inline;
+  }
+
+  .review-mobile-revision-nav {
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  .review-mobile-revision-nav .fieldset {
+    margin: 0;
+    gap: 0;
+    padding: 0;
+  }
+
+  .review-revision-select {
+    display: block;
+    width: 60px;
+    min-height: 44px;
+    border: 1px solid var(--review-line-strong);
+    border-radius: 6px;
+    background: var(--review-panel);
+    padding-inline: 6px;
+    color: var(--review-text);
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  .review-section-decision.is-readonly {
+    position: static;
   }
 
   .review-diff-style #diff-style-split {
@@ -2458,8 +2812,7 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-packet-shell,
-  .review-packet-shell.is-guide-unified,
-  .review-packet-shell.is-guide-split {
+  .review-packet-shell.has-outline {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2506,13 +2859,20 @@ details[open] > summary .review-collapse-icon,
     bottom: auto;
     left: 0;
     width: min(var(--guide-flyout-w), calc(100vw - 32px));
-    max-height: 70vh;
+    max-height: 70svh;
     border: 1px solid var(--review-line-strong);
     border-left: 0;
     border-radius: 0 8px 8px 0;
   }
 
-  /* The rail strip and its flyout cover navigation on phones. */
+  .review-guide-shell.is-flyout-open .review-guide-flyout {
+    position: relative;
+    top: 0;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
   .review-guide-panel {
     display: none;
   }
@@ -2578,6 +2938,7 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-guide-flyout,
+  .review-edge-rail-ticks .review-edge-tick,
   .review-section-action,
   .review-section-action-label {
     transition: none;
@@ -2617,14 +2978,17 @@ details[open] > summary .review-collapse-icon,
     order: 3;
   }
 
-  .review-packet-shell.is-guide-split .review-packet-grid,
-  .review-packet-shell.is-guide-unified .review-packet-grid {
+  .review-packet-shell.is-guide-split .review-packet-grid {
     padding-inline: 16px;
   }
 
-  .review-packet-shell.is-guide-split .review-packet-row.is-markdown .review-packet-markdown,
-  .review-packet-shell.is-guide-unified .review-packet-row.is-markdown .review-packet-markdown {
+  .review-packet-shell.is-guide-split .review-packet-row.is-markdown .review-packet-markdown {
     font-size: 17px;
     line-height: 1.5;
   }
+}
+
+/* Guide measure: split prose uses a 72ch reading column (#100). */
+.review-packet-shell.is-guide-split {
+  --guide-measure: 72ch;
 }

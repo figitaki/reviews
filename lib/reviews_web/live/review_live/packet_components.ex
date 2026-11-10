@@ -17,14 +17,19 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :published_threads, :list, required: true
   attr :current_user, :any, required: true
   attr :diff_style, :string, required: true
-  attr :expanded_section_ids, :any, required: true
   attr :expanded_hunk_ids, :any, required: true
   attr :show_packet_outline, :boolean, default: true
   attr :active_section_index, :integer, default: nil
 
   def packet(assigns) do
     sections = packet_sections(assigns)
-    file_labels = file_labels(assigns.file_diffs)
+
+    visible_sections =
+      if assigns.show_packet_outline do
+        Enum.filter(sections, &(&1.index == assigns.active_section_index))
+      else
+        sections
+      end
 
     packet_outline =
       packet_outline(
@@ -39,44 +44,31 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     assigns =
       assigns
       |> assign(:sections, sections)
-      |> assign(:file_labels, file_labels)
+      |> assign(:visible_sections, visible_sections)
+      |> assign(:file_labels, file_labels(assigns.file_diffs))
       |> assign(:packet_outline, packet_outline)
       |> assign(
         :packet_outline_sections_by_index,
         Map.new(packet_outline.sections, &{&1.index, &1})
-      )
-      |> assign(
-        :packet_nav,
-        build_packet_nav(
-          sections,
-          assigns.hunks_by_path,
-          file_labels,
-          assigns.expanded_section_ids
-        )
       )
 
     ~H"""
     <section id="review-packet" class="review-packet" aria-labelledby="review-packet-title">
       <div class={[
         "review-packet-shell",
+        @show_packet_outline && "has-outline",
         !@show_packet_outline && "is-outline-hidden",
-        @show_packet_outline && @diff_style == "unified" && "is-guide-unified",
         @show_packet_outline && @diff_style == "split" && "is-guide-split"
       ]}>
         <.packet_guide_shell
           :if={@show_packet_outline}
           outline={@packet_outline}
           active_section_index={@active_section_index}
-          current_user={@current_user}
-          diff_style={@diff_style}
         />
 
         <div class="review-packet-grid">
           <section
-            :if={
-              focused_guide_layout?(@show_packet_outline, @diff_style) &&
-                is_nil(@active_section_index)
-            }
+            :if={is_nil(@active_section_index)}
             id="review-split-inline-overview"
             class="review-packet-inline-overview"
             aria-labelledby="review-split-inline-overview-title"
@@ -88,129 +80,24 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             />
           </section>
 
+          <%!-- LiveView 1.2.11 loses nested template references in a keyed list
+          when toggling from one section to all sections. Stable article IDs
+          preserve the diff islands without keying this comprehension. --%>
           <article
-            :for={section <- @sections}
-            :if={
-              packet_section_visible?(
-                @show_packet_outline,
-                @diff_style,
-                @active_section_index,
-                section.index
-              )
-            }
-            :key={section.index}
+            :for={section <- @visible_sections}
             id={"packet-section-#{section.index}"}
             class={[
-              "review-packet-section",
-              section.effective_status && "is-decided",
-              guide_section_open?(
-                @show_packet_outline,
-                @diff_style,
-                @active_section_index,
-                @expanded_section_ids,
-                section.index
-              ) && "is-open"
+              "review-packet-section is-open",
+              section.effective_status && "is-decided"
             ]}
           >
             <.packet_section_header
-              :if={focused_guide_layout?(@show_packet_outline, @diff_style)}
               section={section}
               section_count={@packet_outline.summary.section_count}
               current_user={@current_user}
             />
 
-            <header
-              :if={!focused_guide_layout?(@show_packet_outline, @diff_style)}
-              class="review-packet-section-summary"
-            >
-              <button
-                type="button"
-                class="review-packet-section-heading"
-                phx-click="toggle_packet_section"
-                phx-value-section_index={section.index}
-                aria-expanded={
-                  guide_section_open?(
-                    @show_packet_outline,
-                    @diff_style,
-                    @active_section_index,
-                    @expanded_section_ids,
-                    section.index
-                  )
-                }
-                aria-controls={"packet-section-#{section.index}-body"}
-              >
-                <div class="review-packet-section-title-row">
-                  <h3 class="review-packet-section-title">{section.title}</h3>
-                  <span
-                    class="review-packet-section-estimate"
-                    title={"Estimated from #{section.estimate.changed_lines} changed lines across #{section.estimate.hunk_count} hunk rows."}
-                  >
-                    {section.estimate.effort}
-                    <.change_stat
-                      additions={section.estimate.additions}
-                      deletions={section.estimate.deletions}
-                    /> ~{section.estimate.time}
-                  </span>
-                </div>
-              </button>
-
-              <div class="review-packet-section-controls">
-                <span class="review-section-summary-status">
-                  {section_decision_state_label(section)}
-                </span>
-
-                <button
-                  type="button"
-                  class="review-packet-section-toggle"
-                  phx-click="toggle_packet_section"
-                  phx-value-section_index={section.index}
-                  aria-expanded={
-                    guide_section_open?(
-                      @show_packet_outline,
-                      @diff_style,
-                      @active_section_index,
-                      @expanded_section_ids,
-                      section.index
-                    )
-                  }
-                  aria-controls={"packet-section-#{section.index}-body"}
-                >
-                  <span class="sr-only">Toggle {section.title}</span>
-                  <.icon name="hero-chevron-down" class="review-collapse-icon" />
-                </button>
-              </div>
-            </header>
-
-            <p
-              :if={
-                section.summary != "" &&
-                  !focused_guide_layout?(@show_packet_outline, @diff_style) &&
-                  !guide_section_open?(
-                    @show_packet_outline,
-                    @diff_style,
-                    @active_section_index,
-                    @expanded_section_ids,
-                    section.index
-                  )
-              }
-              class="review-packet-section-summary-text"
-            >
-              {section.summary}
-            </p>
-
-            <div
-              :if={
-                guide_section_open?(
-                  @show_packet_outline,
-                  @diff_style,
-                  @active_section_index,
-                  @expanded_section_ids,
-                  section.index
-                )
-              }
-              id={"packet-section-#{section.index}-body"}
-              class="review-packet-section-body"
-            >
+            <div id={"packet-section-#{section.index}-body"} class="review-packet-section-body">
               <div class="review-packet-row-list">
                 <.packet_unit
                   :for={unit <- packet_units(section, @hunks_by_path)}
@@ -232,7 +119,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 section={section}
                 current_user={@current_user}
                 next_section={@packet_outline_sections_by_index[section.index + 1]}
-                diff_style={@diff_style}
                 show_nav={@show_packet_outline}
               />
             </div>
@@ -277,14 +163,19 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   attr :outline, :map, required: true
   attr :active_section_index, :integer, default: nil
-  attr :current_user, :any, default: nil
-  attr :diff_style, :string, required: true
 
   defp packet_guide_shell(assigns) do
+    assigns =
+      assigns
+      |> assign(
+        :active_section,
+        active_outline_section(assigns.outline, assigns.active_section_index)
+      )
+
     ~H"""
     <aside
       id="review-guide-shell"
-      class={["review-guide-shell is-packet-guide", "is-#{@diff_style}"]}
+      class="review-guide-shell is-packet-guide"
       phx-hook=".GuideFlyout"
       aria-label="Review guide"
     >
@@ -321,10 +212,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               "review-edge-tick",
               section.index == @active_section_index && "is-active"
             ]}
-            phx-click={guide_section_nav_event(@diff_style, section.target_id)}
+            phx-click="select_guide_section"
             phx-value-section_index={section.index}
             phx-value-target_id={section.target_id}
-            title={section.title}
+            title={"#{section.title} — #{section.status_label}"}
+            style={"--guide-item-delay: #{min(section.index + 1, 6) * 24}ms"}
             aria-label={"#{pad2(section.index + 1)} #{section.title}"}
             aria-describedby={section.effective_status && "review-guide-tick-#{section.index}-state"}
             aria-current={if(section.index == @active_section_index, do: "true", else: "false")}
@@ -375,36 +267,85 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           </button>
         </div>
 
-        <.guide_nav_groups
-          outline={@outline}
-          active_section_index={@active_section_index}
-          diff_style={@diff_style}
-        />
-      </div>
-
-      <section id="review-guide-panel" class="review-guide-panel" aria-label="Section list">
-        <div class="review-guide-panel-inner is-nav">
-          <.guide_nav_groups
-            outline={@outline}
-            active_section_index={@active_section_index}
-            diff_style={@diff_style}
-          />
+        <div class="review-guide-flyout-group">
+          <div class="review-guide-flyout-label">Packet</div>
+          <button
+            type="button"
+            class={["review-guide-flyout-section", is_nil(@active_section_index) && "is-active"]}
+            phx-click="select_packet_overview"
+          >
+            <span class="review-guide-flyout-num">★</span>
+            <span>Overview</span>
+          </button>
         </div>
-      </section>
+
+        <div class="review-guide-flyout-group">
+          <div class="review-guide-flyout-label">Sections</div>
+          <div
+            :for={section <- @outline.sections}
+            :key={section.index}
+            class="review-guide-flyout-item"
+          >
+            <button
+              type="button"
+              class={[
+                "review-guide-flyout-section",
+                section.index == @active_section_index && "is-active"
+              ]}
+              phx-click="select_guide_section"
+              phx-value-section_index={section.index}
+              phx-value-target_id={section.target_id}
+            >
+              <span class="review-guide-flyout-num">{pad2(section.index + 1)}</span>
+              <span class="review-guide-flyout-title">{section.title}</span>
+              <span
+                :if={section.effective_status}
+                class={["review-guide-flyout-state", "is-#{section.effective_status}"]}
+              >
+                <.section_status_icon status={section.effective_status} /> {section.status_label}
+              </span>
+            </button>
+
+            <div
+              :if={section.index == @active_section_index && section.files != []}
+              class="review-guide-flyout-files"
+            >
+              <button
+                :for={file <- section.files}
+                :key={file.path}
+                type="button"
+                class="review-guide-flyout-file"
+                phx-click="packet_nav_jump"
+                phx-value-section_index={section.index}
+                phx-value-target_id={file.target_id}
+                disabled={is_nil(file.target_id)}
+                translate="no"
+              >
+                {file.basename}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </aside>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".GuideFlyout">
       export default {
         mounted() {
-          this.open = false
+          const savedOpen = localStorage.getItem("reviews:guide-map-open")
+          this.open = savedOpen === null
+            ? window.matchMedia("(min-width: 769px)").matches
+            : savedOpen === "true"
           this.toggle = this.el.querySelector("[data-guide-flyout-toggle]")
           this.panel = this.el.querySelector("[data-guide-flyout-panel]")
+          this.ticks = this.el.querySelector(".review-edge-rail-ticks")
 
-          // Closing makes the panel inert, so focus must leave it first.
+          // Reveal the rail before restoring focus to its menu button.
           this.setOpen = (open, {focusToggle = false} = {}) => {
             if (open === this.open) return
-            if (!open && focusToggle) this.toggle?.focus({preventScroll: true})
             this.open = open
+            localStorage.setItem("reviews:guide-map-open", String(open))
             this.sync()
+            if (!open && focusToggle) this.toggle?.focus({preventScroll: true})
           }
 
           this.onToggle = event => {
@@ -430,23 +371,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           this.onPanelClick = event => {
             if (event.target.closest("[data-guide-flyout-close]")) {
               this.setOpen(false, {focusToggle: true})
-              return
             }
-            if (!event.target.closest("[phx-click]")) return
-            // The jump that follows moves focus to its target; park focus on
-            // the toggle meanwhile so the panel never goes inert around it.
-            this.setOpen(false, {focusToggle: true})
-          }
-
-          this.onPointerDown = event => {
-            if (!this.open) return
-            if (this.panel?.contains(event.target) || this.toggle?.contains(event.target)) return
-            this.setOpen(false)
           }
 
           this.toggle?.addEventListener("click", this.onToggle)
           this.panel?.addEventListener("click", this.onPanelClick)
-          document.addEventListener("pointerdown", this.onPointerDown)
           window.addEventListener("keydown", this.onKeyDown)
           this.sync()
         },
@@ -459,7 +388,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         destroyed() {
           this.toggle?.removeEventListener("click", this.onToggle)
           this.panel?.removeEventListener("click", this.onPanelClick)
-          document.removeEventListener("pointerdown", this.onPointerDown)
           window.removeEventListener("keydown", this.onKeyDown)
         },
 
@@ -467,79 +395,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           const open = this.open
           this.el.classList.toggle("is-flyout-open", open)
           if (this.panel) this.panel.inert = !open
+          if (this.ticks) this.ticks.inert = open
           this.toggle?.setAttribute("aria-expanded", open ? "true" : "false")
+          this.toggle?.setAttribute("aria-label", open ? "Close guide map" : "Open guide map")
         },
       }
     </script>
-    """
-  end
-
-  attr :outline, :map, required: true
-  attr :active_section_index, :integer, default: nil
-  attr :diff_style, :string, required: true
-
-  # Section navigation shared by the rail flyout and the unified guide panel.
-  defp guide_nav_groups(assigns) do
-    ~H"""
-    <div class="review-guide-flyout-group">
-      <div class="review-guide-flyout-label">Packet</div>
-      <button
-        type="button"
-        class={["review-guide-flyout-section", is_nil(@active_section_index) && "is-active"]}
-        phx-click="select_packet_overview"
-      >
-        <span class="review-guide-flyout-num">★</span>
-        <span>Overview</span>
-      </button>
-    </div>
-
-    <div class="review-guide-flyout-group">
-      <div class="review-guide-flyout-label">Sections</div>
-      <div
-        :for={section <- @outline.sections}
-        :key={section.index}
-        class="review-guide-flyout-item"
-      >
-        <button
-          type="button"
-          class={[
-            "review-guide-flyout-section",
-            section.index == @active_section_index && "is-active"
-          ]}
-          phx-click={guide_section_nav_event(@diff_style, section.target_id)}
-          phx-value-section_index={section.index}
-          phx-value-target_id={section.target_id}
-        >
-          <span class="review-guide-flyout-num">{pad2(section.index + 1)}</span>
-          <span class="review-guide-flyout-title">{section.title}</span>
-          <span
-            :if={section.effective_status}
-            class={["review-guide-flyout-state", "is-#{section.effective_status}"]}
-          >
-            <.section_status_icon status={section.effective_status} /> {section.status_label}
-          </span>
-        </button>
-
-        <div
-          :if={section.index == @active_section_index && section.files != []}
-          class="review-guide-flyout-files"
-        >
-          <button
-            :for={file <- section.files}
-            :key={file.path}
-            type="button"
-            class="review-guide-flyout-file"
-            phx-click="packet_nav_jump"
-            phx-value-section_index={section.index}
-            phx-value-target_id={file.target_id}
-            disabled={is_nil(file.target_id)}
-            translate="no"
-          >
-            {file.basename}
-          </button>
-        </div>
-      </div>
-    </div>
     """
   end
 
@@ -556,6 +417,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       <h2 id={@title_id} class="review-guide-panel-title">{@outline.overview.title}</h2>
       <.markdown
         :if={@outline.overview.summary != ""}
+        id={"#{@title_id}-markdown"}
         body={@outline.overview.summary}
         class="review-guide-panel-prose"
       />
@@ -571,7 +433,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         :if={@first_section}
         type="button"
         class="review-guide-begin"
-        phx-click={if(@first_section.target_id, do: "packet_nav_jump", else: "select_guide_section")}
+        phx-click="select_guide_section"
         phx-value-section_index={@first_section.index}
         phx-value-target_id={@first_section.target_id}
       >
@@ -602,6 +464,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         <span class="review-section-header-meta">
           <span>{@section.estimate.effort}</span>
           <.change_stat
+            :if={@section.estimate.hunk_count > 0}
             additions={@section.estimate.additions}
             deletions={@section.estimate.deletions}
           />
@@ -638,12 +501,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :section, :map, required: true
   attr :current_user, :any, default: nil
   attr :next_section, :map, default: nil
-  attr :diff_style, :string, default: "split"
   attr :show_nav, :boolean, default: false
 
   defp packet_section_decision(assigns) do
     ~H"""
-    <footer id={"packet-section-#{@section.index}-decision"} class="review-section-decision">
+    <footer
+      id={"packet-section-#{@section.index}-decision"}
+      class={["review-section-decision", !@current_user && "is-readonly"]}
+    >
       <div class="review-section-decision-copy">
         <span class="review-guide-eyebrow">Section decision</span>
         <p class="review-section-decision-prompt">{section_decision_prompt(@section)}</p>
@@ -677,28 +542,33 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           </.link>
         <% end %>
       </div>
-      <nav :if={@show_nav} class="review-section-next" aria-label="Section navigation">
-        <button
-          :if={@next_section}
-          type="button"
-          class="review-guide-begin review-section-next-button"
-          phx-click={guide_section_nav_event(@diff_style, @next_section.target_id)}
-          phx-value-section_index={@next_section.index}
-          phx-value-target_id={@next_section.target_id}
-        >
-          Next: {pad2(@next_section.index + 1)} {@next_section.title}
-          <span aria-hidden="true">→</span>
-        </button>
-        <button
-          :if={is_nil(@next_section)}
-          type="button"
-          class="review-guide-begin review-section-next-button is-overview"
-          phx-click="select_packet_overview"
-        >
-          Back to overview
-        </button>
-      </nav>
     </footer>
+    <nav
+      :if={@show_nav}
+      id={"packet-section-#{@section.index}-nav"}
+      class="review-section-next"
+      aria-label="Section navigation"
+    >
+      <button
+        :if={@next_section}
+        type="button"
+        class="review-guide-begin review-section-next-button"
+        phx-click="select_guide_section"
+        phx-value-section_index={@next_section.index}
+        phx-value-target_id={@next_section.target_id}
+      >
+        Next: {pad2(@next_section.index + 1)} {@next_section.title}
+        <span aria-hidden="true">→</span>
+      </button>
+      <button
+        :if={is_nil(@next_section)}
+        type="button"
+        class="review-guide-begin review-section-next-button is-overview"
+        phx-click="select_packet_overview"
+      >
+        Back to overview
+      </button>
+    </nav>
     """
   end
 
@@ -857,55 +727,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     MapSet.member?(expanded_section_ids, section_index)
   end
 
-  defp guide_section_open?(
-         true,
-         "unified",
-         active_section_index,
-         _expanded_section_ids,
-         section_index
-       ),
-       do: active_section_index == section_index
-
-  defp guide_section_open?(
-         true,
-         "split",
-         active_section_index,
-         _expanded_section_ids,
-         section_index
-       ),
-       do: active_section_index == section_index
-
-  defp guide_section_open?(
-         _show_packet_outline,
-         _diff_style,
-         _active_section_index,
-         expanded_section_ids,
-         section_index
-       ) do
-    section_expanded?(expanded_section_ids, section_index)
-  end
-
-  defp packet_section_visible?(true, "split", active_section_index, section_index),
-    do: active_section_index == section_index
-
-  defp packet_section_visible?(
-         _show_packet_outline,
-         _diff_style,
-         _active_section_index,
-         _section_index
-       ),
-       do: true
-
-  defp focused_guide_layout?(true, diff_style) when diff_style in ["split", "unified"], do: true
-  defp focused_guide_layout?(_show_packet_outline, _diff_style), do: false
-
-  defp guide_section_nav_event("split", _target_id), do: "select_guide_section"
-
-  defp guide_section_nav_event(_diff_style, target_id) when is_binary(target_id),
-    do: "packet_nav_jump"
-
-  defp guide_section_nav_event(_diff_style, _target_id), do: "select_guide_section"
-
   defp outline_files(section, hunks_by_path, file_by_path) do
     section.rows
     |> Enum.with_index()
@@ -977,6 +798,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
     Map.put(file, :view_state, state)
   end
+
+  defp active_outline_section(%{sections: sections}, index) when is_integer(index) do
+    Enum.find(sections, &(&1.index == index))
+  end
+
+  defp active_outline_section(_outline, _index), do: nil
 
   defp outline_directory(path) do
     case Path.dirname(path || "") do
@@ -1391,7 +1218,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :section_title, :string, default: nil
   attr :file_label, :string, default: nil
   attr :show_hunk_label?, :boolean, default: true
-  attr :dedupe_intro?, :boolean, default: false
 
   def packet_row(%{row: row} = assigns) do
     assigns =
@@ -1406,10 +1232,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> assign(:file, file_for(assigns.file_diffs, ReviewPacket.text(row, "path")))
       |> assign(:hunk, ReviewHunks.for_packet_row(assigns.hunks_by_path, row))
       |> assign(:section_index, section_index_from_row_id(assigns.row_id))
-      |> assign(
-        :body_for_render,
-        dedupe_intro(assigns.dedupe_intro?, ReviewPacket.text(row, "body"))
-      )
 
     ~H"""
     <%= cond do %>
@@ -1441,59 +1263,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           class={["review-packet-row is-markdown", @annotation? && "is-annotation"]}
         >
           <.markdown
-            :if={@body_for_render != ""}
-            body={@body_for_render}
+            :if={@body != ""}
+            id={"#{@row_id}-markdown"}
+            body={@body}
             class="review-packet-markdown"
           />
         </div>
     <% end %>
     """
-  end
-
-  defp dedupe_intro(true, body) when is_binary(body) do
-    body
-    |> markdown_blocks()
-    |> drop_first_paragraph_block()
-    |> markdown_blocks_to_source()
-  end
-
-  defp dedupe_intro(_dedupe?, body), do: body || ""
-
-  defp drop_first_paragraph_block(blocks) do
-    {before_intro, rest} = Enum.split_while(blocks, &(&1.kind != :paragraph))
-
-    case rest do
-      [_paragraph | remaining] -> before_intro ++ remaining
-      [] -> blocks
-    end
-  end
-
-  defp markdown_blocks_to_source(blocks) do
-    blocks
-    |> Enum.map(&markdown_block_to_source/1)
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.join("\n\n")
-  end
-
-  defp markdown_block_to_source(%{kind: :heading, level: level, segments: segments}) do
-    "#{String.duplicate("#", level)} #{segments_to_source(segments)}"
-  end
-
-  defp markdown_block_to_source(%{kind: :paragraph, segments: segments}) do
-    segments_to_source(segments)
-  end
-
-  defp markdown_block_to_source(%{kind: :list, items: items}) do
-    items
-    |> Enum.map(&("- " <> segments_to_source(&1)))
-    |> Enum.join("\n")
-  end
-
-  defp segments_to_source(segments) do
-    Enum.map_join(segments, "", fn
-      %{kind: :code, text: text} -> "`#{text}`"
-      %{text: text} -> text
-    end)
   end
 
   defp annotation_markdown?(body) when is_binary(body) do
@@ -1603,7 +1380,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :expanded_hunk_ids, :any, required: true
   attr :section_title, :string, default: nil
   attr :file_labels, :map, required: true
-  attr :dedupe_intro?, :boolean, default: false
 
   def packet_unit(%{unit: %{kind: :hunk_group} = unit} = assigns) do
     row = unit.row
@@ -1649,7 +1425,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       assigns
       |> assign(:row, row)
       |> assign(:row_id, row_id)
-      |> assign(:intro?, Map.get(assigns.unit, :intro?, false))
       |> assign(:file_label, Map.get(assigns.file_labels, ReviewPacket.text(row, "path")))
       |> assign(
         :show_hunk_label?,
@@ -1670,7 +1445,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       section_title={@section_title}
       file_label={@file_label}
       show_hunk_label?={@show_hunk_label?}
-      dedupe_intro?={@dedupe_intro? && @intro?}
     />
     """
   end
@@ -1828,6 +1602,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     "#{hunk.file_path} · hunk #{hunk.hunk_index} · #{line_ref} · #{stats}"
   end
 
+  attr :id, :string, required: true
   attr :body, :string, required: true
   attr :class, :string, default: "review-packet-markdown"
 
@@ -1835,29 +1610,31 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     assigns = assign(assigns, :blocks, markdown_blocks(assigns.body))
 
     ~H"""
-    <div class={@class}>
-      <%= for block <- @blocks do %>
-        <h3
-          :if={block.kind == :heading && block.level == 3}
-          class="review-packet-md-heading is-h3"
-        >
-          <.inline segments={block.segments} />
-        </h3>
-        <h4
-          :if={block.kind == :heading && block.level == 4}
-          class="review-packet-md-heading is-h4"
-        >
-          <.inline segments={block.segments} />
-        </h4>
-        <ul :if={block.kind == :list} class="review-packet-md-list">
-          <li :for={item <- block.items}>
-            <.inline segments={item} />
-          </li>
-        </ul>
-        <p :if={block.kind == :paragraph} class="review-packet-md-paragraph">
-          <.inline segments={block.segments} />
-        </p>
-      <% end %>
+    <div id={@id} class={@class} phx-hook="Markdown" data-markdown={@body}>
+      <div id={"#{@id}-output"} data-markdown-output phx-update="ignore">
+        <%= for block <- @blocks do %>
+          <h3
+            :if={block.kind == :heading && block.level == 3}
+            class="review-packet-md-heading is-h3"
+          >
+            <.inline segments={block.segments} />
+          </h3>
+          <h4
+            :if={block.kind == :heading && block.level == 4}
+            class="review-packet-md-heading is-h4"
+          >
+            <.inline segments={block.segments} />
+          </h4>
+          <ul :if={block.kind == :list} class="review-packet-md-list">
+            <li :for={item <- block.items}>
+              <.inline segments={item} />
+            </li>
+          </ul>
+          <p :if={block.kind == :paragraph} class="review-packet-md-paragraph">
+            <.inline segments={block.segments} />
+          </p>
+        <% end %>
+      </div>
     </div>
     """
   end

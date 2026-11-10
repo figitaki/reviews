@@ -3,103 +3,63 @@ defmodule ReviewsWeb.HomeLiveTest do
 
   import Phoenix.LiveViewTest
 
-  test "renders hero and install snippet", %{conn: conn} do
-    {:ok, view, html} = live(conn, ~p"/")
-
-    assert html =~ "Review any diff."
-    assert has_element?(view, "#hero-install-root")
-    assert has_element?(view, "[data-install-cmd]")
-    assert has_element?(view, "a[href$=\"github.com/figitaki/reviews\"]")
+  test "landing page remains indexable", %{conn: conn} do
+    conn = get(conn, ~p"/")
+    assert html_response(conn, 200)
+    assert get_resp_header(conn, "x-robots-tag") == []
   end
 
-  test "renders all four workflow chapters with demo CTAs", %{conn: conn} do
+  test "robots policy discourages sensitive routes without blocking the landing page", %{
+    conn: conn
+  } do
+    conn = get(conn, "/robots.txt")
+    policy = response(conn, 200)
+    assert policy =~ "User-agent: *"
+
+    disallowed =
+      for line <- String.split(policy, "\n"),
+          String.starts_with?(line, "Disallow:"),
+          do: line |> String.replace_prefix("Disallow:", "") |> String.trim()
+
+    assert Enum.sort(disallowed) == ["/api/", "/auth/", "/dev/", "/r/", "/settings"]
+    refute "/" in disallowed
+    assert get_resp_header(conn, "x-robots-tag") == []
+  end
+
+  test "offers the real demo and installation instead of an embedded walkthrough", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
-    for {step, label} <- [
-          {"push", "View section"},
-          {"review", "Request changes"},
-          {"reprompt", "Reprompt"},
-          {"final", "Approve"}
-        ] do
-      assert has_element?(view, "#chapter-#{step}")
+    assert has_element?(view, "#home-title", "Review any diff.")
+    assert has_element?(view, "#home-demo-link[href='/r/demo-review']", "Open demo review")
+    assert has_element?(view, "#reviews-home a[href='#home-install']")
+    assert has_element?(view, "#hero-install-root [data-install-cmd]", "install.sh | sh")
+    assert has_element?(view, "#hero-install-root button[data-install-copy]")
+    assert has_element?(view, "#hero-install-root [role='status']")
 
-      assert has_element?(
-               view,
-               "#chapter-#{step} button[phx-click=\"set_demo_step\"][phx-value-step=\"#{step}\"]",
-               label
-             )
+    assert has_element?(
+             view,
+             "#home-docs-link[href='https://github.com/figitaki/reviews#readme']"
+           )
+
+    for id <- ["home-packet", "home-decisions", "home-revisions"] do
+      assert has_element?(view, "##{id} h2")
     end
+
+    refute has_element?(view, "#home-demo")
+    refute has_element?(view, "[phx-click='set_demo_step']")
+    refute has_element?(view, "a[href$='#chapter-push']")
   end
 
-  test "demo CTAs advance the demo state", %{conn: conn} do
+  test "demo link opens a seeded review anonymously", %{conn: conn} do
+    Reviews.DemoReview.seed!()
     {:ok, view, _html} = live(conn, ~p"/")
 
-    assert has_element?(view, "#home-demo[data-step=\"intro\"]")
+    {:ok, demo, _html} =
+      view
+      |> element("#home-demo-link")
+      |> render_click()
+      |> follow_redirect(conn, ~p"/r/demo-review")
 
-    view
-    |> element("#chapter-push button", "View section")
-    |> render_click()
-
-    assert has_element?(
-             view,
-             "#home-demo[data-step=\"push\"] .home-demo-focus-panel.is-section-1"
-           )
-
-    view
-    |> element("#chapter-review button", "Request changes")
-    |> render_click()
-
-    assert has_element?(view, "#home-demo[data-step=\"review\"]")
-    assert has_element?(view, ".home-demo-comment-row")
-
-    view
-    |> element("#chapter-reprompt button", "Reprompt")
-    |> render_click()
-
-    assert has_element?(view, "#home-demo[data-step=\"reprompt_prompt\"]")
-
-    assert has_element?(
-             view,
-             "#chapter-reprompt .home-agent-input",
-             "Address the comments on the review packet"
-           )
-
-    assert has_element?(view, "#chapter-reprompt .home-agent-send", "Send")
-
-    view
-    |> element("#chapter-reprompt .home-agent-send", "Send")
-    |> render_click()
-
-    assert has_element?(view, "#home-demo[data-step=\"reprompting\"]")
-
-    assert has_element?(
-             view,
-             "#chapter-reprompt .home-agent-bubble",
-             "Address the comments on the review packet"
-           )
-
-    assert has_element?(view, "#chapter-reprompt .home-agent-status", "Thinking...")
-
-    send(view.pid, :complete_reprompt)
-    render(view)
-
-    assert has_element?(view, "#home-demo[data-step=\"reprompt\"]")
-    assert has_element?(view, "#chapter-reprompt .home-agent-harness", "Pushed a new revision.")
-
-    view
-    |> element("#chapter-final button", "Approve")
-    |> render_click()
-
-    assert has_element?(
-             view,
-             "#home-demo[data-step=\"final\"] .home-demo-edge-tick.is-section-1.is-approved"
-           )
-  end
-
-  test "ignores unknown demo steps", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/")
-
-    render_hook(view, "set_demo_step", %{"step" => "bogus"})
-    assert has_element?(view, "#home-demo[data-step=\"intro\"]")
+    assert has_element?(demo, "#review-packet-title", "Structured Markdown review packets")
   end
 end
