@@ -23,12 +23,11 @@ config :reviews, ReviewsWeb.Endpoint,
   live_view: [signing_salt: "RllUbgpY"]
 
 # Configure esbuild (the version is required)
-# The JSX loaders are left over from the old React diff island. No source uses JSX now.
 config :esbuild,
   version: "0.28.2",
   reviews: [
     args:
-      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=. --loader:.jsx=jsx --loader:.js=jsx),
+      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ]
