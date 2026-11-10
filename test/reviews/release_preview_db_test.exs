@@ -111,5 +111,26 @@ defmodule Reviews.ReleasePreviewDbTest do
       assert :ok = Release.ensure_database()
       assert :ok = Release.drop_preview_database()
     end
+
+    test "refuse a PREVIEW_DB_NAME that DATABASE_URL does not name" do
+      System.put_env("PREVIEW_DB_NAME", @db_name)
+      on_exit(fn -> System.delete_env("PREVIEW_DB_NAME") end)
+
+      assert_raise ArgumentError, ~r/DATABASE_URL names/, fn -> Release.ensure_database() end
+
+      assert_raise ArgumentError, ~r/DATABASE_URL names/, fn ->
+        Release.drop_preview_database()
+      end
+
+      refute database_exists?(@db_name)
+    end
+
+    test "refuse a PREVIEW_DB_NAME that is not reviews_pr_<digits>" do
+      System.put_env("PREVIEW_DB_NAME", "reviews")
+      on_exit(fn -> System.delete_env("PREVIEW_DB_NAME") end)
+
+      assert_raise ArgumentError, ~r/must match/, fn -> Release.ensure_database() end
+      assert_raise ArgumentError, ~r/must match/, fn -> Release.drop_preview_database() end
+    end
   end
 end
