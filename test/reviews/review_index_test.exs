@@ -99,8 +99,9 @@ defmodule Reviews.ReviewIndexTest do
     test "carry patchset and thread counts" do
       carey = user!("carey")
       conner = user!("conner")
+      pushed_at = at(5)
       review = review!(carey, "Counts", at: at(60))
-      patchset!(review, at(5))
+      patchset!(review, pushed_at)
       comment!(review, conner)
       comment!(review, conner, "Second thread")
 
@@ -112,8 +113,8 @@ defmodule Reviews.ReviewIndexTest do
       assert entry.latest_patchset_number == 2
       assert entry.thread_count == 2
       assert entry.open_thread_count == 1
-      assert entry.last_pushed_at == at(5)
-      assert entry.updated_at == at(5)
+      assert entry.last_pushed_at == pushed_at
+      assert entry.updated_at == pushed_at
     end
   end
 
