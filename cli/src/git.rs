@@ -373,6 +373,18 @@ pub fn push_snapshot_refs(
     head_oid: &str,
     head_ref: &str,
 ) -> Result<()> {
+    // The remote URL and ref names come from the server. Refuse anything
+    // git could read as an option, and anything outside the snapshot ref
+    // namespace, so a bad response cannot run commands or move real branches.
+    if remote_url.starts_with('-') {
+        bail!("server returned an invalid upload URL; not pushing code");
+    }
+    for r in [base_ref, head_ref] {
+        if !r.starts_with("refs/heads/snapshots/") || r.contains("..") || r.contains(':') {
+            bail!("server returned an invalid snapshot ref name; not pushing code");
+        }
+    }
+
     let base_refspec = format!("{base_oid}:{base_ref}");
     let head_refspec = format!("{head_oid}:{head_ref}");
     let auth_value = format!(
@@ -382,12 +394,27 @@ pub fn push_snapshot_refs(
 
     run_git_env(
         repo,
-        &["push", "--atomic", remote_url, &base_refspec, &head_refspec],
         &[
-            ("GIT_CONFIG_COUNT", "1"),
+            "push",
+            "--atomic",
+            "--",
+            remote_url,
+            &base_refspec,
+            &head_refspec,
+        ],
+        &[
+            ("GIT_CONFIG_COUNT", "3"),
             ("GIT_CONFIG_KEY_0", "http.extraHeader"),
             ("GIT_CONFIG_VALUE_0", &auth_value),
+            // Give up on a stalled upload (under 1 KB/s for 30 s) so an
+            // optional upload cannot hang the push.
+            ("GIT_CONFIG_KEY_1", "http.lowSpeedLimit"),
+            ("GIT_CONFIG_VALUE_1", "1000"),
+            ("GIT_CONFIG_KEY_2", "http.lowSpeedTime"),
+            ("GIT_CONFIG_VALUE_2", "30"),
             ("GIT_TERMINAL_PROMPT", "0"),
+            // No ext::, ssh or other transports for a server-supplied URL.
+            ("GIT_ALLOW_PROTOCOL", "https:http:file"),
         ],
     )
     .map(|_| ())
@@ -748,6 +775,34 @@ mod tests {
         ];
         expected.sort_unstable();
         assert_eq!(lines, expected);
+    }
+
+    #[test]
+    fn push_snapshot_refs_rejects_unsafe_server_values() {
+        let (_g, repo) = init_repo();
+        commit_file(&repo, "a.txt", "1\n", "c1");
+        let oid = rev_parse(&repo, "HEAD").unwrap();
+        let ok_ref = "refs/heads/snapshots/s1/base";
+
+        let marker = repo.join("pwned");
+        let evil_url = format!("--receive-pack=touch {}", marker.display());
+        let err =
+            push_snapshot_refs(&repo, &evil_url, "t", &oid, ok_ref, &oid, ok_ref).unwrap_err();
+        assert!(format!("{err:#}").contains("invalid upload URL"));
+        assert!(!marker.exists());
+
+        for bad_ref in [
+            "refs/heads/main",
+            "refs/heads/snapshots/../main",
+            "+refs/heads/x",
+        ] {
+            let err = push_snapshot_refs(&repo, "/nonexistent", "t", &oid, bad_ref, &oid, ok_ref)
+                .unwrap_err();
+            assert!(
+                format!("{err:#}").contains("invalid snapshot ref"),
+                "ref {bad_ref}"
+            );
+        }
     }
 
     #[test]
