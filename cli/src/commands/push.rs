@@ -100,7 +100,15 @@ pub fn run(args: PushArgs) -> Result<()> {
         short_sha(&cap.base_sha),
     );
 
-    let caps = client.capabilities()?;
+    // A failed capabilities check must not block a diff-only push. The
+    // server still accepts pushes without a snapshot.
+    let caps = match client.capabilities() {
+        Ok(caps) => caps,
+        Err(err) => {
+            eprintln!("warning: could not check code storage support ({err:#}); pushing diff only");
+            None
+        }
+    };
     let policy = code_policy(caps.as_ref(), args.no_code_storage, &cap.object_format)?;
     let snapshot_id = match policy {
         CodePolicy::Disabled => None,

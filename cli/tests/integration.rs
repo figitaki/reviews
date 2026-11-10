@@ -140,6 +140,30 @@ fn push_against_old_server_is_diff_only() {
 }
 
 #[test]
+fn push_continues_diff_only_when_capabilities_check_fails() {
+    let mut server = mockito::Server::new();
+    let caps = server
+        .mock("GET", "/api/v1/capabilities")
+        .with_status(502)
+        .create();
+    let create = server
+        .mock("POST", "/api/v1/reviews")
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(push_harness::review_created_body())
+        .create();
+
+    let h = push_harness::Harness::new(&server.url());
+    let out = h.push(&[]);
+
+    assert!(out.status.success(), "push failed: {out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("pushing diff only"), "stderr = {stderr}");
+    caps.assert();
+    create.assert();
+}
+
+#[test]
 fn push_with_optional_policy_warns_and_falls_back_on_reserve_failure() {
     let mut server = mockito::Server::new();
     let _caps = server
