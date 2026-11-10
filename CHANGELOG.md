@@ -25,6 +25,15 @@ still stabilizing.
 
 ### Changed
 
+- Section diffs and the Changes view open without line-count or file-count
+  limits. Large diffs use the existing virtualized renderer; manual collapse
+  controls remain available.
+- Reviews open on Overview. The guide map remembers open/closed choices and
+  defaults open on desktop. The expanded map replaces the compact rail rather
+  than leaving an empty strip beside it.
+- Packet prose supports rich Markdown without authored HTML or remote images.
+  The demo includes lists, links, emphasis, code blocks and a bundled Mermaid
+  diagram rendered ahead of time.
 - Review packets use one centered heading and prose layout in split and stacked
   diffs. Hiding section navigation shows every section in that layout.
 - Typography uses shared system-sans reading and interface roles. Decision
