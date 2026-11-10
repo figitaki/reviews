@@ -10,7 +10,8 @@ defmodule ReviewsWeb.ReviewLive do
 
   PubSub:
     * subscribes to `"review:<slug>"`
-    * receives `{:patchset_pushed, n}` and `{:thread_published, thread}`
+    * receives `{:patchset_pushed, n}`, `{:thread_published, thread}` and
+      `{:section_decision_changed, n}`
   """
   use ReviewsWeb, :live_view
 
@@ -305,6 +306,11 @@ defmodule ReviewsWeb.ReviewLive do
      socket
      |> refresh_snapshot!()
      |> push_threads_for_all_files()}
+  end
+
+  @impl true
+  def handle_info({:section_decision_changed, _patchset_number}, socket) do
+    {:noreply, refresh_snapshot!(socket)}
   end
 
   # ---------------------------------------------------------------------------

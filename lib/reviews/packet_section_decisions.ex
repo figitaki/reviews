@@ -68,6 +68,7 @@ defmodule Reviews.PacketSectionDecisions do
          ]},
       conflict_target: [:review_id, :patchset_id, :author_id, :section_index]
     )
+    |> tap(&broadcast_change(&1, review, patchset))
   end
 
   def set_status(%Review{} = review, %Patchset{} = patchset, %User{} = user, attrs) do
@@ -88,8 +89,13 @@ defmodule Reviews.PacketSectionDecisions do
            author_id: author.id,
            section_index: section_index
          ) do
-      nil -> {:ok, nil}
-      %PacketSectionDecision{} = decision -> Repo.delete(decision)
+      nil ->
+        {:ok, nil}
+
+      %PacketSectionDecision{} = decision ->
+        decision
+        |> Repo.delete()
+        |> tap(&broadcast_change(&1, review, patchset))
     end
   end
 
@@ -159,6 +165,18 @@ defmodule Reviews.PacketSectionDecisions do
         )
     }
   end
+
+  # Lets every open review screen refresh its reviewers stack, whether the
+  # decision came from the web UI or from an agent through the API.
+  defp broadcast_change({:ok, _decision}, %Review{slug: slug}, %Patchset{number: number}) do
+    Phoenix.PubSub.broadcast(
+      Reviews.PubSub,
+      "review:#{slug}",
+      {:section_decision_changed, number}
+    )
+  end
+
+  defp broadcast_change(_result, _review, _patchset), do: :ok
 
   defp section_attrs(section, status) do
     %{

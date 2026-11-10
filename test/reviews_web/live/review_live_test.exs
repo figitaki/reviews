@@ -675,6 +675,88 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
     end
 
+    test "updates the reviewers stack live when an agent decides through the API", %{
+      conn: conn
+    } do
+      {:ok, owner} =
+        Accounts.upsert_from_github(%{
+          github_id: 8765,
+          username: "owner",
+          email: "owner@example.com",
+          avatar_url: nil
+        })
+
+      {:ok, %{review: packet_review, patchset: patchset}} =
+        ReviewsCtx.create_review_with_initial_patchset(owner, %{
+          title: "Packet for an agent",
+          raw_diff: """
+          diff --git a/lib/packet.ex b/lib/packet.ex
+          --- a/lib/packet.ex
+          +++ b/lib/packet.ex
+          @@ -1 +1 @@
+          -old
+          +new
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [
+                  %{
+                    "kind" => "hunk",
+                    "path" => "lib/packet.ex",
+                    "hunk_index" => 1,
+                    "line_start" => 1,
+                    "line_end" => 2
+                  }
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, agent} =
+        Accounts.create_agent_identity(owner, %{display_name: "Codex", handle: "codex"})
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+      assert has_element?(view, "#decider-stack.is-empty")
+
+      section = Reviews.ReviewPacket.section_at(patchset.packet, 0)
+
+      {:ok, _} =
+        Reviews.PacketSectionDecisions.put_section_status(
+          packet_review,
+          patchset,
+          agent,
+          section,
+          [],
+          [patchset],
+          "denied"
+        )
+
+      assert has_element?(
+               view,
+               ~s|#decider-stack-#{agent.id}.is-denied[data-kind="agent"]|
+             )
+
+      decisions = Reviews.PacketSectionDecisions.list_for_review(packet_review, agent)
+
+      {:ok, nil} =
+        Reviews.PacketSectionDecisions.put_section_status(
+          packet_review,
+          patchset,
+          agent,
+          section,
+          decisions,
+          [patchset],
+          "denied"
+        )
+
+      assert has_element?(view, "#decider-stack.is-empty")
+    end
+
     test "does not render the old publish review button", %{conn: conn, review: review} do
       {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
       refute has_element?(view, "#publish-review-button")
