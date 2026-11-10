@@ -265,7 +265,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
                "Sign in to record a section decision"
              )
 
-      refute has_element?(view, "#packet-section-0-decision-toggle")
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
+      view |> element("#packet-section-0-decision-toggle") |> render_click()
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=true]")
+      assert has_element?(view, "#packet-section-0-decision-controls a[href='/auth/github']")
+      view |> element("#packet-section-0-decision-toggle") |> render_click()
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
       refute has_element?(view, "#packet-section-0-decision [aria-pressed]")
       assert has_element?(view, "#review-packet .review-hunk-card")
       refute has_element?(view, "#review-packet .review-hunk-summary")
@@ -284,7 +289,6 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-toolbar .review-toolbar-views > #diff-style-toggle")
       refute has_element?(view, "#revision-nav")
       refute has_element?(view, "#revision-mobile-nav")
-      assert has_element?(view, "#packet-section-0-decision.is-readonly")
 
       view
       |> element("#diff-style-unified")

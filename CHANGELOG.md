@@ -10,8 +10,9 @@ still stabilizing.
 ### Changed
 
 - Section decisions keep a floating island on desktop and use a compact
-  floating action button on phones. After voting, only the selected outcome
-  stays labeled; alternatives reveal their labels on hover or keyboard focus.
+  floating action button on phones, including before sign-in. After voting,
+  only the selected outcome stays labeled; alternatives reveal their labels
+  on hover or keyboard focus.
 - The Guide map separates from the reading surface without a shadow, and
   compact section numbers stay aligned regardless of their decision state.
 - Section diffs and the Changes view open without line-count or file-count

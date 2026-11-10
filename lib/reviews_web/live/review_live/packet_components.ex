@@ -508,8 +508,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       class={[
         "review-section-decision",
         "is-#{@section.effective_status || "pending"}",
-        @editing && "is-editing",
-        !@current_user && "is-readonly"
+        @editing && "is-editing"
       ]}
       phx-hook=".SectionDecision"
       data-editing={to_string(@editing)}
@@ -524,43 +523,43 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           {@section.decision_history}
         </p>
       </div>
-      <%= if @current_user do %>
-        <button
-          id={"packet-section-#{@section.index}-decision-toggle"}
-          type="button"
-          class="review-section-decision-toggle"
-          aria-label={
-            cond do
-              @editing ->
-                "Close decision controls"
+      <button
+        id={"packet-section-#{@section.index}-decision-toggle"}
+        type="button"
+        class="review-section-decision-toggle"
+        aria-label={
+          cond do
+            @editing ->
+              "Close decision controls"
 
-              @section.effective_status in ~w(approved denied ignored) ->
-                "Change decision: #{section_decision_state_label(@section)}"
+            @section.effective_status in ~w(approved denied ignored) ->
+              "Change decision: #{section_decision_state_label(@section)}"
 
-              true ->
-                "Decide section"
-            end
-          }
-          aria-expanded={to_string(@editing)}
-          aria-controls={"packet-section-#{@section.index}-decision-controls"}
-          phx-click="toggle_section_decision"
-          phx-value-section_index={@section.index}
-        >
-          <%= cond do %>
-            <% @editing -> %>
-              <.icon name="hero-x-mark" />
-            <% @section.effective_status in ~w(approved denied ignored) -> %>
-              <.section_status_icon status={@section.effective_status} />
-            <% true -> %>
-              <.icon name="hero-pencil-square" />
-          <% end %>
-        </button>
-        <div
-          id={"packet-section-#{@section.index}-decision-controls"}
-          class="review-packet-section-actions"
-          role="group"
-          aria-label={"Decision for #{@section.title}"}
-        >
+            true ->
+              "Decide section"
+          end
+        }
+        aria-expanded={to_string(@editing)}
+        aria-controls={"packet-section-#{@section.index}-decision-controls"}
+        phx-click="toggle_section_decision"
+        phx-value-section_index={@section.index}
+      >
+        <%= cond do %>
+          <% @editing -> %>
+            <.icon name="hero-x-mark" />
+          <% @section.effective_status in ~w(approved denied ignored) -> %>
+            <.section_status_icon status={@section.effective_status} />
+          <% true -> %>
+            <.icon name="hero-pencil-square" />
+        <% end %>
+      </button>
+      <div
+        id={"packet-section-#{@section.index}-decision-controls"}
+        class="review-packet-section-actions"
+        role="group"
+        aria-label={"Decision for #{@section.title}"}
+      >
+        <%= if @current_user do %>
           <button
             :for={status <- ~w(approved denied ignored)}
             :key={status}
@@ -591,12 +590,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               <span class="review-section-action-result">{guide_status_label(status)}</span>
             </span>
           </button>
-        </div>
-      <% else %>
-        <.link href={~p"/auth/github"} class="review-packet-section-signin">
-          Sign in to record a section decision
-        </.link>
-      <% end %>
+        <% else %>
+          <.link href={~p"/auth/github"} class="review-packet-section-signin">
+            Sign in to record a section decision
+          </.link>
+        <% end %>
+      </div>
     </footer>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".SectionDecision">
       export default {
@@ -615,7 +614,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           const editing = this.el.dataset.editing
           if (editing !== this.editing && this.mobile.matches) {
             const target = editing === "true"
-              ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]")
+              ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector(".review-packet-section-signin")
               : this.el.querySelector("[aria-expanded]")
             target?.focus({preventScroll: true})
           }

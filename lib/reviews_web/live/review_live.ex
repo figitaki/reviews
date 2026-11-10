@@ -108,8 +108,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("toggle_section_decision", %{"section_index" => index}, socket) do
-    with %{} <- socket.assigns.current_identity,
-         %{} = patchset <- socket.assigns.selected_patchset,
+    with %{} = patchset <- socket.assigns.selected_patchset,
          {section_index, ""} <- Integer.parse(to_string(index)),
          %{} <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
       editing =

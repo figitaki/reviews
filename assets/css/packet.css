@@ -819,7 +819,7 @@
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -1421,6 +1421,20 @@ details[open] > summary .review-collapse-icon,
 }
 
 @media (max-width: 640px) {
+  .review-packet-shell.has-outline .review-packet-grid {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .review-packet-shell.has-outline .review-section-decision {
+    position: fixed;
+    right: calc(16px + env(safe-area-inset-right));
+    margin: 0;
+  }
+
+  .review-packet-shell.has-outline .review-section-decision.is-editing {
+    width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  }
+
   .review-section-decision {
     --review-decision-action-padding: 0 8px;
 
@@ -1429,7 +1443,7 @@ details[open] > summary .review-collapse-icon,
     gap: 12px;
   }
 
-  .review-section-decision:not(.is-editing):not(.is-readonly) {
+  .review-section-decision:not(.is-editing) {
     width: 56px;
     margin-left: auto;
     margin-right: 0;
@@ -1440,7 +1454,7 @@ details[open] > summary .review-collapse-icon,
     box-shadow: none;
   }
 
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-section-decision-copy,
+  .review-section-decision:not(.is-editing) .review-section-decision-copy,
   .review-section-decision:not(.is-editing) .review-packet-section-actions {
     display: none;
   }
@@ -2937,10 +2951,6 @@ details[open] > summary .review-collapse-icon,
     color: var(--review-text);
     font-size: 16px;
     cursor: pointer;
-  }
-
-  .review-section-decision.is-readonly {
-    position: static;
   }
 
   .review-diff-style #diff-style-split {
