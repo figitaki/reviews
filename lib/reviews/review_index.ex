@@ -135,7 +135,7 @@ defmodule Reviews.ReviewIndex do
       identity_ids
       |> base_query()
       |> filter_role(filters.role, identity_ids)
-      |> filter_status(filters.status)
+      |> filter_status(filters.status, identity_ids)
       |> filter_author(filters.author)
       |> filter_search(filters.q)
       |> order_by([r, ps: ps], desc: fragment("GREATEST(?, ?)", r.updated_at, ps.last_pushed_at))
@@ -257,15 +257,19 @@ defmodule Reviews.ReviewIndex do
   defp filter_role(query, "involved", identity_ids),
     do: where(query, [review: r], r.author_id not in ^identity_ids)
 
-  defp filter_status(query, "all"), do: query
+  defp filter_status(query, "all", _identity_ids), do: query
 
-  defp filter_status(query, "open"), do: where(query, [th: th], th.open_thread_count > 0)
+  defp filter_status(query, "open", _identity_ids),
+    do: where(query, [th: th], th.open_thread_count > 0)
 
-  defp filter_status(query, "updated") do
+  # Only the review owner's account can push patchsets, so a review the viewer
+  # wrote never has a patchset that is new to them.
+  defp filter_status(query, "updated", identity_ids) do
     where(
       query,
-      [ps: ps, act: act],
-      not is_nil(act.last_activity_at) and ps.last_pushed_at > act.last_activity_at
+      [review: r, ps: ps, act: act],
+      r.author_id not in ^identity_ids and not is_nil(act.last_activity_at) and
+        ps.last_pushed_at > act.last_activity_at
     )
   end
 
@@ -302,6 +306,7 @@ defmodule Reviews.ReviewIndex do
     }
   end
 
+  defp new_patchset?(%{authored: true}), do: false
   defp new_patchset?(%{last_activity_at: nil}), do: false
   defp new_patchset?(%{last_pushed_at: nil}), do: false
 
