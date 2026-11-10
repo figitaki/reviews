@@ -17,7 +17,7 @@ This file is for every coding agent (Claude Code, Codex, Cursor, …). `CLAUDE.m
 | JS unit tests | `cd assets && bun run test` |
 | Assets | `mix assets.build` (CI runs it; tailwind needs `NODE_PATH`, already wired) |
 | CLI | `cd cli && cargo build --release`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` |
-| Preview a change as a review | `reviews push` from any checkout, then open the printed `/r/<slug>` URL; `reviews push --update <slug>` adds a patchset; `reviews push --dry-run` (alias `--validate`) validates without sending and exits 1, listing each `file:line: message` problem |
+| Preview a change as a review | `reviews push` from any checkout, then open the printed `/r/<slug>` URL; `reviews push --update <slug>` adds a patchset; `reviews push --dry-run` (alias `--validate`) validates without sending; on problems it lists each as `file:line: message` and exits 1 |
 
 CI (`.github/workflows/ci.yml`) runs format check, compile with warnings as errors, `bun install --frozen-lockfile`, `mix assets.build`, and `mix test`. Match it locally before pushing.
 

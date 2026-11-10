@@ -32,7 +32,8 @@ pub struct PushArgs {
     pub update: Option<String>,
 
     /// Check the diff and packet and show what would be sent, without
-    /// contacting the server. Exits with status 1 if the packet has problems.
+    /// contacting the server. Exits with status 1 if the packet or the push
+    /// has problems.
     #[arg(long, visible_alias = "validate")]
     pub dry_run: bool,
 }

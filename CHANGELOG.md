@@ -11,7 +11,9 @@ still stabilizing.
 
 - `reviews push --dry-run` (alias `--validate`) checks the diff and packet
   and prints what would be sent, without contacting the server. It lists
-  every packet problem with `file:line` and exits 1 if there are any.
+  every packet problem with `file:line`, flags an empty review title or
+  `--update` slug, and exits 1 if there are any problems. A real push now
+  also lists every packet problem at once.
 
 ### Changed
 
