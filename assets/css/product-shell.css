@@ -16,7 +16,7 @@
   overflow-x: hidden;
   background: var(--ds-bg);
   color: var(--ds-text);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .design-main{
@@ -24,6 +24,26 @@
   margin: 0 auto;
   padding-top: 32px;
   padding-bottom: 112px;
+}
+
+.design-main.is-guide-view{
+  width: 100%;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.design-main.is-packet-diff-view{
+  width: 100%;
+  padding-top: 16px;
+}
+
+.design-main.is-review-view{
+  width: 100%;
+  padding: 0;
+}
+
+.is-review-view .rev-shell{
+  padding: 20px;
 }
 
 .design-section-body{
@@ -38,7 +58,7 @@
 .ds-shell-topbar{
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 50;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 18px;
@@ -454,9 +474,9 @@ textarea.ds-input{
   background: var(--ds-panel);
   color: var(--ds-text);
   font: inherit;
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
   transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
