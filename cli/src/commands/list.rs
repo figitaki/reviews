@@ -155,9 +155,9 @@ fn render_table(body: &Value, args: &ListArgs) -> Result<String> {
                 r.patchset_count.to_string()
             };
             [
-                r.slug.clone(),
-                truncate(&r.title, TITLE_WIDTH),
-                author,
+                clean(&r.slug),
+                truncate(&clean(&r.title), TITLE_WIDTH),
+                clean(&author),
                 patchsets,
                 threads,
                 short_time(r.updated_at.as_deref()),
@@ -218,6 +218,15 @@ fn push_row(out: &mut String, cells: impl Iterator<Item = String>, widths: &[usi
     out.push('\n');
 }
 
+/// Titles and handles come from other people. Replace control characters
+/// (newlines, tabs, terminal escape sequences) with spaces so a row stays on
+/// one line and cannot change the terminal.
+fn clean(text: &str) -> String {
+    text.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect()
+}
+
 fn truncate(text: &str, max: usize) -> String {
     if text.chars().count() <= max {
         text.to_string()
@@ -232,10 +241,10 @@ fn truncate(text: &str, max: usize) -> String {
 fn short_time(iso: Option<&str>) -> String {
     match iso {
         None => "-".to_string(),
-        Some(s) if s.len() >= 16 && s.as_bytes()[10] == b'T' => {
-            format!("{} {}", &s[..10], &s[11..16])
-        }
-        Some(s) => s.to_string(),
+        Some(s) => match (s.get(..10), s.get(10..11), s.get(11..16)) {
+            (Some(date), Some("T"), Some(time)) => format!("{date} {time}"),
+            _ => clean(s),
+        },
     }
 }
 
@@ -358,5 +367,18 @@ mod tests {
     fn short_time_handles_odd_input() {
         assert_eq!(short_time(None), "-");
         assert_eq!(short_time(Some("yesterday")), "yesterday");
+        assert_eq!(short_time(Some("2026-10-09T15:0é")), "2026-10-09T15:0é");
+    }
+
+    #[test]
+    fn control_characters_in_titles_are_replaced() {
+        let mut body = sample();
+        body["reviews"][0]["title"] = json!("Fix\nlogin\u{1b}[31m red");
+        let out = render_table(&body, &parse(&[])).unwrap();
+        let lines: Vec<&str> = out.lines().collect();
+
+        assert!(!out.contains('\u{1b}'));
+        assert!(lines[1].contains("Fix login [31m red"));
+        assert!(lines[2].starts_with("a1b2c3d4"));
     }
 }
