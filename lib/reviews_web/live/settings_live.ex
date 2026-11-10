@@ -72,6 +72,28 @@ defmodule ReviewsWeb.SettingsLive do
   end
 
   @impl true
+  def handle_event("revoke_token", %{"id" => id}, socket) do
+    case socket.assigns.current_user do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Sign in to manage API tokens.")}
+
+      user ->
+        case Accounts.revoke_token(user, id) do
+          :ok ->
+            {:noreply,
+             socket
+             |> assign(:new_token, nil)
+             |> assign(:new_token_identity, nil)
+             |> assign_account_data()
+             |> put_flash(:info, "Token revoked. It can no longer access the API.")}
+
+          {:error, :not_found} ->
+            {:noreply, put_flash(socket, :error, "Token not found.")}
+        end
+    end
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
@@ -264,7 +286,16 @@ defmodule ReviewsWeb.SettingsLive do
                             <span>{identity_label(identity)}</span>
                             <span>Created {format_date(token.inserted_at)}</span>
                             <span>{last_used_label(token.last_used_at)}</span>
-                            <span class="ds-badge">Active</span>
+                            <.ds_button
+                              id={"revoke-token-#{token.id}"}
+                              variant="danger"
+                              phx-click="revoke_token"
+                              phx-value-id={token.id}
+                              data-confirm="Revoke this token? Anything using it will lose API access."
+                              aria-label={"Revoke token #{token.name || "(unnamed)"}"}
+                            >
+                              Revoke
+                            </.ds_button>
                           </li>
                         </ul>
                       </section>

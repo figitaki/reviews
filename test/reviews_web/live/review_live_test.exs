@@ -5,8 +5,63 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
+  alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsCtx
   alias Reviews.Threads
+
+  defp snapshot!(review) do
+    {:ok, snapshot} = ReviewView.snapshot(review, nil, [])
+    snapshot
+  end
+
+  defp snapshot_hunk(review, path, hunk_index) do
+    review
+    |> snapshot!()
+    |> Map.fetch!(:hunks_by_path)
+    |> Map.fetch!(path)
+    |> Enum.find(&(&1.hunk_index == hunk_index))
+  end
+
+  defp hunk_view_params(review, path, hunk_index, extra) do
+    hunk = snapshot_hunk(review, path, hunk_index)
+
+    Map.merge(
+      %{
+        "file_path" => hunk.file_path,
+        "row_ref" => hunk.row_ref,
+        "hunk_fingerprint" => hunk.hunk_fingerprint,
+        "hunk_index" => hunk.hunk_index,
+        "line_start" => hunk.line_start,
+        "line_end" => hunk.line_end
+      },
+      extra
+    )
+  end
+
+  defp grouped_hunk_view_params(review, path, hunk_id) do
+    attrs =
+      review
+      |> snapshot!()
+      |> Map.fetch!(:hunks_by_path)
+      |> Map.fetch!(path)
+      |> Enum.map(
+        &%{
+          file_path: &1.file_path,
+          row_ref: &1.row_ref,
+          hunk_fingerprint: &1.hunk_fingerprint,
+          hunk_index: &1.hunk_index,
+          line_start: &1.line_start,
+          line_end: &1.line_end
+        }
+      )
+
+    %{"hunk_attrs" => JSON.encode!(attrs), "hunk_id" => hunk_id}
+  end
+
+  defp changes_hunk_id(review, path) do
+    file = Enum.find(snapshot!(review).file_diffs, &(&1.path == path))
+    "file-diff-#{file.id}"
+  end
 
   defp seed!(_) do
     {:ok, author} =
@@ -41,7 +96,26 @@ defmodule ReviewsWeb.ReviewLiveTest do
   describe "anonymous viewer" do
     setup :seed!
 
-    test "renders the review screen with file tree and defers diff hooks", %{
+    test "current and historical review pages discourage indexing", %{review: review} do
+      {:ok, _patchset} =
+        ReviewsCtx.append_patchset(review, %{
+          raw_diff: "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+        })
+
+      for path <- [
+            ~p"/r/#{review.slug}",
+            ~p"/r/#{review.slug}/changes",
+            ~p"/r/#{review.slug}?patchset=1",
+            ~p"/r/#{review.slug}/changes?patchset=1"
+          ] do
+        conn = get(build_conn(), path)
+
+        assert html_response(conn, 200)
+        assert get_resp_header(conn, "x-robots-tag") == ["noindex, nofollow, noarchive"]
+      end
+    end
+
+    test "renders collapsed diff islands through the single Pierre header", %{
       conn: conn,
       review: review
     } do
@@ -49,16 +123,40 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert html =~ "Great change"
       assert html =~ "lib/foo.ex"
-      refute html =~ "phx-hook=\"DiffRenderer\""
 
       assert has_element?(view, "#diff-files .review-hunk-card")
-      refute has_element?(view, ~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"]|)
+      refute has_element?(view, "#diff-files .review-hunk-summary")
 
-      view
-      |> element(~s|#diff-files .review-hunk-toggle[title^="lib/foo.ex"]|)
-      |> render_click()
+      assert has_element?(
+               view,
+               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"][data-hunk-expanded="false"]|
+             )
 
-      assert has_element?(view, ~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"]|)
+      render_click(view, "toggle_hunk_diff", %{
+        "hunk_id" => changes_hunk_id(review, "lib/foo.ex")
+      })
+
+      assert has_element?(
+               view,
+               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"][data-hunk-expanded="true"]|
+             )
+    end
+
+    test "tablet viewport keeps the diff layout unified", %{conn: conn, review: review} do
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}/changes")
+
+      assert has_element?(view, ~s|#diff-style-toggle[data-tablet-query="(max-width: 1024px)"]|)
+      assert has_element?(view, ~s|#diff-style-split[data-requires-wide="true"]|)
+      assert has_element?(view, ~s|#diff-style-split[aria-pressed="true"]|)
+
+      render_click(view, "select_diff_style", %{"style" => "unified", "viewport" => "tablet"})
+      assert has_element?(view, ~s|#diff-style-unified[aria-pressed="true"]|)
+
+      render_click(view, "select_diff_style", %{"style" => "split", "viewport" => "tablet"})
+      assert has_element?(view, ~s|#diff-style-unified[aria-pressed="true"]|)
+
+      render_click(view, "select_diff_style", %{"style" => "split", "viewport" => "wide"})
+      assert has_element?(view, ~s|#diff-style-split[aria-pressed="true"]|)
     end
 
     test "renders a stored review packet above the diff", %{conn: conn, author: author} do
@@ -110,9 +208,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, ".review-header-change-stat .review-change-stat-add", "+1")
       assert has_element?(view, ".review-header-change-stat .review-change-stat-del", "-1")
       assert has_element?(view, "#packet-section-0.is-open")
-      assert has_element?(view, "#packet-section-0 .review-packet-section-estimate", "Light")
-      assert has_element?(view, "#packet-section-0 .review-change-stat-add", "+1")
-      assert has_element?(view, "#packet-section-0 .review-change-stat-del", "-1")
+
+      assert has_element?(
+               view,
+               "#review-split-section-overview-0 .review-section-header-meta",
+               "Light"
+             )
+
+      assert has_element?(view, "#review-split-section-overview-0 .review-change-stat-add", "+1")
+      assert has_element?(view, "#review-split-section-overview-0 .review-change-stat-del", "-1")
+
+      assert has_element?(
+               view,
+               "#review-split-section-overview-0 .review-section-state-text",
+               "Pending"
+             )
 
       refute has_element?(view, "#packet-section-0 > .review-packet-section-summary-text")
 
@@ -125,34 +235,53 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert html =~ "Keep packet.md editable."
       assert html =~ "Run the smoke test"
 
+      # The section header stays a header: grounding prose reads in the
+      # content flow, not inside the overview.
+      refute has_element?(
+               view,
+               "#review-split-section-overview-0",
+               "Preserve packet JSON as the server contract."
+             )
+
       assert has_element?(
                view,
                "#packet-section-0-row-0 .review-packet-md-heading + .review-packet-md-paragraph",
                "Preserve packet JSON as the server contract."
              )
 
+      # No file inventory in the reading sequence.
+      refute has_element?(view, "#packet-section-0 .review-guide-panel-files")
+
+      # Decisions close the section reading order.
       assert has_element?(
                view,
-               "#packet-section-0-row-0 .review-packet-md-paragraph + .review-packet-md-paragraph",
-               "Keep packet.md editable."
-             )
-
-      assert has_element?(view, "#review-packet .review-hunk-card", "packet.ex")
-
-      assert has_element?(
-               view,
-               ~s|#review-packet .review-hunk-toggle[title^="lib/packet.ex"]|
+               "#packet-section-0 .review-packet-row-list + #packet-section-0-decision"
              )
 
       assert has_element?(
                view,
-               ~s|#review-packet [phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
+               "#packet-section-0-decision .review-packet-section-signin",
+               "Sign in to record a section decision"
+             )
+
+      assert has_element?(view, "#review-packet .review-hunk-card")
+      refute has_element?(view, "#review-packet .review-hunk-summary")
+
+      assert has_element?(
+               view,
+               ~s|#review-packet [phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"][data-hunk-details^="lib/packet.ex"]|
              )
 
       assert has_element?(view, "#review-packet .review-packet-md-heading", "Main change")
       assert has_element?(view, "#review-packet", "Preserve packet JSON as the server contract.")
       assert has_element?(view, "#review-packet", "Keep packet.md editable.")
       assert has_element?(view, "#review-packet", "Run the smoke test.")
+
+      assert has_element?(view, "#review-toolbar .review-toolbar-views > #code-view-switcher")
+      assert has_element?(view, "#review-toolbar .review-toolbar-views > #diff-style-toggle")
+      refute has_element?(view, "#revision-nav")
+      refute has_element?(view, "#revision-mobile-nav")
+      assert has_element?(view, "#packet-section-0-decision.is-readonly")
 
       view
       |> element("#diff-style-unified")
@@ -209,12 +338,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               ~s|#packet-section-0-row-0 .review-hunk-toggle[phx-value-hunk_id="packet-section-0-row-0--hunk-lib-packet-ex-1"]|
+               ~s|#packet-section-0-row-0 [data-hunk-id="packet-section-0-row-0--hunk-lib-packet-ex-1"]|
              )
 
       assert has_element?(
                view,
-               ~s|#packet-section-0-row-1 .review-hunk-toggle[phx-value-hunk_id="packet-section-0-row-1--hunk-lib-packet-ex-1"]|
+               ~s|#packet-section-0-row-1 [data-hunk-id="packet-section-0-row-1--hunk-lib-packet-ex-1"]|
              )
 
       assert has_element?(
@@ -265,8 +394,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               ~s|#packet-section-0-row-0[data-packet-row-ids="packet-section-0-row-0 packet-section-0-row-1"] .review-hunk-card|,
-               "hunks 1-2"
+               ~s|#packet-section-0-row-0[data-packet-row-ids="packet-section-0-row-0 packet-section-0-row-1"] [data-hunk-label="hunks 1-2"]|
              )
 
       assert has_element?(
@@ -274,7 +402,6 @@ defmodule ReviewsWeb.ReviewLiveTest do
                ~s|#packet-section-0-row-0 [id="packet-section-0-row-0--hunk-lib-packet-ex-1-through-2-diff"][phx-hook="DiffRenderer"]|
              )
 
-      refute has_element?(view, "#packet-section-0-row-0 .review-hunk-lines")
       refute has_element?(view, "#packet-section-0-row-1 .review-hunk-card")
 
       refute has_element?(
@@ -283,7 +410,10 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
     end
 
-    test "opening a small packet section expands every hunk", %{conn: conn, author: author} do
+    test "a focused packet section opens its hunks on landing and on selection", %{
+      conn: conn,
+      author: author
+    } do
       {:ok, %{review: packet_review}} =
         ReviewsCtx.create_review_with_initial_patchset(author, %{
           title: "Small section",
@@ -324,21 +454,62 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
-      assert has_element?(view, "#packet-section-0:not(.is-open)")
-      refute has_element?(view, ~s|#packet-section-0 [phx-hook="DiffRenderer"]|)
+      assert has_element?(view, "#packet-section-0.is-open")
+      refute has_element?(view, "#packet-section-1")
+
+      # Landing opens the first section's hunks the same way tick navigation does.
+      assert has_element?(
+               view,
+               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-file-path="lib/one.ex"][data-hunk-expanded="true"]|
+             )
+
+      # The decision footer leads into the next section.
+      assert has_element?(
+               view,
+               "#packet-section-0-nav .review-section-next-button",
+               "Next: 02 Second section"
+             )
 
       view
-      |> element("#packet-section-0 .review-packet-section-heading", "First section")
+      |> element("#packet-section-0-nav .review-section-next-button")
+      |> render_click()
+
+      assert has_element?(view, "#packet-section-1.is-open")
+      refute has_element?(view, "#packet-section-0")
+
+      assert has_element?(
+               view,
+               "#packet-section-1-nav .review-section-next-button",
+               "Back to overview"
+             )
+
+      view |> element("#diff-style-unified") |> render_click()
+
+      assert has_element?(view, "#review-split-section-overview-1", "Second section")
+
+      assert has_element?(
+               view,
+               "#packet-section-1-body .review-packet-markdown",
+               "No hunks here."
+             )
+
+      refute has_element?(view, "#review-guide-panel")
+      refute has_element?(view, "#packet-section-1 [phx-hook=DiffRenderer]")
+
+      view |> element("#diff-style-split") |> render_click()
+
+      view
+      |> element("#review-guide-tick-0")
       |> render_click()
 
       assert has_element?(
                view,
-               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-file-path="lib/one.ex"]|
+               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-file-path="lib/one.ex"][data-hunk-expanded="true"]|
              )
 
       assert has_element?(
                view,
-               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-file-path="lib/two.ex"]|
+               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-file-path="lib/two.ex"][data-hunk-expanded="true"]|
              )
     end
 
@@ -403,6 +574,22 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, ~s|#revision-nav #patchset-3.is-active|, "v3")
       assert has_element?(view, ~s|#revision-nav #patchset-1.has-packet|)
       assert has_element?(view, ~s|#revision-nav #patchset-3.has-packet|)
+
+      view |> element("#patchset-1") |> render_click()
+      assert has_element?(view, "#patchset-1.is-active")
+      assert has_element?(view, "#previous-revision[disabled]")
+
+      view |> element("#next-revision") |> render_click()
+      assert has_element?(view, "#patchset-2.is-active")
+
+      assert has_element?(view, ~s|#mobile-revision option[value="2"][selected]|)
+
+      view
+      |> form("#revision-mobile-nav", %{"number" => "1"})
+      |> render_change()
+
+      assert has_element?(view, "#patchset-1.is-active")
+      assert has_element?(view, ~s|#mobile-revision option[value="1"][selected]|)
     end
 
     test "does not render the old publish review button", %{conn: conn, review: review} do
@@ -438,26 +625,219 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
       assert has_element?(packet_view, "#review-packet")
+
+      assert has_element?(
+               packet_view,
+               "#code-view-switcher .review-code-view-tab.is-active",
+               "Guide"
+             )
+
+      assert has_element?(packet_view, "#code-view-switcher .review-code-view-tab", "Diff")
       refute has_element?(packet_view, "#diff-files")
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
       assert has_element?(changes_view, "#diff-files")
-      assert has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
-      assert has_element?(changes_view, ~s|#changes-file-tree[data-nav*="lib/packet.ex"]|)
+
+      assert has_element?(
+               changes_view,
+               "#code-view-switcher .review-code-view-tab.is-active",
+               "Diff"
+             )
+
+      assert has_element?(changes_view, "#code-view-switcher .review-code-view-tab", "Guide")
+      refute has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#diff-files .rev-file-card")
       refute has_element?(changes_view, "#diff-files .rev-file-placeholder")
 
-      assert has_element?(
-               changes_view,
-               ~s|#diff-files .review-hunk-toggle[title^="lib/packet.ex"]|
-             )
-
       assert has_element?(changes_view, "#diff-files .review-hunk-card")
+      refute has_element?(changes_view, "#diff-files .review-hunk-summary")
 
       assert has_element?(
                changes_view,
-               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"]|
+               ~s|[phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"][data-hunk-expanded="true"]|
              )
+
+      changes_view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      refute has_element?(changes_view, "#file-tree")
+      refute has_element?(changes_view, "#review-guide-sidebar")
+      refute has_element?(changes_view, "#review-guide-rail")
+      refute has_element?(changes_view, "#changes-file-tree")
+      refute has_element?(changes_view, "#review-guide-shell")
+
+      refute has_element?(changes_view, "#diff-files .review-hunk-summary")
+
+      changes_view
+      |> element("#diff-style-split")
+      |> render_click()
+
+      refute has_element?(changes_view, "#file-tree")
+      refute has_element?(changes_view, "#review-guide-shell")
+    end
+
+    test "guide rail preserves section layout across diff styles and when hidden", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Packet active section",
+          raw_diff: """
+          diff --git a/lib/first.ex b/lib/first.ex
+          --- a/lib/first.ex
+          +++ b/lib/first.ex
+          @@ -1 +1 @@
+          -old_first
+          +new_first
+          diff --git a/lib/second.ex b/lib/second.ex
+          --- a/lib/second.ex
+          +++ b/lib/second.ex
+          @@ -1 +1 @@
+          -old_second
+          +new_second
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Active outline",
+            "summary" => "Packet-level overview for the guided review.",
+            "sections" => [
+              %{
+                "title" => "Primary reasoning",
+                "rows" => [
+                  %{
+                    "kind" => "markdown",
+                    "body" =>
+                      "This first paragraph explains why the entrypoint change matters before the reviewer looks at the code."
+                  },
+                  %{"kind" => "hunk", "path" => "lib/first.ex", "hunk_index" => 1},
+                  %{
+                    "kind" => "markdown",
+                    "body" =>
+                      "This interspersed commentary stays with the code hunk after the lead paragraph."
+                  }
+                ]
+              },
+              %{
+                "title" => "Secondary consequence",
+                "rows" => [
+                  %{
+                    "kind" => "markdown",
+                    "body" =>
+                      "This second paragraph should stay out of the way until the reviewer makes this section active."
+                  },
+                  %{"kind" => "hunk", "path" => "lib/second.ex", "hunk_index" => 1}
+                ]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+
+      assert has_element?(view, ".review-packet-shell.has-outline")
+      assert has_element?(view, "#review-guide-shell")
+      assert has_element?(view, "#review-guide-flyout")
+      refute has_element?(view, "#review-split-inline-overview")
+      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
+
+      assert has_element?(
+               view,
+               "#review-split-section-overview-0 .review-section-state-text",
+               "Pending"
+             )
+
+      # Grounding prose reads in the section flow, not in the header.
+      refute has_element?(view, "#review-split-section-overview-0", "entrypoint change matters")
+      assert has_element?(view, "#packet-section-0", "entrypoint change matters")
+      assert has_element?(view, "#packet-section-0.is-open")
+      refute has_element?(view, "#packet-section-1")
+
+      view
+      |> element("#review-guide-overview-tick")
+      |> render_click()
+
+      assert has_element?(view, "#review-guide-overview-tick.is-active")
+      assert has_element?(view, "#review-split-inline-overview", "Active outline")
+      assert has_element?(view, "#review-split-inline-overview", "Packet-level overview")
+      refute has_element?(view, "#packet-section-0")
+
+      send(view.pid, {:patchset_pushed, 1})
+      _ = render(view)
+
+      assert has_element?(view, "#review-guide-overview-tick.is-active")
+      assert has_element?(view, "#review-split-inline-overview")
+      refute has_element?(view, "#packet-section-0")
+
+      view
+      |> element("#review-guide-tick-0")
+      |> render_click()
+
+      view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      assert has_element?(view, ".review-packet-shell.has-outline")
+      assert has_element?(view, ~s|#review-guide-shell[phx-hook$=".GuideFlyout"]|)
+      assert has_element?(view, "#review-guide-tick-0.is-active")
+      refute has_element?(view, "#review-split-inline-overview")
+
+      assert has_element?(view, "#packet-section-0.is-open")
+      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
+
+      assert has_element?(
+               view,
+               "#packet-section-0-body",
+               "entrypoint change matters"
+             )
+
+      refute has_element?(view, "#review-guide-panel")
+      assert has_element?(view, "#packet-section-0", "interspersed commentary")
+      assert has_element?(view, "#review-guide-flyout .review-guide-flyout-file", "first.ex")
+      refute has_element?(view, "#packet-section-0", "stay out of the way")
+      refute has_element?(view, "#review-guide-flyout .review-guide-flyout-file", "second.ex")
+
+      view
+      |> element("#review-guide-tick-1")
+      |> render_click()
+
+      assert has_element?(view, "#review-guide-tick-1.is-active")
+
+      assert has_element?(view, "#packet-section-1.is-open")
+      assert has_element?(view, "#review-split-section-overview-1", "Secondary consequence")
+
+      assert has_element?(
+               view,
+               "#packet-section-1-body",
+               "stay out of the way"
+             )
+
+      refute has_element?(view, "#packet-section-0")
+      refute has_element?(view, "#packet-section-1", "entrypoint change matters")
+
+      view
+      |> element("#review-guide-overview-tick")
+      |> render_click()
+
+      assert has_element?(view, "#review-guide-overview-tick.is-active")
+
+      view |> element("#review-guide-tick-1") |> render_click()
+      view |> element("#review-guide-shell .review-packet-nav-hide") |> render_click()
+
+      refute has_element?(view, "#review-guide-shell")
+      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
+      assert has_element?(view, "#review-split-section-overview-1", "Secondary consequence")
+      assert has_element?(view, "#packet-section-0-body", "entrypoint change matters")
+      assert has_element?(view, "#packet-section-1-body", "stay out of the way")
+      refute has_element?(view, "#packet-section-0 .review-packet-section-summary")
+      refute has_element?(view, "#packet-section-1 .review-packet-section-summary")
+
+      view |> element(".review-outline-toggle") |> render_click()
+
+      assert has_element?(view, "#review-guide-tick-1.is-active")
+      assert has_element?(view, "#packet-section-1-body", "stay out of the way")
+      refute has_element?(view, "#packet-section-0")
     end
 
     test "changes route renders one collapsible diff island per file", %{
@@ -487,12 +867,20 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 
-      assert has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
-      assert has_element?(changes_view, ~s|#changes-file-tree[data-nav*="lib/packet.ex"]|)
-      assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff", "packet.ex")
-      assert has_element?(changes_view, "#diff-files .review-file-view-state", "2 hunks")
+      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff")
+
+      assert has_element?(
+               changes_view,
+               ~s|#diff-files .review-hunk-card.is-file-diff [data-hunk-view-state="2 hunks"]|
+             )
+
       refute has_element?(changes_view, "#diff-files .review-hunk-card:not(.is-file-diff)")
-      refute has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff", "hunks 1-2")
+
+      refute has_element?(
+               changes_view,
+               ~s|#diff-files .review-hunk-card.is-file-diff [data-hunk-label="hunks 1-2"]|
+             )
 
       assert has_element?(
                changes_view,
@@ -520,11 +908,11 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{large_review.slug}/changes")
 
-      assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff", "large.ex")
+      assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff")
 
-      refute has_element?(
+      assert has_element?(
                changes_view,
-               ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="lib/large.ex"]|
+               ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="lib/large.ex"][data-hunk-expanded="false"]|
              )
     end
 
@@ -561,6 +949,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{mixed_review.slug}/changes")
 
+      refute has_element?(changes_view, "#code-view-switcher")
+
       assert has_element?(
                changes_view,
                ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="lib/first.ex"]|
@@ -570,6 +960,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
                changes_view,
                ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="lib/second.ex"]|
              )
+
+      changes_view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      refute has_element?(changes_view, "#file-tree")
+      refute has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
+      refute has_element?(changes_view, "#review-guide-sidebar")
+      assert has_element?(changes_view, "#diff-files")
     end
   end
 
@@ -616,23 +1015,39 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
-      assert has_element?(view, "#review-packet-nav")
-      refute has_element?(view, ".review-outline-toggle")
+      assert has_element?(view, "#review-guide-shell")
 
       view
-      |> element("#review-packet-nav .review-packet-nav-hide")
+      |> element("#diff-style-unified")
       |> render_click()
 
-      refute has_element?(view, "#review-packet-nav")
-      assert has_element?(view, ".review-outline-toggle", "Show outline")
+      assert has_element?(view, "#review-guide-shell")
+      refute has_element?(view, "#review-outline-toggle")
+
+      view
+      |> element("#review-guide-shell .review-packet-nav-hide")
+      |> render_click()
+
+      refute has_element?(view, "#review-guide-shell")
+      assert has_element?(view, ~s|#review-outline-toggle[aria-label="Show section navigation"]|)
 
       author = Accounts.get_user!(author.id)
       assert Accounts.get_user_preference(author, :packet_outline_visible, true) == false
 
       {:ok, next_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
-      refute has_element?(next_view, "#review-packet-nav")
-      assert has_element?(next_view, ".review-outline-toggle", "Show outline")
+      refute has_element?(next_view, "#review-guide-shell")
+
+      next_view
+      |> element("#diff-style-unified")
+      |> render_click()
+
+      refute has_element?(next_view, "#review-guide-shell")
+
+      assert has_element?(
+               next_view,
+               ~s|#review-outline-toggle[aria-label="Show section navigation"]|
+             )
     end
 
     test "comments are visible immediately once created", %{
@@ -718,29 +1133,39 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
-      packet_view
-      |> element("#packet-section-0 button", "Mark Viewed")
-      |> render_click()
+      params =
+        hunk_view_params(packet_review, "lib/packet.ex", 1, %{
+          "hunk_id" => "packet-section-0-row-0--hunk-lib-packet-ex-1",
+          "section_index" => 0,
+          "section_title" => "Main change"
+        })
 
-      assert has_element?(packet_view, "#packet-section-0 .review-hunk-viewed-pill", "Viewed")
-      assert has_element?(packet_view, ~s|#packet-section-0 [phx-hook="DiffRenderer"]|)
+      render_click(packet_view, "mark_hunk_viewed", params)
+
+      assert has_element?(
+               packet_view,
+               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-hunk-viewed="true"]|
+             )
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 
-      assert has_element?(changes_view, "#diff-files .review-hunk-viewed-pill", "Viewed")
+      assert has_element?(changes_view, ~s|#diff-files [data-hunk-viewed="true"]|)
 
-      changes_view
-      |> element(~s|#diff-files button.review-hunk-viewed-button[phx-value-hunk_index="1"]|)
-      |> render_click()
+      render_click(
+        changes_view,
+        "mark_hunk_unviewed",
+        hunk_view_params(packet_review, "lib/packet.ex", 1, %{
+          "hunk_id" => changes_hunk_id(packet_review, "lib/packet.ex")
+        })
+      )
 
-      refute has_element?(changes_view, "#diff-files .review-hunk-viewed-pill", "Viewed")
+      refute has_element?(changes_view, ~s|#diff-files [data-hunk-viewed="true"]|)
 
       {:ok, packet_view_after_clear, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
       refute has_element?(
                packet_view_after_clear,
-               "#packet-section-0 .review-hunk-viewed-pill",
-               "Viewed"
+               ~s|#packet-section-0 [data-hunk-viewed="true"]|
              )
     end
 
@@ -774,11 +1199,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
-      packet_view
-      |> element("#packet-section-0 button", "Mark Viewed")
-      |> render_click()
+      render_click(
+        packet_view,
+        "mark_hunk_viewed",
+        hunk_view_params(packet_review, "lib/deleted.ex", 1, %{
+          "hunk_id" => "packet-section-0-row-0--hunk-lib-deleted-ex-1",
+          "section_index" => 0,
+          "section_title" => "Deleted file"
+        })
+      )
 
-      assert has_element?(packet_view, "#packet-section-0 .review-hunk-viewed-pill", "Viewed")
+      assert has_element?(
+               packet_view,
+               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-hunk-viewed="true"]|
+             )
+
       refute render(packet_view) =~ "Could not update hunk."
 
       [viewed] = PacketHunkViews.list_for_review(packet_review, author)
@@ -823,14 +1258,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, packet_view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
 
-      packet_view
-      |> element("#packet-section-0 button", "Mark Viewed")
-      |> render_click()
+      hunk_id = "packet-section-0-row-0--hunk-lib-grouped-ex-1-through-2"
 
-      assert has_element?(packet_view, "#packet-section-0 .review-hunk-viewed-pill", "Viewed")
+      render_click(
+        packet_view,
+        "mark_hunk_viewed",
+        grouped_hunk_view_params(packet_review, "lib/grouped.ex", hunk_id)
+      )
+
+      assert has_element?(
+               packet_view,
+               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-hunk-viewed="true"]|
+             )
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
-      assert has_element?(changes_view, "#diff-files .review-hunk-viewed-pill", "Viewed")
+      assert has_element?(changes_view, ~s|#diff-files [data-hunk-viewed="true"]|)
 
       [cleared_view | _] = PacketHunkViews.list_for_review(packet_review, author)
       attrs = Map.take(cleared_view, [:file_path, :row_ref, :hunk_fingerprint])
@@ -840,11 +1282,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                packet_view_after_clear,
-               "#packet-section-0 .review-hunk-partial-pill",
-               "Partially viewed"
+               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-hunk-viewed="false"][data-hunk-partially-viewed="true"]|
              )
-
-      assert has_element?(packet_view_after_clear, "#packet-section-0 button", "Mark Viewed")
     end
 
     test "section decisions persist and later changed sections link to the previous decision", %{
@@ -887,17 +1326,28 @@ defmodule ReviewsWeb.ReviewLiveTest do
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}?patchset=1")
       assert has_element?(view, "#packet-section-0.is-open")
 
-      view |> element("#packet-section-0 button", "Approve") |> render_click()
-      assert has_element?(view, "#packet-section-0:not(.is-open)")
+      view |> element("#packet-section-0-decision button", "Approve") |> render_click()
+      assert has_element?(view, "#packet-section-0.is-open")
 
-      refute has_element?(view, "#packet-section-0 .review-section-state-pill.is-current")
       assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
 
-      view |> element("#packet-section-0 button", "Approve") |> render_click()
-      assert has_element?(view, "#packet-section-0:not(.is-open)")
+      assert has_element?(
+               view,
+               "#review-split-section-overview-0 .review-section-state-text",
+               "Approved"
+             )
+
+      view |> element("#packet-section-0-decision button", "Approve") |> render_click()
+      assert has_element?(view, "#packet-section-0.is-open")
       refute has_element?(view, "#packet-section-0 .review-section-action.is-active")
 
-      view |> element("#packet-section-0 button", "Approve") |> render_click()
+      assert has_element?(
+               view,
+               "#review-split-section-overview-0 .review-section-state-text",
+               "Pending"
+             )
+
+      view |> element("#packet-section-0-decision button", "Approve") |> render_click()
       assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
 
       {:ok, %{patchset: _ps2}} =
@@ -936,31 +1386,37 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                latest_view,
-               ~s|#packet-section-0 .review-section-state-pill.is-previous.is-approved[title="Previously approved in v1"]|
+               "#review-split-section-overview-0 .review-section-state-text",
+               "Pending for this revision"
              )
-
-      refute has_element?(
-               latest_view,
-               "#packet-section-0 a.review-section-state-pill.is-previous"
-             )
-
-      assert has_element?(latest_view, "#packet-section-0 .review-section-transition-icon")
-      assert has_element?(latest_view, "#packet-section-0 .review-packet-section-actions")
-      assert has_element?(latest_view, "#packet-section-0.is-open")
-
-      latest_view |> element("#packet-section-0 button", "Ignore") |> render_click()
 
       assert has_element?(
                latest_view,
-               ~s|#packet-section-0 .review-section-state-pill.is-previous.is-approved[title="Previously approved in v1"]|
+               "#review-split-section-overview-0 .review-section-state-history",
+               "Previously approved in v1; outdated for v2."
              )
 
-      refute has_element?(latest_view, "#packet-section-0 .review-section-state-pill.is-current")
+      assert has_element?(
+               latest_view,
+               "#packet-section-0-decision .review-section-decision-history",
+               "Previously approved in v1"
+             )
+
+      assert has_element?(latest_view, "#packet-section-0 .review-packet-section-actions")
+      assert has_element?(latest_view, "#packet-section-0.is-open")
+
+      latest_view |> element("#packet-section-0-decision button", "Skip") |> render_click()
+
+      assert has_element?(
+               latest_view,
+               "#review-split-section-overview-0 .review-section-state-history",
+               "Previously approved in v1"
+             )
 
       assert has_element?(
                latest_view,
                "#packet-section-0 .review-section-action.is-active",
-               "Ignore"
+               "Skip"
              )
 
       {:ok, %{patchset: _ps3}} =
@@ -999,15 +1455,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(
                carried_view,
                "#packet-section-0 .review-section-action.is-active",
-               "Ignore"
+               "Skip"
+             )
+
+      assert has_element?(
+               carried_view,
+               "#review-split-section-overview-0 .review-section-state-text",
+               "Skipped (carried forward)"
              )
 
       refute has_element?(
                carried_view,
-               "#packet-section-0 .review-section-state-pill.is-previous"
+               "#review-split-section-overview-0 .review-section-state-history"
              )
 
-      carried_view |> element("#packet-section-0 button", "Ignore") |> render_click()
+      carried_view |> element("#packet-section-0-decision button", "Skip") |> render_click()
       refute has_element?(carried_view, "#packet-section-0 .review-section-action.is-active")
     end
   end

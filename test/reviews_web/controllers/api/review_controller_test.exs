@@ -165,6 +165,18 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
       %{review: review, ps1: ps1, ps2: ps2, user: user}
     end
 
+    test "anonymous current and historical snapshots discourage indexing", %{review: review} do
+      for path <- [
+            ~p"/api/v1/reviews/#{review.slug}",
+            ~p"/api/v1/reviews/#{review.slug}?patchset=1"
+          ] do
+        conn = get(build_conn(), path)
+
+        assert json_response(conn, 200)
+        assert get_resp_header(conn, "x-robots-tag") == ["noindex, nofollow, noarchive"]
+      end
+    end
+
     test "returns review JSON anonymously (latest patchset by default)",
          %{conn: conn, review: review, ps2: ps2} do
       conn = get(conn, ~p"/api/v1/reviews/#{review.slug}")

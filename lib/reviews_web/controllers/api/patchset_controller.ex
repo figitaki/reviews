@@ -3,8 +3,8 @@ defmodule ReviewsWeb.Api.PatchsetController do
   CLI-facing `/api/v1/reviews/:slug/patchsets` endpoint.
 
   `POST` appends a new patchset to an existing review and returns the new
-  patchset number. Bearer-token auth (any signed-in user can push to any
-  review for now — visibility is link-only in v1).
+  patchset number. Requires a bearer token belonging to the review owner's
+  account (human or agent identity). Link access alone does not allow uploads.
   """
   use ReviewsWeb, :controller
 
@@ -28,9 +28,7 @@ defmodule ReviewsWeb.Api.PatchsetController do
           code_snapshot_id: params["code_snapshot_id"]
         }
 
-        identity = conn.assigns.current_identity
-
-        case Reviews.append_patchset(identity, review, attrs) do
+        case Reviews.append_patchset(review, conn.assigns.current_identity, attrs) do
           {:ok, %{patchset: patchset, code_snapshot: code_snapshot}} ->
             response = %{
               patchset_number: patchset.number,
@@ -40,6 +38,11 @@ defmodule ReviewsWeb.Api.PatchsetController do
             conn
             |> put_status(:created)
             |> json(maybe_put_code_snapshot(response, code_snapshot))
+
+          {:error, :forbidden} ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{errors: %{detail: "Forbidden"}})
 
           {:error, {:code_snapshot, code}} when is_atom(code) ->
             error_json(conn, Errors.http_status(code), code, Errors.message(code))

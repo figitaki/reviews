@@ -18,9 +18,9 @@ Short overview of what the review packet covers.
 
 ## Section Title
 
-One or two sentences orienting the reviewer.
+The first paragraph is the section overview. Use it to explain the reasoning behind this part of the changeset: what problem this section solves, why the files belong together, and what judgment the reviewer should bring to the code. It can be a full paragraph when the change needs that context.
 
-One sentence of context before the hunk when useful.
+Context before a hunk should connect the local code to that section overview. It can be a short paragraph when useful, especially when the surrounding code shape, dependency order, risk, or intended reviewer attention would otherwise be unclear.
 
 @hunk path/to/file.ex#1
 ```
@@ -31,17 +31,19 @@ Rules:
 - Prose between hunk refs is allowed and encouraged.
 - Hunk refs use `@hunk path#N`.
 - Paths and hunk numbers must match the diff being pushed.
+- The first prose paragraph in each section is the section overview shown in the guide rail; write it as durable review reasoning, not as a terse hunk caption.
 
 ## Writing Method
 
 1. Inspect the diff with `git diff` or the intended CLI range.
 2. Identify logical review areas: persistence/schema, read model, LiveView state, rendering, styling, tests, tooling.
 3. Prefer stable section titles if updating an existing packet and you want approvals to inherit.
-4. Put a 1-2 sentence summary at the top of each `##` section.
+4. Put a reasoning-first overview paragraph at the top of each `##` section. This first paragraph is the primary guide-rail content, so it should explain why the grouped changes exist and how to review them.
 5. Use `###` subheadings sparingly, only when a section truly needs scan landmarks; do not add a stock technical-overview subsection to every section.
-6. Add terse hunk explainers before hunks when they help the reader know what to look for.
-7. Avoid hunk explainers that restate the diff; explain context, dependency order, risk, or review intent.
-8. Keep section decisions independent from hunk viewed progress in wording.
+6. Add interwoven hunk comments before hunks when they help the reader understand the surrounding code and how the local change supports the section overview.
+7. Hunk comments no longer need to be ultra-terse. Prefer the shortest useful explanation, but use two to four sentences when needed to carry code context, tradeoffs, dependency order, risk, or review intent.
+8. Avoid hunk comments that restate the diff; explain why this code is shaped this way, what to inspect, or how it relates back to the section's primary overview.
+9. Keep section decisions independent from hunk viewed progress in wording.
 
 ## Structure Preferences
 

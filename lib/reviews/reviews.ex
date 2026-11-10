@@ -77,17 +77,37 @@ defmodule Reviews.Reviews do
   ## Patchsets
 
   @doc """
-  Appends a new patchset to an existing review. Auto-numbers to (max+1).
-  Also populates the per-file rows for the new patchset so the sidebar
-  renders without a re-parse.
+  Appends a patchset on behalf of an authenticated identity. Only identities
+  owned by the review author's user may upload revisions. There is currently
+  no editor grant model; link access does not grant revision upload access.
 
-  Pass the pushing `Identity` to allow claiming a reserved code snapshot via
-  `attrs.code_snapshot_id`. Returns `{:ok, %{patchset: patchset, code_snapshot: result}}`
-  where `result` is `nil`, a claimed snapshot, or `{:skipped, code}`.
+  Returns `{:error, :forbidden}` without writing when the actor is not an owner.
+  Otherwise returns `{:ok, %{patchset: patchset, code_snapshot: result}}`, where
+  `result` is `nil`, a claimed snapshot, or `{:skipped, code}`.
   """
-  def append_patchset(identity \\ nil, review, attrs)
+  def append_patchset(%Review{} = review, %Identity{owner_user_id: owner_id} = identity, attrs)
+      when not is_nil(owner_id) and is_map(attrs) do
+    owner? =
+      Repo.exists?(
+        from i in Identity,
+          where: i.id == ^review.author_id and i.owner_user_id == ^owner_id
+      )
 
-  def append_patchset(identity, %Review{} = review, attrs) when is_map(attrs) do
+    if owner?, do: insert_patchset(identity, review, attrs), else: {:error, :forbidden}
+  end
+
+  def append_patchset(%Review{}, _actor, attrs) when is_map(attrs),
+    do: {:error, :forbidden}
+
+  @doc """
+  Trusted internal setup path without authorization. User-facing callers must
+  use `append_patchset/3` with the authenticated identity instead. It returns
+  the same map, and a snapshot id is only honored under the code storage policy.
+  """
+  def append_patchset(%Review{} = review, attrs) when is_map(attrs),
+    do: insert_patchset(nil, review, attrs)
+
+  defp insert_patchset(identity, %Review{} = review, attrs) do
     next_number = next_patchset_number(review.id)
     raw_diff = attrs[:raw_diff] || attrs["raw_diff"]
     code_snapshot_id = attrs[:code_snapshot_id] || attrs["code_snapshot_id"]

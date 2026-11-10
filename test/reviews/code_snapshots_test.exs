@@ -144,7 +144,7 @@ defmodule Reviews.CodeSnapshotsTest do
       end)
 
       {:ok, %{patchset: patchset2}} =
-        ReviewsContext.append_patchset(ctx.identity, ctx.review, %{raw_diff: @diff})
+        ReviewsContext.append_patchset(ctx.review, ctx.identity, %{raw_diff: @diff})
 
       Repo.transaction(fn ->
         assert {:error, :snapshot_not_ready} =
@@ -195,7 +195,7 @@ defmodule Reviews.CodeSnapshotsTest do
       end)
 
       {:ok, %{patchset: patchset2}} =
-        ReviewsContext.append_patchset(ctx.identity, ctx.review, %{raw_diff: @diff})
+        ReviewsContext.append_patchset(ctx.review, ctx.identity, %{raw_diff: @diff})
 
       Repo.transaction(fn ->
         assert {:error, :snapshot_not_ready} =
@@ -227,7 +227,7 @@ defmodule Reviews.CodeSnapshotsTest do
       snap2 = code_snapshot_fixture(ctx.identity, Repo.get!(CodeRepository, repository.id))
 
       {:ok, %{patchset: patchset2}} =
-        ReviewsContext.append_patchset(ctx.identity, ctx.review, %{raw_diff: @diff})
+        ReviewsContext.append_patchset(ctx.review, ctx.identity, %{raw_diff: @diff})
 
       Repo.transaction(fn ->
         assert {:ok, claimed} =
