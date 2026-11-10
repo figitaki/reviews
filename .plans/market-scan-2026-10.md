@@ -32,8 +32,8 @@ Not found or not checked: CodeApprove, Crocodile, Phorge, git-appraise, CodeTour
 ## Ideas worth borrowing
 
 1. Section order convention (Linear, Plannotator, CodeRabbit) → packet layout. Core change, then consequences, then glue. Make it the default packet template; have the writing-review-packets skill warn on departures. S
-2. Stale packet and coverage banner (CodeRabbit) → patchsets. "Packet written for patchset N"; flag sections whose hunk hashes no longer match; list uncovered hunks. S
-3. Carry approvals forward on unchanged content (GitHub stacks, Reviewable) → decisions. Keep a section's approve when its hunk hashes did not change; reset only changed sections. M
+2. Stale packet banner (CodeRabbit) → patchsets. "Packet written for patchset N". Already in place: `reviews push` rejects a packet that misses or repeats a changed line, and a section whose hunk refs changed shows "Pending for this revision" with its previous decision. S
+3. Carry approvals forward on unchanged content (GitHub stacks, Reviewable) → decisions. Decisions already carry forward while a section's title and hunk refs (path, hunk index, line range) match. Refs are positions, not content: key them on a hunk content hash so a section that only moved keeps its approval and one whose code changed in place resets. M
 4. Finding states across revisions (Copilot, Greptile) → threads. Open / resolved since last patchset / new; pin unresolved in the summary; require a resolution reason. S–M
 5. Agent metadata: risk score and "on behalf of" (Linear) → agent identities. Per-section risk level + explanation; record the human the agent acts for. S
 6. Record the authoring model (Greptile Model Inversion) → CLI. `reviews push` records the model that wrote the patchset so a reviewing agent can pick a different one. S
@@ -48,6 +48,6 @@ Not found or not checked: CodeApprove, Crocodile, Phorge, git-appraise, CodeTour
 
 - The author writes the narrative and it is versioned. Linear, Graphite, CodeRabbit and Devin generate guides server-side; none document author editing.
 - Decisions per section. Linear, CodeRabbit and GitHub use one PR-level review.
-- Content-hash anchoring across Gerrit-style patchsets, outside GitHub. GitHub-overlay tools inherit GitHub's anchoring limits.
+- Threads anchored by content (line text plus context) across Gerrit-style patchsets, outside GitHub. Relocation (`Anchoring.relocate/3`) is still a placeholder and not wired into `append_patchset`. GitHub-overlay tools inherit GitHub's anchoring limits.
 - Agents as named authors and reviewers in a self-hosted tool, usable before a PR exists.
 - Gaps: no built-in AI bug finder (crowded space); no stacks or merge queue while GitHub stacks are GA; Linear's guide updates incrementally; Graphite/Cursor Origin may ship guided review on its own forge.
