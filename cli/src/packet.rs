@@ -249,13 +249,26 @@ pub fn summarize(packet: &Value) -> PacketSummary {
 }
 
 /// The files in a raw diff and how many hunks each has, in path order.
+/// Includes files with no text hunks (binary files, pure renames, mode
+/// changes, empty files), which the coverage check does not need.
 pub fn diff_files(raw_diff: &str) -> Vec<DiffFile> {
-    diff_index(raw_diff)
+    let index = diff_index(raw_diff);
+    let mut files: BTreeMap<String, usize> = index
+        .iter()
+        .map(|(path, hunks)| (path.clone(), hunks.len()))
+        .collect();
+    for chunk in raw_diff.split("\ndiff --git ") {
+        let chunk = chunk.strip_prefix("diff --git ").unwrap_or(chunk);
+        let Some(header) = chunk.lines().next() else {
+            continue;
+        };
+        if let Some(path) = path_from_header(header, chunk) {
+            files.entry(path).or_insert(0);
+        }
+    }
+    files
         .into_iter()
-        .map(|(path, hunks)| DiffFile {
-            path,
-            hunks: hunks.len(),
-        })
+        .map(|(path, hunks)| DiffFile { path, hunks })
         .collect()
 }
 
@@ -548,10 +561,12 @@ fn parse_positive_usize(input: &str, label: &str) -> Result<usize> {
 }
 
 /// Check a parsed packet's shape and its hunk coverage against the diff.
-/// Coverage is only checked when the shape is sound enough to read hunk rows.
+/// Coverage is checked whenever the packet has a sections array; hunk rows
+/// with a bad shape are skipped (their shape issue is already reported), so
+/// one shape problem does not hide the coverage problems.
 fn validate_packet(packet: &Value, diff: &DiffIndex, source: &SourceMap) -> Vec<Issue> {
     let mut issues = validate_shape(packet, source);
-    if !issues.is_empty() && !source.markdown {
+    if packet.get("sections").and_then(Value::as_array).is_none() {
         return issues;
     }
 
@@ -1137,13 +1152,52 @@ Second thought.
             r#"{"title":"T","sections":[{"title":"S","rows":[{"kind":"hunk","path":"lib/a.ex"},{"kind":"video"}]}]}"#,
             DIFF,
         );
-        assert_eq!(check.issues.len(), 2, "issues = {:#?}", check.issues);
+        // Two shape problems, then the coverage problems for both hunks,
+        // because the malformed row covers nothing.
+        assert_eq!(check.issues.len(), 4, "issues = {:#?}", check.issues);
         assert!(check.issues[0]
             .message
             .contains("section 1 row 1: hunk rows must include positive integer `hunk_index`"));
         assert!(check.issues[1]
             .message
             .contains("section 1 row 2: unknown packet row kind `video`"));
+        assert!(check.issues[2].message.contains("does not cover"));
+    }
+
+    #[test]
+    fn json_shape_errors_do_not_hide_hunk_problems() {
+        let check = check_file(
+            "packet.json",
+            r#"{"title":"","sections":[{"title":"S","rows":[{"kind":"hunk","path":"lib/missing.ex","hunk_index":1},{"kind":"hunk","path":"lib/a.ex","hunk_index":1},{"kind":"hunk","path":"lib/a.ex","hunk_index":2}]}]}"#,
+            DIFF,
+        );
+        let messages: Vec<_> = check.issues.iter().map(|i| i.message.as_str()).collect();
+        assert_eq!(messages.len(), 2, "issues = {messages:#?}");
+        assert!(messages[0].contains("title cannot be empty"));
+        assert!(messages[1]
+            .contains("section 1 row 1: packet references unknown file `lib/missing.ex`"));
+    }
+
+    #[test]
+    fn diff_files_lists_files_without_text_hunks() {
+        let diff = "diff --git a/img.png b/img.png\nnew file mode 100644\nindex 0000000..1111111\nBinary files /dev/null and b/img.png differ\ndiff --git a/old.txt b/new.txt\nsimilarity index 100%\nrename from old.txt\nrename to new.txt\ndiff --git a/lib/a.ex b/lib/a.ex\n--- a/lib/a.ex\n+++ b/lib/a.ex\n@@ -1 +1 @@\n-old\n+new\n";
+        assert_eq!(
+            diff_files(diff),
+            vec![
+                DiffFile {
+                    path: "img.png".to_string(),
+                    hunks: 0
+                },
+                DiffFile {
+                    path: "lib/a.ex".to_string(),
+                    hunks: 1
+                },
+                DiffFile {
+                    path: "new.txt".to_string(),
+                    hunks: 0
+                },
+            ]
+        );
     }
 
     #[test]
