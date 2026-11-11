@@ -8,10 +8,8 @@ export function previewNotice(threadCount = 0) {
   return `${notice} ${discussions} shown in Source.`
 }
 
-export function markdownPreview(patch, diffStyle = "split", threadCount = 0) {
-  const preview = el("div", { className: "review-markdown-preview", dataset: { diffStyle } }, [
-    el("p", { className: "review-markdown-notice" }, previewNotice(threadCount)),
-  ])
+export function markdownPreview(patch, diffStyle = "split") {
+  const preview = el("div", { className: "review-markdown-preview", dataset: { diffStyle } })
   for (const excerpt of markdownPatchExcerpts(patch)) {
     const pair = el("div", { className: "review-markdown-pair" })
     for (const [side, label, start] of [["before", "Before", excerpt.oldStart], ["after", "After", excerpt.newStart]]) {

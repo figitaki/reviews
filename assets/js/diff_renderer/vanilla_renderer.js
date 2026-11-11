@@ -1,6 +1,6 @@
 import * as Diffs from "@pierre/diffs"
 import { isMarkdown, markdownPatchExcerpts } from "../lib/markdown.js"
-import { markdownPreview } from "./markdown_preview.js"
+import { markdownPreview, previewNotice } from "./markdown_preview.js"
 
 import {
   commentComposer,
@@ -45,7 +45,7 @@ const REVIEWS_DIFF_HEADER_CSS = `
   [data-metadata] {
     pointer-events: none;
   }
-  ::slotted(.reviews-diff-header-metadata) {
+  ::slotted([slot="header-metadata"]) {
     position: relative;
     z-index: 2;
     pointer-events: none;
@@ -133,6 +133,7 @@ export class VanillaDiffRenderer {
     this.composerAt = null
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
+    this.headerInstance = null
     this.virtualizer = null
     // Markdown files open rendered; Source shows the exact lines and comments.
     this.preview = true
@@ -410,6 +411,8 @@ export class VanillaDiffRenderer {
 
     this.sourceContainer = this.container
     if (this.hasMarkdownPreview) {
+      const headerContainer = el("div")
+      this.container.append(headerContainer)
       const toolbar = el("div", { className: "review-markdown-toolbar", role: "group", "aria-label": "Markdown view" })
       for (const [label, preview] of [["Source", false], ["Preview", true]]) {
         toolbar.append(el("button", {
@@ -418,26 +421,30 @@ export class VanillaDiffRenderer {
           onclick: () => {
             this.preview = preview
             this.render()
-            this.container.querySelector(`[aria-pressed="true"]`)?.focus()
+            this.container.querySelector(`.review-markdown-toolbar [aria-pressed="true"]`)?.focus()
           },
         }, label))
       }
-      this.container.append(toolbar)
+      toolbar.append(el("p", { className: "review-markdown-notice" }, previewNotice(this.threads?.length || 0)))
       this.sourceContainer = el("div")
-      this.container.append(this.sourceContainer)
-      if (this.preview) {
-        // Keep Pierre's header (path, counts, expand and Mark viewed) and
-        // show the rendered excerpts below it unless the hunk is collapsed.
-        this.instance = new Diffs.FileDiff({ ...this.options(), collapsed: true })
-        this.instance.render(this.renderArgs())
-        if (!this.collapsed()) {
-          this.container.append(markdownPreview(this.rawDiff, this.diffStyle, this.threads?.length || 0))
+      if (!this.collapsed()) {
+        this.container.append(toolbar, this.sourceContainer)
+        if (this.preview) {
+          this.sourceContainer.append(markdownPreview(this.rawDiff, this.diffStyle))
+        } else {
+          this.renderSource({ ...this.options(), disableFileHeader: true })
         }
-        return
       }
+      // One shared Pierre header stays above the notice in both modes.
+      this.headerInstance = new Diffs.FileDiff({ ...this.options(), collapsed: true })
+      this.headerInstance.render({ ...this.renderArgs(), containerWrapper: headerContainer, lineAnnotations: [] })
+      return
     }
 
-    const options = this.options()
+    this.renderSource(this.options())
+  }
+
+  renderSource(options) {
     const renderArgs = this.renderArgs()
 
     if (
@@ -485,6 +492,8 @@ export class VanillaDiffRenderer {
   }
 
   cleanUp(clear = true) {
+    this.headerInstance?.cleanUp?.()
+    this.headerInstance = null
     try {
       this.instance?.cleanUp?.()
     } finally {
