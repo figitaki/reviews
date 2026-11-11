@@ -95,8 +95,10 @@ deletes only that PR's database through the API, and verifies absence.
 No SQL `CREATEDB` permission, database ownership, psql, SSH, or WireGuard
 proxy is needed for the managed lifecycle.
 
-Managed Postgres v1 is not supported by this path: its database roles
-cannot create databases, and its database-delete API is unavailable.
+> [!NOTE]
+> Managed Postgres v1 is not supported by this path: its database roles
+> cannot create databases, and its database-delete API is unavailable.
+
 Do not select the production cluster. The scripts reject clusters whose
 names do not start with `reviews-preview-`.
 
