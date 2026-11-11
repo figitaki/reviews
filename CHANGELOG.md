@@ -9,6 +9,8 @@ still stabilizing.
 
 ### Changed
 
+- Preview deployments can provision and delete per-PR databases through
+  Fly Managed Postgres v2, without granting SQL database-owner privileges.
 - Section diffs and the Changes view open without line-count or file-count
   limits. Large diffs use the existing virtualized renderer; manual collapse
   controls remain available.

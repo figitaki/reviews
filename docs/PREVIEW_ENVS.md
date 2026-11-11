@@ -76,6 +76,44 @@ is the strongest isolation boundary; reviewer gating does not narrow its scope.
 All preview apps use one Postgres server, but each preview app has its
 own database on it: `reviews_pr_<N>`. See "Per-PR databases" below.
 
+Per-PR databases isolate migrations, not access. The shared database role
+can access other preview databases, and approved preview code receives
+that role's credentials. Use only synthetic data in previews, and never
+put production credentials or data on the preview cluster.
+
+#### Managed Postgres v2 (recommended)
+
+Create a dedicated v2 cluster whose name starts with `reviews-preview-`.
+Set `PREVIEW_MPG_CLUSTER_ID` as a variable on the protected `preview`
+GitHub Environment. The preview Fly token must have access to this
+cluster's database and user-credential APIs as well as preview apps.
+
+The workflow provisions the database through the Machines API before
+deploying, fetches its connection credentials without logging them, and
+stages the per-PR URL through stdin. On close, it destroys the app first,
+deletes only that PR's database through the API, and verifies absence.
+No SQL `CREATEDB` permission, database ownership, psql, SSH, or WireGuard
+proxy is needed for the managed lifecycle.
+
+Managed Postgres v1 is not supported by this path: its database roles
+cannot create databases, and its database-delete API is unavailable.
+Do not select the production cluster. The scripts reject clusters whose
+names do not start with `reviews-preview-`.
+
+Keep `PREVIEW_DATABASE_URL` during rollout for workflows on older PR
+branches, but update it to the new preview cluster when retiring v1.
+Setting the new variable does not update those branches' YAML. Older
+workflows still need their per-PR databases precreated through the API,
+since the managed role cannot create them through SQL. Move apps/data
+explicitly before retiring a v1 cluster; never infer that it is unused
+just because a new variable exists.
+
+#### Self-managed Postgres (legacy path)
+
+When `PREVIEW_MPG_CLUSTER_ID` is unset, the existing SQL create/drop path
+below remains available. These role and proxy requirements do not apply
+to the managed v2 path.
+
 Provision a dedicated preview cluster (`fly postgres create --name
 reviews-preview-pg --region sjc`). Do not reuse the production cluster
 or its credentials. Per-PR database names isolate schema changes, not
@@ -137,6 +175,12 @@ Under **Settings → Secrets and variables → Actions**:
 | Variable    | Value                            |
 | ----------- | -------------------------------- |
 | `FLY_ORG`   | Your Fly organization slug. **This variable is the on/off switch — the workflow is skipped until it's set.** |
+
+**`preview` environment variables**:
+
+| Variable | Value |
+| -------- | ----- |
+| `PREVIEW_MPG_CLUSTER_ID` | Dedicated Managed Postgres v2 cluster ID. When set, use the managed API lifecycle instead of the legacy URL/SQL path. |
 
 **`preview` environment secrets** (encrypted; do not duplicate at repository scope):
 
@@ -203,6 +247,16 @@ connections to the server. See "Connection budget" below.
 
 **How the database is created.**
 
+With `PREVIEW_MPG_CLUSTER_ID` set, `.github/scripts/preview_mpg.py`
+validates the PR target and dedicated cluster, lists existing databases,
+creates the target only when absent, and verifies it exists. Repeated
+deployments preserve existing data. It fetches the cluster's pooler
+endpoint and user credentials and emits only the per-PR URL into the
+workflow's masked shell variable. The release command finds that database
+already present, then runs migrations and seeds normally.
+
+Without the variable, the legacy path is:
+
 1. The "Stage secrets" step in `.github/workflows/fly-review.yml` sets
    these secrets on the app:
    - `PREVIEW_DB_NAME=reviews_pr_<N>`. The step stops if the name does
@@ -227,7 +281,10 @@ database that it does not own.
 1. Validate that the app and database names identify the same PR.
 2. List apps in `FLY_ORG` and destroy this preview if it exists. A failed
    list or destroy stops cleanup rather than guessing that the app is gone.
-3. Open a private `flyctl proxy` to the database endpoint. Connect to
+3. For managed v2, delete the database through the Machines API and list
+   databases again to verify absence. Repeated cleanup is harmless, but
+   authentication or cluster-selection failures are not treated as absence.
+   For self-managed Postgres, open a private `flyctl proxy` to the database endpoint. Connect to
    `postgres` with the preview credentials, then run
    `DROP DATABASE IF EXISTS "reviews_pr_<N>" WITH (FORCE)`.
 
@@ -246,6 +303,15 @@ so it cannot block the queued close run; then approve cleanup itself.
 
 **If a drop fails.** Drop the database by hand. Do this only for a PR
 that is closed:
+
+For managed v2, rerun the cleanup script with the protected environment's
+`FLY_API_TOKEN`, `FLY_ORG`, `PREVIEW_MPG_CLUSTER_ID`, `PREVIEW_DB_NAME`, and
+matching `APP_NAME`. It handles an already-deleted app and verifies the
+database is absent. List managed orphans with
+`fly mpg databases list <preview-cluster-id> --json` and compare them with
+open PRs. Never delete a whole cluster to clean up one PR.
+
+For self-managed Postgres:
 
 ```sh
 fly postgres connect -a reviews-preview-pg <<'SQL'
@@ -332,16 +398,18 @@ so the machine does not go idle until the tab closes.
    if a `preview` Environment with required reviewers is configured,
    waits for approval → `flyctl apps create` makes `reviews-pr-<N>`,
    `flyctl secrets set --stage` writes config, and `flyctl deploy
-   --remote-only` builds the image on Fly's builders. The release
-   command in `fly.preview.toml` creates the `reviews_pr_<N>` database if
-   needed, runs migrations and seeds the preview user.
+   --remote-only` builds the image on Fly's builders. The managed API
+   provisions `reviews_pr_<N>` before staging secrets (the
+   legacy SQL path creates it during release). The release command in
+   `fly.preview.toml` runs migrations and seeds the preview user.
 
 2. **Subsequent pushes** → workflow re-runs → app redeploys with the
    new HEAD.
 
 3. **PR closed (merged or not)** → workflow fires the close path →
    the app is destroyed, then the runner drops `reviews_pr_<N>` through
-   a private database proxy. Database cleanup failure fails the run.
+   the managed API or the legacy private database proxy. Database cleanup
+   failure fails the run.
 
 ---
 

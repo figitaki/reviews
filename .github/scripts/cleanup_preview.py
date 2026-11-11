@@ -19,6 +19,14 @@ def cleanup():
     if not org:
         raise ValueError("FLY_ORG is required")
 
+    managed = None
+    if os.environ.get("PREVIEW_MPG_CLUSTER_ID"):
+        import preview_mpg
+
+        # Validate the cluster before destroying anything. v1 databases must
+        # never be silently treated as already absent on the v2 API.
+        managed = preview_mpg.target()
+
     print("Cleanup stage: list preview apps.", flush=True)
     apps = subprocess.run(
         ["flyctl", "apps", "list", "--org", org, "--quiet"],
@@ -35,6 +43,11 @@ def cleanup():
         print(f"Destroyed {app}.", flush=True)
     else:
         print(f"Preview app {app} is already absent.", flush=True)
+
+    if managed:
+        print(f"Cleanup stage: drop {name} through Managed Postgres.", flush=True)
+        preview_mpg.drop_database(managed[0], name)
+        return
 
     print("Cleanup stage: configure maintenance connection.", flush=True)
     url = urlsplit(os.environ.get("PREVIEW_DATABASE_URL", ""))
