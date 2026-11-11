@@ -234,7 +234,9 @@ uses a distinct token and required maintainer approval; see `PREVIEW_ENVS.md`.
 
 1. Builds the Docker image remotely on Fly's builders (no local docker needed).
 2. Runs the `release_command` in `fly.toml` (`/app/bin/migrate`), which
-   executes Ecto migrations against the attached Postgres.
+   executes Ecto migrations against the attached Postgres, then seeds the
+   demo review. Its first step, `Reviews.Release.ensure_database`, does
+   nothing in production; it creates the per-PR database on previews.
 3. Rolls the machines.
 
 Migration failures abort the deploy; the previous version keeps serving

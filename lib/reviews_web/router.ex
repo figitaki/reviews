@@ -28,7 +28,6 @@ defmodule ReviewsWeb.Router do
 
     live "/", HomeLive, :index
     live "/settings", SettingsLive, :edit
-    live "/demo", DemoLive, :index
   end
 
   scope "/", ReviewsWeb do

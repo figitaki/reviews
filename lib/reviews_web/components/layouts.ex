@@ -128,9 +128,8 @@ defmodule ReviewsWeb.Layouts do
         </.link>
 
         <nav class="l-nav" aria-label="Primary">
-          <.link navigate={~p"/demo"} class="r-nav-item">Demo &amp; QA</.link>
-          <a :if={@show_workflow_anchor} class="r-nav-item l-nav-optional" href="/#chapter-push">Workflow</a>
-          <a class="r-nav-item l-nav-optional" href="https://github.com/figitaki/reviews">
+          <a :if={@show_workflow_anchor} class="r-nav-item" href="/#chapter-push">Workflow</a>
+          <a class="r-nav-item" href="https://github.com/figitaki/reviews">
             GitHub <span aria-hidden="true">↗</span>
           </a>
 

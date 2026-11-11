@@ -65,12 +65,6 @@
   font-size: 13px;
 }
 
-@media (max-width: 520px) {
-  .l-nav-optional {
-    display: none;
-  }
-}
-
 .l-footer {
   border-top: 1px solid var(--ds-line);
   padding: 28px 0;
@@ -202,23 +196,3 @@
   .home-workflow article { grid-template-columns: 1fr; gap: 8px; }
   .home-content { padding-bottom: 40px; }
 }
-
-/* Demo & QA hub */
-.demo-hub { max-width: 1120px; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
-.demo-intro { max-width: 760px; margin-bottom: 2.5rem; }
-.demo-intro h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 650; letter-spacing: -.04em; margin: .5rem 0 1rem; }
-.demo-intro p { line-height: 1.65; }
-.demo-note { font-size: .85rem; margin-top: .85rem; opacity: .75; }
-.demo-checklist-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-.demo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
-.demo-card { min-width: 0; border: 1px solid var(--ds-line); border-radius: .75rem; padding: 1.5rem; background: var(--ds-panel); }
-.demo-card h2 { font-size: 1.25rem; font-weight: 650; margin-bottom: .65rem; }
-.demo-card p { line-height: 1.6; margin-bottom: 1rem; }
-.demo-card fieldset { min-width: 0; margin-top: 1.5rem; }
-.demo-card legend { font-size: .8rem; font-weight: 650; margin-bottom: .75rem; }
-.demo-card label, .demo-card .label { white-space: normal; line-height: 1.5; }
-.demo-card .label { display: flex; align-items: flex-start; }
-.demo-card input[type="checkbox"] { flex-shrink: 0; }
-.demo-card input:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: 3px; }
-.demo-crosschecks { margin-top: 1.25rem; }
-@media (max-width: 700px) { .demo-grid { grid-template-columns: minmax(0, 1fr); } }

@@ -24,22 +24,18 @@ defmodule Reviews.DemoReview do
 
     # Keep visitors' comments across deploys, but replace the review when its
     # bundled fixture changes; otherwise fixture edits would never ship.
-    review =
-      case Reviews.get_review_by_slug(@slug) do
-        nil ->
+    case Reviews.get_review_by_slug(@slug) do
+      nil ->
+        create_demo!(author, raw_diff, packet)
+
+      existing ->
+        if fixture_current?(existing, raw_diff, packet) do
+          existing
+        else
+          Repo.delete!(existing)
           create_demo!(author, raw_diff, packet)
-
-        existing ->
-          if fixture_current?(existing, raw_diff, packet) do
-            existing
-          else
-            Repo.delete!(existing)
-            create_demo!(author, raw_diff, packet)
-          end
-      end
-
-    Elixir.Reviews.DemoCatalog.seed!(author)
-    review
+        end
+    end
   end
 
   defp fixture_current?(review, raw_diff, packet) do
