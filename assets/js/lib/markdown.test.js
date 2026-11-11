@@ -48,14 +48,14 @@ test("renders document structure for Markdown previews", () => {
 test("reconstructs both sides without joining across omitted content", () => {
   const result = markdownPatchExcerpts("--- a/a.md\n+++ b/a.md\n@@ -1,2 +1,2 @@\n # Title\n-old\n+new\n@@ -20 +30 @@\n-later old\n+later new\n\\ No newline at end of file\n")
   assert.deepEqual(result, [
-    { oldStart: 1, newStart: 1, before: "# Title\nold", after: "# Title\nnew" },
-    { oldStart: 20, newStart: 30, before: "later old", after: "later new" },
+    { oldStart: 1, newStart: 1, before: "# Title\nold", after: "# Title\nnew", beforeChanges: [1], afterChanges: [1] },
+    { oldStart: 20, newStart: 30, before: "later old", after: "later new", beforeChanges: [0], afterChanges: [0] },
   ])
 })
 
 test("handles whole added and deleted documents and header-like content", () => {
   assert.deepEqual(markdownPatchExcerpts("@@ -0,0 +1,2 @@\n+# New\n+---\n"), [
-    { oldStart: 0, newStart: 1, before: "", after: "# New\n---" },
+    { oldStart: 0, newStart: 1, before: "", after: "# New\n---", beforeChanges: [], afterChanges: [0, 1] },
   ])
   assert.equal(markdownPatchExcerpts("@@ -1,2 +0,0 @@\n-# Old\n----\n")[0].before, "# Old\n---")
   assert.deepEqual(markdownPatchExcerpts("Binary files differ"), [])
@@ -63,6 +63,31 @@ test("handles whole added and deleted documents and header-like content", () => 
   assert.equal(isMarkdown("docs/README.MD"), true)
   assert.equal(isMarkdown("src/file.js"), false)
   assert.equal(isMarkdown(undefined), false)
+})
+
+test("marks changed Markdown blocks without marking unchanged context", () => {
+  const [excerpt, additions, deletions] = markdownPatchExcerpts([
+    "@@ -10,16 +20,16 @@", " # Guide", " ", "-Old intro.", "+New intro.", " ",
+    " - Keep", "-- Old item", "+- New item", " ", " | Column |", " | --- |",
+    "-| old |", "+| new |", " ", " ```js", "-old()", "+new()", " ```", " ", " > Stable quote",
+    "@@ -50 +60,2 @@", " Stable", "+Added",
+    "@@ -80,2 +90 @@", " Stable", "-Removed",
+  ].join("\n"))
+  assert.deepEqual(excerpt.beforeChanges, [2, 5, 9, 12])
+  assert.deepEqual(excerpt.afterChanges, [2, 5, 9, 12])
+  const html = renderMarkdown(excerpt.after, excerpt.afterChanges)
+  assert.match(html, /<h1>Guide<\/h1>/)
+  assert.match(html, /<p class="review-markdown-change">New intro\.<\/p>/)
+  assert.match(html, /<li>Keep<\/li>/)
+  assert.match(html, /<li class="review-markdown-change">New item<\/li>/)
+  assert.match(html, /<table class="review-markdown-change">/)
+  assert.match(html, /<pre class="review-markdown-change"><code class="language-js">new\(\)/)
+  assert.match(html, /<blockquote>\n<p>Stable quote<\/p>/)
+  assert.doesNotMatch(renderMarkdown(additions.before, additions.beforeChanges), /review-markdown-change/)
+  assert.match(renderMarkdown(additions.after, additions.afterChanges), /review-markdown-change/)
+  assert.match(renderMarkdown(deletions.before, deletions.beforeChanges), /review-markdown-change/)
+  assert.doesNotMatch(renderMarkdown(deletions.after, deletions.afterChanges), /review-markdown-change/)
+  assert.equal(renderMarkdown("    code", [0]), '<pre class="review-markdown-change"><code>code\n</code></pre>\n')
 })
 
 // Markdown previews render lines from untrusted diffs. Every payload goes
@@ -99,7 +124,7 @@ test("previews of untrusted patches never produce executable markup", () => {
     const patch = `@@ -1,${lines.length} +1,${lines.length} @@\n${lines.map(l => `-${l}`).join("\n")}\n${lines.map(l => `+${l}`).join("\n")}\n`
     const [excerpt] = markdownPatchExcerpts(patch)
     assert.equal(excerpt.after, payload)
-    for (const html of [renderMarkdown(excerpt.before), renderMarkdown(excerpt.after)]) {
+    for (const html of [renderMarkdown(excerpt.before, excerpt.beforeChanges), renderMarkdown(excerpt.after, excerpt.afterChanges)]) {
       assert.doesNotMatch(html, /<(script|img|svg|iframe|details|object|embed)\b/i, payload)
       // Attribute values are quoted and escaped; look for handlers outside them.
       assert.doesNotMatch(html.replace(/"[^"]*"/g, '""'), /<[a-z][^>]*\son[a-z]+\s*=/i, payload)
@@ -111,6 +136,6 @@ test("previews of untrusted patches never produce executable markup", () => {
 
 test("the preview notice points to Source for discussions", () => {
   assert.doesNotMatch(previewNotice(0), /discussion/)
-  assert.match(previewNotice(1), /1 discussion is shown in Source\.$/)
-  assert.match(previewNotice(3), /3 discussions are shown in Source\.$/)
+  assert.match(previewNotice(1), /Source.*1 discussion\.$/)
+  assert.match(previewNotice(3), /Source.*3 discussions\.$/)
 })

@@ -2965,8 +2965,10 @@ details[open] > summary .review-collapse-icon,
 .review-markdown-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--ds-line); }
 .review-markdown-side { min-width: 0; }
 .review-markdown-side + .review-markdown-side { border-left: 1px solid var(--ds-line); }
-.review-markdown-side-label { padding: .5rem 1rem; background: var(--ds-panel-raised); font-size: .8rem; font-weight: 650; }
+.review-markdown-side-label { padding: .35rem 1rem; font-size: .75rem; color: var(--ds-muted); }
 .review-rich-markdown { padding: 1rem 1.5rem; overflow-wrap: anywhere; line-height: 1.65; color: var(--ds-text); }
+.review-rich-markdown .review-markdown-change { border-left: 3px solid var(--ds-add); padding-left: .75rem; }
+.review-markdown-side.is-before .review-markdown-change { border-left-color: var(--ds-del); }
 .review-rich-markdown > * + * { margin-top: 1rem; }
 .review-rich-markdown :is(h1,h2,h3,h4,h5,h6) { font-weight: 650; line-height: 1.3; margin-block: 1.25rem .65rem; }
 .review-rich-markdown h1 { font-size: 1.8rem; }

@@ -18,7 +18,28 @@ markdown.renderer.rules.image = (tokens, index, options, env, renderer) => {
   return renderImage(tokens, index, options, env, renderer)
 }
 
-export const renderMarkdown = source => markdown.render(source || "")
+for (const type of ["fence", "code_block"]) {
+  const render = markdown.renderer.rules[type]
+  markdown.renderer.rules[type] = (tokens, index, options, env, renderer) => {
+    const html = render(tokens, index, options, env, renderer)
+    return tokens[index].meta?.reviewChanged
+      ? html.replace("<pre>", '<pre class="review-markdown-change">')
+      : html
+  }
+}
+
+export function renderMarkdown(source, changedLines = []) {
+  const tokens = markdown.parse(source || "", {})
+  for (const token of tokens) {
+    const block = (token.level === 0 && !["bullet_list_open", "ordered_list_open"].includes(token.type)) ||
+      (token.level === 1 && token.type === "list_item_open")
+    if (block && token.map && changedLines.some(line => line >= token.map[0] && line < token.map[1])) {
+      if (["fence", "code_block"].includes(token.type)) token.meta = { reviewChanged: true }
+      else token.attrJoin("class", "review-markdown-change")
+    }
+  }
+  return markdown.renderer.render(tokens, markdown.options, {})
+}
 
 export const isMarkdown = (path) => /\.(md|markdown|mdown|mkd)$/i.test(path || "")
 
@@ -31,7 +52,7 @@ export function markdownPatchExcerpts(patch) {
   for (const line of (patch || "").split("\n")) {
     const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line)
     if (header) {
-      current = { oldStart: Number(header[1]), newStart: Number(header[3]), before: [], after: [] }
+      current = { oldStart: Number(header[1]), newStart: Number(header[3]), before: [], after: [], beforeChanges: [], afterChanges: [] }
       oldRemaining = Number(header[2] ?? 1)
       newRemaining = Number(header[4] ?? 1)
       excerpts.push(current)
@@ -40,8 +61,10 @@ export function markdownPatchExcerpts(patch) {
         current.before.push(line.slice(1)); current.after.push(line.slice(1))
         oldRemaining--; newRemaining--
       } else if (line.startsWith("-") && oldRemaining) {
+        current.beforeChanges.push(current.before.length)
         current.before.push(line.slice(1)); oldRemaining--
       } else if (line.startsWith("+") && newRemaining) {
+        current.afterChanges.push(current.after.length)
         current.after.push(line.slice(1)); newRemaining--
       }
     }
