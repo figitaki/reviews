@@ -425,7 +425,7 @@ export class VanillaDiffRenderer {
           },
         }, label))
       }
-      toolbar.append(el("p", { className: "review-markdown-notice" }, previewNotice(this.threads?.length || 0)))
+      toolbar.append(el("p", { className: "review-markdown-notice" }, previewNotice(this.threads, this.fileDiff?.hunks)))
       this.sourceContainer = el("div")
       if (!this.collapsed()) {
         this.container.append(toolbar, this.sourceContainer)

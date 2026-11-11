@@ -1,7 +1,12 @@
 import { el } from "./dom.js"
 import { markdownPatchExcerpts, renderMarkdown } from "../lib/markdown.js"
 
-export function previewNotice(threadCount = 0) {
+export function previewNotice(threads = [], hunks = []) {
+  const threadCount = threads.filter(thread => hunks.some(hunk => {
+    const side = thread.side === "old" ? "deletion" : "addition"
+    const line = thread.anchor.line_number_hint
+    return line >= hunk[`${side}Start`] && line < hunk[`${side}Start`] + hunk[`${side}Count`]
+  })).length
   const notice = "Excerpts only. Source shows changes and comments."
   if (threadCount === 0) return notice
   return `${notice} ${threadCount} ${threadCount === 1 ? "discussion" : "discussions"}.`

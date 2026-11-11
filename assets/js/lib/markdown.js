@@ -30,10 +30,21 @@ for (const type of ["fence", "code_block"]) {
 
 export function renderMarkdown(source, changedLines = []) {
   const tokens = markdown.parse(source || "", {})
+  const sortedChanges = [...changedLines].sort((a, b) => a - b)
   for (const token of tokens) {
     const block = (token.level === 0 && !["bullet_list_open", "ordered_list_open"].includes(token.type)) ||
       (token.level === 1 && token.type === "list_item_open")
-    if (block && token.map && changedLines.some(line => line >= token.map[0] && line < token.map[1])) {
+    if (!block || !token.map) continue
+    // Find the first change at or after this block's start, without rescanning
+    // every changed line for every block in a fully added document.
+    let low = 0
+    let high = sortedChanges.length
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2)
+      if (sortedChanges[mid] < token.map[0]) low = mid + 1
+      else high = mid
+    }
+    if (low < sortedChanges.length && sortedChanges[low] < token.map[1]) {
       if (["fence", "code_block"].includes(token.type)) token.meta = { reviewChanged: true }
       else token.attrJoin("class", "review-markdown-change")
     }

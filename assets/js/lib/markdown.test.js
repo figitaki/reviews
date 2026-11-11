@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
+import { parsePatchFiles } from "@pierre/diffs"
 import { isMarkdown, markdownPatchExcerpts, renderMarkdown } from "./markdown.js"
 import { previewNotice } from "../diff_renderer/markdown_preview.js"
 
@@ -134,8 +135,24 @@ test("previews of untrusted patches never produce executable markup", () => {
   }
 })
 
-test("the preview notice points to Source for discussions", () => {
-  assert.doesNotMatch(previewNotice(0), /discussion/)
-  assert.match(previewNotice(1), /Source.*1 discussion\.$/)
-  assert.match(previewNotice(3), /Source.*3 discussions\.$/)
+test("the preview notice counts only discussions on the displayed side and hunks", () => {
+  const [{ files: [{ hunks }] }] = parsePatchFiles([
+    "diff --git a/a.md b/a.md", "--- a/a.md", "+++ b/a.md",
+    "@@ -10,2 +20,3 @@", " context", "-old", "+new", "+added",
+    "@@ -40 +50,0 @@", "-removed",
+  ].join("\n") + "\n")
+  const thread = (side, line) => ({ side, anchor: { line_number_hint: line } })
+  const outside = [thread("old", 9), thread("old", 12), thread("new", 19),
+    thread("new", 23), thread("old", 20), thread("new", 10), thread("new", 50)]
+  assert.doesNotMatch(previewNotice(outside, hunks), /discussion/)
+  assert.match(previewNotice([...outside, thread("old", 11)], hunks), /Source.*1 discussion\.$/)
+  assert.match(previewNotice([thread("old", 10), thread("new", 22), thread("old", 40)], hunks), /Source.*3 discussions\.$/)
+  assert.doesNotMatch(previewNotice(), /discussion/)
+})
+
+test("change lookup preserves exclusive block boundaries and unsorted input", () => {
+  const changes = [6, 1, 4]
+  assert.equal(renderMarkdown("First\n\nSecond\n\nThird\n\nFourth", changes),
+    '<p>First</p>\n<p>Second</p>\n<p class="review-markdown-change">Third</p>\n<p class="review-markdown-change">Fourth</p>\n')
+  assert.deepEqual(changes, [6, 1, 4])
 })
