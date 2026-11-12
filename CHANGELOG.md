@@ -9,6 +9,10 @@ still stabilizing.
 
 ### Changed
 
+- Inline conversations share one shelf with an expandable reply entry and
+  compact resolved history. On mobile, conversations float above the review
+  without shifting code, preserve reply text when dismissed, and follow the
+  visible viewport. Empty comments cannot be submitted.
 - Section diffs and the Changes view open without line-count or file-count
   limits. Large diffs use the existing virtualized renderer; manual collapse
   controls remain available.

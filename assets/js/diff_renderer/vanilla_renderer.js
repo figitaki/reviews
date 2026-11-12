@@ -6,6 +6,7 @@ import {
   threadBubble,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { MobileConversation } from "./mobile_conversation.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
   annotationSideToSide,
@@ -134,6 +135,15 @@ export class VanillaDiffRenderer {
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
     this.virtualizer = null
+    this.threadUI = new Map()
+    this.composerDraft = ""
+    this.mobileConversation = new MobileConversation()
+    this.mobileQuery = window.matchMedia("(max-width: 768px)")
+    this.mobileResize = () => {
+      this.mobileConversation.close(false)
+      this.render()
+    }
+    this.mobileQuery.addEventListener("change", this.mobileResize)
   }
 
   update({ threads }) {
@@ -181,6 +191,8 @@ export class VanillaDiffRenderer {
 
   setComposerAt(composerAt) {
     this.composerAt = composerAt
+    this.composerDraft = ""
+    this.mobileSelection = composerAt && this.mobileQuery.matches ? { composer: true } : null
     this.render()
   }
 
@@ -242,9 +254,20 @@ export class VanillaDiffRenderer {
   renderAnnotation(annotation) {
     const meta = annotation.metadata || {}
     if (meta.kind === "composer") {
+      if (this.mobileQuery.matches) {
+        const marker = el("button", {
+          type: "button", className: "reviews-conversation-marker",
+          style: { minHeight: "44px", padding: "8px 12px", color: "var(--ds-text)", background: "var(--ds-panel)", border: "1px solid var(--ds-line)", borderRadius: "8px", cursor: "pointer" },
+          onclick: () => this.openMobileConversation({ composer: true }, marker),
+        }, "Continue comment…")
+        if (this.mobileSelection?.composer) this.mobileOpener = marker
+        return marker
+      }
       return meta.composerKind === "signin"
         ? signInPrompt(() => this.setComposerAt(null))
         : commentComposer({
+            initialValue: this.composerDraft,
+            onChange: (value) => { this.composerDraft = value },
             onSave: (body) => this.createNewComment(body),
             onCancel: () => this.setComposerAt(null),
           })
@@ -252,17 +275,68 @@ export class VanillaDiffRenderer {
 
     const threadList = meta.threads || []
 
-    return el("div", {}, [
-      ...threadList.map((thread) =>
-        threadBubble({
-          thread,
-          onReply: this.signedIn ? (t, body) => this.replyToThread(t, body) : null,
-          onUpdateStatus: this.signedIn
-            ? (t, status) => this.updateThreadStatus(t, status)
-            : null,
-        })
-      ),
-    ])
+    return el("div", {}, threadList.map((thread) => {
+      if (!this.mobileQuery.matches) return this.renderThread(thread)
+      const marker = el("button", {
+        type: "button", className: "reviews-conversation-marker",
+        dataset: { threadId: thread.id },
+        style: { display: "block", minHeight: "44px", margin: "4px 0", padding: "8px 12px", color: "var(--ds-text)", background: "var(--ds-panel)", border: "1px solid var(--ds-line)", borderRadius: "8px", cursor: "pointer", font: "13px var(--font-sans, system-ui, sans-serif)" },
+        onclick: () => this.openMobileConversation({ threadId: thread.id }, marker),
+      }, `${thread.status === "resolved" ? "Resolved" : thread.status === "outdated" ? "Outdated" : "Open"} · ${thread.comments?.length || 0} ${thread.comments?.length === 1 ? "comment" : "comments"}`)
+      marker.setAttribute("aria-label", `View ${thread.status} thread on line ${thread.anchor?.line_number_hint}: ${thread.comments?.length || 0} ${thread.comments?.length === 1 ? "comment" : "comments"}`)
+      if (this.mobileSelection?.threadId === thread.id) this.mobileOpener = marker
+      return marker
+    }))
+  }
+
+  renderThread(thread) {
+    if (!this.threadUI.has(thread.id)) this.threadUI.set(thread.id, {})
+    return threadBubble({
+      thread,
+      ui: this.threadUI.get(thread.id),
+      onReply: this.signedIn ? (t, body) => this.replyToThread(t, body) : null,
+      onUpdateStatus: this.signedIn ? (t, status) => this.updateThreadStatus(t, status) : null,
+    })
+  }
+
+  openMobileConversation(selection, opener) {
+    this.mobileSelection = selection
+    this.mobileOpener = opener
+    this.renderMobileConversation()
+  }
+
+  renderMobileConversation() {
+    if (this.collapsed() || !this.mobileQuery.matches || !this.mobileSelection) {
+      this.mobileConversation.close()
+      return
+    }
+    let content
+    if (this.mobileSelection.composer && this.composerAt) {
+      content = this.composerAt.kind === "signin"
+        ? signInPrompt(() => this.setComposerAt(null))
+        : commentComposer({
+            initialValue: this.composerDraft,
+            embedded: true,
+            autoFocus: !this.mobileConversation.node,
+            onChange: (value) => { this.composerDraft = value },
+            onSave: (body) => this.createNewComment(body),
+            onCancel: () => this.setComposerAt(null),
+          })
+    } else {
+      const thread = this.threads.find((thread) => thread.id === this.mobileSelection.threadId)
+      if (thread) content = this.renderThread(thread)
+    }
+    if (!content) {
+      this.mobileConversation.close()
+      return
+    }
+    Object.assign(content.style, { border: "none", borderRadius: "0", marginBottom: "0" })
+    const title = this.mobileSelection.composer
+      ? `${this.filePath} · Line ${annotationSideToSide(this.composerAt.side) === "old" ? "−" : "+"}${this.composerAt.lineNumber}`
+      : this.filePath
+    this.mobileConversation.show(content, title, () => {
+      this.mobileSelection = null
+    }, () => this.mobileOpener)
   }
 
   handleLineNumberClick(props) {
@@ -424,11 +498,15 @@ export class VanillaDiffRenderer {
       !this.collapsed() &&
       shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
     ) {
-      if (this.tryRenderVirtualized(options, renderArgs)) return
+      if (this.tryRenderVirtualized(options, renderArgs)) {
+        this.renderMobileConversation()
+        return
+      }
     }
 
     this.instance = new Diffs.FileDiff(options)
     this.instance.render(renderArgs)
+    this.renderMobileConversation()
   }
 
   tryRenderVirtualized(options, renderArgs) {
@@ -465,6 +543,11 @@ export class VanillaDiffRenderer {
   }
 
   cleanUp(clear = true) {
+    if (clear) {
+      this.mobileQuery.removeEventListener("change", this.mobileResize)
+      this.mobileConversation.close(false)
+      this.threadUI.clear()
+    }
     try {
       this.instance?.cleanUp?.()
     } finally {
