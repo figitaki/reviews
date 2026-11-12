@@ -4,6 +4,7 @@ import {
   commentComposer,
   signInPrompt,
   threadBubble,
+  threadStatusBadge,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
 import { MobileConversation } from "./mobile_conversation.js"
@@ -280,9 +281,13 @@ export class VanillaDiffRenderer {
       const marker = el("button", {
         type: "button", className: "reviews-conversation-marker",
         dataset: { threadId: thread.id },
-        style: { display: "block", minHeight: "44px", margin: "4px 0", padding: "8px 12px", color: "var(--ds-text)", background: "var(--ds-panel)", border: "1px solid var(--ds-line)", borderRadius: "8px", cursor: "pointer", font: "13px var(--font-sans, system-ui, sans-serif)" },
+        style: { display: "flex", alignItems: "center", gap: "8px", minHeight: "44px", margin: "4px 0", padding: "8px 12px", color: "var(--ds-text)", background: "var(--ds-panel)", border: "1px solid var(--ds-line)", borderRadius: "8px", cursor: "pointer", font: "13px var(--font-sans, system-ui, sans-serif)" },
         onclick: () => this.openMobileConversation({ threadId: thread.id }, marker),
-      }, `${thread.status === "resolved" ? "Resolved" : thread.status === "outdated" ? "Outdated" : "Open"} · ${thread.comments?.length || 0} ${thread.comments?.length === 1 ? "comment" : "comments"}`)
+      }, [
+        threadStatusBadge(thread.status),
+        el("span", { style: { color: "var(--ds-muted)", fontSize: "12px" } },
+          `${thread.comments?.length || 0} ${thread.comments?.length === 1 ? "comment" : "comments"}`),
+      ])
       marker.setAttribute("aria-label", `View ${thread.status} thread on line ${thread.anchor?.line_number_hint}: ${thread.comments?.length || 0} ${thread.comments?.length === 1 ? "comment" : "comments"}`)
       if (this.mobileSelection?.threadId === thread.id) this.mobileOpener = marker
       return marker

@@ -12,6 +12,7 @@ const colors = {
   line: "var(--ds-line, #242426)",
   lineStrong: "var(--ds-line-strong, #3a3a3d)",
   add: "var(--ds-add, #25d0a0)",
+  blue: "var(--ds-blue)",
 }
 
 const fontStack = "var(--font-sans, system-ui, sans-serif)"
@@ -93,10 +94,14 @@ const anchorPinpointStyle = {
 }
 
 const statusPillBaseStyle = {
-  marginLeft: "6px",
-  padding: "1px 6px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "4px",
+  flexShrink: "0",
+  padding: "2px 7px",
   borderRadius: "999px",
   fontSize: "11px",
+  lineHeight: "14px",
   fontWeight: "500",
   border: `1px solid ${colors.lineStrong}`,
   background: colors.raised,
@@ -104,11 +109,17 @@ const statusPillBaseStyle = {
 }
 
 const statusPillStyle = {
-  open: statusPillBaseStyle,
+  open: {
+    ...statusPillBaseStyle,
+    color: colors.blue,
+    background: `color-mix(in srgb, ${colors.blue} 10%, ${colors.panel})`,
+    borderColor: `color-mix(in srgb, ${colors.blue} 30%, ${colors.line})`,
+  },
   resolved: {
     ...statusPillBaseStyle,
     color: colors.add,
-    borderColor: `color-mix(in srgb, ${colors.add} 50%, transparent)`,
+    background: `color-mix(in srgb, ${colors.add} 10%, ${colors.panel})`,
+    borderColor: `color-mix(in srgb, ${colors.add} 30%, ${colors.line})`,
   },
   outdated: { ...statusPillBaseStyle, color: colors.faint },
 }
@@ -258,6 +269,30 @@ function avatar(user, size = 20) {
   )
 }
 
+export function threadStatusBadge(status) {
+  const label = { open: "Open", resolved: "Resolved", outdated: "Outdated" }[status] || status
+  const badge = el("span", { style: statusPillStyle[status] || statusPillBaseStyle }, [])
+  if (status === "open" || status === "resolved") {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    for (const [key, value] of Object.entries({
+      viewBox: "0 0 24 24", width: "14", height: "14", fill: "none",
+      stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round",
+      "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false",
+    })) svg.setAttribute(key, value)
+    svg.style.flexShrink = "0"
+    // Match the glyphs' optical center, which sits below the font's line-box center.
+    svg.style.transform = "translateY(0.5px)"
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path")
+    path.setAttribute("d", status === "resolved"
+      ? "M9 12l2 2 4-4 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"
+      : "M8 10h8M8 14h5M21 12a9 9 0 0 1-9 9H3l1.5-4A9 9 0 1 1 21 12Z")
+    svg.append(path)
+    badge.append(svg)
+  }
+  badge.append(label)
+  return badge
+}
+
 function bubbleAnchorLink({ anchor, side, status, commentCount }) {
   const label = commentCount > 1 ? "Comments" : "Comment"
   const text = el("span", {}, [
@@ -265,10 +300,7 @@ function bubbleAnchorLink({ anchor, side, status, commentCount }) {
     el("span", { style: anchorPinpointStyle }, anchorPinpoint(anchor, side)),
   ])
   const children = [text]
-  if (status) {
-    const label = { open: "Open", resolved: "Resolved", outdated: "Outdated" }[status] || status
-    children.push(el("span", { style: statusPillStyle[status] || statusPillBaseStyle }, label))
-  }
+  if (status) children.push(threadStatusBadge(status))
   return el(
     "button",
     {
