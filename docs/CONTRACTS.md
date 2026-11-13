@@ -186,9 +186,22 @@ unique DOM id, and `phx-update="ignore"` (the hook owns its DOM tree).
 | `data-patchset-number` | string   | The patchset number this file belongs to.                |
 | `data-side`            | string   | Always `"new"` today.                                    |
 | `data-raw-diff`        | string   | Raw unified diff for this file or hunk only.             |
+| `data-full-diff`       | optional string | Whole-file patch for added/deleted Markdown files, so sliced packet hunks can preview the complete document. Source and thread counts still use `data-raw-diff`. |
 | `data-threads`         | string (JSON) | Published threads in this file. Shape: the `Thread` schema in `schemas.js`. |
 | `data-signed-in`       | string   | `"true"` or `"false"`. Signed-out viewers get a sign-in prompt instead of a composer. |
 | `data-diff-style`      | string   | `"split"` or `"unified"`.                                |
+
+Markdown files with discussions default to Source; other files default to Preview
+unless the excerpt is ambiguous or exceeds 1,500 rendered lines / 200 KiB. Explicit
+mode choices are stored locally per review URL and file path, across revisions.
+Preview DOM is cached for the lifetime of its renderer, independently of thread,
+viewed, theme and layout updates. Large files use Source's virtualized renderer.
+Added/deleted files preview their complete document with a single panel. Other
+files remain excerpts: fences with omitted context, headerless table fragments,
+and leading indented continuations fall back to Source with an explanation.
+Repository-relative links are non-navigating text in Preview because no repository
+base URL is available; Source retains their exact destinations. External links
+open separately without sharing the review URL.
 
 ### Events the hook pushes to LiveView
 
