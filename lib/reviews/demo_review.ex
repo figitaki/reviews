@@ -22,10 +22,30 @@ defmodule Reviews.DemoReview do
       |> File.read!()
       |> parse_packet_markdown()
 
-    if review = Reviews.get_review_by_slug(@slug) do
-      Repo.delete!(review)
-    end
+    # Keep visitors' comments across deploys, but replace the review when its
+    # bundled fixture changes; otherwise fixture edits would never ship.
+    case Reviews.get_review_by_slug(@slug) do
+      nil ->
+        create_demo!(author, raw_diff, packet)
 
+      existing ->
+        if fixture_current?(existing, raw_diff, packet) do
+          existing
+        else
+          Repo.delete!(existing)
+          create_demo!(author, raw_diff, packet)
+        end
+    end
+  end
+
+  defp fixture_current?(review, raw_diff, packet) do
+    case Reviews.latest_patchset(review) do
+      %{raw_diff: ^raw_diff, packet: ^packet} -> true
+      _ -> false
+    end
+  end
+
+  defp create_demo!(author, raw_diff, packet) do
     {:ok, %{review: review}} =
       Reviews.create_review_with_initial_patchset(author, %{
         slug: @slug,
