@@ -60,7 +60,7 @@ defmodule Reviews.ReviewView do
 
   def thread_payloads_for_file(%{published_threads: threads}, file_path) do
     threads
-    |> Enum.filter(&(&1.file_path == file_path))
+    |> Enum.filter(&(&1.file_path == file_path and Map.get(&1, :anchor_status) != "outdated"))
     |> Enum.map(&thread_to_payload/1)
   end
 
@@ -106,9 +106,60 @@ defmodule Reviews.ReviewView do
       hunks_by_path: hunks_by_path,
       packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
-      published_threads: Threads.list_published_threads(review.id),
+      published_threads: project_threads(review, patchsets, selected),
       viewer: viewer
     }
+  end
+
+  defp project_threads(_review, _patchsets, nil), do: []
+
+  defp project_threads(review, patchsets, selected) do
+    by_id = Map.new(patchsets, &{&1.id, &1})
+    threads = Threads.list_published_threads(review.id)
+
+    historical_origins =
+      threads
+      |> Enum.map(&by_id[&1.originating_patchset_id])
+      |> Enum.filter(&(&1 && &1.number < selected.number))
+      |> Enum.uniq_by(& &1.id)
+
+    indexes =
+      if historical_origins == [] do
+        %{}
+      else
+        Map.new([selected | historical_origins], &{&1.id, Reviews.Anchoring.index(&1)})
+      end
+
+    Enum.flat_map(threads, fn thread ->
+      origin = by_id[thread.originating_patchset_id]
+
+      if origin && origin.number <= selected.number do
+        result =
+          if origin.id == selected.id,
+            do: {:ok, thread.anchor},
+            else:
+              Reviews.Anchoring.relocate_indexed(thread, indexes[origin.id], indexes[selected.id])
+
+        {anchor, anchor_status} =
+          case result do
+            {:ok, anchor} -> {anchor, "current"}
+            {:error, _} -> {nil, "outdated"}
+          end
+
+        [
+          thread
+          |> Map.from_struct()
+          |> Map.merge(%{
+            anchor: anchor,
+            anchor_status: anchor_status,
+            original_anchor: thread.anchor,
+            originating_patchset_number: origin.number
+          })
+        ]
+      else
+        []
+      end
+    end)
   end
 
   defp file_diff_meta(_files, nil), do: []
@@ -164,6 +215,8 @@ defmodule Reviews.ReviewView do
       side: thread.side,
       anchor: thread.anchor,
       status: thread.status,
+      resolved_at: encode_dt(thread.resolved_at),
+      resolved_by: user_to_payload(thread.resolved_by),
       inserted_at: encode_dt(thread.inserted_at),
       author: user_to_payload(thread.author),
       comments:
