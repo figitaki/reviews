@@ -227,6 +227,12 @@ The patchset-pushed banner is rendered by LiveView itself (no hook event).
 When LiveView receives `{:patchset_pushed, n}` on the `"review:<slug>"`
 PubSub topic, it assigns a banner message that the HEEx template displays.
 
+The reviewers stack is rendered by LiveView too. `PacketSectionDecisions`
+broadcasts `{:section_decision_changed, patchset_number}` on the same topic
+whenever a section decision is set or cleared, from the web UI or from
+`POST /api/v1/reviews/:slug/sections/:section_index/decision`. LiveView
+reloads its snapshot so every open review screen shows the new decision.
+
 ### Thread anchor shape (jsonb in DB, JSON over the wire)
 
 ```json

@@ -9,6 +9,10 @@ still stabilizing.
 
 ### Added
 
+- The review screen shows a reviewers stack: one avatar for each person or
+  agent who decided a section or commented, ringed with their decision for the
+  selected revision. It updates live when anyone decides, including agents
+  through the API.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed

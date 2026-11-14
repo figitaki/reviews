@@ -26,6 +26,20 @@ defmodule Reviews.PacketSectionDecisions do
 
   def list_for_review(_review, nil), do: []
 
+  @doc """
+  Every identity's decisions for a review, with authors preloaded.
+
+  `list_for_review/2` stays viewer-scoped because the packet section buttons
+  read it as "my decisions". This list feeds read models that show everyone.
+  """
+  def list_visible_for_review(%Review{id: review_id}) do
+    PacketSectionDecision
+    |> where([d], d.review_id == ^review_id)
+    |> preload([:author])
+    |> order_by([d], asc: d.patchset_id, asc: d.section_index, asc: d.author_id)
+    |> Repo.all()
+  end
+
   def set_status(%Review{} = review, %Patchset{} = patchset, %Identity{} = author, attrs) do
     section_index = attrs.section_index
 
@@ -54,6 +68,7 @@ defmodule Reviews.PacketSectionDecisions do
          ]},
       conflict_target: [:review_id, :patchset_id, :author_id, :section_index]
     )
+    |> tap(&broadcast_change(&1, review, patchset))
   end
 
   def set_status(%Review{} = review, %Patchset{} = patchset, %User{} = user, attrs) do
@@ -74,8 +89,13 @@ defmodule Reviews.PacketSectionDecisions do
            author_id: author.id,
            section_index: section_index
          ) do
-      nil -> {:ok, nil}
-      %PacketSectionDecision{} = decision -> Repo.delete(decision)
+      nil ->
+        {:ok, nil}
+
+      %PacketSectionDecision{} = decision ->
+        decision
+        |> Repo.delete()
+        |> tap(&broadcast_change(&1, review, patchset))
     end
   end
 
@@ -145,6 +165,18 @@ defmodule Reviews.PacketSectionDecisions do
         )
     }
   end
+
+  # Lets every open review screen refresh its reviewers stack, whether the
+  # decision came from the web UI or from an agent through the API.
+  defp broadcast_change({:ok, _decision}, %Review{slug: slug}, %Patchset{number: number}) do
+    Phoenix.PubSub.broadcast(
+      Reviews.PubSub,
+      "review:#{slug}",
+      {:section_decision_changed, number}
+    )
+  end
+
+  defp broadcast_change(_result, _review, _patchset), do: :ok
 
   defp section_attrs(section, status) do
     %{
