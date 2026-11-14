@@ -10,9 +10,13 @@ defmodule ReviewsWeb.ReviewLive do
 
   PubSub:
     * subscribes to `"review:<slug>"`
-    * receives `{:patchset_pushed, n}` and `{:thread_published, thread}`
+    * receives `{:patchset_pushed, n}`, `{:thread_published, thread}`, and
+      `{:thread_updated, thread}` — the last also fires for resolve/reopen
+      performed over the CLI/API, not just from a browser
   """
   use ReviewsWeb, :live_view
+
+  require Logger
 
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
@@ -80,7 +84,7 @@ defmodule ReviewsWeb.ReviewLive do
       {:ok, patchset_number} ->
         case refresh_snapshot(socket, patchset_number: patchset_number) do
           {:ok, socket} ->
-            {:noreply, socket}
+            {:noreply, reveal_activity_thread(socket, params["thread"])}
 
           {:error, :patchset_not_found} ->
             {:noreply, put_flash(socket, :error, "Patchset not found.")}
@@ -272,14 +276,34 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_event("create_comment", params, socket) do
-    require Logger
+  def handle_event("open_activity_thread", %{"thread_id" => id}, socket) do
+    case Enum.find(socket.assigns.published_threads, &(to_string(&1.id) == to_string(id))) do
+      nil ->
+        {:noreply, socket}
 
+      thread ->
+        number =
+          if thread.anchor,
+            do: socket.assigns.selected_patchset.number,
+            else: thread.originating_patchset_number
+
+        {:noreply,
+         push_patch(socket,
+           to:
+             ~p"/r/#{socket.assigns.review.slug}/changes?#{[patchset: number, thread: thread.id]}"
+         )}
+    end
+  end
+
+  @impl true
+  def handle_event("create_comment", params, socket) do
     case socket.assigns.current_identity do
       nil ->
         {:noreply, put_flash(socket, :error, "Sign in to leave a comment.")}
 
       author ->
+        params = Map.put(params, "originating_patchset_id", socket.assigns.selected_patchset.id)
+
         case Threads.publish_comment(socket.assigns.review, author, params) do
           {:ok, _} ->
             {:noreply, push_threads_for_file(socket, params["file_path"])}
@@ -287,6 +311,29 @@ defmodule ReviewsWeb.ReviewLive do
           {:error, reason} ->
             Logger.warning("create_comment failed: #{inspect(reason)}")
             {:noreply, put_flash(socket, :error, "Could not save comment.")}
+        end
+    end
+  end
+
+  @impl true
+  def handle_event("update_thread_status", params, socket) do
+    case socket.assigns.current_identity do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Sign in to update threads.")}
+
+      identity ->
+        case Threads.update_status(
+               socket.assigns.review,
+               params["thread_id"],
+               identity,
+               params["status"]
+             ) do
+          {:ok, _thread} ->
+            {:noreply, push_threads_for_file(socket, params["file_path"])}
+
+          {:error, reason} ->
+            Logger.warning("update_thread_status failed: #{inspect(reason)}")
+            {:noreply, put_flash(socket, :error, "Could not update thread.")}
         end
     end
   end
@@ -305,6 +352,13 @@ defmodule ReviewsWeb.ReviewLive do
      socket
      |> refresh_snapshot!()
      |> push_threads_for_all_files()}
+  end
+
+  @impl true
+  def handle_info({:thread_updated, thread}, socket) do
+    # Only the thread's own file changed, so pushing every file would remount
+    # each mounted renderer on every connected client for a one-thread change.
+    {:noreply, push_threads_for_file(socket, thread.file_path)}
   end
 
   # ---------------------------------------------------------------------------
@@ -525,34 +579,43 @@ defmodule ReviewsWeb.ReviewLive do
             </button>
           </div>
 
-          <PacketComponents.packet
-            :if={has_packet && @live_action != :changes}
-            packet={packet}
-            review={@review}
-            patchsets={@patchsets}
-            section_decisions={@packet_section_decisions}
-            file_diffs={@file_diffs}
-            hunks_by_path={@hunks_by_path}
-            selected_patchset={@selected_patchset}
-            published_threads={@published_threads}
-            current_user={@current_user}
-            diff_style={@diff_style}
-            expanded_hunk_ids={@expanded_hunk_ids}
-            show_packet_outline={show_packet_outline}
-            active_section_index={@active_outline_section_index}
-          />
+          <div class="review-workspace">
+            <div class="review-workspace-content">
+              <PacketComponents.packet
+                :if={has_packet && @live_action != :changes}
+                packet={packet}
+                review={@review}
+                patchsets={@patchsets}
+                section_decisions={@packet_section_decisions}
+                file_diffs={@file_diffs}
+                hunks_by_path={@hunks_by_path}
+                selected_patchset={@selected_patchset}
+                published_threads={@published_threads}
+                current_user={@current_user}
+                diff_style={@diff_style}
+                expanded_hunk_ids={@expanded_hunk_ids}
+                show_packet_outline={show_packet_outline}
+                active_section_index={@active_outline_section_index}
+              />
 
-          <%!-- Body: sidebar + diff list --%>
-          <DiffComponents.diff_shell
-            :if={@live_action == :changes || !has_packet}
-            file_diffs={@file_diffs}
-            selected_patchset={@selected_patchset}
-            published_threads={@published_threads}
-            current_user={@current_user}
-            diff_style={@diff_style}
-            expanded_hunk_ids={@expanded_hunk_ids}
-            hunks_by_path={@hunks_by_path}
-          />
+              <%!-- Body: sidebar + diff list --%>
+              <DiffComponents.diff_shell
+                :if={@live_action == :changes || !has_packet}
+                file_diffs={@file_diffs}
+                selected_patchset={@selected_patchset}
+                published_threads={@published_threads}
+                current_user={@current_user}
+                diff_style={@diff_style}
+                expanded_hunk_ids={@expanded_hunk_ids}
+                hunks_by_path={@hunks_by_path}
+              />
+            </div>
+            <ReviewsWeb.ReviewLive.ActivityComponents.activity
+              review={@review}
+              threads={@published_threads}
+              current_identity={@current_identity}
+            />
+          </div>
         </div>
       </.ds_shell>
     </div>
@@ -601,6 +664,20 @@ defmodule ReviewsWeb.ReviewLive do
       </ul>
     </div>
     """
+  end
+
+  defp reveal_activity_thread(socket, id) do
+    with thread when not is_nil(thread) <-
+           Enum.find(socket.assigns.published_threads, &(to_string(&1.id) == id)),
+         true <- is_map(thread.anchor),
+         file when not is_nil(file) <-
+           Enum.find(socket.assigns.file_diffs, &(&1.path == thread.file_path)) do
+      socket
+      |> update(:expanded_hunk_ids, &MapSet.put(&1, "file-diff-#{file.id}"))
+      |> push_event("open_review_thread", %{thread_id: thread.id, file_path: thread.file_path})
+    else
+      _ -> socket
+    end
   end
 
   defp review_summary(file_diffs) do
@@ -763,7 +840,12 @@ defmodule ReviewsWeb.ReviewLive do
       socket =
         case action do
           :viewed ->
-            auto_open_next_hunks(socket, attrs)
+            hunk_id = hunk_id_for_attrs(socket, attrs)
+
+            socket
+            |> auto_open_next_hunks(attrs)
+            |> update(:expanded_hunk_ids, &MapSet.delete(&1, hunk_id))
+            |> scroll_to_collapsed_hunk(hunk_id)
 
           :unviewed ->
             expand_hunk(socket, attrs)
