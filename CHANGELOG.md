@@ -9,12 +9,21 @@ still stabilizing.
 
 ### Added
 
+- Recent comment activity with unread counts, thread links, and read state saved
+  per reviewer in the current browser.
+- Comments follow matching code across revisions. Discussions whose code changed
+  stay available on their original revision rather than drifting onto other lines.
+
 - Markdown files in a diff open in a rendered Preview with Before and After
   excerpts. Source shows the exact lines and comments. Raw HTML, scripts and
   unsafe links stay escaped.
 
 ### Changed
 
+- Selecting diff text offers a row-end comment button instead of opening a
+  composer. File controls stay visible while scrolling on desktop and mobile;
+  marking viewed collapses the diff and leaves a compact green check.
+- Unified diffs wrap long lines; split diffs retain horizontal scrolling.
 - Inline conversations share one shelf with an expandable reply entry and
   compact resolved history. On mobile, conversations float above the review
   without shifting code, preserve reply text when dismissed, and follow the

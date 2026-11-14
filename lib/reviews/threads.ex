@@ -63,10 +63,10 @@ defmodule Reviews.Threads do
         "thread_id"     => 123 # optional
       }
 
-  Token-range anchors carry the substring identification. The relocator in
-  `Reviews.Anchoring` still returns `:not_implemented` for them, so they do not
-  survive a patchset push yet. They're stored verbatim and rendered as line
-  anchors today via `anchor.line_number_hint`.
+  New threads may supply `"originating_patchset_id"` (or its atom key) to
+  comment on an explicitly selected revision. It must belong to this review;
+  omitted values default to the latest patchset. Replies retain their origin.
+  Token-range anchors retain their selected text and offset across projection.
 
   Returns `{:ok, %{thread: t, comment: c}}` or `{:error, reason}`.
   Broadcasts `{:thread_published, thread}` on `"review:<slug>"`.
@@ -95,8 +95,9 @@ defmodule Reviews.Threads do
         {:error, :unknown_granularity}
 
       true ->
-        with {:ok, existing} <- fetch_reply_thread(review, thread_id) do
-          insert_comment(review, author, existing, file_path, side, anchor, body)
+        with {:ok, existing} <- fetch_reply_thread(review, thread_id),
+             {:ok, origin_id} <- originating_patchset_id(review, existing, params) do
+          insert_comment(review, author, existing, file_path, side, anchor, body, origin_id)
         end
     end
   rescue
@@ -109,10 +110,10 @@ defmodule Reviews.Threads do
     end
   end
 
-  defp insert_comment(review, author, existing, file_path, side, anchor, body) do
+  defp insert_comment(review, author, existing, file_path, side, anchor, body, origin_id) do
     result =
       Repo.transaction(fn ->
-        thread = existing || create_thread(review, author, file_path, side, anchor)
+        thread = existing || create_thread(review, author, file_path, side, anchor, origin_id)
 
         comment =
           %Comment{}
@@ -243,9 +244,29 @@ defmodule Reviews.Threads do
     end
   end
 
-  defp create_thread(review, author, file_path, side, anchor) do
-    originating_patchset_id = ReviewsContext.latest_patchset_id(review)
+  defp originating_patchset_id(_review, %Thread{} = thread, _params),
+    do: {:ok, thread.originating_patchset_id}
 
+  defp originating_patchset_id(review, nil, params) do
+    case Map.get(params, "originating_patchset_id", params[:originating_patchset_id]) do
+      nil ->
+        {:ok, ReviewsContext.latest_patchset_id(review)}
+
+      id ->
+        with {:ok, id} <- cast_thread_id(id),
+             true <-
+               Repo.exists?(
+                 from p in Reviews.Reviews.Patchset,
+                   where: p.id == ^id and p.review_id == ^review.id
+               ) do
+          {:ok, id}
+        else
+          _ -> {:error, :patchset_not_found}
+        end
+    end
+  end
+
+  defp create_thread(review, author, file_path, side, anchor, originating_patchset_id) do
     %Thread{}
     |> Thread.changeset(%{
       review_id: review.id,

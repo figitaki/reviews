@@ -7,6 +7,32 @@
 /* ----------------------------------------------------------------------------
    Review surface
 ---------------------------------------------------------------------------- */
+.review-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.review-workspace-content {
+  min-width: 0;
+}
+
+.review-workspace > .review-activity {
+  order: -1;
+}
+
+@media (min-width: 1200px) {
+  .review-workspace {
+    grid-template-columns: minmax(0, 1fr) 288px;
+    align-items: start;
+    padding-right: 16px;
+  }
+
+  .review-workspace > .review-activity {
+    order: 0;
+  }
+}
+
 .review-page {
   --review-app-nav-h: 64px;
   --review-toolbar-h: 64px;
@@ -1609,10 +1635,58 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-inline-diff {
+  position: relative;
   border: 0;
   border-radius: 0;
   background: transparent;
-  overflow: hidden;
+  overflow: visible;
+}
+
+/* Pierre scrolls its code columns, not the file wrapper: an overflow wrapper
+   traps sticky headers even when it never scrolls vertically. */
+.review-page .design-page {
+  overflow-x: clip;
+}
+
+.reviews-markdown-sticky-header {
+  position: sticky;
+  top: var(--review-main-nav-h);
+  z-index: 10;
+  background: var(--review-panel);
+}
+
+.reviews-row-comment-action {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border: 1px solid var(--review-line-strong);
+  border-radius: 6px;
+  background: var(--review-panel-raised);
+  color: var(--review-text);
+  cursor: pointer;
+}
+
+.reviews-row-comment-action:hover,
+.reviews-row-comment-action:focus-visible {
+  border-color: var(--ds-blue);
+  color: var(--ds-blue);
+  outline: 2px solid var(--ds-blue);
+  outline-offset: 2px;
+}
+
+.reviews-row-comment-action svg,
+.reviews-diff-header-viewed svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .review-packet-inline-diff .rdr-file {
@@ -1659,7 +1733,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-hunk-card.is-file-diff .review-packet-inline-diff {
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .review-hunk-card.is-open {
@@ -1776,8 +1850,24 @@ details[open] > summary .review-collapse-icon,
 }
 
 .reviews-diff-header-viewed[aria-pressed="true"] {
-  border-color: var(--review-line-strong);
-  color: var(--review-text);
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  padding: 0;
+  border-color: transparent;
+  color: var(--review-add);
+}
+
+.reviews-diff-header-viewed[aria-pressed="true"]:hover {
+  border-color: var(--review-add);
+}
+
+@media (pointer: coarse) {
+  .reviews-row-comment-action,
+  .reviews-diff-header-viewed[aria-pressed="true"] {
+    width: 44px;
+    min-height: 44px;
+  }
 }
 
 @media (pointer: coarse) {

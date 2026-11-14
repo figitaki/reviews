@@ -60,7 +60,7 @@ defmodule Reviews.ReviewView do
 
   def thread_payloads_for_file(%{published_threads: threads}, file_path) do
     threads
-    |> Enum.filter(&(&1.file_path == file_path))
+    |> Enum.filter(&(&1.file_path == file_path and Map.get(&1, :anchor_status) != "outdated"))
     |> Enum.map(&thread_to_payload/1)
   end
 
@@ -106,9 +106,46 @@ defmodule Reviews.ReviewView do
       hunks_by_path: hunks_by_path,
       packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
-      published_threads: Threads.list_published_threads(review.id),
+      published_threads: project_threads(review, patchsets, selected),
       viewer: viewer
     }
+  end
+
+  defp project_threads(_review, _patchsets, nil), do: []
+
+  defp project_threads(review, patchsets, selected) do
+    by_id = Map.new(patchsets, &{&1.id, &1})
+
+    Threads.list_published_threads(review.id)
+    |> Enum.flat_map(fn thread ->
+      origin = by_id[thread.originating_patchset_id]
+
+      if origin && origin.number <= selected.number do
+        result =
+          if origin.id == selected.id,
+            do: {:ok, thread.anchor},
+            else: Reviews.Anchoring.relocate(thread, origin, selected)
+
+        {anchor, anchor_status} =
+          case result do
+            {:ok, anchor} -> {anchor, "current"}
+            {:error, _} -> {nil, "outdated"}
+          end
+
+        [
+          thread
+          |> Map.from_struct()
+          |> Map.merge(%{
+            anchor: anchor,
+            anchor_status: anchor_status,
+            original_anchor: thread.anchor,
+            originating_patchset_number: origin.number
+          })
+        ]
+      else
+        []
+      end
+    end)
   end
 
   defp file_diff_meta(_files, nil), do: []

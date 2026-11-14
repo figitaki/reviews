@@ -117,9 +117,9 @@ const DiffRenderer = {
     }
     this._systemThemeQuery?.addEventListener?.("change", this._systemThemeListener)
 
-    // The "Open Threads" sidebar dispatches reviews:scroll-to-anchor on click.
-    // Pierre rows live inside shadow DOM, so the pre-Pierre direct DOM lookup is
-    // intentionally still not restored here.
+    this.handleEvent("open_review_thread", ({ thread_id, file_path }) => {
+      if (file_path === filePath) this._renderer?.openThread(thread_id)
+    })
   },
 
   updated() {

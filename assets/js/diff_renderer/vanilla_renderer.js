@@ -10,6 +10,7 @@ import {
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
 import { MobileConversation } from "./mobile_conversation.js"
+import { SelectionAction } from "./selection_action.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
   annotationSideToSide,
@@ -33,7 +34,9 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
 // header. Metadata controls sit above it as siblings, not nested buttons.
 const REVIEWS_DIFF_HEADER_CSS = `
   [data-diffs-header] {
-    position: relative;
+    position: sticky;
+    top: var(--review-main-nav-h, 0px);
+    z-index: 10;
     min-height: 44px;
     padding-inline: 12px;
     transition: background-color 140ms ease;
@@ -98,10 +101,6 @@ function shouldVirtualize({ rawDiff, fileDiff, diffStyle }) {
   )
 }
 
-function lineTextFromEvent(props) {
-  return (props?.lineElement && props.lineElement.textContent) || ""
-}
-
 export function hunkViewLabel(hunkUI) {
   if (!hunkUI) return ""
   if (hunkUI.hunkViewed) return "Viewed"
@@ -135,6 +134,9 @@ export class VanillaDiffRenderer {
     this.onToggleHunk = onToggleHunk
     this.onSetHunkViewed = onSetHunkViewed
     this.composerAt = null
+    this.selectionAction = new SelectionAction(container, (anchor) => {
+      this.setComposerAt(this.signedIn ? anchor : { ...anchor, kind: "signin" })
+    })
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
     this.headerInstance = null
@@ -310,6 +312,33 @@ export class VanillaDiffRenderer {
     })
   }
 
+  openThread(id) {
+    const thread = this.threads.find(thread => String(thread.id) === String(id))
+    if (!thread) return
+    this.preview = false
+    this.threadUI.set(thread.id, { ...this.threadUI.get(thread.id), expanded: true })
+    this.focusedThreadId = thread.id
+    this.pendingThreadFocus = thread.id
+    this.mobileSelection = { threadId: thread.id }
+    this.render()
+  }
+
+  focusPendingThread() {
+    if (!this.pendingThreadFocus) return
+    requestAnimationFrame(() => {
+      if (!this.pendingThreadFocus) return
+      const target = this.container.querySelector(`[data-thread-id="${this.pendingThreadFocus}"]`)
+      if (!target) return
+      this.pendingThreadFocus = null
+      target.style.scrollMarginTop = "calc(var(--review-main-nav-h) + 60px)"
+      target.scrollIntoView({ block: "start", behavior: "instant" })
+      if (!this.mobileQuery.matches) {
+        target.tabIndex = -1
+        target.focus({ preventScroll: true })
+      }
+    })
+  }
+
   openMobileConversation(selection, opener) {
     this.mobileSelection = selection
     this.mobileOpener = opener
@@ -348,48 +377,6 @@ export class VanillaDiffRenderer {
     this.mobileConversation.show(content, title, () => {
       this.mobileSelection = null
     }, () => this.mobileOpener)
-  }
-
-  handleLineNumberClick(props) {
-    const side = props?.annotationSide || props?.side
-    const lineNumber = props?.lineNumber
-    if (!side || !lineNumber) return
-
-    if (!this.signedIn) {
-      this.setComposerAt({ kind: "signin", side, lineNumber })
-      return
-    }
-
-    this.setComposerAt({
-      kind: "line",
-      side,
-      lineNumber,
-      lineText: lineTextFromEvent(props),
-    })
-  }
-
-  handleTokenClick(props) {
-    const side = props?.side
-    const lineNumber = props?.lineNumber
-    const tokenText = props?.tokenText || ""
-    if (!side || !lineNumber || tokenText.trim().length === 0) return
-
-    if (!this.signedIn) {
-      this.setComposerAt({ kind: "signin", side, lineNumber })
-      return
-    }
-
-    const lineEl =
-      (props?.tokenElement && props.tokenElement.closest("[data-line]")) || null
-    this.setComposerAt({
-      kind: "token",
-      side,
-      lineNumber,
-      lineText: (lineEl && lineEl.textContent) || "",
-      lineCharStart: props.lineCharStart,
-      lineCharEnd: props.lineCharEnd,
-      tokenText,
-    })
   }
 
   // Keep Pierre's path, status icon and counts. The disclosure button uses
@@ -454,6 +441,12 @@ export class VanillaDiffRenderer {
 
     if (this.hunkUI.signedIn) {
       const viewed = this.hunkUI.hunkViewed
+      const check = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+      check.setAttribute("viewBox", "0 0 24 24")
+      check.setAttribute("aria-hidden", "true")
+      const checkPath = document.createElementNS("http://www.w3.org/2000/svg", "path")
+      checkPath.setAttribute("d", "m8 12 3 3 5-6 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0")
+      check.append(checkPath)
       children.push(
         el(
           "button",
@@ -461,11 +454,12 @@ export class VanillaDiffRenderer {
             className: "reviews-diff-header-viewed",
             type: "button",
             "aria-pressed": viewed ? "true" : "false",
+            title: viewed ? "Viewed · mark unviewed" : "Mark viewed and collapse",
             "aria-label": `${viewed ? "Mark unviewed" : "Mark viewed"}: ${this.filePath}${this.hunkUI.hunkLabel ? ` · ${this.hunkUI.hunkLabel}` : ""}`,
             onclick: (event) =>
               stopHeaderEvent(event, () => this.onSetHunkViewed?.(!viewed)),
           },
-          viewed ? "Viewed" : viewLabel || "Mark viewed"
+          viewed ? [check] : viewLabel || "Mark viewed"
         )
       )
     }
@@ -477,13 +471,16 @@ export class VanillaDiffRenderer {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
+      overflow: this.diffStyle === "unified" ? "wrap" : "scroll",
       collapsed: this.collapsed(),
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
-      onLineNumberClick: (props) => this.handleLineNumberClick(props),
-      onTokenClick: (props) => this.handleTokenClick(props),
+      onPostRender: () => this.focusPendingThread(),
+      onLineEnter: (props) => this.selectionAction.offer(props),
+      onLineClick: (props) => this.selectionAction.offer(props, true),
+      onLineNumberClick: (props) => this.selectionAction.offer(props, true),
     }
   }
 
@@ -507,7 +504,7 @@ export class VanillaDiffRenderer {
 
     this.sourceContainer = this.container
     if (this.hasMarkdownPreview) {
-      const headerContainer = el("div")
+      const headerContainer = el("div", { className: "reviews-markdown-sticky-header" })
       this.container.append(headerContainer)
       const toolbar = el("div", { className: "review-markdown-toolbar", role: "group", "aria-label": "Markdown view" })
       for (const [label, preview] of [["Source", false], ["Preview", true]]) {
@@ -544,7 +541,7 @@ export class VanillaDiffRenderer {
     const renderArgs = this.renderArgs()
 
     if (
-      !this.collapsed() &&
+      !this.collapsed() && !this.focusedThreadId &&
       shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
     ) {
       if (this.tryRenderVirtualized(options, renderArgs)) {
@@ -592,7 +589,9 @@ export class VanillaDiffRenderer {
   }
 
   cleanUp(clear = true) {
+    this.selectionAction.clear()
     if (clear) {
+      this.selectionAction.destroy()
       this.mobileQuery.removeEventListener("change", this.mobileResize)
       this.mobileConversation.close(false)
       this.threadUI.clear()
