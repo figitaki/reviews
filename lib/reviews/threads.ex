@@ -18,6 +18,10 @@ defmodule Reviews.Threads do
 
   @pubsub Reviews.PubSub
 
+  # Postgres bigint. An id past this range reaches the driver as an unencodable
+  # integer and takes the whole request down, so it is a miss like any other.
+  @max_thread_id 9_223_372_036_854_775_807
+
   ## Queries
 
   @doc """
@@ -32,7 +36,7 @@ defmodule Reviews.Threads do
       from t in Thread,
         where: t.review_id == ^review_id,
         order_by: [asc: t.inserted_at],
-        preload: [comments: ^comments_query, author: []]
+        preload: [comments: ^comments_query, author: [], resolved_by: []]
 
     Repo.all(query)
     |> Enum.filter(fn thread -> thread.comments != [] end)
@@ -44,9 +48,10 @@ defmodule Reviews.Threads do
   @doc """
   Creates a published comment in one transaction.
 
-  When `"thread_id"` belongs to the review, the comment is appended to that
-  thread. Otherwise a new thread is created from `"file_path"`, `"side"`, and
-  `"thread_anchor"`.
+  When `"thread_id"` is given, the comment is appended to that thread. If the
+  id is not a thread of this review, it returns `{:error, :thread_not_found}`
+  and writes nothing. Without `"thread_id"`, a new thread is created from
+  `"file_path"`, `"side"`, and `"thread_anchor"`.
 
   `params`:
 
@@ -58,10 +63,10 @@ defmodule Reviews.Threads do
         "thread_id"     => 123 # optional
       }
 
-  Token-range anchors carry the substring identification. The relocator in
-  `Reviews.Anchoring` still returns `:not_implemented` for them, so they do not
-  survive a patchset push yet. They're stored verbatim and rendered as line
-  anchors today via `anchor.line_number_hint`.
+  New threads may supply `"originating_patchset_id"` (or its atom key) to
+  comment on an explicitly selected revision. It must belong to this review;
+  omitted values default to the latest patchset. Replies retain their origin.
+  Token-range anchors retain their selected text and offset across projection.
 
   Returns `{:ok, %{thread: t, comment: c}}` or `{:error, reason}`.
   Broadcasts `{:thread_published, thread}` on `"review:<slug>"`.
@@ -71,7 +76,7 @@ defmodule Reviews.Threads do
     side = params["side"] || params[:side]
     body = String.trim(to_string(params["body"] || params[:body] || ""))
     anchor = params["thread_anchor"] || params[:thread_anchor] || %{}
-    thread_id = params["thread_id"] || params[:thread_id]
+    thread_id = Map.get(params, "thread_id", params[:thread_id])
 
     cond do
       body == "" ->
@@ -90,36 +95,9 @@ defmodule Reviews.Threads do
         {:error, :unknown_granularity}
 
       true ->
-        result =
-          Repo.transaction(fn ->
-            thread = fetch_or_create_thread(review, author, thread_id, file_path, side, anchor)
-
-            comment =
-              %Comment{}
-              |> Comment.changeset(%{
-                thread_id: thread.id,
-                author_id: author.id,
-                body: body
-              })
-              |> Repo.insert!()
-
-            %{thread: thread, comment: comment}
-          end)
-
-        case result do
-          {:ok, %{thread: thread, comment: _} = out} ->
-            published_thread = Repo.preload(thread, comments: comments_query())
-
-            Phoenix.PubSub.broadcast(
-              @pubsub,
-              "review:#{review.slug}",
-              {:thread_published, published_thread}
-            )
-
-            {:ok, out}
-
-          {:error, reason} ->
-            {:error, reason}
+        with {:ok, existing} <- fetch_reply_thread(review, thread_id),
+             {:ok, origin_id} <- originating_patchset_id(review, existing, params) do
+          insert_comment(review, author, existing, file_path, side, anchor, body, origin_id)
         end
     end
   rescue
@@ -132,27 +110,163 @@ defmodule Reviews.Threads do
     end
   end
 
+  defp insert_comment(review, author, existing, file_path, side, anchor, body, origin_id) do
+    result =
+      Repo.transaction(fn ->
+        thread = existing || create_thread(review, author, file_path, side, anchor, origin_id)
+
+        comment =
+          %Comment{}
+          |> Comment.changeset(%{
+            thread_id: thread.id,
+            author_id: author.id,
+            body: body
+          })
+          |> Repo.insert!()
+
+        %{thread: thread, comment: comment}
+      end)
+
+    case result do
+      {:ok, %{thread: thread, comment: _} = out} ->
+        published_thread = Repo.preload(thread, comments: comments_query())
+
+        Phoenix.PubSub.broadcast(
+          @pubsub,
+          "review:#{review.slug}",
+          {:thread_published, published_thread}
+        )
+
+        {:ok, out}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Updates a thread's review status.
+
+  Resolving records the acting identity and timestamp. Reopening clears both. The
+  thread must belong to the supplied review.
+  """
+  def update_status(%Review{} = review, thread_id, %Identity{} = identity, status)
+      when status in ["open", "resolved"] do
+    with {:ok, id} <- cast_thread_id(thread_id),
+         {:ok, {thread, changed?}} <-
+           Repo.transaction(fn ->
+             # The no-op check and write must share the row lock. A concurrent
+             # resolver must see the first transition, not overwrite it.
+             case Repo.one(
+                    from t in Thread,
+                      where: t.id == ^id and t.review_id == ^review.id,
+                      lock: "FOR UPDATE"
+                  ) do
+               %Thread{status: ^status} = thread -> {thread, false}
+               %Thread{} = thread -> {write_status(thread, identity, status), true}
+               nil -> Repo.rollback(:not_found)
+             end
+           end) do
+      thread = preload_thread(thread)
+
+      if changed? do
+        Phoenix.PubSub.broadcast(
+          @pubsub,
+          "review:#{review.slug}",
+          {:thread_updated, thread}
+        )
+      end
+
+      {:ok, thread}
+    end
+  end
+
+  def update_status(%Review{} = review, thread_id, %User{} = user, status) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      update_status(review, thread_id, identity, status)
+    end
+  end
+
+  def update_status(%Review{}, _thread_id, %Identity{}, _status), do: {:error, :invalid_status}
+
+  defp write_status(thread, identity, status) do
+    attrs =
+      case status do
+        "resolved" ->
+          %{
+            status: "resolved",
+            resolved_by_id: identity.id,
+            resolved_at: DateTime.utc_now(:second)
+          }
+
+        "open" ->
+          %{status: "open", resolved_by_id: nil, resolved_at: nil}
+      end
+
+    case thread |> Thread.changeset(attrs) |> Repo.update() do
+      {:ok, updated} -> updated
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
+  end
+
+  defp preload_thread(%Thread{} = thread) do
+    Repo.preload(thread, [:author, :resolved_by, comments: comments_query()])
+  end
+
+  defp cast_thread_id(id) when is_integer(id) and id > 0 and id <= @max_thread_id, do: {:ok, id}
+
+  defp cast_thread_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {parsed, ""} when parsed > 0 and parsed <= @max_thread_id -> {:ok, parsed}
+      _ -> {:error, :not_found}
+    end
+  end
+
+  defp cast_thread_id(_id), do: {:error, :not_found}
+
   defp comments_query do
     from c in Comment,
       order_by: [asc: c.inserted_at],
       preload: [:author]
   end
 
-  defp fetch_or_create_thread(review, author, thread_id, file_path, side, anchor)
-       when is_integer(thread_id) do
-    case Repo.get(Thread, thread_id) do
-      %Thread{review_id: rid} = thread when rid == review.id -> thread
-      _ -> create_thread(review, author, file_path, side, anchor)
+  # No thread_id starts a new thread. A thread_id that is not a thread of this
+  # review (unparseable, out of range, missing, or from another review) is an
+  # error, so a bad reply never opens a stray thread.
+  defp fetch_reply_thread(_review, nil), do: {:ok, nil}
+
+  defp fetch_reply_thread(%Review{id: review_id}, thread_id) do
+    with {:ok, id} <- cast_thread_id(thread_id),
+         %Thread{review_id: ^review_id} = thread <- Repo.get(Thread, id) do
+      {:ok, thread}
+    else
+      _ -> {:error, :thread_not_found}
     end
   end
 
-  defp fetch_or_create_thread(review, author, _thread_id, file_path, side, anchor) do
-    create_thread(review, author, file_path, side, anchor)
+  defp originating_patchset_id(_review, %Thread{} = thread, _params),
+    do: {:ok, thread.originating_patchset_id}
+
+  defp originating_patchset_id(review, nil, params) do
+    case Map.get(params, "originating_patchset_id", params[:originating_patchset_id]) do
+      nil ->
+        {:ok, ReviewsContext.latest_patchset_id(review)}
+
+      id ->
+        with {:ok, id} <- cast_thread_id(id),
+             true <-
+               Repo.exists?(
+                 from p in Reviews.Reviews.Patchset,
+                   where: p.id == ^id and p.review_id == ^review.id
+               ) do
+          {:ok, id}
+        else
+          _ -> {:error, :patchset_not_found}
+        end
+    end
   end
 
-  defp create_thread(review, author, file_path, side, anchor) do
-    originating_patchset_id = ReviewsContext.latest_patchset_id(review)
-
+  defp create_thread(review, author, file_path, side, anchor, originating_patchset_id) do
     %Thread{}
     |> Thread.changeset(%{
       review_id: review.id,
