@@ -37,6 +37,11 @@ defmodule ReviewsWeb.Api.CommentController do
               url: url(~p"/r/#{review.slug}") <> "#file-" <> file_anchor(thread)
             })
 
+          {:error, :thread_not_found} ->
+            conn
+            |> put_status(:not_found)
+            |> json(%{errors: %{detail: "Thread not found"}})
+
           {:error, reason} ->
             conn
             |> put_status(:unprocessable_entity)
@@ -50,7 +55,10 @@ defmodule ReviewsWeb.Api.CommentController do
       "file_path" => params["file_path"],
       "side" => params["side"] || "new",
       "body" => params["body"],
-      "thread_anchor" => params["thread_anchor"] || %{}
+      "thread_anchor" => params["thread_anchor"] || %{},
+      # Passed through as given. `publish_comment/3` casts it and returns
+      # `:thread_not_found` when it is not a thread of this review.
+      "thread_id" => params["thread_id"]
     }
   end
 
