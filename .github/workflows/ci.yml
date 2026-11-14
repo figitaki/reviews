@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 env:
   MIX_ENV: test
@@ -76,6 +75,13 @@ jobs:
       - run: mix format --check-formatted
 
       - run: mix compile --warnings-as-errors
+
+      - name: Preview cleanup integration tests
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
 
       - name: Build assets (catches esbuild / JS bundle breaks)
         run: mix assets.build
