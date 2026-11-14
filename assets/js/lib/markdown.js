@@ -3,7 +3,9 @@ import MarkdownIt from "markdown-it"
 // Packet prose is untrusted. Never interpret authored HTML as application markup.
 const markdown = new MarkdownIt({ html: false, linkify: true })
 markdown.validateLink = url => {
-  if (/[\u0000-\u0020\u007f\\]/.test(url) || url.startsWith("//")) return false
+  // Markdown-it normalizes destinations before validation. Check encoded
+  // backslashes too; a browser must not reinterpret them as a host separator.
+  if (/%(?:0[0-9a-f]|1[0-9a-f]|5c|7f)/i.test(url) || url.startsWith("//")) return false
   return /^(?:https?:|mailto:)/i.test(url) || !/^[^/?#]*:/.test(url)
 }
 
@@ -28,8 +30,39 @@ for (const type of ["fence", "code_block"]) {
   }
 }
 
-export function renderMarkdown(source, changedLines = []) {
+export function renderMarkdown(source, changedLines = [], { preview = false } = {}) {
   const tokens = markdown.parse(source || "", {})
+  if (preview) {
+    // Keep document headings below the review section (h2) and side label (h3).
+    const levels = [...new Set(tokens.filter(token => token.type === "heading_open").map(token => token.tag))].sort()
+    for (const token of tokens) {
+      if (token.type === "heading_open" || token.type === "heading_close") {
+        const heading = token.tag
+        token.tag = "div"
+        if (token.type === "heading_open") {
+          token.attrSet("role", "heading")
+          token.attrSet("aria-level", String(Math.min(6, 4 + levels.indexOf(heading))))
+          token.attrSet("data-markdown-heading", heading)
+        }
+      }
+      let relativeLink = false
+      for (const child of token.children || []) {
+        if (child.type === "link_open") {
+          relativeLink = !/^(?:https?:|mailto:)/i.test(child.attrGet("href") || "")
+          if (relativeLink) {
+            child.tag = "span"
+            child.attrs = [["title", "Repository-relative link. See the path in Source."], ["class", "review-markdown-relative-link"]]
+          } else {
+            child.attrSet("target", "_blank")
+            child.attrSet("rel", "noopener noreferrer")
+          }
+        } else if (child.type === "link_close" && relativeLink) {
+          child.tag = "span"
+          relativeLink = false
+        }
+      }
+    }
+  }
   const sortedChanges = [...changedLines].sort((a, b) => a - b)
   for (const token of tokens) {
     const block = (token.level === 0 && !["bullet_list_open", "ordered_list_open"].includes(token.type)) ||

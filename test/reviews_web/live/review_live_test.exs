@@ -96,6 +96,32 @@ defmodule ReviewsWeb.ReviewLiveTest do
   describe "anonymous viewer" do
     setup :seed!
 
+    test "new Markdown files expose the complete patch to the preview", %{
+      conn: conn,
+      author: author
+    } do
+      patch = """
+      diff --git a/guide.md b/guide.md
+      new file mode 100644
+      --- /dev/null
+      +++ b/guide.md
+      @@ -0,0 +1,3 @@
+      +```elixir
+      +:ready
+      +```
+      """
+
+      {:ok, %{review: review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "New guide",
+          raw_diff: patch
+        })
+
+      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}/changes")
+      island = element(view, "##{changes_hunk_id(review, "guide.md")}-diff") |> render()
+      assert island |> LazyHTML.from_fragment() |> LazyHTML.attribute("data-full-diff") == [patch]
+    end
+
     test "current and historical review pages discourage indexing", %{review: review} do
       {:ok, _patchset} =
         ReviewsCtx.append_patchset(review, %{

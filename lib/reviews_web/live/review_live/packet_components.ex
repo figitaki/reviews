@@ -1508,6 +1508,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           data-side="new"
           data-patchset-number={@selected_patchset && @selected_patchset.number}
           data-raw-diff={@hunk.display_raw_diff}
+          data-full-diff={
+            @file.status in ["added", "deleted"] &&
+              String.match?(@file.path, ~r/\.(md|markdown|mdown|mkd)$/i) && @file.raw_diff
+          }
           data-threads={threads_json(@published_threads, @file.path)}
           data-signed-in={if @current_user, do: "true", else: "false"}
           data-diff-style={@diff_style}

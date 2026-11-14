@@ -14,12 +14,21 @@ still stabilizing.
 - Comments follow matching code across revisions. Discussions whose code changed
   stay available on their original revision rather than drifting onto other lines.
 
-- Markdown files in a diff open in a rendered Preview with Before and After
-  excerpts. Source shows the exact lines and comments. Raw HTML, scripts and
-  unsafe links stay escaped.
+- Markdown diffs offer rendered Preview and exact Source views. Files with
+  discussions open in Source; other files open in Preview. Explicit choices
+  persist per review and file. Discussion buttons open Source, including from
+  collapsed headers. Raw HTML, scripts and unsafe links stay escaped.
 
 ### Changed
 
+- Markdown excerpts with missing fence, table or indentation context use Source
+  with an explanation. New/deleted documents render in one complete panel.
+  Large documents use virtualized Source; smaller previews reuse cached content.
+  Preview changes include text labels as well as color, and document headings
+  stay below review headings. Repository-relative links no longer navigate to
+  unrelated review routes.
+- All reviews use edge-to-edge diff cards and smaller packet gutters on mobile,
+  not only reviews containing Markdown files.
 - Preview deployments can provision and delete per-PR databases through
   Fly Managed Postgres v2, without granting SQL database-owner privileges.
 - Selecting diff text offers a row-end comment button instead of opening a

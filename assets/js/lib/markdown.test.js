@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { parsePatchFiles } from "@pierre/diffs"
 import { isMarkdown, markdownPatchExcerpts, renderMarkdown } from "./markdown.js"
-import { previewNotice } from "../diff_renderer/markdown_preview.js"
+import { discussionCount, markdownPreviewState, previewNotice } from "../diff_renderer/markdown_preview.js"
 
 test("renders packet lists, links, emphasis, bold and fenced code", () => {
   const html = renderMarkdown('- **Check** *this* [guide](/docs/guide)\n- `code`\n\n1. First\n2. Next\n\n```js\nconst x = "<tag>"\n```')
@@ -125,7 +125,7 @@ test("previews of untrusted patches never produce executable markup", () => {
     const patch = `@@ -1,${lines.length} +1,${lines.length} @@\n${lines.map(l => `-${l}`).join("\n")}\n${lines.map(l => `+${l}`).join("\n")}\n`
     const [excerpt] = markdownPatchExcerpts(patch)
     assert.equal(excerpt.after, payload)
-    for (const html of [renderMarkdown(excerpt.before, excerpt.beforeChanges), renderMarkdown(excerpt.after, excerpt.afterChanges)]) {
+    for (const html of [renderMarkdown(excerpt.before, excerpt.beforeChanges), renderMarkdown(excerpt.after, excerpt.afterChanges), renderMarkdown(excerpt.after, excerpt.afterChanges, { preview: true })]) {
       assert.doesNotMatch(html, /<(script|img|svg|iframe|details|object|embed)\b/i, payload)
       // Attribute values are quoted and escaped; look for handlers outside them.
       assert.doesNotMatch(html.replace(/"[^"]*"/g, '""'), /<[a-z][^>]*\son[a-z]+\s*=/i, payload)
@@ -144,10 +144,10 @@ test("the preview notice counts only discussions on the displayed side and hunks
   const thread = (side, line) => ({ side, anchor: { line_number_hint: line } })
   const outside = [thread("old", 9), thread("old", 12), thread("new", 19),
     thread("new", 23), thread("old", 20), thread("new", 10), thread("new", 50)]
-  assert.doesNotMatch(previewNotice(outside, hunks), /discussion/)
-  assert.match(previewNotice([...outside, thread("old", 11)], hunks), /Source.*1 discussion\.$/)
-  assert.match(previewNotice([thread("old", 10), thread("new", 22), thread("old", 40)], hunks), /Source.*3 discussions\.$/)
-  assert.doesNotMatch(previewNotice(), /discussion/)
+  assert.equal(discussionCount(outside, hunks), 0)
+  assert.equal(discussionCount([...outside, thread("old", 11)], hunks), 1)
+  assert.equal(discussionCount([thread("old", 10), thread("new", 22), thread("old", 40)], hunks), 3)
+  assert.equal(discussionCount(), 0)
 })
 
 test("change lookup preserves exclusive block boundaries and unsorted input", () => {
@@ -155,4 +155,58 @@ test("change lookup preserves exclusive block boundaries and unsorted input", ()
   assert.equal(renderMarkdown("First\n\nSecond\n\nThird\n\nFourth", changes),
     '<p>First</p>\n<p>Second</p>\n<p class="review-markdown-change">Third</p>\n<p class="review-markdown-change">Fourth</p>\n')
   assert.deepEqual(changes, [6, 1, 4])
+})
+
+test("ambiguous Markdown excerpts fall back instead of inventing structure", () => {
+  for (const patch of [
+    "@@ -10,7 +10,7 @@\n const a = 1\n const b = 2\n ```\n-Old prose after the fence.\n+New prose after the fence.\n \n ## Next heading\n More text",
+    "@@ -20,3 +20,3 @@\n     continuation of a list item paragraph\n     - nested item\n-    - old nested\n+    - new nested",
+    "@@ -30,3 +30,3 @@\n | a | b |\n-| c | d |\n+| c | e |\n | f | g |",
+    "@@ -30,2 +30,2 @@\n a | b\n-c | d\n+c | e",
+    "@@ -1,2 +1,2 @@\n ```js\n-old()\n+new()",
+    "@@ -8,2 +8,2 @@\n ~~~~\n-old\n+new",
+    // Fences inside blockquotes and list items can also continue into omitted text.
+    "@@ -1,2 +1,2 @@\n > ~~~js\n-> old()\n+> new()",
+    "@@ -1,2 +1,2 @@\n - ```sh\n-  old\n+  new",
+    // Two- and three-space list continuations whose parent item is omitted.
+    "@@ -20,2 +20,2 @@\n   continuation\n-  - old nested\n+  - nested item",
+    "@@ -20,2 +20,2 @@\n    continuation\n-   old\n+   new",
+  ]) {
+    const state = markdownPreviewState(patch)
+    assert.match(state.reason, /Surrounding Markdown is missing/, patch)
+    assert.equal(state.excerpts, undefined)
+  }
+  for (const patch of [
+    "@@ -20,3 +20,3 @@\n # Heading\n-old prose\n+new prose\n More text",
+    "@@ -20,3 +20,3 @@\n | A | B |\n | --- | --- |\n-| c | d |\n+| c | e |",
+    "@@ -20,3 +20,3 @@\n A | B\n --- | ---\n-c | d\n+c | e",
+    "@@ -1,3 +1,3 @@\n ```js\n-old()\n+new()\n ```",
+    "@@ -1,3 +1,3 @@\n > ```js\n-> old()\n+> new()\n > ```",
+    // Pipes inside a closed fence are code, not a table without its header.
+    "@@ -1,3 +1,3 @@\n ```js\n-const value = left | right\n+const value = left || right\n ```",
+  ]) assert.equal(markdownPreviewState(patch).reason, null, patch)
+})
+
+test("complete documents render without excerpt warnings, and large ones stay in Source", () => {
+  const patch = "@@ -0,0 +1,3 @@\n+```js\n+hello()\n+```"
+  const state = markdownPreviewState(patch, { type: "new", unifiedLineCount: 3 })
+  assert.equal(state.complete, true)
+  assert.equal(state.excerpts[0].after, "```js\nhello()\n```")
+  assert.match(previewNotice(true, state), /Complete document/)
+  assert.doesNotMatch(previewNotice(false, state), /excerpts|Source/i)
+  assert.equal(markdownPreviewState(patch, { unifiedLineCount: 1499 }).reason, null)
+  assert.match(markdownPreviewState(patch, { unifiedLineCount: 1500 }).reason, /Large/)
+  assert.match(markdownPreviewState("é".repeat(100 * 1024)).reason, /Large/)
+  assert.match(previewNotice(true, { complete: false }), /omitted context/)
+})
+
+test("preview headings fit the review outline and repository-relative links cannot navigate to review routes", () => {
+  const html = renderMarkdown("## Title\n\n#### Child\n\n[setup](setup.md) [external](https://example.com)", [], { preview: true })
+  assert.match(html, /role="heading" aria-level="4" data-markdown-heading="h2"/)
+  assert.match(html, /role="heading" aria-level="5" data-markdown-heading="h4"/)
+  assert.doesNotMatch(html, /<h[1-6]|href="setup.md"/)
+  assert.match(html, /Repository-relative link/)
+  assert.match(html, /target="_blank" rel="noopener noreferrer"/)
+  assert.match(renderMarkdown("[setup](setup.md)"), /href="setup.md"/)
+  assert.doesNotMatch(renderMarkdown("[x](/\\\\evil)"), /<a\b/)
 })
