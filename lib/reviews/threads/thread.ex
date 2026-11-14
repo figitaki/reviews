@@ -5,7 +5,10 @@ defmodule Reviews.Threads.Thread do
   for the dispatch logic.
 
   `side` is "old" or "new" (which side of the diff the comment is anchored to).
-  `status` is "open" or "resolved" or "outdated".
+  `status` is "open" or "resolved" or "outdated". An outdated thread keeps
+  the anchor of its last known position; `Reviews.Anchoring.relocate/4`
+  returns `{:error, :outdated}` (or `{:error, :ambiguous}`) when a thread
+  cannot be placed in a newer patchset.
   """
   use Ecto.Schema
   import Ecto.Changeset
