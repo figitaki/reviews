@@ -43,6 +43,16 @@ test("clicked-thread reads leave other threads unread; mark all reads exactly th
   assert.equal(state.unread(thread([2, "other"], [3, "other"]), "me"), 1)
 })
 
+test("previously saved shared-array acknowledgements remain read", () => {
+  const storage = memoryStorage()
+  const state = new ReviewActivityReadState("review", "me", storage)
+  storage.setItem(state.key, '["1"]')
+  const reloaded = new ReviewActivityReadState("review", "me", storage)
+  reloaded.markRead([thread([2, "other"])])
+  const restored = new ReviewActivityReadState("review", "me", storage)
+  assert.equal(restored.unread(thread([1, "other"], [2, "other"], [3, "other"]), "me"), 1)
+})
+
 test("read state is isolated by review, identity and anonymous browser viewer", () => {
   const storage = memoryStorage()
   new ReviewActivityReadState("one", "me", storage).markRead([thread([1, "other"])])
@@ -67,6 +77,26 @@ test("invalid storage values cannot acknowledge comments", () => {
     const storage = { getItem: () => raw, setItem: () => {} }
     const state = new ReviewActivityReadState("review", "me", storage)
     assert.equal(state.unread(thread([1, "other"]), "me"), 1)
+  }
+})
+
+test("concurrent tab acknowledgements survive both tabs reloading", () => {
+  const storage = memoryStorage()
+  const a = new ReviewActivityReadState("review", "me", storage)
+  const b = new ReviewActivityReadState("review", "me", storage)
+  const write = storage.setItem
+  let interleave = true
+  storage.setItem = (key, value) => {
+    if (interleave) {
+      interleave = false
+      b.markRead([thread([2, "other"])])
+    }
+    write(key, value)
+  }
+  a.markRead([thread([1, "other"])])
+  for (let tab = 0; tab < 2; tab++) {
+    const reloaded = new ReviewActivityReadState("review", "me", storage)
+    assert.equal(reloaded.unread(thread([1, "other"], [2, "other"], [3, "other"]), "me"), 1)
   }
 })
 

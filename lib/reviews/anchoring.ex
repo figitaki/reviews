@@ -31,11 +31,22 @@ defmodule Reviews.Anchoring do
       repeated_source? = Enum.count(source, fn {_, line} -> line == text end) > 1
       anchor = source_context(anchor, source, text)
 
+      unique_source? =
+        not repeated_source? or
+          Enum.count(source, fn {number, line} ->
+            line == text and context_matches?(anchor, source, number)
+          end) == 1
+
       matches =
-        if length(matches) > 1 or repeated_source? do
-          Enum.filter(matches, fn {number, _} -> context_matches?(anchor, target, number) end)
-        else
-          matches
+        cond do
+          not unique_source? ->
+            []
+
+          length(matches) > 1 or repeated_source? ->
+            Enum.filter(matches, fn {number, _} -> context_matches?(anchor, target, number) end)
+
+          true ->
+            matches
         end
 
       case matches do

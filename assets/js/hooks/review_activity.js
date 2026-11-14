@@ -37,7 +37,8 @@ export const ReviewActivity = {
       }))
     }
     this.onStorage = event => {
-      if (event.key !== this.readState.key && event.key !== null) return
+      if (event.key !== null && event.key !== this.readState.key &&
+          !event.key.startsWith(`${this.readState.key}:comment:`)) return
       this.readState.refresh()
       this.renderActivity()
     }

@@ -47,6 +47,25 @@ defmodule Reviews.AnchoringTest do
              Anchoring.relocate(t, original, patch("+second block\n+target\n+second end"))
   end
 
+  test "identical source blocks stay outdated when one copy disappears" do
+    block = "+before1\n+before2\n+before3\n+target\n+after1\n+after2\n+after3"
+    source = patch(block <> "\n" <> block)
+
+    assert {:error, :outdated} =
+             Anchoring.relocate(thread(%{"line_number_hint" => 4}), source, patch(block))
+
+    distinct = String.replace(block, "before1", "different")
+
+    assert {:ok, anchor} =
+             Anchoring.relocate(
+               thread(%{"line_number_hint" => 4}),
+               patch(block <> "\n" <> distinct),
+               patch(block, 30)
+             )
+
+    assert anchor["line_number_hint"] == 33
+  end
+
   test "exact context disambiguates duplicate lines" do
     t = thread(%{"context_before" => ["before"], "context_after" => ["after"]})
 

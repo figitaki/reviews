@@ -23,22 +23,33 @@ export class ReviewActivityReadState {
   }
 
   unread(thread, identityId) {
-    return thread.comments.filter(comment =>
-      (identityId == null || String(comment.authorId) !== String(identityId)) &&
-      !this.seen.has(String(comment.id))
-    ).length
+    return thread.comments.filter(comment => {
+      const id = String(comment.id)
+      if (!this.seen.has(id) && this.persistent) {
+        try {
+          if (this.storage.getItem(`${this.key}:comment:${encodeURIComponent(id)}`) === "1") this.seen.add(id)
+        } catch {
+          this.persistent = false
+        }
+      }
+      return (identityId == null || String(comment.authorId) !== String(identityId)) && !this.seen.has(id)
+    }).length
   }
 
   markRead(threads) {
-    this.refresh() // Merge other tabs' reads before writing.
     for (const thread of threads) {
-      for (const comment of thread.comments) this.seen.add(String(comment.id))
-    }
-    if (!this.persistent) return
-    try {
-      this.storage.setItem(this.key, JSON.stringify([...this.seen]))
-    } catch {
-      this.persistent = false
+      for (const comment of thread.comments) {
+        const id = String(comment.id)
+        this.seen.add(id)
+        if (!this.persistent) continue
+        try {
+          // Independent, immutable records cannot overwrite another tab's reads.
+          // Keep the old shared array read-only for previously saved state.
+          this.storage.setItem(`${this.key}:comment:${encodeURIComponent(id)}`, "1")
+        } catch {
+          this.persistent = false
+        }
+      }
     }
   }
 }
