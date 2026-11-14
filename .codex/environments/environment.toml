@@ -1,0 +1,34 @@
+version = 1
+name = "local"
+
+[setup]
+script = """
+set -eu
+
+src="${CODEX_SOURCE_TREE_PATH:?}"
+dst="${CODEX_WORKTREE_PATH:?}"
+
+copy_if_exists() {
+  from="$src/$1"
+  to="$dst/$1"
+
+  if [ -e "$from" ] && [ ! -e "$to" ]; then
+    mkdir -p "$(dirname "$to")"
+    # -c clones files on macOS (APFS). GNU cp has no -c, so fall back to a
+    # plain copy, clearing anything a failed clone left behind.
+    if ! cp -Rc "$from" "$to" 2>/dev/null; then
+      rm -rf "$to"
+      cp -R "$from" "$to"
+    fi
+  fi
+}
+
+copy_if_exists ".env"
+copy_if_exists ".env.local"
+copy_if_exists ".env.test"
+copy_if_exists ".env.test.local"
+
+copy_if_exists "deps"
+copy_if_exists "_build"
+copy_if_exists "assets/node_modules"
+"""
