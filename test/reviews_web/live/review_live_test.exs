@@ -9,6 +9,48 @@ defmodule ReviewsWeb.ReviewLiveTest do
   alias Reviews.Reviews, as: ReviewsCtx
   alias Reviews.Threads
 
+  test "activity previews exclude the viewer's replies and self-only threads" do
+    comment = fn id, author_id, body ->
+      %{
+        id: id,
+        author_id: author_id,
+        author: %{display_name: nil, handle: "person-#{author_id}"},
+        body: body,
+        inserted_at: ~U[2026-11-14 00:00:00Z]
+      }
+    end
+
+    threads = [
+      %{
+        id: 1,
+        file_path: "one.ex",
+        status: "open",
+        comments: [comment.(1, 2, "Other feedback"), comment.(3, 1, "My reply")]
+      },
+      %{id: 2, file_path: "two.ex", status: "open", comments: [comment.(2, 1, "Only me")]}
+    ]
+
+    data = fn identity ->
+      [json] =
+        render_component(&ReviewsWeb.ReviewLive.ActivityComponents.activity/1,
+          review: %{id: 1},
+          threads: threads,
+          current_identity: identity
+        )
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#review-activity")
+        |> LazyHTML.attribute("data-activity")
+
+      JSON.decode!(json)
+    end
+
+    assert [%{"id" => "1", "preview" => "Other feedback", "comments" => [%{"id" => "1"}]}] =
+             data.(%{id: 1})["threads"]
+
+    assert [%{"id" => "1", "preview" => "My reply"}, %{"id" => "2", "preview" => "Only me"}] =
+             data.(nil)["threads"]
+  end
+
   defp snapshot!(review) do
     {:ok, snapshot} = ReviewView.snapshot(review, nil, [])
     snapshot
