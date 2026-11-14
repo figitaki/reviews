@@ -9,6 +9,11 @@ still stabilizing.
 
 ### Added
 
+- `reviews push --dry-run` (alias `--validate`) checks the diff and packet
+  and prints what would be sent, without contacting the server. It lists
+  every packet problem with `file:line`, flags an empty review title or
+  `--update` slug, and exits 1 if there are any problems. A real push now
+  also lists every packet problem at once.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed

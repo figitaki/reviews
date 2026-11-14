@@ -50,7 +50,7 @@ Typical flow:
 1. Develop with the user or autonomous agent loop.
 2. Stabilize the diff enough for review.
 3. Write or update a review packet that groups the work logically.
-4. Push the diff and packet to Reviews.
+4. Check the packet with `reviews push --dry-run`, then push the diff and packet to Reviews.
 5. Share the review URL with the human reviewer.
 6. Address feedback.
 7. Push another patchset to the same review.
