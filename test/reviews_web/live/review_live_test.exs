@@ -66,7 +66,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
   defp seed!(_) do
     {:ok, author} =
       Accounts.upsert_from_github(%{
-        github_id: 1234,
+        github_id: 1234 + System.unique_integer([:positive]),
         username: "carey",
         email: "carey@example.com",
         avatar_url: nil
@@ -1172,6 +1172,82 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert comment.body == "from-hook"
     end
 
+    test "update_thread_status event resolves an existing thread", %{
+      conn: conn,
+      author: author,
+      review: review
+    } do
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, author, %{
+          "file_path" => "lib/foo.ex",
+          "side" => "new",
+          "body" => "from-hook",
+          "thread_anchor" => %{
+            "granularity" => "line",
+            "line_text" => "  def bar, do: :new",
+            "context_before" => [],
+            "context_after" => [],
+            "line_number_hint" => 2
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      render_hook(view, "update_thread_status", %{
+        "file_path" => "lib/foo.ex",
+        "thread_id" => thread.id,
+        "status" => "resolved"
+      })
+
+      assert [updated] = Threads.list_published_threads(review.id)
+      assert updated.status == "resolved"
+      assert updated.resolved_by_id == Accounts.human_identity_for(author).id
+    end
+
+    test "comments on earlier revisions keep their origin and activity opens that revision", %{
+      conn: conn,
+      author: author,
+      review: review
+    } do
+      first = ReviewsCtx.latest_patchset(review)
+
+      {:ok, second} =
+        ReviewsCtx.append_patchset(review, %{
+          raw_diff: String.replace(first.raw_diff, ":new", ":newer")
+        })
+
+      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}/changes?patchset=1")
+
+      render_click(view, "create_comment", %{
+        "file_path" => "lib/foo.ex",
+        "side" => "new",
+        "body" => "Keep the original discussion",
+        "originating_patchset_id" => second.id,
+        "thread_anchor" => %{
+          "granularity" => "line",
+          "line_number_hint" => 2,
+          "line_text" => "  def bar, do: :new"
+        }
+      })
+
+      assert [thread] = Threads.list_published_threads(review.id)
+      assert thread.originating_patchset_id == first.id
+      assert thread.author_id == Accounts.human_identity_for(author).id
+
+      {:ok, latest, _} = live(conn, ~p"/r/#{review.slug}/changes")
+      assert has_element?(latest, "#review-activity")
+      render_click(latest, "open_activity_thread", %{"thread_id" => thread.id})
+      assert_patch(latest, ~p"/r/#{review.slug}/changes?#{[patchset: 1, thread: thread.id]}")
+      assert has_element?(latest, ~s|#diff-files [data-hunk-expanded="true"]|)
+
+      thread_id = thread.id
+
+      assert_push_event(latest, "open_review_thread", %{
+        thread_id: ^thread_id,
+        file_path: "lib/foo.ex"
+      })
+    end
+
     test "hunk viewed state is shared between packet and changes views", %{
       conn: conn,
       author: author
@@ -1215,7 +1291,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                packet_view,
-               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-hunk-viewed="true"]|
+               ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-hunk-viewed="true"][data-hunk-expanded="false"]|
              )
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
