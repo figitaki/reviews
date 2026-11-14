@@ -43,6 +43,11 @@ still stabilizing.
   diagram rendered ahead of time.
 - Review packets use one centered heading and prose layout in split and stacked
   diffs. Hiding section navigation shows every section in that layout.
+- With split diffs, guide prose uses a 72ch measure. Context prose sits closer
+  to the hunk it introduces. On phones the section heading comes before its
+  meta row.
+- Guide rail ticks are named by section number and title. The decision glyph
+  has its own label, which the tick references as its description.
 - Typography uses shared system-sans reading and interface roles. Decision
   controls have a padded, rounded sticky surface.
 - Review titles, revisions and matching view controls share a sticky toolbar.
