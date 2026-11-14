@@ -72,6 +72,9 @@ jobs:
       # Each preview app gets its own database on the shared preview
       # Postgres server. See "Per-PR databases" in docs/PREVIEW_ENVS.md.
       PREVIEW_DB_NAME: reviews_pr_${{ github.event.pull_request.number }}
+      # Set only for the dedicated v2 preview cluster. Older/self-managed
+      # installations keep the SQL path until they explicitly opt in.
+      PREVIEW_MPG_CLUSTER_ID: ${{ vars.PREVIEW_MPG_CLUSTER_ID }}
 
     # Never trace commands that consume deployment or application secrets.
     defaults:
@@ -117,13 +120,18 @@ jobs:
             exit 1
           fi
 
-          # Take the server and credentials from PREVIEW_DATABASE_URL. Keep
-          # the scheme, credentials, host, port and query string; replace
-          # only the path (the database name) with the per-PR name. The
-          # release command creates that database through the server's
-          # `postgres` maintenance database.
-          DATABASE_URL="$(python3 -c 'import os, urllib.parse as u; p = u.urlsplit(os.environ["PREVIEW_DATABASE_URL"]); print(u.urlunsplit(p._replace(path="/" + os.environ["PREVIEW_DB_NAME"])))')"
-          echo "::add-mask::$DATABASE_URL"
+          if [[ -n "$PREVIEW_MPG_CLUSTER_ID" ]]; then
+            # Managed Postgres roles cannot CREATE DATABASE. Provision via
+            # the API first; the release command finds it already present.
+            DATABASE_URL="$(python3 .github/scripts/preview_mpg.py)"
+          else
+            # Self-managed Postgres: preserve server, credentials and query
+            # parameters, replacing only the per-PR database path.
+            DATABASE_URL="$(python3 -c 'import os, urllib.parse as u; p = u.urlsplit(os.environ["PREVIEW_DATABASE_URL"]); print(u.urlunsplit(p._replace(path="/" + os.environ["PREVIEW_DB_NAME"])))')"
+          fi
+          # Escape workflow-command data so encoded credentials remain an
+          # exact mask, including passwords containing percent or newlines.
+          echo "::add-mask::${DATABASE_URL//%/%25}"
 
           # POOL_SIZE is not set here: fly.preview.toml sets it in [env].
           # Secrets go in on stdin, not argv, so they stay out of the process list.
@@ -156,7 +164,7 @@ jobs:
         run: flyctl scale count 1 --app "$APP_NAME" --yes
 
       - name: Install Postgres client for cleanup
-        if: github.event.action == 'closed'
+        if: github.event.action == 'closed' && vars.PREVIEW_MPG_CLUSTER_ID == ''
         run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
 
       # Once the client is installed, cleanup destroys the app first, even if

@@ -15,6 +15,8 @@ still stabilizing.
 
 ### Changed
 
+- Preview deployments can provision and delete per-PR databases through
+  Fly Managed Postgres v2, without granting SQL database-owner privileges.
 - Reseeding keeps the real demo review and its comments unless its bundled
   fixture changes.
 - Section diffs and the Changes view open without line-count or file-count
