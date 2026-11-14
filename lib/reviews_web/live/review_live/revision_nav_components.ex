@@ -149,6 +149,18 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
           </.link>
         </div>
         <.diff_style_switcher diff_style={@diff_style} />
+        <button
+          id="wrap-lines-toggle"
+          type="button"
+          phx-hook="WrapLinesToggle"
+          phx-update="ignore"
+          aria-pressed="false"
+          aria-label="Wrap lines"
+          title="Wrap long lines (Markdown and text files always wrap)"
+          class="review-chip review-wrap-lines"
+        >
+          <.icon name="hero-bars-3-bottom-left" class="w-4 h-4" />
+        </button>
       </div>
       <script :type={Phoenix.LiveView.ColocatedHook} name=".ReviewToolbar">
         export default {

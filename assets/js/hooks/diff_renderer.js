@@ -6,6 +6,7 @@
 // and coerced exactly once, here, by the HunkIslandDataset schema.
 
 import { VanillaDiffRenderer } from "../diff_renderer/vanilla_renderer.js"
+import { WRAP_LINES_ATTR } from "../lib/line_wrap.js"
 import {
   Thread,
   CreateCommentPayload,
@@ -94,10 +95,12 @@ const DiffRenderer = {
       }
     })
 
+    // Theme and the "Wrap lines" toggle both live on <html>; either change
+    // needs a fresh Pierre render.
     this._themeObserver = new MutationObserver(() => this._renderer?.render())
     this._themeObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-theme"],
+      attributeFilter: ["data-theme", WRAP_LINES_ATTR],
     })
     this._systemThemeQuery = window.matchMedia?.("(prefers-color-scheme: dark)")
     this._systemThemeListener = () => {
