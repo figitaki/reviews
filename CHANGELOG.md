@@ -50,6 +50,9 @@ still stabilizing.
 - Mobile review navigation uses one compact sticky row; the brand/account row
   scrolls away, Guide/Diff use icons, and multiple revisions use a native
   selector. Anonymous sign-in prompts stay in the section flow on phones.
+- Below 480px the topbar brand shows only its "R" mark, and the account menu
+  uses the freed width before a long user name truncates. On touch screens the
+  topbar controls are at least 44px tall.
 - Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
   now requires Elixir `~> 1.20`.
 - Phoenix 1.8.13, LiveView 1.2.11, Phoenix LiveDashboard 0.9.1, Bandit 1.12.5,
