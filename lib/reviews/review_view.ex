@@ -115,16 +115,30 @@ defmodule Reviews.ReviewView do
 
   defp project_threads(review, patchsets, selected) do
     by_id = Map.new(patchsets, &{&1.id, &1})
+    threads = Threads.list_published_threads(review.id)
 
-    Threads.list_published_threads(review.id)
-    |> Enum.flat_map(fn thread ->
+    historical_origins =
+      threads
+      |> Enum.map(&by_id[&1.originating_patchset_id])
+      |> Enum.filter(&(&1 && &1.number < selected.number))
+      |> Enum.uniq_by(& &1.id)
+
+    indexes =
+      if historical_origins == [] do
+        %{}
+      else
+        Map.new([selected | historical_origins], &{&1.id, Reviews.Anchoring.index(&1)})
+      end
+
+    Enum.flat_map(threads, fn thread ->
       origin = by_id[thread.originating_patchset_id]
 
       if origin && origin.number <= selected.number do
         result =
           if origin.id == selected.id,
             do: {:ok, thread.anchor},
-            else: Reviews.Anchoring.relocate(thread, origin, selected)
+            else:
+              Reviews.Anchoring.relocate_indexed(thread, indexes[origin.id], indexes[selected.id])
 
         {anchor, anchor_status} =
           case result do

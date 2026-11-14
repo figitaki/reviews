@@ -56,6 +56,15 @@ defmodule Reviews.AnchoringTest do
     assert anchor["line_number_hint"] == 3
   end
 
+  test "malformed stored contexts are non-matches, not projection crashes" do
+    for key <- ["context_before", "context_after"], value <- ["before", 7, %{}, [7]] do
+      t = thread(%{key => value})
+
+      assert {:error, :outdated} =
+               Anchoring.relocate(t, patch("+target"), patch("+target\n+target"))
+    end
+  end
+
   test "vanished, changed, opposite-side, and other-file text cannot match" do
     for target <- [
           patch("+replacement"),
@@ -106,6 +115,17 @@ defmodule Reviews.AnchoringTest do
     assert {:ok, _} = Anchoring.relocate(t, patch("+target"), patch("+target", 4))
     repeated = put_in(t, [:anchor, "line_text"], "target target")
     assert {:error, :outdated} = Anchoring.relocate(repeated, %{}, patch("+target target"))
+
+    overlapping =
+      thread(%{
+        "granularity" => "token_range",
+        "line_text" => "banana",
+        "selection_text" => "ana"
+      })
+
+    assert {:error, :outdated} = Anchoring.relocate(overlapping, %{}, patch("+banana"))
+    explicit = put_in(overlapping, [:anchor, "selection_offset"], 3)
+    assert {:ok, _} = Anchoring.relocate(explicit, %{}, patch("+banana"))
   end
 
   test "unknown granularity retains the dispatch error" do

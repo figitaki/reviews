@@ -10,11 +10,16 @@ defmodule Reviews.Anchoring do
   alias Reviews.Reviews, as: ReviewsContext
 
   def relocate(thread, old_patchset, new_patchset) do
+    relocate_indexed(thread, index(old_patchset), index(new_patchset))
+  end
+
+  def relocate_indexed(thread, source_index, target_index) do
     anchor = Map.get(thread, :anchor, thread)
 
     if anchor["granularity"] in ["line", "token_range"] do
-      source = lines(thread, old_patchset)
-      target = lines(thread, new_patchset)
+      key = {Map.get(thread, :file_path), Map.get(thread, :side)}
+      source = Map.get(source_index, key, %{})
+      target = Map.get(target_index, key, %{})
       text = anchor["line_text"] || source[anchor["line_number_hint"]]
 
       matches =
@@ -68,11 +73,22 @@ defmodule Reviews.Anchoring do
            do: :ok,
            else: {:error, :outdated}
 
-      is_nil(offset) and length(:binary.matches(line, selection)) == 1 ->
+      is_nil(offset) and unique_selection?(line, selection) ->
         :ok
 
       true ->
         {:error, :outdated}
+    end
+  end
+
+  defp unique_selection?(line, selection) do
+    case :binary.match(line, selection) do
+      {start, _length} ->
+        rest = binary_part(line, start + 1, byte_size(line) - start - 1)
+        :binary.match(rest, selection) == :nomatch
+
+      :nomatch ->
+        false
     end
   end
 
@@ -101,37 +117,39 @@ defmodule Reviews.Anchoring do
     before = anchor["context_before"] || []
     after_lines = anchor["context_after"] || []
 
-    (before != [] or after_lines != []) and
+    if is_list(before) and is_list(after_lines) and (before != [] or after_lines != []) do
       Enum.with_index(before, number - length(before))
       |> Enum.concat(Enum.with_index(after_lines, number + 1))
-      |> Enum.all?(fn {text, position} -> lines[position] == text end)
+      |> Enum.all?(fn {text, position} -> is_binary(text) and lines[position] == text end)
+    else
+      false
+    end
   end
 
-  defp lines(thread, patchset) do
-    path = Map.get(thread, :file_path)
-    side = Map.get(thread, :side)
+  def index(patchset) do
+    patchset
+    |> Map.get(:raw_diff, "")
+    |> ReviewsContext.parse_diff_files()
+    |> Enum.flat_map(fn file ->
+      Enum.map(["old", "new"], fn side ->
+        {{file.path, side}, lines(file, side)}
+      end)
+    end)
+    |> Map.new()
+  end
 
-    file =
-      patchset
-      |> Map.get(:raw_diff, "")
-      |> ReviewsContext.parse_diff_files()
-      |> Enum.find(&(&1.path == path))
+  defp lines(file, side) do
+    {_, _, _, lines} =
+      Enum.reduce(String.split(file.raw_diff, "\n"), {nil, nil, false, %{}}, fn line,
+                                                                                {old, new, active,
+                                                                                 acc} ->
+        case Regex.run(~r/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/, line) do
+          [_, old, new] -> {String.to_integer(old), String.to_integer(new), true, acc}
+          _ -> diff_line(line, old, new, active, acc, side)
+        end
+      end)
 
-    if file && side in ["old", "new"] do
-      {_, _, _, lines} =
-        Enum.reduce(String.split(file.raw_diff, "\n"), {nil, nil, false, %{}}, fn line,
-                                                                                  {old, new,
-                                                                                   active, acc} ->
-          case Regex.run(~r/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/, line) do
-            [_, old, new] -> {String.to_integer(old), String.to_integer(new), true, acc}
-            _ -> diff_line(line, old, new, active, acc, side)
-          end
-        end)
-
-      lines
-    else
-      %{}
-    end
+    lines
   end
 
   defp diff_line(<<prefix, text::binary>>, old, new, true, acc, side)

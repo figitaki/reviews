@@ -321,6 +321,7 @@ export function commentComposer({
   embedded = false,
   onChange,
   autoFocus = true,
+  focusSelection,
 }) {
   const textarea = el("textarea", {
     style: textareaStyle,
@@ -395,7 +396,10 @@ export function commentComposer({
   })
 
   if (autoFocus) window.requestAnimationFrame(() => {
-    if (textarea.isConnected) textarea.focus({ preventScroll: true })
+    if (textarea.isConnected) {
+      textarea.focus({ preventScroll: true })
+      if (focusSelection) textarea.setSelectionRange(...focusSelection)
+    }
   })
   return node
 }
@@ -508,6 +512,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
           initialValue: ui.draft || "",
           embedded: true,
           autoFocus: Boolean(ui.focusReply),
+          focusSelection: ui.replySelection,
           onChange: (value) => { ui.draft = value },
           onSave: (body) => {
             ui.replyOpen = false
@@ -525,6 +530,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
         })
       )
       ui.focusReply = false
+      ui.replySelection = null
     } else {
       replyButton = button("Reply to this thread…", () => {
         ui.replyOpen = true

@@ -495,6 +495,19 @@ export class VanillaDiffRenderer {
   }
 
   render() {
+    // An incoming update replaces annotation DOM. Preserve only the active
+    // desktop reply editor, not every draft that happens to be open.
+    const active = document.activeElement
+    const threadId = active?.closest?.("[data-thread-id]")?.dataset.threadId
+    if (!this.mobileQuery.matches && active?.tagName === "TEXTAREA" &&
+        this.container.contains(active) && threadId) {
+      const thread = this.threads.find(thread => String(thread.id) === threadId)
+      const ui = thread && this.threadUI.get(thread.id)
+      if (ui) {
+        ui.focusReply = true
+        ui.replySelection = [active.selectionStart, active.selectionEnd, active.selectionDirection]
+      }
+    }
     if (this.collapsed() || (this.hasMarkdownPreview && this.preview)) {
       this.mobileConversation.close(false)
     }

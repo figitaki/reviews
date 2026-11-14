@@ -53,6 +53,7 @@ export class MobileConversation {
       window.addEventListener("resize", this.resize)
       document.body.append(this.node)
     }
+    this.node.setAttribute("aria-label", `Conversation in ${title}`)
     const close = el("button", {
       type: "button", "aria-label": "Close conversation",
       onclick: () => this.close(),
