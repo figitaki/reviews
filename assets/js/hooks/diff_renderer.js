@@ -9,6 +9,7 @@ import { VanillaDiffRenderer } from "../diff_renderer/vanilla_renderer.js"
 import {
   Thread,
   CreateCommentPayload,
+  UpdateThreadStatusPayload,
   HunkIslandDataset,
   hunkViewPayload,
 } from "../schemas.js"
@@ -54,6 +55,16 @@ const DiffRenderer = {
       }
     }
 
+    const onUpdateThreadStatus = (payload) => {
+      try {
+        const parsed = UpdateThreadStatusPayload.parse(payload)
+        this.pushEvent("update_thread_status", parsed)
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[DiffRenderer] invalid update_thread_status payload:", err, payload)
+      }
+    }
+
     const onToggleHunk = () => {
       if (!this._island) return
       this.pushEvent("toggle_hunk_diff", { hunk_id: this._island.hunkId })
@@ -79,6 +90,7 @@ const DiffRenderer = {
       diffStyle: initialDiffStyle,
       hunkUI: this._island,
       onCreateComment,
+      onUpdateThreadStatus,
       onToggleHunk,
       onSetHunkViewed,
     })
@@ -105,9 +117,9 @@ const DiffRenderer = {
     }
     this._systemThemeQuery?.addEventListener?.("change", this._systemThemeListener)
 
-    // The "Open Threads" sidebar dispatches reviews:scroll-to-anchor on click.
-    // Pierre rows live inside shadow DOM, so the pre-Pierre direct DOM lookup is
-    // intentionally still not restored here.
+    this.handleEvent("open_review_thread", ({ thread_id, file_path }) => {
+      if (file_path === filePath) this._renderer?.openThread(thread_id)
+    })
   },
 
   updated() {

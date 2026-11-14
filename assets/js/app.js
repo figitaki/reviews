@@ -27,6 +27,7 @@ import topbar from "../vendor/topbar"
 import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
 import Markdown from "./hooks/markdown"
+import ReviewActivity from "./hooks/review_activity"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -37,6 +38,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
     DiffRenderer,
     PacketNavTree,
     Markdown,
+    ReviewActivity,
   },
 })
 

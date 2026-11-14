@@ -1,0 +1,100 @@
+/* Place in the review layout's right-hand track. It stays in normal flow on
+   smaller screens; native details provides keyboard-accessible disclosure. */
+.review-activity {
+  min-width: 0;
+  color: var(--ds-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-meta-size);
+  line-height: var(--font-meta-leading);
+}
+
+.review-activity-panel {
+  border: 1px solid var(--ds-line);
+  border-radius: var(--radius-md);
+  background: var(--ds-panel);
+  overflow: hidden;
+}
+
+.review-activity-summary {
+  cursor: pointer;
+  padding: var(--space-5);
+  font-weight: var(--weight-semi);
+  min-height: 44px;
+}
+
+.review-activity-count {
+  margin-inline-start: var(--space-3);
+  color: var(--ds-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--weight-regular);
+}
+
+.review-activity-body { padding: 0 var(--space-5) var(--space-5); }
+.review-activity-note { color: var(--ds-muted); margin: 0 0 var(--space-3); }
+
+.review-activity-mark-all {
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--ds-line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ds-text);
+  background: var(--ds-panel-raised);
+  font: inherit;
+  cursor: pointer;
+}
+
+.review-activity-mark-all:disabled { color: var(--ds-muted); cursor: default; }
+.review-activity-list { list-style: none; padding: 0; margin: var(--space-5) 0 0; }
+.review-activity-list > li + li { border-top: 1px solid var(--ds-line); }
+
+.review-activity-entry {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-5) var(--space-3);
+  border: 0;
+  border-inline-start: 2px solid transparent;
+  background: transparent;
+  color: var(--ds-text);
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.review-activity-entry[data-unread="true"] { border-inline-start-color: var(--ds-blue); }
+.review-activity-entry:hover,
+.review-activity-mark-all:enabled:hover { background: var(--ds-hover); }
+.review-activity-file { font-family: var(--font-mono); font-size: var(--font-label-size); }
+.review-activity-meta,
+.review-activity-time { color: var(--ds-muted); font-size: var(--font-label-size); }
+.review-activity-read { color: var(--ds-muted); font-size: var(--font-label-size); }
+.review-activity-entry[data-unread="true"] .review-activity-read { color: var(--ds-blue); }
+.review-activity-preview { white-space: pre-line; }
+
+.review-activity-summary:focus-visible,
+.review-activity-mark-all:focus-visible,
+.review-activity-entry:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -2px;
+}
+
+@media (min-width: 1200px) {
+  .review-activity {
+    width: 288px;
+    position: sticky;
+    top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h) + var(--space-5));
+    align-self: start;
+  }
+
+  .review-activity-body {
+    max-height: calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 96px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 1199px) {
+  .review-activity-body { max-height: 60dvh; overflow-y: auto; }
+}

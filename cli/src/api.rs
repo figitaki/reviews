@@ -77,6 +77,9 @@ pub struct CreateCommentRequest<'a> {
     pub side: &'a str,
     pub body: &'a str,
     pub thread_anchor: Value,
+    /// Set to append to an existing thread instead of opening a new one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -87,8 +90,19 @@ pub struct CreateCommentResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct UpdateThreadStatusRequest<'a> {
+    pub status: &'a str,
+}
+
+#[derive(Debug, Serialize)]
 pub struct SectionDecisionRequest<'a> {
     pub status: &'a str,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateThreadStatusResponse {
+    pub id: i64,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -222,6 +236,24 @@ impl ApiClient {
             .with_context(|| format!("could not reach server for GET {path}"))?;
         let resp = check_status(resp, &format!("GET {path}"))?;
         resp.json::<Value>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
+    pub fn update_thread_status(
+        &self,
+        slug: &str,
+        thread_id: i64,
+        req: &UpdateThreadStatusRequest<'_>,
+    ) -> Result<UpdateThreadStatusResponse> {
+        let path = format!("/api/v1/reviews/{slug}/threads/{thread_id}");
+        let _ = self.require_token(&format!("PATCH {path}"))?;
+        let resp = self
+            .auth(self.http.patch(self.url(&path)))
+            .json(req)
+            .send()
+            .with_context(|| format!("could not reach server for PATCH {path}"))?;
+        let resp = check_status(resp, &format!("PATCH {path}"))?;
+        resp.json::<UpdateThreadStatusResponse>()
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 
@@ -457,6 +489,7 @@ mod tests {
                     side: "new",
                     body: "lgtm",
                     thread_anchor: anchor,
+                    thread_id: None,
                 },
             )
             .unwrap();
@@ -477,11 +510,39 @@ mod tests {
                     side: "new",
                     body: "b",
                     thread_anchor: serde_json::json!({"granularity": "line"}),
+                    thread_id: None,
                 },
             )
             .unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("reviews login"), "msg = {msg}");
+    }
+
+    #[test]
+    fn update_thread_status_happy_path() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("PATCH", "/api/v1/reviews/k7m2qz/threads/7")
+            .match_header("authorization", "Bearer tok")
+            .match_header("content-type", "application/json")
+            .match_body(r#"{"status":"resolved"}"#)
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"id":7,"status":"resolved"}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let resp = client
+            .update_thread_status(
+                "k7m2qz",
+                7,
+                &UpdateThreadStatusRequest { status: "resolved" },
+            )
+            .unwrap();
+
+        assert_eq!(resp.id, 7);
+        assert_eq!(resp.status, "resolved");
+        mock.assert();
     }
 
     #[test]
