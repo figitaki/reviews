@@ -2,6 +2,7 @@ defmodule Reviews.ThreadsTest do
   use Reviews.DataCase, async: true
 
   alias Reviews.Accounts
+  alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsCtx
   alias Reviews.Threads
   alias Reviews.Threads.{Comment, Thread}
@@ -92,6 +93,17 @@ defmodule Reviews.ThreadsTest do
       assert listed_second.id == second.id
     end
 
+    test "rejects false reply IDs with either key type instead of creating a thread" do
+      %{author: author, review: review} = setup_review!()
+
+      for key <- ["thread_id", :thread_id] do
+        params = Map.put(line_params("reply"), key, false)
+        assert {:error, :thread_not_found} = Threads.publish_comment(review, author, params)
+      end
+
+      assert Threads.list_published_threads(review.id) == []
+    end
+
     test "rejects empty body" do
       %{author: author, review: review} = setup_review!()
 
@@ -121,6 +133,95 @@ defmodule Reviews.ThreadsTest do
 
       assert {:ok, _} = Threads.publish_comment(review, author, line_params("hello"))
       assert_receive {:thread_published, %Thread{}}
+    end
+  end
+
+  describe "list_published_threads/1" do
+    test "comments are visible immediately to every viewer" do
+      %{author: author, review: review} = setup_review!()
+
+      {:ok, _} = Threads.publish_comment(review, author, line_params("published now"))
+
+      assert [thread] = Threads.list_published_threads(review.id)
+      assert length(thread.comments) == 1
+      assert hd(thread.comments).body == "published now"
+    end
+  end
+
+  describe "update_status/4" do
+    test "resolves a thread and records who resolved it" do
+      %{author: author, review: review} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+      Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
+
+      assert {:ok, %Thread{} = updated} =
+               Threads.update_status(review, thread.id, author, "resolved")
+
+      identity = Accounts.human_identity_for(author)
+
+      assert updated.id == thread.id
+      assert updated.status == "resolved"
+      assert updated.resolved_by_id == identity.id
+      assert %DateTime{} = updated.resolved_at
+      assert updated.resolved_by.handle == author.username
+      assert_receive {:thread_updated, %Thread{id: thread_id, status: "resolved"}}
+      assert thread_id == thread.id
+    end
+
+    test "reopens a resolved thread and clears resolution metadata" do
+      %{author: author, review: review} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+      {:ok, resolved} = Threads.update_status(review, thread.id, author, "resolved")
+
+      assert {:ok, reopened} = Threads.update_status(review, resolved.id, author, "open")
+
+      assert reopened.status == "open"
+      assert reopened.resolved_by_id == nil
+      assert reopened.resolved_at == nil
+    end
+
+    test "rejects threads from another review" do
+      %{author: author, review: review} = setup_review!()
+      %{review: other_review} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+
+      assert {:error, :not_found} =
+               Threads.update_status(other_review, thread.id, author, "resolved")
+    end
+
+    test "rejects invalid statuses" do
+      %{author: author, review: review} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+
+      assert {:error, :invalid_status} =
+               Threads.update_status(review, thread.id, author, "closed")
+
+      assert %Thread{status: "open"} = Repo.get(Thread, thread.id)
+    end
+
+    test "re-resolving keeps the original resolver and stays quiet" do
+      %{author: author, review: review} = setup_review!()
+      %{author: other} = setup_review!()
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+      {:ok, resolved} = Threads.update_status(review, thread.id, author, "resolved")
+
+      Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
+
+      assert {:ok, again} = Threads.update_status(review, thread.id, other, "resolved")
+
+      assert again.resolved_by_id == resolved.resolved_by_id
+      assert again.resolved_at == resolved.resolved_at
+      refute_receive {:thread_updated, _}
+    end
+
+    test "treats an out-of-range thread id as a miss rather than crashing" do
+      %{author: author, review: review} = setup_review!()
+
+      assert {:error, :not_found} =
+               Threads.update_status(review, 99_999_999_999_999_999_999, author, "resolved")
+
+      assert {:error, :not_found} =
+               Threads.update_status(review, "99999999999999999999", author, "resolved")
     end
   end
 end

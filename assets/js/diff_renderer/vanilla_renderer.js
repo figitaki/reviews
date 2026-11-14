@@ -1,11 +1,16 @@
 import * as Diffs from "@pierre/diffs"
+import { isMarkdown, markdownPatchExcerpts } from "../lib/markdown.js"
+import { markdownPreview, previewNotice } from "./markdown_preview.js"
 
 import {
   commentComposer,
   signInPrompt,
   threadBubble,
+  threadStatusBadge,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { MobileConversation } from "./mobile_conversation.js"
+import { SelectionAction } from "./selection_action.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
   annotationSideToSide,
@@ -29,7 +34,9 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
 // header. Metadata controls sit above it as siblings, not nested buttons.
 const REVIEWS_DIFF_HEADER_CSS = `
   [data-diffs-header] {
-    position: relative;
+    position: sticky;
+    top: var(--review-main-nav-h, 0px);
+    z-index: 10;
     min-height: 44px;
     padding-inline: 12px;
     transition: background-color 140ms ease;
@@ -43,7 +50,7 @@ const REVIEWS_DIFF_HEADER_CSS = `
   [data-metadata] {
     pointer-events: none;
   }
-  ::slotted(.reviews-diff-header-metadata) {
+  ::slotted([slot="header-metadata"]) {
     position: relative;
     z-index: 2;
     pointer-events: none;
@@ -94,10 +101,6 @@ function shouldVirtualize({ rawDiff, fileDiff, diffStyle }) {
   )
 }
 
-function lineTextFromEvent(props) {
-  return (props?.lineElement && props.lineElement.textContent) || ""
-}
-
 export function hunkViewLabel(hunkUI) {
   if (!hunkUI) return ""
   if (hunkUI.hunkViewed) return "Viewed"
@@ -115,6 +118,7 @@ export class VanillaDiffRenderer {
     diffStyle,
     hunkUI,
     onCreateComment,
+    onUpdateThreadStatus,
     onToggleHunk,
     onSetHunkViewed,
   }) {
@@ -126,12 +130,29 @@ export class VanillaDiffRenderer {
     this.diffStyle = diffStyle
     this.hunkUI = hunkUI || null
     this.onCreateComment = onCreateComment
+    this.onUpdateThreadStatus = onUpdateThreadStatus
     this.onToggleHunk = onToggleHunk
     this.onSetHunkViewed = onSetHunkViewed
     this.composerAt = null
+    this.selectionAction = new SelectionAction(container, (anchor) => {
+      this.setComposerAt(this.signedIn ? anchor : { ...anchor, kind: "signin" })
+    })
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
+    this.headerInstance = null
     this.virtualizer = null
+    this.threadUI = new Map()
+    this.composerDraft = ""
+    this.mobileConversation = new MobileConversation()
+    this.mobileQuery = window.matchMedia("(max-width: 768px)")
+    this.mobileResize = () => {
+      this.mobileConversation.close(false)
+      this.render()
+    }
+    this.mobileQuery.addEventListener("change", this.mobileResize)
+    // Markdown files open rendered; Source shows the exact lines and comments.
+    this.preview = true
+    this.hasMarkdownPreview = isMarkdown(filePath) && markdownPatchExcerpts(rawDiff).length > 0
   }
 
   update({ threads }) {
@@ -179,6 +200,8 @@ export class VanillaDiffRenderer {
 
   setComposerAt(composerAt) {
     this.composerAt = composerAt
+    this.composerDraft = ""
+    this.mobileSelection = composerAt && this.mobileQuery.matches ? { composer: true } : null
     this.render()
   }
 
@@ -228,12 +251,32 @@ export class VanillaDiffRenderer {
     })
   }
 
+  updateThreadStatus(thread, status) {
+    if (!this.signedIn) return
+    this.onUpdateThreadStatus?.({
+      file_path: thread.file_path,
+      thread_id: thread.id,
+      status,
+    })
+  }
+
   renderAnnotation(annotation) {
     const meta = annotation.metadata || {}
     if (meta.kind === "composer") {
+      if (this.mobileQuery.matches) {
+        const marker = el("button", {
+          type: "button", className: "reviews-conversation-marker",
+          style: { minHeight: "44px", padding: "8px 12px", color: "var(--ds-text)", background: "var(--ds-panel)", border: "1px solid var(--ds-line)", borderRadius: "8px", cursor: "pointer" },
+          onclick: () => this.openMobileConversation({ composer: true }, marker),
+        }, "Continue comment…")
+        if (this.mobileSelection?.composer) this.mobileOpener = marker
+        return marker
+      }
       return meta.composerKind === "signin"
         ? signInPrompt(() => this.setComposerAt(null))
         : commentComposer({
+            initialValue: this.composerDraft,
+            onChange: (value) => { this.composerDraft = value },
             onSave: (body) => this.createNewComment(body),
             onCancel: () => this.setComposerAt(null),
           })
@@ -241,56 +284,99 @@ export class VanillaDiffRenderer {
 
     const threadList = meta.threads || []
 
-    return el("div", {}, [
-      ...threadList.map((thread) =>
-        threadBubble({
-          thread,
-          onReply: this.signedIn ? (t, body) => this.replyToThread(t, body) : null,
-        })
-      ),
-    ])
+    return el("div", {}, threadList.map((thread) => {
+      if (!this.mobileQuery.matches) return this.renderThread(thread)
+      const marker = el("button", {
+        type: "button", className: "reviews-conversation-marker",
+        dataset: { threadId: thread.id },
+        style: { display: "flex", alignItems: "center", gap: "8px", minHeight: "44px", margin: "4px 0", padding: "8px 12px", color: "var(--ds-text)", background: "var(--ds-panel)", border: "1px solid var(--ds-line)", borderRadius: "8px", cursor: "pointer", font: "13px var(--font-sans, system-ui, sans-serif)" },
+        onclick: () => this.openMobileConversation({ threadId: thread.id }, marker),
+      }, [
+        threadStatusBadge(thread.status),
+        el("span", { style: { color: "var(--ds-muted)", fontSize: "12px" } },
+          `${thread.comments?.length || 0} ${thread.comments?.length === 1 ? "comment" : "comments"}`),
+      ])
+      marker.setAttribute("aria-label", `View ${thread.status} thread on line ${thread.anchor?.line_number_hint}: ${thread.comments?.length || 0} ${thread.comments?.length === 1 ? "comment" : "comments"}`)
+      if (this.mobileSelection?.threadId === thread.id) this.mobileOpener = marker
+      return marker
+    }))
   }
 
-  handleLineNumberClick(props) {
-    const side = props?.annotationSide || props?.side
-    const lineNumber = props?.lineNumber
-    if (!side || !lineNumber) return
-
-    if (!this.signedIn) {
-      this.setComposerAt({ kind: "signin", side, lineNumber })
-      return
-    }
-
-    this.setComposerAt({
-      kind: "line",
-      side,
-      lineNumber,
-      lineText: lineTextFromEvent(props),
+  renderThread(thread) {
+    if (!this.threadUI.has(thread.id)) this.threadUI.set(thread.id, {})
+    return threadBubble({
+      thread,
+      ui: this.threadUI.get(thread.id),
+      onReply: this.signedIn ? (t, body) => this.replyToThread(t, body) : null,
+      onUpdateStatus: this.signedIn ? (t, status) => this.updateThreadStatus(t, status) : null,
     })
   }
 
-  handleTokenClick(props) {
-    const side = props?.side
-    const lineNumber = props?.lineNumber
-    const tokenText = props?.tokenText || ""
-    if (!side || !lineNumber || tokenText.trim().length === 0) return
+  openThread(id) {
+    const thread = this.threads.find(thread => String(thread.id) === String(id))
+    if (!thread) return
+    this.preview = false
+    this.threadUI.set(thread.id, { ...this.threadUI.get(thread.id), expanded: true })
+    this.focusedThreadId = thread.id
+    this.pendingThreadFocus = thread.id
+    this.mobileSelection = { threadId: thread.id }
+    this.render()
+  }
 
-    if (!this.signedIn) {
-      this.setComposerAt({ kind: "signin", side, lineNumber })
+  focusPendingThread() {
+    if (!this.pendingThreadFocus) return
+    requestAnimationFrame(() => {
+      if (!this.pendingThreadFocus) return
+      const target = this.container.querySelector(`[data-thread-id="${this.pendingThreadFocus}"]`)
+      if (!target) return
+      this.pendingThreadFocus = null
+      target.style.scrollMarginTop = "calc(var(--review-main-nav-h) + 60px)"
+      target.scrollIntoView({ block: "start", behavior: "instant" })
+      if (!this.mobileQuery.matches) {
+        target.tabIndex = -1
+        target.focus({ preventScroll: true })
+      }
+    })
+  }
+
+  openMobileConversation(selection, opener) {
+    this.mobileSelection = selection
+    this.mobileOpener = opener
+    this.renderMobileConversation()
+  }
+
+  renderMobileConversation() {
+    if (this.collapsed() || !this.mobileQuery.matches || !this.mobileSelection) {
+      this.mobileConversation.close()
       return
     }
-
-    const lineEl =
-      (props?.tokenElement && props.tokenElement.closest("[data-line]")) || null
-    this.setComposerAt({
-      kind: "token",
-      side,
-      lineNumber,
-      lineText: (lineEl && lineEl.textContent) || "",
-      lineCharStart: props.lineCharStart,
-      lineCharEnd: props.lineCharEnd,
-      tokenText,
-    })
+    let content
+    if (this.mobileSelection.composer && this.composerAt) {
+      content = this.composerAt.kind === "signin"
+        ? signInPrompt(() => this.setComposerAt(null))
+        : commentComposer({
+            initialValue: this.composerDraft,
+            embedded: true,
+            autoFocus: !this.mobileConversation.node,
+            onChange: (value) => { this.composerDraft = value },
+            onSave: (body) => this.createNewComment(body),
+            onCancel: () => this.setComposerAt(null),
+          })
+    } else {
+      const thread = this.threads.find((thread) => thread.id === this.mobileSelection.threadId)
+      if (thread) content = this.renderThread(thread)
+    }
+    if (!content) {
+      this.mobileConversation.close()
+      return
+    }
+    Object.assign(content.style, { border: "none", borderRadius: "0", marginBottom: "0" })
+    const title = this.mobileSelection.composer
+      ? `${this.filePath} · Line ${annotationSideToSide(this.composerAt.side) === "old" ? "−" : "+"}${this.composerAt.lineNumber}`
+      : this.filePath
+    this.mobileConversation.show(content, title, () => {
+      this.mobileSelection = null
+    }, () => this.mobileOpener)
   }
 
   // Keep Pierre's path, status icon and counts. The disclosure button uses
@@ -355,6 +441,12 @@ export class VanillaDiffRenderer {
 
     if (this.hunkUI.signedIn) {
       const viewed = this.hunkUI.hunkViewed
+      const check = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+      check.setAttribute("viewBox", "0 0 24 24")
+      check.setAttribute("aria-hidden", "true")
+      const checkPath = document.createElementNS("http://www.w3.org/2000/svg", "path")
+      checkPath.setAttribute("d", "m8 12 3 3 5-6 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0")
+      check.append(checkPath)
       children.push(
         el(
           "button",
@@ -362,11 +454,12 @@ export class VanillaDiffRenderer {
             className: "reviews-diff-header-viewed",
             type: "button",
             "aria-pressed": viewed ? "true" : "false",
+            title: viewed ? "Viewed · mark unviewed" : "Mark viewed and collapse",
             "aria-label": `${viewed ? "Mark unviewed" : "Mark viewed"}: ${this.filePath}${this.hunkUI.hunkLabel ? ` · ${this.hunkUI.hunkLabel}` : ""}`,
             onclick: (event) =>
               stopHeaderEvent(event, () => this.onSetHunkViewed?.(!viewed)),
           },
-          viewed ? "Viewed" : viewLabel || "Mark viewed"
+          viewed ? [check] : viewLabel || "Mark viewed"
         )
       )
     }
@@ -378,19 +471,22 @@ export class VanillaDiffRenderer {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
+      overflow: this.diffStyle === "unified" ? "wrap" : "scroll",
       collapsed: this.collapsed(),
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
-      onLineNumberClick: (props) => this.handleLineNumberClick(props),
-      onTokenClick: (props) => this.handleTokenClick(props),
+      onPostRender: () => this.focusPendingThread(),
+      onLineEnter: (props) => this.selectionAction.offer(props),
+      onLineClick: (props) => this.selectionAction.offer(props, true),
+      onLineNumberClick: (props) => this.selectionAction.offer(props, true),
     }
   }
 
   renderArgs() {
     const args = {
-      containerWrapper: this.container,
+      containerWrapper: this.sourceContainer || this.container,
       lineAnnotations: this.annotations(),
     }
     if (this.fileDiff) args.fileDiff = this.fileDiff
@@ -399,22 +495,77 @@ export class VanillaDiffRenderer {
   }
 
   render() {
+    // An incoming update replaces annotation DOM. Preserve only the active
+    // desktop reply editor, not every draft that happens to be open.
+    const active = document.activeElement
+    const threadId = active?.closest?.("[data-thread-id]")?.dataset.threadId
+    if (!this.mobileQuery.matches && active?.tagName === "TEXTAREA" &&
+        this.container.contains(active) && threadId) {
+      const thread = this.threads.find(thread => String(thread.id) === threadId)
+      const ui = thread && this.threadUI.get(thread.id)
+      if (ui) {
+        ui.focusReply = true
+        ui.replySelection = [active.selectionStart, active.selectionEnd, active.selectionDirection]
+      }
+    }
+    if (this.collapsed() || (this.hasMarkdownPreview && this.preview)) {
+      this.mobileConversation.close(false)
+    }
     this.cleanUp(false)
     this.container.replaceChildren()
     this.container.dataset.virtualized = "false"
 
-    const options = this.options()
+    this.sourceContainer = this.container
+    if (this.hasMarkdownPreview) {
+      const headerContainer = el("div", { className: "reviews-markdown-sticky-header" })
+      this.container.append(headerContainer)
+      const toolbar = el("div", { className: "review-markdown-toolbar", role: "group", "aria-label": "Markdown view" })
+      for (const [label, preview] of [["Source", false], ["Preview", true]]) {
+        toolbar.append(el("button", {
+          type: "button", className: "review-button review-button-ghost",
+          "aria-pressed": String(this.preview === preview),
+          onclick: () => {
+            this.preview = preview
+            this.render()
+            this.container.querySelector(`.review-markdown-toolbar [aria-pressed="true"]`)?.focus()
+          },
+        }, label))
+      }
+      toolbar.append(el("p", { className: "review-markdown-notice" }, previewNotice(this.threads, this.fileDiff?.hunks)))
+      this.sourceContainer = el("div")
+      if (!this.collapsed()) {
+        this.container.append(toolbar, this.sourceContainer)
+        if (this.preview) {
+          this.sourceContainer.append(markdownPreview(this.rawDiff, this.diffStyle))
+        } else {
+          this.renderSource({ ...this.options(), disableFileHeader: true })
+        }
+      }
+      // One shared Pierre header stays above the notice in both modes.
+      this.headerInstance = new Diffs.FileDiff({ ...this.options(), collapsed: true })
+      this.headerInstance.render({ ...this.renderArgs(), containerWrapper: headerContainer, lineAnnotations: [] })
+      return
+    }
+
+    this.renderSource(this.options())
+  }
+
+  renderSource(options) {
     const renderArgs = this.renderArgs()
 
     if (
-      !this.collapsed() &&
+      !this.collapsed() && !this.focusedThreadId &&
       shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
     ) {
-      if (this.tryRenderVirtualized(options, renderArgs)) return
+      if (this.tryRenderVirtualized(options, renderArgs)) {
+        this.renderMobileConversation()
+        return
+      }
     }
 
     this.instance = new Diffs.FileDiff(options)
     this.instance.render(renderArgs)
+    this.renderMobileConversation()
   }
 
   tryRenderVirtualized(options, renderArgs) {
@@ -422,7 +573,7 @@ export class VanillaDiffRenderer {
 
     try {
       const contentWrapper = el("div", { className: "review-virtualized-diff-content" })
-      this.container.append(contentWrapper)
+      this.sourceContainer.append(contentWrapper)
       this.virtualizer = new Diffs.Virtualizer({
         overscrollSize: 800,
         intersectionObserverMargin: 800,
@@ -445,12 +596,21 @@ export class VanillaDiffRenderer {
       // eslint-disable-next-line no-console
       console.warn("[DiffRenderer] virtualized render unavailable; falling back to FileDiff:", err)
       this.cleanUp(false)
-      this.container.replaceChildren()
+      this.sourceContainer.replaceChildren()
       return false
     }
   }
 
   cleanUp(clear = true) {
+    this.selectionAction.clear()
+    if (clear) {
+      this.selectionAction.destroy()
+      this.mobileQuery.removeEventListener("change", this.mobileResize)
+      this.mobileConversation.close(false)
+      this.threadUI.clear()
+    }
+    this.headerInstance?.cleanUp?.()
+    this.headerInstance = null
     try {
       this.instance?.cleanUp?.()
     } finally {
