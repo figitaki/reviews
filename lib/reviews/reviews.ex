@@ -25,6 +25,12 @@ defmodule Reviews.Reviews do
   end
 
   @doc """
+  Lists the reviews `viewer` wrote or took part in. See `Reviews.ReviewIndex`
+  for the filters, the visibility rule, and the result shape.
+  """
+  defdelegate list_reviews(viewer, filters \\ %{}), to: Reviews.ReviewIndex, as: :list
+
+  @doc """
   Creates a review along with its initial patchset (#1) in a single transaction.
 
   Returns `{:ok, %{review: review, patchset: patchset, files: files}}` or

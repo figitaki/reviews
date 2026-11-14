@@ -155,6 +155,16 @@ reviews push --update <slug> --packet /path/to/packet.md
 
 Use `--range HEAD` when pushing current uncommitted work.
 
+List the reviews you wrote or took part in:
+
+```sh
+reviews list
+reviews list --status updated      # a newer patchset since your last action
+reviews list --role involved -q billing --json
+```
+
+The same list is on the web at `/reviews`.
+
 ## Layout
 
 - `lib/reviews/` — domain contexts and schemas.

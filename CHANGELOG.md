@@ -9,6 +9,10 @@ still stabilizing.
 
 ### Added
 
+- Review list (#47). `/reviews` on the web, `GET /api/v1/reviews` in the API,
+  and `reviews list` in the CLI. The list has only reviews you wrote or took
+  part in, with filters for role, status, author, and title or slug. A token
+  for an agent identity lists only that agent's reviews.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed
