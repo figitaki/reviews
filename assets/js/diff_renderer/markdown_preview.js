@@ -9,6 +9,9 @@ export function discussionCount(threads = [], hunks = []) {
   })).length
 }
 
+// A fence may follow blockquote or list markers, or sit indented inside a list item.
+const FENCE = /^(?: {0,3}>\s?| {0,3}(?:[-+*]|\d{1,9}[.)])\s+)*\s*(`{3,}|~{3,})(.*)$/
+
 // A patch cannot tell us the surrounding structure of an arbitrary excerpt.
 // Refuse visibly ambiguous fragments rather than inventing a document structure.
 export function markdownPreviewState(patch, fileDiff) {
@@ -27,17 +30,24 @@ export function markdownPreviewState(patch, fileDiff) {
         // Fences in a partial excerpt may close a fence opened in omitted text.
         // The same applies to table rows without a header and list continuations.
         let fence = null
-        for (const line of lines) {
-          const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
-          if (!marker) continue
-          if (!fence) fence = marker[1]
-          else if (marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) fence = null
-        }
-        const tableFragment = lines.some((line, index) =>
-          line.includes("|") && !(lines[index - 1] || "").includes("|") &&
-          !/^ {0,3}\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[index + 1] || ""))
-        if (fence || tableFragment ||
-            (start > 1 && (/^(?: {4}|\t)/.test(first) || lines.some(line => /^ {0,3}(?:`{3,}|~{3,})/.test(line))))) {
+        let sawFence = false
+        // Fenced lines are blanked so pipes in code are not read as table rows.
+        const prose = lines.map(line => {
+          const marker = FENCE.exec(line)
+          if (marker) sawFence = true
+          if (!fence) {
+            if (!marker) return line
+            fence = marker[1]
+          } else if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) {
+            fence = null
+          }
+          return ""
+        })
+        const tableFragment = prose.some((line, index) =>
+          line.includes("|") && !(prose[index - 1] || "").includes("|") &&
+          !/^ {0,3}\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/.test(prose[index + 1] || ""))
+        // Two or more leading spaces can continue a list item whose marker is omitted.
+        if (fence || tableFragment || (start > 1 && (/^(?: {2,}|\t)/.test(first) || sawFence))) {
           return { reason: "Surrounding Markdown is missing. Use Source for this excerpt." }
         }
       }

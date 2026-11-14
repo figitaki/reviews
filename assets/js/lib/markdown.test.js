@@ -165,6 +165,12 @@ test("ambiguous Markdown excerpts fall back instead of inventing structure", () 
     "@@ -30,2 +30,2 @@\n a | b\n-c | d\n+c | e",
     "@@ -1,2 +1,2 @@\n ```js\n-old()\n+new()",
     "@@ -8,2 +8,2 @@\n ~~~~\n-old\n+new",
+    // Fences inside blockquotes and list items can also continue into omitted text.
+    "@@ -1,2 +1,2 @@\n > ~~~js\n-> old()\n+> new()",
+    "@@ -1,2 +1,2 @@\n - ```sh\n-  old\n+  new",
+    // Two- and three-space list continuations whose parent item is omitted.
+    "@@ -20,2 +20,2 @@\n   continuation\n-  - old nested\n+  - nested item",
+    "@@ -20,2 +20,2 @@\n    continuation\n-   old\n+   new",
   ]) {
     const state = markdownPreviewState(patch)
     assert.match(state.reason, /Surrounding Markdown is missing/, patch)
@@ -175,6 +181,9 @@ test("ambiguous Markdown excerpts fall back instead of inventing structure", () 
     "@@ -20,3 +20,3 @@\n | A | B |\n | --- | --- |\n-| c | d |\n+| c | e |",
     "@@ -20,3 +20,3 @@\n A | B\n --- | ---\n-c | d\n+c | e",
     "@@ -1,3 +1,3 @@\n ```js\n-old()\n+new()\n ```",
+    "@@ -1,3 +1,3 @@\n > ```js\n-> old()\n+> new()\n > ```",
+    // Pipes inside a closed fence are code, not a table without its header.
+    "@@ -1,3 +1,3 @@\n ```js\n-const value = left | right\n+const value = left || right\n ```",
   ]) assert.equal(markdownPreviewState(patch).reason, null, patch)
 })
 
