@@ -13,6 +13,14 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
   def activity(assigns) do
     threads =
       assigns.threads
+      |> Enum.map(fn thread ->
+        comments =
+          Enum.reject(thread.comments, fn comment ->
+            assigns.current_identity && comment.author_id == assigns.current_identity.id
+          end)
+
+        %{thread | comments: comments}
+      end)
       |> Enum.reject(&(&1.comments == []))
       |> Enum.map(fn thread ->
         comments = Enum.sort_by(thread.comments, & &1.id)
