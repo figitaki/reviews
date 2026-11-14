@@ -20,6 +20,8 @@ still stabilizing.
 
 ### Changed
 
+- Preview deployments can provision and delete per-PR databases through
+  Fly Managed Postgres v2, without granting SQL database-owner privileges.
 - Selecting diff text offers a row-end comment button instead of opening a
   composer. File controls stay visible while scrolling on desktop and mobile;
   marking viewed collapses the diff and leaves a compact green check.
