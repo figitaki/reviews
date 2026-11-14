@@ -13,7 +13,8 @@ config :reviews, Reviews.Repo,
   password: System.get_env("POSTGRES_PASSWORD", ""),
   database: "reviews_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2
+  # Concurrency regressions use four independent database connections.
+  pool_size: max(System.schedulers_online() * 2, 4)
 
 if postgres_host || postgres_port do
   config :reviews, Reviews.Repo,
