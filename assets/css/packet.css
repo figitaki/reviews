@@ -7,6 +7,32 @@
 /* ----------------------------------------------------------------------------
    Review surface
 ---------------------------------------------------------------------------- */
+.review-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.review-workspace-content {
+  min-width: 0;
+}
+
+.review-workspace > .review-activity {
+  order: -1;
+}
+
+@media (min-width: 1200px) {
+  .review-workspace {
+    grid-template-columns: minmax(0, 1fr) 288px;
+    align-items: start;
+    padding-right: 16px;
+  }
+
+  .review-workspace > .review-activity {
+    order: 0;
+  }
+}
+
 .review-page {
   --review-app-nav-h: 64px;
   --review-toolbar-h: 64px;
@@ -1609,10 +1635,58 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-inline-diff {
+  position: relative;
   border: 0;
   border-radius: 0;
   background: transparent;
-  overflow: hidden;
+  overflow: visible;
+}
+
+/* Pierre scrolls its code columns, not the file wrapper: an overflow wrapper
+   traps sticky headers even when it never scrolls vertically. */
+.review-page .design-page {
+  overflow-x: clip;
+}
+
+.reviews-markdown-sticky-header {
+  position: sticky;
+  top: var(--review-main-nav-h);
+  z-index: 10;
+  background: var(--review-panel);
+}
+
+.reviews-row-comment-action {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border: 1px solid var(--review-line-strong);
+  border-radius: 6px;
+  background: var(--review-panel-raised);
+  color: var(--review-text);
+  cursor: pointer;
+}
+
+.reviews-row-comment-action:hover,
+.reviews-row-comment-action:focus-visible {
+  border-color: var(--ds-blue);
+  color: var(--ds-blue);
+  outline: 2px solid var(--ds-blue);
+  outline-offset: 2px;
+}
+
+.reviews-row-comment-action svg,
+.reviews-diff-header-viewed svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .review-packet-inline-diff .rdr-file {
@@ -1659,7 +1733,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-hunk-card.is-file-diff .review-packet-inline-diff {
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .review-hunk-card.is-open {
@@ -1776,8 +1850,24 @@ details[open] > summary .review-collapse-icon,
 }
 
 .reviews-diff-header-viewed[aria-pressed="true"] {
-  border-color: var(--review-line-strong);
-  color: var(--review-text);
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  padding: 0;
+  border-color: transparent;
+  color: var(--review-add);
+}
+
+.reviews-diff-header-viewed[aria-pressed="true"]:hover {
+  border-color: var(--review-add);
+}
+
+@media (pointer: coarse) {
+  .reviews-row-comment-action,
+  .reviews-diff-header-viewed[aria-pressed="true"] {
+    width: 44px;
+    min-height: 44px;
+  }
 }
 
 @media (pointer: coarse) {
@@ -2817,8 +2907,17 @@ details[open] > summary .review-collapse-icon,
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .review-packet-grid {
-    padding: 18px 16px 56px;
+  .review-page .is-review-view .rev-shell {
+    padding-inline: 0;
+  }
+
+  .review-hunk-list {
+    padding-inline: 0;
+  }
+
+  .review-packet-grid,
+  .review-packet-shell.has-outline .review-packet-grid {
+    padding: 18px 8px 56px;
   }
 
   .review-guide-shell {
@@ -2880,7 +2979,7 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-guide-panel-inner {
-    padding: 28px 24px;
+    padding: 28px 8px;
   }
 
   .review-guide-panel-title {
@@ -2946,3 +3045,43 @@ details[open] > summary .review-collapse-icon,
     transition: none;
   }
 }
+
+/* Markdown document previews share the active Reviews theme. */
+.review-markdown-toolbar { display: flex; align-items: center; gap: .25rem; padding: .5rem .75rem; border-bottom: 1px solid var(--ds-line); }
+.review-markdown-toolbar button { flex-shrink: 0; }
+.review-markdown-toolbar [aria-pressed="true"] { background: var(--ds-hover); font-weight: 650; }
+.review-markdown-toolbar button:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: 2px; }
+.review-markdown-notice { min-width: 0; margin: 0 0 0 .5rem; font-size: .8rem; color: var(--ds-muted); }
+.review-markdown-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--ds-line); }
+.review-markdown-side { min-width: 0; }
+.review-markdown-side + .review-markdown-side { border-left: 1px solid var(--ds-line); }
+.review-markdown-side-label { padding: .35rem 1rem; font-size: .75rem; color: var(--ds-muted); }
+.review-rich-markdown { padding: 1rem 1.5rem; overflow-wrap: anywhere; line-height: 1.65; color: var(--ds-text); }
+.review-rich-markdown .review-markdown-change { border-left: 3px solid var(--ds-add); padding-left: .75rem; }
+.review-markdown-side.is-before .review-markdown-change { border-left-color: var(--ds-del); }
+.review-rich-markdown > * + * { margin-top: 1rem; }
+.review-rich-markdown :is(h1,h2,h3,h4,h5,h6) { font-weight: 650; line-height: 1.3; margin-block: 1.25rem .65rem; }
+.review-rich-markdown h1 { font-size: 1.8rem; }
+.review-rich-markdown h2 { font-size: 1.5rem; }
+.review-rich-markdown h3 { font-size: 1.2rem; }
+.review-rich-markdown ul { list-style: disc; padding-left: 1.5rem; }
+.review-rich-markdown ol { list-style: decimal; padding-left: 1.5rem; }
+.review-rich-markdown blockquote { border-left: 3px solid var(--ds-line); padding-left: 1rem; }
+.review-rich-markdown a { color: var(--ds-blue); text-decoration: underline; }
+.review-rich-markdown pre { overflow-x: auto; padding: 1rem; background: var(--ds-panel-raised); border-radius: .4rem; }
+.review-rich-markdown code { font-family: var(--font-mono); font-size: .85em; background: var(--ds-panel-raised); }
+.review-rich-markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.review-rich-markdown :is(th,td) { padding: .4rem .75rem; border: 1px solid var(--ds-line); }
+.review-rich-markdown img { max-width: 100%; height: auto; }
+@media (max-width: 768px) {
+  .review-markdown-toolbar { padding-inline: .5rem; }
+  .review-markdown-side-label { padding-inline: .5rem; }
+  .review-rich-markdown { padding-inline: .5rem; }
+}
+@media (max-width: 700px) {
+  .review-markdown-pair { grid-template-columns: minmax(0, 1fr); }
+  .review-markdown-side + .review-markdown-side { border-left: 0; border-top: 1px solid var(--ds-line); }
+}
+
+.review-markdown-preview[data-diff-style="unified"] .review-markdown-pair { grid-template-columns: minmax(0, 1fr); }
+.review-markdown-preview[data-diff-style="unified"] .review-markdown-side + .review-markdown-side { border-left: 0; border-top: 1px solid var(--ds-line); }

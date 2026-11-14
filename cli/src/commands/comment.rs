@@ -44,6 +44,8 @@ pub fn run(args: CommentArgs) -> Result<()> {
         side: &args.side,
         body,
         thread_anchor: anchor,
+        // `comment` always opens a thread; `reviews reply` appends to one.
+        thread_id: None,
     };
 
     let resp = client.create_comment(&args.slug, &req)?;
