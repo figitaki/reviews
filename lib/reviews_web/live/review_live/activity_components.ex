@@ -9,6 +9,7 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
   attr :review, :any, required: true
   attr :threads, :list, required: true
   attr :current_identity, :any, required: true
+  attr :patchset_number, :integer, required: true
 
   def activity(assigns) do
     threads =
@@ -25,17 +26,19 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
       |> Enum.map(fn thread ->
         comments = Enum.sort_by(thread.comments, & &1.id)
         latest = List.last(comments)
+        outdated? = Map.get(thread, :anchor_status) == "outdated"
+        anchor = thread.anchor || thread.original_anchor
+
+        number =
+          if outdated?, do: thread.originating_patchset_number, else: assigns.patchset_number
 
         %{
           id: to_string(thread.id),
           filePath: thread.file_path,
-          status:
-            if(Map.get(thread, :anchor_status) == "outdated",
-              do: "#{thread.status} · earlier revision",
-              else: thread.status
-            ),
-          author: latest.author.display_name || latest.author.handle,
-          preview: String.slice(latest.body, 0, 180),
+          line: anchor["line_number_hint"],
+          side: thread.side,
+          earlierRevision: outdated?,
+          href: ~p"/r/#{assigns.review.slug}?#{[patchset: number, thread: thread.id]}",
           insertedAt: DateTime.to_iso8601(latest.inserted_at),
           comments:
             Enum.map(comments, fn comment ->
@@ -63,14 +66,14 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
     >
       <details id={"#{@id}-panel"} class="review-activity-panel">
         <summary id={"#{@id}-summary"} class="review-activity-summary">
-          <span>Comment activity</span>
-          <span data-activity-count class="review-activity-count">Recent threads</span>
+          <span>Comments</span>
+          <span data-activity-count class="review-activity-count"></span>
         </summary>
         <div class="review-activity-body">
-          <p data-activity-storage class="review-activity-note">
+          <p data-activity-storage class="sr-only">
             Read state is saved in this browser, not your account.
           </p>
-          <p data-activity-status class="review-activity-note" role="status" aria-live="polite">
+          <p data-activity-status class="sr-only" role="status" aria-live="polite">
             Enable JavaScript to see recent comment activity.
           </p>
           <button
@@ -82,7 +85,12 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
           >
             Mark all read
           </button>
-          <ol data-activity-list class="review-activity-list" aria-label="Recent comment threads">
+          <p data-activity-empty class="review-activity-note" hidden>No unread comments.</p>
+          <ol
+            data-activity-list
+            class="review-activity-list"
+            aria-label="Threads with unread comments"
+          >
           </ol>
         </div>
       </details>
