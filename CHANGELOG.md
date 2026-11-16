@@ -7,6 +7,11 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Security
+
+- Update Ecto to 3.14.3 to fix unbounded query cache growth from interpolated
+  JSON paths and splice lists (CVE-2026-118391).
+
 ### Added
 
 - Recent comment activity with unread counts, thread links, and read state saved
