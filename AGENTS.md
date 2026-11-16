@@ -23,7 +23,7 @@ CI (`.github/workflows/ci.yml`) runs format check, compile with warnings as erro
 
 ## Review packets for PRs
 
-Every PR we push, including drafts, must include an up-to-date review packet link in the PR description's **Reviews Packet** section (`- Packet: <URL>`), so the TinyCube swarm can find and review it. Use the printed `/r/<slug>` URL on `https://reviews-dev.fly.dev` or a swarm-accessible preview host; name the preview host when using one. A localhost link is not accessible to the swarm.
+Every PR we push, including drafts, must include an up-to-date review packet link in the PR description's **Reviews Packet** section (`- Packet: <URL>`), so reviewers can find and review it. Use the printed `/r/<slug>` URL on `https://reviews-dev.fly.dev` or a reviewer-accessible preview host; name the preview host when using one. A localhost link is not accessible to reviewers.
 
 Follow [writing-review-packets](skills/writing-review-packets/SKILL.md). After committing the changes, capture the full PR diff explicitly (the CLI defaults to only `HEAD~1..HEAD`):
 
@@ -36,7 +36,7 @@ reviews push --range origin/main...HEAD --packet /path/to/packet.md
 reviews push --update <slug> --range origin/main...HEAD --packet /path/to/packet.md
 ```
 
-Run these from the PR checkout with the CLI configured for the intended review host. Keep packet prose and hunk references synchronized with the latest pushed PR head and base, covering every changed line exactly once. Refresh the packet after each push or rebase, verify the latest patchset matches the PR diff, and keep the PR description's link current. Use the unpinned review URL so the swarm opens the latest patchset. Validate each revision with `--dry-run` before uploading; the CLI also validates packet structure and coverage during upload.
+Run these from the PR checkout with the CLI configured for the intended review host. Keep packet prose and hunk references synchronized with the latest pushed PR head and base, covering every changed line exactly once. Refresh the packet after each push or rebase, verify the latest patchset matches the PR diff, and keep the PR description's link current. Use the unpinned review URL so reviewers open the latest patchset. Validate each revision with `--dry-run` before uploading; the CLI also validates packet structure and coverage during upload.
 
 ## Where things are
 
