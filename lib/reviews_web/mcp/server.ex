@@ -371,7 +371,9 @@ defmodule ReviewsWeb.MCP.Server do
     %{
       "type" => "string",
       "maxLength" => 64,
-      "description" => "next_cursor from the previous page. Send it with the same revision."
+      "pattern" => "^[a-z][0-9.]*$",
+      "description" =>
+        "next_cursor from the previous page, unchanged. An opaque string; send it with the same revision."
     }
   end
 
