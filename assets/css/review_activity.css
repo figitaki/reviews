@@ -127,9 +127,9 @@
 .review-quick-toggle,
 .review-quick-menu { display: none; }
 
-/* Phones: one small floating menu button replaces the comments row. It sits
-   beside the section decision button when one is showing, centred on it, and
-   its menu opens upwards. */
+/* Phones: one small floating menu button replaces the comments row. It
+   stacks above the section decision button when one is showing, centred on
+   it, and its menu opens upwards. */
 @media (max-width: 640px) {
   .review-activity {
     --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
@@ -145,9 +145,19 @@
     gap: 8px;
   }
   .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity {
-    --review-quick-right: calc(16px + 56px + 12px + env(safe-area-inset-right));
-    --review-quick-bottom: calc(16px + 6px + env(safe-area-inset-bottom));
+    --review-quick-right: calc(16px + 6px + env(safe-area-inset-right));
+    --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
   }
+  /* Offer only items with something to open: Comments while any are unread,
+     Sections in the Guide. With neither, there is no menu. */
+  .review-activity[data-unread="false"] [data-quick-comments],
+  .review-page:not(:has([data-guide-flyout-toggle])) [data-quick-sections] { display: none; }
+  .review-page:not(:has([data-guide-flyout-toggle])) .review-activity[data-unread="false"]:not(:has(details[open])) {
+    display: none;
+  }
+  /* Sections scrolls the Guide map in below the sticky review toolbar, so its
+     close button stays visible. */
+  #review-guide-shell { scroll-margin-top: var(--rev-header-h, 48px); }
   /* The open decision panel spans the screen. */
   .review-page:has(.review-section-decision.is-editing) .review-activity { display: none; }
   /* Leave room so the buttons never cover the last lines of code. The Guide
@@ -198,7 +208,6 @@
     border-radius: 22px;
     font-weight: var(--weight-medium);
   }
-  .review-quick-item[hidden] { display: none; }
   .review-quick-icon { width: 18px; height: 18px; }
   .review-quick-toggle:focus-visible,
   .review-quick-item:focus-visible {

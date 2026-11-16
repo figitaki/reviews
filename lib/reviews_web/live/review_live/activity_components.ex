@@ -67,8 +67,9 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
       phx-update="ignore"
       data-activity={JSON.encode!(@activity_data)}
     >
-      <%!-- Phones: one floating menu button holds Comments and, in the guide,
-           Sections. Hidden on wider screens, where the rail shows itself. --%>
+      <%!-- Phones: one floating menu button holds Comments, while any are
+           unread, and, in the guide, Sections. Hidden on wider screens, where
+           the rail shows itself. --%>
       <button
         id={"#{@id}-menu-toggle"}
         type="button"
@@ -87,7 +88,6 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
           type="button"
           class="review-quick-item"
           data-quick-sections
-          hidden
         >
           <span>Sections</span>
           <.icon name="hero-bars-3" class="review-quick-icon" />

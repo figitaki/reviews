@@ -64,8 +64,12 @@ export const ReviewActivity = {
       this.renderActivity()
     }
     this.onOpen = event => this.pushEvent("open_activity_thread", { thread_id: event.detail.threadId })
+    // On phones the menu and the open list float over the code; a tap
+    // elsewhere closes them.
     this.onOutside = event => {
-      if (!this.menu.hidden && !this.el.contains(event.target)) this.setMenu(false)
+      if (this.el.contains(event.target)) return
+      if (!this.menu.hidden) this.setMenu(false)
+      if (this.details.open && window.matchMedia("(max-width: 640px)").matches) this.details.open = false
     }
     this.onKeydown = event => {
       if (event.key !== "Escape" || this.menu.hidden) return
@@ -84,7 +88,6 @@ export const ReviewActivity = {
 
   setMenu(open) {
     this.menu.hidden = !open
-    this.el.querySelector("[data-quick-sections]").hidden = !document.querySelector("[data-guide-flyout-toggle]")
     this.menuToggle.setAttribute("aria-expanded", String(open))
     this.menuToggle.setAttribute("aria-label", open ? "Close review menu" : "Open review menu")
   },
@@ -113,9 +116,10 @@ export const ReviewActivity = {
       : "No comments")
     this.details.dataset.unread = String(total > 0)
     this.el.dataset.unread = String(total > 0)
+    // The menu offers Comments only when its list has something to show.
     const menuCount = this.el.querySelector("[data-quick-count]")
-    menuCount.textContent = count.textContent
-    menuCount.setAttribute("aria-label", count.getAttribute("aria-label"))
+    menuCount.textContent = `${total} unread`
+    menuCount.setAttribute("aria-label", `${total} unread comments`)
     this.el.querySelector("[data-activity-empty]").hidden = total > 0
     this.el.querySelector("[data-activity-status]").textContent = `${total} unread comments in ${unreadThreads.length} threads.`
     this.el.querySelector("[data-activity-storage]").textContent = this.readState.persistent
