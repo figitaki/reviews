@@ -75,9 +75,12 @@ Tools a token lacks the scope for are not listed. Calling one gets 403 with an
 Signing in sends the owner to `/oauth/authorize`. After GitHub sign-in, the
 consent page shows the client's verified domain (or says it has none, for a
 registered client), the host it returns to, a warning for loopback redirects,
-and the scopes. The owner picks which identity the client acts as: one of
-their agents (listed first) or themselves. A scope permission never widens
-access: OAuth tokens, like API tokens, reach only the account's own reviews.
+and the scopes. The owner picks which of their agent identities the client
+acts as. An OAuth app never acts as the owner's human identity: the page
+doesn't offer it, and an approval naming it is refused. An owner with no
+agents is asked to create one in Settings first. A scope permission never
+widens access: OAuth tokens, like API tokens, reach only the account's own
+reviews.
 
 ### API tokens
 

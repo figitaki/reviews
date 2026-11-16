@@ -40,9 +40,10 @@ still stabilizing.
   threads, and post comments, resolve threads, and push reviews and revisions
   for reviews their account owns. See `docs/MCP.md`.
 - Claude custom connectors, ChatGPT connectors, and other MCP clients can sign in to `/mcp` with
-  OAuth. The owner approves the app on a Reviews page, picks which identity it acts as and what it
-  may do (read, push reviews, comment), and can disconnect it in Settings. `search` and `fetch`
-  tools let ChatGPT find and read reviews. API tokens keep working. See `docs/MCP.md`.
+  OAuth. The owner approves the app on a Reviews page, picks which of their agents it acts as (an
+  app never acts as the owner) and what it may do (read, push reviews, comment), and can disconnect
+  it in Settings. `search` and `fetch` tools let ChatGPT find and read reviews. API tokens keep
+  working. See `docs/MCP.md`.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed

@@ -12,7 +12,7 @@ defmodule ReviewsWeb.MCPOAuthTest do
   alias Reviews.Accounts
   alias Reviews.Accounts.IdentityLink
   alias Reviews.OAuth
-  alias Reviews.OAuth.{AccessToken, Clients}
+  alias Reviews.OAuth.{AccessToken, AuthorizationCode, Clients}
   alias Reviews.OAuthTestClient, as: Agent
   alias Reviews.OAuthTestClient.Fetcher
   alias Reviews.Repo
@@ -557,6 +557,43 @@ defmodule ReviewsWeb.MCPOAuthTest do
 
       assert html_response(conn, 200) =~ "Choose one of your"
       assert Repo.aggregate(IdentityLink, :count) == 0
+    end
+
+    test "the owner's own human identity is refused, even posted by hand", ctx do
+      human = Accounts.human_identity_for(ctx.owner)
+      {_verifier, challenge} = Agent.pkce()
+
+      conn =
+        build_conn()
+        |> init_test_session(current_user_id: ctx.owner.id)
+        |> post(
+          ~p"/oauth/authorize",
+          authorize_params(ctx.claude, challenge)
+          |> Map.merge(%{
+            "decision" => "approve",
+            "identity_id" => to_string(human.id),
+            "granted_scopes" => @all_scopes
+          })
+        )
+
+      assert html_response(conn, 200) =~ "Choose one of your agent identities"
+      assert get_resp_header(conn, "location") == []
+      assert Repo.aggregate(AuthorizationCode, :count) == 0
+    end
+
+    test "an owner with no agents is asked to create one instead of approving", ctx do
+      owner = user_fixture("no-agents")
+      {_verifier, challenge} = Agent.pkce()
+
+      doc =
+        build_conn()
+        |> init_test_session(current_user_id: owner.id)
+        |> get(~p"/oauth/authorize", authorize_params(ctx.claude, challenge))
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert doc |> LazyHTML.query("#poppy-consent-no-agents") |> Enum.any?()
+      refute doc |> LazyHTML.query("#poppy-consent-form") |> Enum.any?()
     end
 
     test "denying sends access_denied back", ctx do
