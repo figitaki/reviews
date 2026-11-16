@@ -27,7 +27,10 @@ defmodule ReviewsWeb.ReviewLiveTest do
         side: "new",
         anchor: %{"line_number_hint" => 42},
         status: "open",
-        comments: [comment.(1, 2, "Other feedback"), comment.(3, 1, "My reply")]
+        comments: [
+          comment.(1, 2, "Other feedback"),
+          %{comment.(3, 1, "My reply") | inserted_at: ~U[2026-11-14 00:02:00Z]}
+        ]
       },
       %{
         id: 2,
@@ -35,7 +38,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
         side: "old",
         anchor: %{"line_number_hint" => 7},
         status: "open",
-        comments: [comment.(2, 1, "Only me")]
+        comments: [%{comment.(2, 1, "Only me") | inserted_at: ~U[2026-11-14 00:01:00Z]}]
       }
     ]
 
@@ -60,10 +63,40 @@ defmodule ReviewsWeb.ReviewLiveTest do
     assert [entry] = data.(%{id: 1})["threads"]
     assert %{"id" => "1", "line" => 42, "side" => "new", "comments" => [%{"id" => "1"}]} = entry
     assert entry["href"] == "/r/example?patchset=2&thread=1"
-    refute Map.has_key?(entry, "preview")
-    refute Map.has_key?(entry, "author")
 
     assert [%{"id" => "1"}, %{"id" => "2"}] = data.(nil)["threads"]
+
+    # The log holds every comment, the viewer's included, oldest first; a
+    # reply quotes the comment before it in its thread.
+    assert [first, only_me, reply] = data.(%{id: 1})["log"]
+
+    assert %{"id" => "1", "author" => "person-2", "body" => "Other feedback", "replyTo" => nil} =
+             first
+
+    assert %{"id" => "2", "filePath" => "two.ex", "line" => 7, "side" => "old"} = only_me
+
+    assert %{
+             "id" => "3",
+             "threadId" => "1",
+             "body" => "My reply",
+             "replyTo" => %{"author" => "person-2", "body" => "Other feedback"},
+             "href" => "/r/example?patchset=2&thread=1"
+           } = reply
+  end
+
+  test "activity renders nothing without comments" do
+    html =
+      render_component(&ReviewsWeb.ReviewLive.ActivityComponents.activity/1,
+        review: %{id: 1, slug: "example"},
+        threads: [],
+        current_identity: nil,
+        patchset_number: 1
+      )
+
+    assert html
+           |> LazyHTML.from_fragment()
+           |> LazyHTML.query("#review-activity[hidden]")
+           |> Enum.count() == 1
   end
 
   defp snapshot!(review) do

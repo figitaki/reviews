@@ -35,6 +35,15 @@ still stabilizing.
 
 ### Changed
 
+- On wide screens, comments are a chat-style activity log pinned to the lower
+  right, beside the code: recent comments oldest first and newest at the
+  bottom, each with its author, time, file:line, the first two lines of the
+  comment fading out, and a one-line quote of the comment a reply answers.
+  Unread comments are marked. Clicking an entry opens its thread. New comments
+  append while you are on the page, and the log keeps its entries for the
+  visit. It collapses to an icon, remembers that in this browser, and renders
+  nothing when a review has no comments.
+
 - Migrate packet navigation to @pierre/trees 1.0.0. This release was published
   November 10, 2026 at 18:31:06.937 UTC; hold merge until November 17 at
   18:31:06.937 UTC under the seven-day dependency rule.

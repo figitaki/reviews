@@ -52,44 +52,119 @@
 }
 .review-activity-panel[open] .review-activity-close { display: block; }
 
-.review-activity-count,
-.review-activity-read {
+.review-activity[hidden] { display: none; }
+
+.review-activity-count {
   color: var(--ds-muted);
   font-size: var(--font-label-size);
   font-variant-numeric: tabular-nums;
 }
-.review-activity-read,
 [data-unread="true"] .review-activity-count { color: var(--ds-blue); }
-.review-activity-body { padding: 0 var(--space-3) var(--space-3); }
-.review-activity-note { color: var(--ds-muted); margin: var(--space-3); }
+.review-activity-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--space-2) var(--space-2);
+}
 
 .review-activity-mark-all {
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
+  order: 2;
+  align-self: flex-end;
+  min-height: 32px;
+  padding: 0 var(--space-2);
   border: 0;
+  border-radius: var(--radius-sm);
   color: var(--ds-muted);
   background: transparent;
   font: inherit;
+  font-size: var(--font-label-size);
   cursor: pointer;
 }
 .review-activity-mark-all:disabled { display: none; }
-.review-activity-list { list-style: none; padding: 0; margin: 0; }
+
+/* A chat-style log: oldest at the top, newest at the bottom, scrolling on
+   its own so the page does not move. */
+.review-activity-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 50dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
 .review-activity-entry {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
+  gap: 2px;
+  padding: var(--space-2) var(--space-2) var(--space-2) 14px;
   border-radius: var(--radius-sm);
-  color: var(--ds-muted);
+  color: var(--ds-text);
   text-decoration: none;
   font: inherit;
 }
+.is-unread > .review-activity-entry::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ds-blue);
+}
+.review-activity-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--ds-muted);
+  font-size: var(--font-label-size);
+  white-space: nowrap;
+}
+.review-activity-author {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ds-text);
+  font-weight: var(--weight-medium);
+}
+.review-activity-time { flex: none; }
+.review-activity-anchor {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--ds-hover);
+  font-family: var(--font-mono);
+}
+.review-activity-entry:hover .review-activity-anchor { color: var(--ds-blue); }
+/* Replies quote the comment they answer, in one line. */
+.review-activity-quote {
+  overflow: hidden;
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--ds-line);
+  color: var(--ds-muted);
+  font-size: var(--font-label-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The first two lines of the comment, fading out. */
+.review-activity-body-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  mask-image: linear-gradient(to bottom, #000 45%, transparent);
+}
+.is-own > .review-activity-entry .review-activity-body-text { color: var(--ds-muted); }
 .review-activity-entry:hover,
-.review-activity-mark-all:enabled:hover { background: var(--ds-hover); color: var(--ds-text); }
-.review-activity-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.review-activity-location { font-family: var(--font-mono); font-size: var(--font-label-size); white-space: nowrap; }
+.review-activity-mark-all:enabled:hover { background: var(--ds-hover); }
 .review-activity-summary:focus-visible,
 .review-activity-mark-all:focus-visible,
 .review-activity-entry:focus-visible {
@@ -97,14 +172,27 @@
   outline-offset: -2px;
 }
 
+/* Wide screens: the aside reserves a column beside the code, and the log is
+   pinned to the lower right of the screen within it, so it never covers
+   code however long the page is. */
 @media (min-width: 1200px) {
   .review-activity {
-    width: 224px;
-    position: sticky;
-    top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h) + var(--space-5));
-    align-self: start;
+    --review-activity-w: 300px;
+
+    width: var(--review-activity-w);
+    align-self: stretch;
   }
-  .review-activity:not(:has(details[open])) { width: auto; }
+  .review-activity:not(:has(details[open])) { --review-activity-w: 48px; }
+  .review-activity-panel {
+    position: fixed;
+    right: calc(16px + env(safe-area-inset-right));
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    z-index: 5;
+    width: var(--review-activity-w);
+    box-sizing: border-box;
+    box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+  }
+  .review-activity-panel:not([open]) .review-activity-summary { justify-content: center; padding: 0; }
   /* Collapsed, the rail is just the icon and count. */
   .review-activity-panel:not([open]) .review-activity-label {
     position: absolute;
@@ -113,14 +201,9 @@
     overflow: hidden;
     clip-path: inset(50%);
   }
-  .review-activity-body {
-    max-height: calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 96px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+  .review-activity-log {
+    max-height: min(60dvh, calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 120px));
   }
-}
-@media (max-width: 1199px) {
-  .review-activity-body { max-height: 50dvh; overflow-y: auto; }
 }
 
 /* Comments use the same escaped Markdown renderer as the Guide, at UI scale. */
