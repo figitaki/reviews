@@ -100,6 +100,9 @@ still stabilizing.
 - Decode Git-quoted filenames consistently in CLI validation, uploaded file
   metadata, and review hunk lookup, including non-ASCII paths.
 
+- Changed lines whose text starts with `--` or `++`, such as a removed SQL
+  `-- note` comment, now count as changes. Packet coverage checks require them,
+  and file and hunk +/- counts include them.
 - Rail height and section jumps account for both headers, including wrapped
   mobile controls.
 - Section jumps use native scrolling instead of a frame-by-frame animation,
