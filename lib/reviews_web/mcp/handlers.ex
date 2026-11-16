@@ -396,7 +396,6 @@ defmodule ReviewsWeb.MCP.Handlers do
   ## search and fetch, in the shape ChatGPT's connectors and deep research use
 
   @search_limit 20
-  @fetch_description_cap 20_000
 
   @doc """
   Reviews the caller's account owns that match `query`. Each result's `id` is
@@ -430,15 +429,10 @@ defmodule ReviewsWeb.MCP.Handlers do
       title = Budget.cap(review.title, @title_cap)
 
       description =
-        case review.description do
-          text when is_binary(text) and text != "" ->
-            Budget.cap(text, @fetch_description_cap) <> "\n\n"
+        if review.description in [nil, ""], do: "", else: review.description <> "\n\n"
 
-          _ ->
-            ""
-        end
-
-      text = "# #{title}\n\n" <> description <> render_feedback(review, revisions, latest)
+      {feedback, feedback_complete?} = feedback_with_status(review, revisions, latest)
+      text = "# #{title}\n\n" <> description <> feedback
 
       doc = %{
         id: review.slug,
@@ -456,8 +450,9 @@ defmodule ReviewsWeb.MCP.Handlers do
       left = Budget.available(@max_bytes_limit, doc)
 
       case Budget.fit_text(text, 0, left) do
+        # Left-out threads and comments are named in the feedback text itself.
         {all, nil} ->
-          %{doc | text: all} |> put_in([:metadata, :complete], true)
+          %{doc | text: all} |> put_in([:metadata, :complete], feedback_complete?)
 
         _too_long ->
           note =
@@ -914,7 +909,11 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   # Bounded like the tools: at most @feedback_threads threads and
   # @feedback_limit bytes, with a note naming what was left out.
-  defp render_feedback(review, revisions, latest) do
+  defp render_feedback(review, revisions, latest),
+    do: review |> feedback_with_status(revisions, latest) |> elem(0)
+
+  # The feedback text, and whether it shows every open thread and comment.
+  defp feedback_with_status(review, revisions, latest) do
     filters = [max_origin_number: latest.number, status: "open"]
     total = Threads.count_threads(review, filters)
     page = Threads.list_thread_page(review, filters, 0, @feedback_threads)
@@ -927,16 +926,18 @@ defmodule ReviewsWeb.MCP.Handlers do
     Open threads: #{total}
     """
 
-    {sections, shown, _left} =
-      Enum.reduce_while(threads, {[], 0, @feedback_limit - byte_size(header)}, fn thread,
-                                                                                  {acc, shown,
-                                                                                   left} ->
-        text = render_feedback_thread(thread)
+    {sections, shown, all_comments?, _left} =
+      Enum.reduce_while(
+        threads,
+        {[], 0, true, @feedback_limit - byte_size(header)},
+        fn thread, {acc, shown, all?, left} ->
+          {text, complete?} = render_feedback_thread(thread)
 
-        if byte_size(text) <= left,
-          do: {:cont, {[text | acc], shown + 1, left - byte_size(text)}},
-          else: {:halt, {acc, shown, left}}
-      end)
+          if byte_size(text) <= left,
+            do: {:cont, {[text | acc], shown + 1, all? and complete?, left - byte_size(text)}},
+            else: {:halt, {acc, shown, all?, left}}
+        end
+      )
 
     omitted =
       if shown < total,
@@ -945,7 +946,8 @@ defmodule ReviewsWeb.MCP.Handlers do
         ],
         else: []
 
-    Enum.join([header | Enum.reverse(sections)] ++ omitted, "\n")
+    {Enum.join([header | Enum.reverse(sections)] ++ omitted, "\n"),
+     shown == total and all_comments?}
   end
 
   defp render_feedback_thread(thread) do
@@ -981,7 +983,8 @@ defmodule ReviewsWeb.MCP.Handlers do
             "reviews_get_thread (thread_id #{thread.id})._\n",
         else: ""
 
-    "## Thread #{thread.id} at `#{location}` (#{thread.side})\n\n#{comments}\n#{note}"
+    {"## Thread #{thread.id} at `#{location}` (#{thread.side})\n\n#{comments}\n#{note}",
+     not incomplete?}
   end
 
   ## Write helpers

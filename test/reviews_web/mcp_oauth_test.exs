@@ -380,8 +380,8 @@ defmodule ReviewsWeb.MCPOAuthTest do
           raw_diff: @diff
         })
 
-      # And about 60 KB of open feedback, as much as the feedback text holds.
-      for _ <- 1..40 do
+      # And open feedback too.
+      for _ <- 1..10 do
         {:ok, _} =
           Reviews.Threads.publish_comment(review, ctx.owner, %{
             "file_path" => "foo",
@@ -399,6 +399,28 @@ defmodule ReviewsWeb.MCPOAuthTest do
       assert doc["metadata"]["complete"] == false
       assert String.valid?(doc["text"])
       assert doc["text"] =~ "Cut short to fit"
+    end
+
+    test "fetch says it is incomplete when the feedback leaves comments out", ctx do
+      # One short description, one thread with a comment longer than the
+      # feedback text shows: the result fits, but it isn't everything.
+      {:ok, _} =
+        Reviews.Threads.publish_comment(ctx.review, ctx.owner, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => String.duplicate("x", 3_000),
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent, ["reviews:read"])
+
+      doc =
+        call_tool(tokens["access_token"], "fetch", %{"id" => ctx.review.slug})
+        |> json_response(200)
+        |> get_in(["result", "structuredContent"])
+
+      assert doc["metadata"]["complete"] == false
+      assert doc["text"] =~ "reviews_get_thread"
     end
 
     test "every tool declares readOnlyHint, destructiveHint, and openWorldHint", ctx do
