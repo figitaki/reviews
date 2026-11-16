@@ -33,6 +33,10 @@ still stabilizing.
 
 ### Changed
 
+- Migrate packet navigation to @pierre/trees 1.0.0. This release was published
+  November 10, 2026 at 18:31:06.937 UTC; hold merge until November 17 at
+  18:31:06.937 UTC under the seven-day dependency rule.
+
 - Comments render safe Markdown. The collapsible comment sidebar lists only
   unread thread locations, without message previews; links prefer the first
   covering hunk in the Guide and fall back to Diff when needed.
