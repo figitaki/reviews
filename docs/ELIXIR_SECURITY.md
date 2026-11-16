@@ -30,3 +30,27 @@ Run `mix hex.audit` locally. The audit fails for known vulnerabilities in
 `mix.lock`; it does not silently upgrade dependencies or ignore advisories.
 The weekly run checks for newly published advisories even without code changes.
 Resolve affected dependencies in a reviewed update PR.
+
+## Initial triage (Sobelow 0.19.0)
+
+Keep the seeded demo backend. The two `Traversal.FileModule` findings in
+`Reviews.DemoReview.seed!/0` are false positives for request-controlled path
+traversal: both filenames are fixed literals, and `examples_dir/0` resolves the
+application's `priv/examples` directory (or a process-working-directory
+fallback). Neither read accepts a request parameter. Reassess if those paths
+become configurable or user-controlled; do not remove the seed or fixtures to
+silence the scanner. They remain visible rather than applying a broad skip.
+
+The `Config.CSP` label says "Missing Content-Security-Policy", but Phoenix's
+`put_secure_browser_headers` already supplies `base-uri 'self'; frame-ancestors
+'self';`. A stricter script/resource policy is separate hardening, not evidence
+of an exploitable XSS. It needs compatibility testing and a hash/nonce or
+external replacement for the inline theme script.
+
+The `/live` socket inherits the explicit production origin allowlist from
+`config/runtime.exs`. The live-reload socket is inside the `code_reloading?`
+branch. These warnings do not establish production cross-site WebSocket
+hijacking. Development disables origin checks and binds loopback; browser-origin
+attacks can still reach loopback, so tightening development origins is useful
+separate hardening. Verify deployed configuration and handshake rejection before
+closing origin-related findings as false positives.
