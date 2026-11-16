@@ -19,7 +19,7 @@ defmodule ReviewsWeb.Plugs.RequireApiToken do
   def call(conn, _opts) do
     with [raw] <- get_req_header(conn, "authorization"),
          "Bearer " <> token <- raw,
-         true <- byte_size(token) == 36 and String.starts_with?(token, "rev_"),
+         true <- token != "",
          {:ok, %{user: user, identity: identity}} <- Accounts.authenticate_token(token) do
       conn
       |> assign(:current_user, user)

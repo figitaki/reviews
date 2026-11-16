@@ -62,11 +62,27 @@ defmodule ReviewsWeb.AbuseIntegrationTest do
 
     malformed =
       conn
-      |> put_req_header("authorization", "Bearer nonsense")
+      |> put_req_header("authorization", "Basic nonsense")
       |> put_req_header("content-type", "application/json")
 
     assert post(malformed, "/api/v1/reviews", "not json").status == 401
     refute_receive :token_lookup, 0
+  end
+
+  test "seeded preview credentials support CLI identity and uploads", %{conn: conn} do
+    for raw <- ["rev_" <> String.duplicate("a", 48), "preview-bootstrap-credential"] do
+      :ok = Reviews.Release.seed_preview_token(raw)
+
+      request =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+
+      assert get(request, "/api/v1/me").status == 200
+      created = post(request, "/api/v1/reviews", review_body())
+      assert %{"slug" => slug} = json_response(created, 201)
+      assert post(request, "/api/v1/reviews/#{slug}/patchsets", review_body()).status == 201
+    end
   end
 
   test "assigns do not bypass auth and successful preauth is reused", %{

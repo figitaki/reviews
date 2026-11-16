@@ -31,7 +31,9 @@ parsing. It does not limit established LiveView write events.
 All API write methods authenticate before parsing. A successful authentication
 is stored only in a server-owned `conn.private` entry and reused by the router;
 ordinary `current_user`/`current_identity` assigns do not bypass verification.
-Only the existing `rev_` + 32-character token shape reaches the database.
+Bearer credentials remain opaque: seeded preview tokens can have a different
+length or prefix from UI-minted tokens. Empty credentials and malformed
+authorization headers are rejected without a token lookup.
 Route classification decodes segments exactly as Phoenix.Router does.
 
 Authenticated POST review and patchset bodies retain the **50,000,000-byte total
