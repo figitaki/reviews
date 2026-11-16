@@ -846,10 +846,8 @@ defmodule ReviewsWeb.ReviewLive do
     |> Map.get(:display_raw_diff, "")
     |> to_string()
     |> String.split("\n")
-    |> Enum.count(fn line ->
-      !String.starts_with?(line, ["diff --git", "index ", "--- ", "+++ ", "@@ "]) &&
-        String.trim(line) != ""
-    end)
+    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
+    |> Enum.count(&(!String.starts_with?(&1, "@@ ") && String.trim(&1) != ""))
   end
 
   defp update_hunk_view(socket, _params, _action) when is_nil(socket.assigns.current_user) do
