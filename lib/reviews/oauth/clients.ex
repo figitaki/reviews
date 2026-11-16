@@ -13,7 +13,13 @@ defmodule Reviews.OAuth.Clients do
   (default 300), so a key removed from `jwks_uri` stops being trusted within
   that time. An unknown `kid` refetches the key set at most once every 30
   seconds per client, and failed fetches are remembered for 30 seconds too, so
-  forged requests can't make Reviews flood a client's server.
+  forged requests can't make Reviews flood a client's server. Concurrent
+  requests for one client share a single fetch.
+
+  Expired entries are swept every minute, and the cache holds at most
+  `:client_cache_size` entries (default 10,000). Past that, results are
+  used but not cached, so unknown `client_id`s can't grow memory without
+  bound.
   """
   use GenServer
 
@@ -22,13 +28,31 @@ defmodule Reviews.OAuth.Clients do
 
   @table __MODULE__
   @refetch_interval 30
+  @sweep_interval :timer.seconds(60)
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
   @impl true
   def init(nil) do
     :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
+    schedule_sweep()
     {:ok, nil}
+  end
+
+  @impl true
+  def handle_info(:sweep, state) do
+    sweep()
+    schedule_sweep()
+    {:noreply, state}
+  end
+
+  defp schedule_sweep, do: Process.send_after(self(), :sweep, @sweep_interval)
+
+  @doc false
+  # Drops expired entries. Runs every minute; public for tests.
+  def sweep do
+    now = now()
+    :ets.select_delete(@table, [{{:_, :_, :"$1", :_}, [{:"=<", :"$1", now}], [true]}])
   end
 
   # Token endpoint authentication methods the issuer accepts.
@@ -60,15 +84,27 @@ defmodule Reviews.OAuth.Clients do
         {:error, :invalid_client_id}
 
       true ->
-        case :ets.lookup(@table, client_id) do
-          [{_, {:ok, client}, expires_at, _jwks_at}] when expires_at > now -> {:ok, client}
-          [{_, {:error, _} = error, expires_at, _}] when expires_at > now -> error
-          _ -> load(client_id, now)
+        with :miss <- cached(client_id, now) do
+          # One fetch per client at a time; the others wait, then read the cache.
+          with_client_lock(client_id, fn ->
+            with :miss <- cached(client_id, now()), do: load(client_id, now())
+          end)
         end
     end
   end
 
   def fetch(_), do: {:error, :invalid_client_id}
+
+  defp cached(client_id, now) do
+    case :ets.lookup(@table, client_id) do
+      [{_, {:ok, client}, expires_at, _jwks_at}] when expires_at > now -> {:ok, client}
+      [{_, {:error, _} = error, expires_at, _}] when expires_at > now -> error
+      _ -> :miss
+    end
+  end
+
+  defp with_client_lock(client_id, fun),
+    do: :global.trans({{__MODULE__, client_id}, self()}, fun, [node()])
 
   @doc "Drops the cached metadata and keys for `client_id`, such as after a key leak."
   def forget(client_id), do: :ets.delete(@table, client_id)
@@ -89,28 +125,41 @@ defmodule Reviews.OAuth.Clients do
 
   def key(_client, _kid), do: {:error, :unknown_key}
 
-  defp refetch_key(%{client_id: client_id}, kid) do
+  defp refetch_key(%{client_id: client_id}, kid),
+    do: with_client_lock(client_id, fn -> refetch_key_locked(client_id, kid) end)
+
+  # Under the client's lock, so concurrent unknown `kid`s wait for one fetch
+  # and then see its `jwks_at`.
+  defp refetch_key_locked(client_id, kid) do
     now = now()
 
     case :ets.lookup(@table, client_id) do
-      [{_, {:ok, cached}, expires_at, jwks_at}] when now - jwks_at >= @refetch_interval ->
-        client =
-          case fetch_keys(cached.jwks_uri) do
-            {:ok, keys} -> %{cached | keys: keys}
-            {:error, _} -> cached
-          end
+      [{_, {:ok, cached}, expires_at, jwks_at}] ->
+        cond do
+          key = find_key(cached.keys, kid) ->
+            {:ok, key}
 
-        :ets.insert(@table, {client_id, {:ok, client}, expires_at, now})
+          now - jwks_at >= @refetch_interval ->
+            client =
+              case fetch_keys(cached.jwks_uri) do
+                {:ok, keys} -> %{cached | keys: keys}
+                {:error, _} -> cached
+              end
 
-        case Enum.find(client.keys, &(&1["kid"] == kid)) do
-          nil -> {:error, :unknown_key}
-          key -> {:ok, key}
+            :ets.insert(@table, {client_id, {:ok, client}, expires_at, now})
+
+            if key = find_key(client.keys, kid), do: {:ok, key}, else: {:error, :unknown_key}
+
+          true ->
+            {:error, :unknown_key}
         end
 
       _ ->
         {:error, :unknown_key}
     end
   end
+
+  defp find_key(keys, kid), do: Enum.find(keys, &(&1["kid"] == kid))
 
   defp load(client_id, now) do
     result =
@@ -126,7 +175,9 @@ defmodule Reviews.OAuth.Clients do
         {:error, _} -> @refetch_interval
       end
 
-    :ets.insert(@table, {client_id, result, now + ttl, now})
+    if :ets.info(@table, :size) < OAuth.config(:client_cache_size, 10_000),
+      do: :ets.insert(@table, {client_id, result, now + ttl, now})
+
     result
   end
 
