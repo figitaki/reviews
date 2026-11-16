@@ -3,6 +3,13 @@ defmodule Reviews.CodeStorage.CodeDotStorage.TokenTest do
 
   alias Reviews.CodeStorage.CodeDotStorage.Token
 
+  defmodule EchoSigner do
+    @behaviour Reviews.CodeStorage.CodeDotStorage.Signer
+
+    @impl true
+    def sign(claims, config), do: {:ok, {:signed_by_echo, claims, config[:key_ref]}}
+  end
+
   # Throwaway P-256 key generated for tests only.
   setup_all do
     jwk = JOSE.JWK.generate_key({:ec, :secp256r1})
@@ -16,7 +23,7 @@ defmodule Reviews.CodeStorage.CodeDotStorage.TokenTest do
   end
 
   test "server_token signs ES256 with repo claim and API scopes", %{pem: pem, jwk: jwk} do
-    {:ok, token} = Token.server_token("acme", "reviews/abc", pem)
+    {:ok, token} = Token.server_token([org: "acme", jwt_private_key: pem], "reviews/abc")
     {claims, alg} = decode!(token, jwk)
 
     assert alg == :ES256
@@ -29,7 +36,9 @@ defmodule Reviews.CodeStorage.CodeDotStorage.TokenTest do
   end
 
   test "upload_token allowlists exactly the snapshot refs", %{pem: pem, jwk: jwk} do
-    {:ok, token} = Token.upload_token("acme", "reviews/abc", "snap-id", pem, 900)
+    {:ok, token} =
+      Token.upload_token([org: "acme", jwt_private_key: pem], "reviews/abc", "snap-id", 900)
+
     {claims, _alg} = decode!(token, jwk)
 
     assert claims["scopes"] == ["git:write"]
@@ -43,6 +52,22 @@ defmodule Reviews.CodeStorage.CodeDotStorage.TokenTest do
   end
 
   test "returns an error for an unusable key" do
-    assert {:error, {:jwt_signing_failed, _}} = Token.server_token("acme", "r/x", "not a pem")
+    assert {:error, {:jwt_signing_failed, _}} =
+             Token.server_token([org: "acme", jwt_private_key: "not a pem"], "r/x")
+  end
+
+  test "reports a missing PEM key as misconfiguration" do
+    assert {:error, :code_storage_misconfigured} = Token.server_token([org: "acme"], "r/x")
+  end
+
+  test "signs with the configured signer instead of the PEM key" do
+    config = [org: "acme", signer: EchoSigner, key_ref: "kms-key-1"]
+
+    assert {:ok, {:signed_by_echo, claims, "kms-key-1"}} =
+             Token.upload_token(config, "reviews/abc", "snap-id", 900)
+
+    assert claims["iss"] == "acme"
+    assert claims["repo"] == "reviews/abc"
+    assert claims["exp"] - claims["iat"] == 900
   end
 end

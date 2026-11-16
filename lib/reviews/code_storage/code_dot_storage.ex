@@ -2,15 +2,17 @@ defmodule Reviews.CodeStorage.CodeDotStorage do
   @moduledoc """
   code.storage (Pierre) adapter.
 
-  The Reviews backend holds the organization's P-256 API private key and
-  mints short-lived ES256 JWTs: broad-scope server tokens for its own API
-  calls, and narrowly ref-scoped `git:write` tokens that the CLI uses to push
-  exactly one snapshot's base and head refs.
+  The Reviews backend mints short-lived ES256 JWTs, signed with the
+  organization's P-256 API key through the configured `Signer`: broad-scope
+  server tokens for its own API calls, and narrowly ref-scoped `git:write`
+  tokens that the CLI uses to push exactly one snapshot's base and head refs.
 
   Config (under `config :reviews, Reviews.CodeStorage`):
 
     * `:org` — code.storage organization identifier
-    * `:jwt_private_key` — P-256 private key, PKCS8 PEM
+    * `:signer` — `Reviews.CodeStorage.CodeDotStorage.Signer` module;
+      defaults to `PemSigner`
+    * `:jwt_private_key` — P-256 private key, PKCS8 PEM, for `PemSigner`
     * `:api_base_url` / `:git_base_url` — overrides for tests/self-hosting
     * `:req_options` — extra Req options (tests inject a Req.Test plug)
 
@@ -32,7 +34,7 @@ defmodule Reviews.CodeStorage.CodeDotStorage do
     config = config()
 
     with :ok <- check_config(config),
-         {:ok, token} <- Token.server_token(config[:org], repository.storage_key, key_pem(config)),
+         {:ok, token} <- Token.server_token(config, repository.storage_key),
          {:ok, %{provider_repo_id: provider_repo_id}} <-
            Client.create_repo(config, token, repository.storage_key) do
       {:ok, %{storage_key: repository.storage_key, provider_repo_id: provider_repo_id}}
@@ -46,13 +48,7 @@ defmodule Reviews.CodeStorage.CodeDotStorage do
 
     with :ok <- check_config(config),
          {:ok, token} <-
-           Token.upload_token(
-             config[:org],
-             repository.storage_key,
-             snapshot.public_id,
-             key_pem(config),
-             ttl
-           ) do
+           Token.upload_token(config, repository.storage_key, snapshot.public_id, ttl) do
       {:ok,
        %{
          remote_url: "#{git_base_url(config)}/#{repository.storage_key}.git",
@@ -67,7 +63,7 @@ defmodule Reviews.CodeStorage.CodeDotStorage do
     config = config()
 
     with :ok <- check_config(config),
-         {:ok, token} <- Token.server_token(config[:org], repository.storage_key, key_pem(config)),
+         {:ok, token} <- Token.server_token(config, repository.storage_key),
          {:ok, %{sha: base_sha}} <-
            resolve_ref(config, token, repository, branch_name(snapshot.base_ref)),
          {:ok, %{sha: head_sha}} <-
@@ -91,7 +87,7 @@ defmodule Reviews.CodeStorage.CodeDotStorage do
     config = config()
 
     with :ok <- check_config(config),
-         {:ok, token} <- Token.server_token(config[:org], repository.storage_key, key_pem(config)) do
+         {:ok, token} <- Token.server_token(config, repository.storage_key) do
       Client.delete_repo(config, token, repository.storage_key)
     end
   end
@@ -112,10 +108,9 @@ defmodule Reviews.CodeStorage.CodeDotStorage do
     config[:git_base_url] || "https://#{config[:org]}.code.storage"
   end
 
-  defp key_pem(config), do: config[:jwt_private_key]
-
+  # The signer reports a missing key itself.
   defp check_config(config) do
-    if config[:org] && config[:jwt_private_key] do
+    if config[:org] do
       :ok
     else
       {:error, :code_storage_misconfigured}

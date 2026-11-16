@@ -149,7 +149,9 @@ CODE_STORAGE_POLICY=optional
 ```
 
 The server signs short-lived ES256 tokens with the private key. The CLI gets a
-token that can write only the two refs of one snapshot.
+token that can write only the two refs of one snapshot. Signing goes through
+`Reviews.CodeStorage.CodeDotStorage.Signer`; the only signer today reads the
+PEM key above.
 
 With the `optional` policy, a failed upload prints a warning and the push
 continues without code. With `required`, the CLI stops before it creates the
