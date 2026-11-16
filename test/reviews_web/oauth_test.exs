@@ -411,6 +411,35 @@ defmodule ReviewsWeb.OAuthTest do
 
       assert %{"error" => "invalid_grant"} =
                refresh(other, tokens["refresh_token"]) |> json_response(400)
+
+      # A replaced token presented by another client doesn't end the grant.
+      rotated = refresh(ctx.app, tokens["refresh_token"]) |> json_response(200)
+
+      assert %{"error" => "invalid_grant"} =
+               refresh(other, tokens["refresh_token"]) |> json_response(400)
+
+      assert valid?(rotated["access_token"])
+      assert refresh(ctx.app, rotated["refresh_token"]) |> json_response(200)
+    end
+
+    test "issue nothing once their resource is turned off", ctx do
+      tokens = sign_in(ctx.app, ctx.owner, ctx.agent)
+      {%{"code" => code}, verifier} = approve(ctx.app, ctx.owner, ctx.agent)
+      previous = Application.get_env(:reviews, Reviews.OAuthTestResource)
+
+      on_exit(fn ->
+        if previous,
+          do: Application.put_env(:reviews, Reviews.OAuthTestResource, previous),
+          else: Application.delete_env(:reviews, Reviews.OAuthTestResource)
+      end)
+
+      Application.put_env(:reviews, Reviews.OAuthTestResource, enabled: false)
+
+      assert %{"error" => "invalid_grant"} =
+               refresh(ctx.app, tokens["refresh_token"]) |> json_response(400)
+
+      assert %{"error" => "invalid_grant"} =
+               exchange(ctx.app, code, verifier) |> json_response(400)
     end
   end
 
@@ -474,6 +503,26 @@ defmodule ReviewsWeb.OAuthTest do
 
       assert html_response(conn, 200) =~ "Choose one of your"
       assert Repo.aggregate(IdentityLink, :count) == 0
+    end
+
+    test "a missing or malformed identity is refused, not a crash", ctx do
+      {_verifier, challenge} = Client.pkce()
+
+      for identity_id <- [nil, "abc", "1; drop"] do
+        conn =
+          build_conn()
+          |> init_test_session(current_user_id: ctx.owner.id)
+          |> post(
+            ~p"/oauth/authorize",
+            authorize_params(ctx.app, challenge)
+            |> Map.merge(%{"decision" => "approve", "granted_scopes" => @all_scopes})
+            |> then(&if(identity_id, do: Map.put(&1, "identity_id", identity_id), else: &1))
+          )
+
+        assert html_response(conn, 200) =~ "Choose one of your"
+      end
+
+      assert Repo.aggregate(AuthorizationCode, :count) == 0
     end
 
     test "the owner's own human identity is refused, even posted by hand", ctx do
@@ -577,6 +626,12 @@ defmodule ReviewsWeb.OAuthTest do
     test "a reused code, which also revokes the tokens the first use got", ctx do
       {%{"code" => code}, verifier} = approve(ctx.app, ctx.owner, ctx.agent)
       tokens = exchange(ctx.app, code, verifier) |> json_response(200)
+
+      # Another client replaying the code can't end the grant.
+      assert %{"error" => "invalid_grant"} =
+               exchange(public_client(), code, verifier) |> json_response(400)
+
+      assert valid?(tokens["access_token"])
 
       assert %{"error" => "invalid_grant"} =
                exchange(ctx.app, code, verifier) |> json_response(400)

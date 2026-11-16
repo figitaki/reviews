@@ -106,6 +106,24 @@ defmodule Reviews.OAuth.TokensTest do
   end
 
   describe "Clients.fetch/1" do
+    test "expired entries are swept, and a full cache stops caching" do
+      client = Client.new() |> Client.publish()
+      assert {:ok, _} = Clients.fetch(client.client_id)
+      assert [{_, _, _, _}] = :ets.lookup(Clients, client.client_id)
+
+      [{id, result, _expires_at, jwks_at}] = :ets.lookup(Clients, client.client_id)
+      :ets.insert(Clients, {id, result, Client.now() - 1, jwks_at})
+      Clients.sweep()
+      assert :ets.lookup(Clients, client.client_id) == []
+
+      previous = Application.get_env(:reviews, Reviews.OAuth)
+      on_exit(fn -> Application.put_env(:reviews, Reviews.OAuth, previous) end)
+      Application.put_env(:reviews, Reviews.OAuth, Keyword.put(previous, :client_cache_size, 0))
+
+      assert {:ok, _} = Clients.fetch(client.client_id)
+      assert :ets.lookup(Clients, client.client_id) == []
+    end
+
     test "refuses client metadata whose client_id doesn't match its URL" do
       client = Client.new(metadata: %{"client_id" => "https://elsewhere.example/client.json"})
 

@@ -198,7 +198,8 @@ defmodule Reviews.OAuth do
   never acts as the person.
   """
   def approve(%User{} = user, identity_id, request, granted_scopes) do
-    with %Identity{kind: "agent"} = identity <- Accounts.get_owned_identity(user, identity_id),
+    with {:ok, id} when is_integer(id) <- Ecto.Type.cast(:id, identity_id),
+         %Identity{kind: "agent"} = identity <- Accounts.get_owned_identity(user, id),
          true <- granted_scopes != [] and granted_scopes -- request.scopes == [] do
       code = random_token("ppc_")
 
@@ -228,7 +229,11 @@ defmodule Reviews.OAuth do
   @doc """
   Exchanges a code for tokens. The code is consumed atomically, so two
   concurrent exchanges can't both succeed. Reusing a code revokes the link it
-  created (RFC 6749 §4.1.2).
+  created (RFC 6749 §4.1.2), when the same client presents it.
+
+  Consuming the code and creating its link happen in one transaction. The
+  update holds the code's row lock until then, so a concurrent reuse waits
+  and finds the link to revoke.
   """
   def exchange_code(client_id, auth_method, params) do
     code = params["code"]
@@ -239,25 +244,36 @@ defmodule Reviews.OAuth do
         where: c.code_hash == ^hash(code || "") and is_nil(c.consumed_at),
         select: c
 
-    case Repo.update_all(query, set: [consumed_at: now]) do
-      {1, [code_row]} ->
-        resource = resource_for(code_row.provider)
+    {:ok, result} =
+      Repo.transaction(fn ->
+        case Repo.update_all(query, set: [consumed_at: now]) do
+          {1, [code_row]} ->
+            redeem_code(code_row, client_id, auth_method, params, now)
 
-        with :ok <- expect(code_row.client_id == client_id),
-             :ok <- expect(DateTime.compare(code_row.expires_at, now) == :gt),
-             :ok <- expect(code_row.redirect_uri == params["redirect_uri"]),
-             :ok <- check_pkce(code_row.code_challenge, params["code_verifier"]),
-             :ok <- check_auth_method(resource, auth_method),
-             :ok <- check_resource(params["resource"], code_row.resource) do
-          create_link(code_row)
-        else
-          {:error, :invalid_target} -> {:error, :invalid_target}
-          _ -> {:error, :invalid_grant}
+          {0, _} ->
+            revoke_reused_code(code, client_id, auth_method)
+            {:error, :invalid_grant}
         end
+      end)
 
-      {0, _} ->
-        revoke_reused_code(code)
-        {:error, :invalid_grant}
+    result
+  end
+
+  # A failed check still commits `consumed_at`: a code gets one attempt.
+  defp redeem_code(code_row, client_id, auth_method, params, now) do
+    resource = resource_for(code_row.provider)
+
+    with :ok <- expect(code_row.client_id == client_id),
+         :ok <- expect(DateTime.compare(code_row.expires_at, now) == :gt),
+         :ok <- expect(code_row.redirect_uri == params["redirect_uri"]),
+         :ok <- check_pkce(code_row.code_challenge, params["code_verifier"]),
+         :ok <- check_auth_method(resource, auth_method),
+         :ok <- check_enabled(resource),
+         :ok <- check_resource(params["resource"], code_row.resource) do
+      create_link(code_row)
+    else
+      {:error, :invalid_target} -> {:error, :invalid_target}
+      _ -> {:error, :invalid_grant}
     end
   end
 
@@ -266,6 +282,9 @@ defmodule Reviews.OAuth do
   defp check_auth_method(resource, method),
     do: expect(method in resource.client_auth_methods())
 
+  # A disabled resource issues no tokens, from codes or refresh tokens.
+  defp check_enabled(resource), do: expect(resource.enabled?())
+
   defp check_pkce(challenge, verifier)
        when is_binary(verifier) and byte_size(verifier) in 43..128 do
     expect(Base.url_encode64(:crypto.hash(:sha256, verifier), padding: false) == challenge)
@@ -273,17 +292,22 @@ defmodule Reviews.OAuth do
 
   defp check_pkce(_challenge, _verifier), do: :error
 
-  defp revoke_reused_code(code) when is_binary(code) do
+  # Only the client the code was issued to, authenticated the way its
+  # resource requires, can revoke the grant by reusing the code. Another
+  # client gets `invalid_grant` and changes nothing.
+  defp revoke_reused_code(code, client_id, auth_method) when is_binary(code) do
     case Repo.get_by(AuthorizationCode, code_hash: hash(code)) do
-      %AuthorizationCode{identity_link_id: link_id} when is_integer(link_id) ->
-        revoke_link_by_id(link_id)
+      %AuthorizationCode{identity_link_id: link_id, client_id: ^client_id} = row
+      when is_integer(link_id) ->
+        if check_auth_method(resource_for(row.provider), auth_method) == :ok,
+          do: revoke_link_by_id(link_id)
 
       _ ->
         :ok
     end
   end
 
-  defp revoke_reused_code(_), do: :ok
+  defp revoke_reused_code(_code, _client_id, _auth_method), do: :ok
 
   defp create_link(%AuthorizationCode{} = code) do
     refresh_token = random_token("ppr_")
@@ -339,7 +363,7 @@ defmodule Reviews.OAuth do
             refresh_link(link, resource_for(link.provider), hash, client_id, auth_method, params)
 
           nil ->
-            revoke_reused_refresh_token(hash)
+            revoke_reused_refresh_token(hash, client_id, auth_method)
             {:error, :invalid_grant}
         end
       end)
@@ -350,6 +374,7 @@ defmodule Reviews.OAuth do
   defp refresh_link(link, resource, hash, client_id, auth_method, params) do
     with :ok <- expect(link.subject == client_id),
          :ok <- check_auth_method(resource, auth_method),
+         :ok <- check_enabled(resource),
          :ok <- expect(active_link?(link)),
          {:ok, scopes} <- requested_scopes(params["scope"], link.scopes, resource),
          :ok <- check_resource(params["resource"], resource.resource()),
@@ -392,15 +417,23 @@ defmodule Reviews.OAuth do
     end
   end
 
-  # Any refresh token a grant rotated away revokes the grant.
-  defp revoke_reused_refresh_token(hash) do
+  # Any refresh token a grant rotated away revokes the grant, when the
+  # grant's own client presents it, authenticated the way its resource
+  # requires. Another client gets `invalid_grant` and changes nothing.
+  defp revoke_reused_refresh_token(hash, client_id, auth_method) do
     case Repo.one(
            from c in "oauth_consumed_refresh_tokens",
-             where: c.token_hash == ^hash,
-             select: c.identity_link_id
+             join: l in IdentityLink,
+             on: l.id == c.identity_link_id,
+             where: c.token_hash == ^hash and l.subject == ^client_id,
+             select: {l.id, l.provider}
          ) do
-      nil -> :ok
-      link_id -> revoke_link_by_id(link_id)
+      {link_id, provider} ->
+        if check_auth_method(resource_for(provider), auth_method) == :ok,
+          do: revoke_link_by_id(link_id)
+
+      nil ->
+        :ok
     end
   end
 
