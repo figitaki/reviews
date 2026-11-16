@@ -23,7 +23,7 @@
 
 @media (min-width: 1200px) {
   .review-workspace {
-    grid-template-columns: minmax(0, 1fr) 288px;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     padding-right: 16px;
   }

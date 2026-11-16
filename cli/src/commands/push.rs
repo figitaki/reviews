@@ -1,12 +1,13 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Args;
 use std::env;
-use std::path::PathBuf;
+use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
 
 use crate::api::{ApiClient, CreatePatchsetRequest, CreateReviewRequest};
 use crate::config::Config;
-use crate::git;
-use crate::packet;
+use crate::git::{self, CapturedDiff};
+use crate::packet::{self, plural, PacketCheck};
 
 #[derive(Args, Debug)]
 pub struct PushArgs {
@@ -29,14 +30,48 @@ pub struct PushArgs {
     /// Append a new patchset to an existing review by slug.
     #[arg(long, value_name = "SLUG")]
     pub update: Option<String>,
+
+    /// Check the diff and packet and show what would be sent, without
+    /// contacting the server. Exits with status 1 if the packet or the push
+    /// has problems.
+    #[arg(long, visible_alias = "validate")]
+    pub dry_run: bool,
 }
 
 pub fn run(args: PushArgs) -> Result<()> {
-    let cfg = Config::load()?;
+    let cfg = Config::load();
+    // A real push needs a config before it does any work. A dry run only
+    // reports on it.
+    let cfg = if args.dry_run { cfg } else { Ok(cfg?) };
     let cwd = env::current_dir().context("could not read current directory")?;
     let cap = git::capture_diff(&cwd, args.range.as_deref())?;
-    let packet = load_packet_for_push(&cwd, &cap.branch_name, args.packet.as_ref(), &cap.raw_diff)?;
+    let check = check_packet_for_push(&cwd, &cap.branch_name, args.packet.as_ref(), &cap.raw_diff)?;
+    let problems = request_problems(&args, &cap);
 
+    if args.dry_run {
+        let server = cfg
+            .as_ref()
+            .map(|cfg| cfg.default.server_url.as_str())
+            .map_err(|err| format!("{err:#}"));
+        print!(
+            "{}",
+            dry_run_report(&cwd, &args, &cap, server, check.as_ref(), &problems)
+        );
+        let packet_ok = check.as_ref().is_none_or(PacketCheck::is_valid);
+        return if packet_ok && problems.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "a real push would fail. Fix the problems above, then run again."
+            ))
+        };
+    }
+
+    let cfg = cfg?;
+    if !problems.is_empty() {
+        return Err(anyhow!("{}", problems.join("\n")));
+    }
+    let packet = check.map(PacketCheck::into_packet).transpose()?;
     let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
 
     eprintln!(
@@ -58,10 +93,7 @@ pub fn run(args: PushArgs) -> Result<()> {
             println!("Patchset {} added to {}", resp.patchset_number, resp.url);
         }
         None => {
-            let title = args
-                .title
-                .clone()
-                .unwrap_or_else(|| cap.branch_name.clone());
+            let title = review_title(&args, &cap);
             let description = args.description.clone().unwrap_or_default();
             let req = CreateReviewRequest {
                 title: &title,
@@ -79,21 +111,207 @@ pub fn run(args: PushArgs) -> Result<()> {
     Ok(())
 }
 
-fn load_packet_for_push(
-    cwd: &std::path::Path,
+fn review_title(args: &PushArgs, cap: &CapturedDiff) -> String {
+    args.title
+        .clone()
+        .unwrap_or_else(|| cap.branch_name.clone())
+}
+
+/// Problems with the request itself that the server would reject: an empty
+/// review title (the server requires one) or an empty `--update` slug.
+fn request_problems(args: &PushArgs, cap: &CapturedDiff) -> Vec<String> {
+    match &args.update {
+        Some(slug) if slug.trim().is_empty() => {
+            vec!["--update needs a review slug, such as `--update k7m2qz`.".to_string()]
+        }
+        Some(_) => Vec::new(),
+        None if review_title(args, cap).trim().is_empty() => {
+            vec!["the review title is empty. Pass --title with some text.".to_string()]
+        }
+        None => Vec::new(),
+    }
+}
+
+/// Find the packet for this push (explicit path first, then the branch
+/// default) and check it against the diff. `None` means no packet.
+fn check_packet_for_push(
+    cwd: &Path,
     branch_name: &str,
     explicit_path: Option<&PathBuf>,
     raw_diff: &str,
-) -> Result<Option<serde_json::Value>> {
+) -> Result<Option<PacketCheck>> {
     let path = match explicit_path {
         Some(path) => Some(path.clone()),
         None => packet::discover_packet(cwd, branch_name),
     };
 
-    match path {
-        Some(path) => Ok(Some(packet::load_packet_for_diff(&path, raw_diff)?)),
-        None => Ok(None),
+    path.map(|path| packet::check_packet_for_diff(&path, raw_diff))
+        .transpose()
+}
+
+#[cfg(test)]
+fn load_packet_for_push(
+    cwd: &Path,
+    branch_name: &str,
+    explicit_path: Option<&PathBuf>,
+    raw_diff: &str,
+) -> Result<Option<serde_json::Value>> {
+    check_packet_for_push(cwd, branch_name, explicit_path, raw_diff)?
+        .map(PacketCheck::into_packet)
+        .transpose()
+}
+
+/// The text `push --dry-run` prints: where the push would go, what it would
+/// send, and every packet problem.
+fn dry_run_report(
+    cwd: &Path,
+    args: &PushArgs,
+    cap: &CapturedDiff,
+    server: std::result::Result<&str, String>,
+    check: Option<&PacketCheck>,
+    problems: &[String],
+) -> String {
+    let mut out = String::new();
+    let _ = writeln!(out, "Dry run: nothing was sent to the server.\n");
+
+    match server {
+        Ok(url) => {
+            let _ = writeln!(out, "Server:  {url}");
+        }
+        Err(err) => {
+            let _ = writeln!(out, "Server:  not set. A real push will fail: {err}");
+        }
     }
+
+    match &args.update {
+        Some(slug) => {
+            let _ = writeln!(out, "Action:  add a new patchset to review {slug}");
+            if args.title.is_some() || args.description.is_some() {
+                let _ = writeln!(
+                    out,
+                    "         --title and --description are ignored with --update"
+                );
+            }
+        }
+        None => {
+            let source = if args.title.is_some() {
+                "from --title"
+            } else {
+                "from the branch name; set --title to change it"
+            };
+            let _ = writeln!(
+                out,
+                "Action:  create a new review titled \"{}\" ({source})",
+                review_title(args, cap)
+            );
+            if let Some(description) = &args.description {
+                let _ = writeln!(
+                    out,
+                    "         with a description of {}",
+                    plural(description.chars().count(), "character")
+                );
+            }
+        }
+    }
+
+    let files = packet::diff_files(&cap.raw_diff);
+    let hunks: usize = files.iter().map(|f| f.hunks).sum();
+    let _ = writeln!(
+        out,
+        "Diff:    {} on branch {} (base {})",
+        cap.source.describe(),
+        cap.branch_name,
+        short_sha(&cap.base_sha)
+    );
+    let _ = writeln!(
+        out,
+        "         {}, {}, {}",
+        plural(files.len(), "file"),
+        plural(hunks, "hunk"),
+        plural(cap.raw_diff.len(), "byte")
+    );
+    for file in &files {
+        let _ = writeln!(
+            out,
+            "           {}  {}",
+            file.path,
+            plural(file.hunks, "hunk")
+        );
+    }
+
+    let Some(check) = check else {
+        let _ = writeln!(
+            out,
+            "Packet:  none. The review will show the diff without a packet."
+        );
+        if !write_problems(&mut out, problems) {
+            let _ = writeln!(
+                out,
+                "\nReady to push. Run the same command without --dry-run to send it."
+            );
+        }
+        return out;
+    };
+
+    let display = display_path(cwd, &check.path);
+    let _ = writeln!(out, "Packet:  {display}");
+    if let Some(packet) = &check.packet {
+        let summary = packet::summarize(packet);
+        let _ = writeln!(out, "         title: {}", summary.title);
+        let _ = writeln!(
+            out,
+            "         {}, {} across {}",
+            plural(summary.sections.len(), "section"),
+            plural(summary.hunk_refs, "hunk ref"),
+            plural(summary.files.len(), "file")
+        );
+        for (idx, section) in summary.sections.iter().enumerate() {
+            let _ = writeln!(
+                out,
+                "           {}. {}  {}",
+                idx + 1,
+                section.title,
+                plural(section.hunk_refs, "hunk ref")
+            );
+        }
+    }
+
+    let has_problems = write_problems(&mut out, problems);
+    if check.is_valid() {
+        let next = if has_problems {
+            "Fix the push problems above before you push."
+        } else {
+            "Run the same command without --dry-run to push it."
+        };
+        let _ = writeln!(out, "\nPacket is valid. {next}");
+    } else {
+        let _ = writeln!(
+            out,
+            "\nPacket has {}:",
+            plural(check.issues.len(), "problem")
+        );
+        for line in check.issue_lines(&display) {
+            let _ = writeln!(out, "  {line}");
+        }
+    }
+    out
+}
+
+/// Write the push problems, if any. Returns whether there were any.
+fn write_problems(out: &mut String, problems: &[String]) -> bool {
+    if problems.is_empty() {
+        return false;
+    }
+    let _ = writeln!(out, "\nPush has {}:", plural(problems.len(), "problem"));
+    for problem in problems {
+        let _ = writeln!(out, "  {problem}");
+    }
+    true
+}
+
+/// The packet path relative to the working directory when it is inside it.
+fn display_path(cwd: &Path, path: &Path) -> String {
+    path.strip_prefix(cwd).unwrap_or(path).display().to_string()
 }
 
 fn short_sha(sha: &str) -> &str {

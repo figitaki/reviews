@@ -15,10 +15,6 @@ export const ReviewActivity = {
   mounted() {
     this.states = new Map()
     this.details = this.el.querySelector("details")
-    this.media = window.matchMedia("(min-width: 1200px)")
-    this.onMedia = () => { this.details.open = this.media.matches }
-    this.onMedia()
-    this.media.addEventListener("change", this.onMedia)
     this.onClick = event => {
       if (event.target.closest("[data-activity-mark-all]")) {
         this.readState.markRead(this.activity.threads)
@@ -26,7 +22,8 @@ export const ReviewActivity = {
         return
       }
       const button = event.target.closest("[data-activity-thread]")
-      if (!button) return
+      if (!button || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      event.preventDefault()
       const thread = this.activity.threads.find(thread => thread.id === button.dataset.activityThread)
       if (!thread) return
       this.readState.markRead([thread])
@@ -66,10 +63,12 @@ export const ReviewActivity = {
   renderActivity() {
     const { threads, identityId } = this.activity
     const total = threads.reduce((sum, thread) => sum + this.readState.unread(thread, identityId), 0)
-    this.el.querySelector("[data-activity-count]").textContent = `${total} unread`
-    this.el.querySelector("[data-activity-status]").textContent = threads.length === 0
-      ? "No comments yet."
-      : `${total} unread ${total === 1 ? "comment" : "comments"} from others. Recent threads, newest first.`
+    const unreadThreads = threads.filter(thread => this.readState.unread(thread, identityId) > 0)
+    const count = this.el.querySelector("[data-activity-count]")
+    count.textContent = String(total)
+    count.setAttribute("aria-label", `${total} unread comments`)
+    this.el.querySelector("[data-activity-empty]").hidden = total > 0
+    this.el.querySelector("[data-activity-status]").textContent = `${total} unread comments in ${unreadThreads.length} threads.`
     this.el.querySelector("[data-activity-storage]").textContent = this.readState.persistent
       ? "Read state is saved in this browser, not your account."
       : "Browser storage is unavailable. Read state lasts only while this page is open."
@@ -78,39 +77,36 @@ export const ReviewActivity = {
     const list = this.el.querySelector("[data-activity-list]")
     const focusedId = document.activeElement?.dataset.activityThread
     const existing = new Map([...list.children].map(item => [item.dataset.threadId, item]))
-    const keep = new Set(threads.map(thread => thread.id))
+    const keep = new Set(unreadThreads.map(thread => thread.id))
     for (const [id, item] of existing) if (!keep.has(id)) item.remove()
-    for (const [index, thread] of threads.entries()) {
+    for (const [index, thread] of unreadThreads.entries()) {
       const unread = this.readState.unread(thread, identityId)
       let item = existing.get(thread.id)
       if (!item) {
         item = document.createElement("li")
         item.dataset.threadId = thread.id
-        const button = document.createElement("button")
-        button.type = "button"
+        const button = document.createElement("a")
         button.id = `${this.el.id}-thread-${thread.id}`
         button.className = "review-activity-entry"
         button.dataset.activityThread = thread.id
         item.append(button)
       }
       const button = item.firstElementChild
-      button.dataset.unread = String(unread > 0)
-      const date = new Date(thread.insertedAt)
-      const time = textElement("time", "review-activity-time", date.toLocaleString())
-      time.dateTime = thread.insertedAt
+      button.href = thread.href
+      button.title = thread.filePath
+      const location = thread.line == null ? "Thread" : `${thread.side === "old" ? "−" : "+"}${thread.line}`
+      button.setAttribute("aria-label", `${thread.filePath}, line ${location}, ${unread} unread comments${thread.earlierRevision ? ", earlier revision" : ""}`)
       button.replaceChildren(
         textElement("span", "review-activity-file", thread.filePath),
-        textElement("span", "review-activity-meta", `${thread.author} · ${thread.status}`),
-        textElement("span", "review-activity-preview", thread.preview),
-        time,
-        textElement("span", "review-activity-read", unread > 0 ? `${unread} unread` : "Read"),
+        textElement("span", "review-activity-location", `${location}${thread.earlierRevision ? " (earlier)" : ""}`),
+        textElement("span", "review-activity-read", String(unread)),
       )
       if (list.children[index] !== item) list.insertBefore(item, list.children[index] || null)
     }
     // Moving an existing item in response to a reply can otherwise drop focus.
     if (focusedId) {
-      const focused = [...list.querySelectorAll("button")].find(button => button.dataset.activityThread === focusedId)
-      focused?.focus({ preventScroll: true })
+      const focused = [...list.querySelectorAll("a")].find(button => button.dataset.activityThread === focusedId)
+      ;(focused || this.details.querySelector("summary")).focus({ preventScroll: true })
     }
   },
 
@@ -118,7 +114,6 @@ export const ReviewActivity = {
     this.el.removeEventListener("click", this.onClick)
     window.removeEventListener("storage", this.onStorage)
     window.removeEventListener("reviews:open-thread", this.onOpen)
-    this.media.removeEventListener("change", this.onMedia)
   },
 }
 
