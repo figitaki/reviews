@@ -898,9 +898,9 @@ fn diff_index(raw_diff: &str) -> DiffIndex {
                     continue;
                 }
                 hunk.row_count += 1;
-                if (line.starts_with('+') && !line.starts_with("+++"))
-                    || (line.starts_with('-') && !line.starts_with("---"))
-                {
+                // File headers (`--- a/`, `+++ b/`) only come before the first `@@`,
+                // so inside a hunk a row like `--- note` is a removed `-- note` line.
+                if line.starts_with('+') || line.starts_with('-') {
                     hunk.changed_rows.insert(hunk.row_count);
                 }
             }
@@ -1119,6 +1119,26 @@ Second thought.
         assert!(issue
             .message
             .contains("does not cover changed lines `lib/a.ex`#2:L2, L3"));
+    }
+
+    #[test]
+    fn counts_hunk_rows_that_look_like_file_headers_as_changed() {
+        // Removing `-- note` and adding `++ x` give rows `--- note` and `+++ x`.
+        let diff = "diff --git a/q.sql b/q.sql\n--- a/q.sql\n+++ b/q.sql\n@@ -1,2 +1,2 @@\n select 1;\n--- note\n+++ x\n";
+        let index = diff_index(diff);
+        let hunks = &index["q.sql"];
+        assert_eq!(hunks.len(), 1);
+        assert_eq!(hunks[0].row_count, 3);
+        assert_eq!(hunks[0].changed_rows, BTreeSet::from([2, 3]));
+
+        let check = check_file("packet.md", "# T\n\n## S\n@hunk q.sql#1:L1-L2", diff);
+        let issue = only_issue(check.issues);
+        assert!(issue
+            .message
+            .contains("does not cover changed line `q.sql`#1:L3"));
+
+        let check = check_file("packet.md", "# T\n\n## S\n@hunk q.sql#1", diff);
+        assert!(check.is_valid(), "issues = {:#?}", check.issues);
     }
 
     #[test]

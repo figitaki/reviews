@@ -623,6 +623,12 @@
   grid-template-columns: var(--guide-rail-w) minmax(0, 1fr);
 }
 
+/* Split diffs only run on wide screens, so split guide prose gets a
+   character-based measure instead of the 52rem default. */
+.review-packet-shell.is-guide-split {
+  --guide-measure: 72ch;
+}
+
 .review-packet-shell.is-outline-hidden {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -1013,14 +1019,6 @@ details[open] > summary .review-collapse-icon,
   font-size: 13px;
 }
 
-.review-guide-section-state {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 18px;
-}
-
 .review-section-state-icon {
   width: 15px;
   height: 15px;
@@ -1230,6 +1228,13 @@ details[open] > summary .review-collapse-icon,
   overflow: visible;
   border-bottom: 1px solid transparent;
   padding: 8px;
+}
+
+/* Context prose belongs to the hunk after it: sit close to that card and
+   leave the wider gap above, so ownership reads at a glance. */
+.review-packet-row.is-markdown:has(+ .review-packet-row.is-hunk) {
+  margin-bottom: -8px;
+  padding-bottom: 0;
 }
 
 .review-packet-row.is-markdown .review-packet-markdown {
@@ -1827,6 +1832,7 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-add);
 }
 
+.reviews-diff-header-discussions,
 .reviews-diff-header-viewed {
   position: relative;
   min-height: 28px;
@@ -2755,6 +2761,14 @@ details[open] > summary .review-collapse-icon,
     max-width: 60vw;
   }
 
+  /* Below 480px the brand shows only its mark, so the account name can use
+     the width the label gave up. */
+  @media (max-width: 480px) {
+    .review-page .ds-shell-actions .review-button {
+      max-width: 100%;
+    }
+  }
+
   /* Keep the signed-out button compact without shrinking its tap area. */
   .review-page .ds-shell-actions > a.review-button {
     position: relative;
@@ -2920,6 +2934,18 @@ details[open] > summary .review-collapse-icon,
     padding: 18px 8px 56px;
   }
 
+  /* Diffs use the full screen width: no side borders or corners, and in the
+     packet the card cancels the grid's 8px inline padding. Top and bottom
+     borders still separate stacked files. */
+  .review-hunk-card {
+    border-inline-width: 0;
+    border-radius: 0;
+  }
+
+  .review-packet-grid .review-hunk-card {
+    margin-inline: -8px;
+  }
+
   .review-guide-shell {
     position: relative;
     top: auto;
@@ -2974,8 +3000,7 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-guide-panel {
-    max-height: none;
-    overflow: visible;
+    display: none;
   }
 
   .review-guide-panel-inner {
@@ -3046,24 +3071,56 @@ details[open] > summary .review-collapse-icon,
   }
 }
 
+/* Phone section header: the section heading leads, then its meta and
+   state. Eyebrow → title → meta → state, instead of the meta row sitting
+   between the eyebrow and the heading. The review title stays in the
+   compact toolbar at its toolbar size. */
+@media (max-width: 480px) {
+  .review-section-header-eyebrow {
+    display: contents;
+  }
+
+  .review-section-header .review-guide-eyebrow {
+    order: 0;
+  }
+
+  .review-section-header-title {
+    order: 1;
+    font-size: clamp(22px, 6.4vw, 26px);
+    line-height: 1.2;
+  }
+
+  .review-section-header-meta {
+    order: 2;
+  }
+
+  .review-section-header-state {
+    order: 3;
+  }
+}
 /* Markdown document previews share the active Reviews theme. */
-.review-markdown-toolbar { display: flex; align-items: center; gap: .25rem; padding: .5rem .75rem; border-bottom: 1px solid var(--ds-line); }
+.review-markdown-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; padding: .5rem .75rem; border-bottom: 1px solid var(--ds-line); }
+.review-markdown-toolbar button:disabled { opacity: .5; cursor: not-allowed; }
+.review-markdown-discussions { margin-left: auto; text-decoration: underline; text-underline-offset: .15em; }
 .review-markdown-toolbar button { flex-shrink: 0; }
 .review-markdown-toolbar [aria-pressed="true"] { background: var(--ds-hover); font-weight: 650; }
 .review-markdown-toolbar button:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: 2px; }
 .review-markdown-notice { min-width: 0; margin: 0 0 0 .5rem; font-size: .8rem; color: var(--ds-muted); }
 .review-markdown-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--ds-line); }
 .review-markdown-side { min-width: 0; }
+.review-markdown-side:only-child { grid-column: 1 / -1; }
+.review-markdown-change-label { display: block; margin-bottom: .25rem; color: var(--ds-muted); font: 500 .7rem var(--font-sans); text-align: left; }
+.review-markdown-relative-link { text-decoration: underline dotted; }
 .review-markdown-side + .review-markdown-side { border-left: 1px solid var(--ds-line); }
 .review-markdown-side-label { padding: .35rem 1rem; font-size: .75rem; color: var(--ds-muted); }
 .review-rich-markdown { padding: 1rem 1.5rem; overflow-wrap: anywhere; line-height: 1.65; color: var(--ds-text); }
 .review-rich-markdown .review-markdown-change { border-left: 3px solid var(--ds-add); padding-left: .75rem; }
 .review-markdown-side.is-before .review-markdown-change { border-left-color: var(--ds-del); }
 .review-rich-markdown > * + * { margin-top: 1rem; }
-.review-rich-markdown :is(h1,h2,h3,h4,h5,h6) { font-weight: 650; line-height: 1.3; margin-block: 1.25rem .65rem; }
-.review-rich-markdown h1 { font-size: 1.8rem; }
-.review-rich-markdown h2 { font-size: 1.5rem; }
-.review-rich-markdown h3 { font-size: 1.2rem; }
+.review-rich-markdown [data-markdown-heading] { font-weight: 650; line-height: 1.3; margin-block: 1.25rem .65rem; }
+.review-rich-markdown [data-markdown-heading="h1"] { font-size: 1.8rem; }
+.review-rich-markdown [data-markdown-heading="h2"] { font-size: 1.5rem; }
+.review-rich-markdown [data-markdown-heading="h3"] { font-size: 1.2rem; }
 .review-rich-markdown ul { list-style: disc; padding-left: 1.5rem; }
 .review-rich-markdown ol { list-style: decimal; padding-left: 1.5rem; }
 .review-rich-markdown blockquote { border-left: 3px solid var(--ds-line); padding-left: 1rem; }

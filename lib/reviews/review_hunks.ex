@@ -157,13 +157,18 @@ defmodule Reviews.ReviewHunks do
 
   defp partial_line_range?(_hunk, _line_start, _line_end), do: false
 
+  # File headers (`--- a/`, `+++ b/`) only come before the first `@@`; inside a
+  # hunk, a row like `--- note` is a removed `-- note` line.
   defp changed_line_stats(raw_diff) do
-    Enum.reduce(String.split(raw_diff, "\n"), {0, 0}, fn line, {additions, deletions} ->
+    raw_diff
+    |> String.split("\n")
+    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
+    |> Enum.reduce({0, 0}, fn line, {additions, deletions} ->
       cond do
-        String.starts_with?(line, "+") && !String.starts_with?(line, "+++") ->
+        String.starts_with?(line, "+") ->
           {additions + 1, deletions}
 
-        String.starts_with?(line, "-") && !String.starts_with?(line, "---") ->
+        String.starts_with?(line, "-") ->
           {additions, deletions + 1}
 
         true ->
