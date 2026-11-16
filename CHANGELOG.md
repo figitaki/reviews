@@ -7,6 +7,8 @@ still stabilizing.
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-11-16
+
 ### Security
 
 - Restrict browser scripts to same-origin assets, disable embedded objects, and
