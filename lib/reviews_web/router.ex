@@ -53,6 +53,14 @@ defmodule ReviewsWeb.Router do
     plug :put_review_robots_header
   end
 
+  # MCP has no session cookie or CSRF token; FastestMCP checks the bearer
+  # token, Host and Origin itself. See ReviewsWeb.MCP.Server.
+  pipeline :mcp do
+    plug :require_mcp_enabled
+    plug :put_review_robots_header
+    plug :put_no_store_header
+  end
+
   scope "/", ReviewsWeb do
     pipe_through :browser
 
@@ -149,6 +157,13 @@ defmodule ReviewsWeb.Router do
     get "/me", MeController, :show
   end
 
+  scope "/" do
+    pipe_through :mcp
+
+    forward "/mcp", ReviewsWeb.MCP.Server,
+      allowed_hosts: {ReviewsWeb.MCP.Server, :allowed_hosts, []}
+  end
+
   # Enable LiveDashboard in development
   if Application.compile_env(:reviews, :dev_routes) do
     import Phoenix.LiveDashboard.Router
@@ -163,6 +178,19 @@ defmodule ReviewsWeb.Router do
   # Crawler directives only; review links remain anonymously accessible.
   defp put_review_robots_header(conn, _opts) do
     put_resp_header(conn, "x-robots-tag", "noindex, nofollow, noarchive")
+  end
+
+  defp put_no_store_header(conn, _opts), do: put_resp_header(conn, "cache-control", "no-store")
+
+  defp require_mcp_enabled(conn, _opts) do
+    if ReviewsWeb.MCP.Server.enabled?() do
+      conn
+    else
+      conn
+      |> put_resp_content_type("application/json")
+      |> send_resp(404, JSON.encode!(%{errors: %{detail: "Not Found"}}))
+      |> halt()
+    end
   end
 
   # No cookies are read here, so any origin may call. A preflight ends here.

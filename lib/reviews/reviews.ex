@@ -25,6 +25,20 @@ defmodule Reviews.Reviews do
   end
 
   @doc """
+  True when `actor` belongs to the account that owns the review: the author's
+  human identity or any agent identity of the same user.
+  """
+  def owned_by?(%Review{author_id: author_id}, %Identity{owner_user_id: owner_id})
+      when not is_nil(owner_id) do
+    Repo.exists?(
+      from i in Identity,
+        where: i.id == ^author_id and i.owner_user_id == ^owner_id
+    )
+  end
+
+  def owned_by?(%Review{}, _actor), do: false
+
+  @doc """
   Creates a review along with its initial patchset (#1) in a single transaction.
 
   Returns `{:ok, %{review: review, patchset: patchset, files: files}}` or
@@ -79,15 +93,8 @@ defmodule Reviews.Reviews do
 
   Returns `{:error, :forbidden}` without writing when the actor is not an owner.
   """
-  def append_patchset(%Review{} = review, %Identity{owner_user_id: owner_id}, attrs)
-      when not is_nil(owner_id) and is_map(attrs) do
-    owner? =
-      Repo.exists?(
-        from i in Identity,
-          where: i.id == ^review.author_id and i.owner_user_id == ^owner_id
-      )
-
-    if owner?, do: append_patchset(review, attrs), else: {:error, :forbidden}
+  def append_patchset(%Review{} = review, %Identity{} = actor, attrs) when is_map(attrs) do
+    if owned_by?(review, actor), do: append_patchset(review, attrs), else: {:error, :forbidden}
   end
 
   def append_patchset(%Review{}, _actor, attrs) when is_map(attrs),
@@ -142,6 +149,60 @@ defmodule Reviews.Reviews do
 
   def get_patchset!(id), do: Repo.get!(Patchset, id)
 
+  def get_patchset_by_number(%Review{id: review_id}, number) when is_integer(number) do
+    Repo.get_by(Patchset, review_id: review_id, number: number)
+  end
+
+  @doc "The packet of one patchset, without loading its diff."
+  def get_packet(%{id: patchset_id}) do
+    Repo.one(from p in Patchset, where: p.id == ^patchset_id, select: p.packet)
+  end
+
+  def get_file(%{id: patchset_id}, path) when is_binary(path) do
+    Repo.get_by(File, patchset_id: patchset_id, path: path)
+  end
+
+  @doc """
+  Revision metadata without diffs or packets, oldest first, with file and line
+  totals from the stored file rows. For readers that must not load every
+  revision's raw diff.
+  """
+  def list_patchset_summaries(%Review{id: review_id}) do
+    stats =
+      from f in File,
+        join: p in Patchset,
+        on: p.id == f.patchset_id,
+        where: p.review_id == ^review_id,
+        group_by: f.patchset_id,
+        select: %{
+          patchset_id: f.patchset_id,
+          files: count(f.id),
+          additions: coalesce(sum(f.additions), 0),
+          deletions: coalesce(sum(f.deletions), 0)
+        }
+
+    Repo.all(
+      from p in Patchset,
+        where: p.review_id == ^review_id,
+        left_join: s in subquery(stats),
+        on: s.patchset_id == p.id,
+        order_by: [asc: p.number],
+        select: %{
+          id: p.id,
+          number: p.number,
+          pushed_at: p.pushed_at,
+          branch_name: p.branch_name,
+          base_sha: p.base_sha,
+          packet_present: not is_nil(p.packet),
+          stats: %{
+            files: coalesce(s.files, 0),
+            additions: coalesce(s.additions, 0),
+            deletions: coalesce(s.deletions, 0)
+          }
+        }
+    )
+  end
+
   def latest_patchset(%Review{id: review_id}) do
     Repo.one(
       from p in Patchset,
@@ -160,6 +221,33 @@ defmodule Reviews.Reviews do
 
   def list_files(%Patchset{id: patchset_id}) do
     Repo.all(from f in File, where: f.patchset_id == ^patchset_id, order_by: [asc: f.path])
+  end
+
+  def list_files(%{id: patchset_id}, paths) when is_list(paths) do
+    Repo.all(
+      from f in File,
+        where: f.patchset_id == ^patchset_id and f.path in ^paths,
+        order_by: [asc: f.path]
+    )
+  end
+
+  @doc "File metadata of a revision without diffs, in path order, one page at a time."
+  def list_file_summaries(%{id: patchset_id}, offset, limit) do
+    Repo.all(
+      from f in File,
+        where: f.patchset_id == ^patchset_id,
+        order_by: [asc: f.path],
+        offset: ^offset,
+        limit: ^limit,
+        select: %{
+          path: f.path,
+          old_path: f.old_path,
+          status: f.status,
+          additions: f.additions,
+          deletions: f.deletions,
+          bytes: coalesce(fragment("octet_length(?)", f.raw_diff), 0)
+        }
+    )
   end
 
   defp next_patchset_number(review_id) do

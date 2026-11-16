@@ -169,6 +169,19 @@ packet sections. It lists every packet problem with `file:line`, flags an
 empty review title or `--update` slug, and exits with status 1 if there are
 any problems. It cannot check that the slug exists or that your token works.
 
+## MCP (prototype)
+
+The server can also serve agents over MCP at `/mcp`, using the same API token.
+It is on in dev and on preview apps, and off in production unless
+`MCP_ENABLED=true`. For example, with Claude Code:
+
+```sh
+claude mcp add --transport http reviews http://localhost:4000/mcp \
+  --header "Authorization: Bearer rev_..."
+```
+
+See [docs/MCP.md](docs/MCP.md) for the tools, access rules, and other clients.
+
 ## Layout
 
 - `lib/reviews/` — domain contexts and schemas.

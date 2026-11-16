@@ -7,6 +7,13 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+### Added
+
+- Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with
+  an existing API token and can read reviews, packet sections, diffs and
+  threads, and post comments, resolve threads, and push reviews and revisions
+  for reviews their account owns. See `docs/MCP.md`.
+
 ## [0.0.1] - 2026-11-16
 
 The first non-alpha release promotes the existing hosted workflow: a settled
