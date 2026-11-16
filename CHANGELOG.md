@@ -2,8 +2,8 @@
 
 All notable changes to Reviews will be tracked here.
 
-Reviews uses semver with prerelease tags while the CLI and hosted service are
-still stabilizing.
+Reviews uses semantic versioning. The first non-alpha release is 0.0.1;
+later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
@@ -15,6 +15,11 @@ still stabilizing.
   for reviews their account owns. See `docs/MCP.md`.
 
 ## [0.0.1] - 2026-11-16
+
+The first non-alpha release promotes the existing hosted workflow: a settled
+review packet contract and working comments, replies, resolution and reopening.
+It does not require existing hosted users to migrate their CLI configuration.
+See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 
 ### Security
 
@@ -125,7 +130,7 @@ still stabilizing.
   topbar controls are at least 44px tall.
 - Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
   now requires Elixir `~> 1.20`.
-- Phoenix 1.8.13, LiveView 1.2.11, Phoenix LiveDashboard 0.9.1, Bandit 1.12.5,
+- Phoenix 1.8.13, LiveView 1.2.11, Phoenix LiveDashboard 0.9.1, Bandit 1.14.1,
   Ecto SQL 3.14, Tailwind CLI 4.3.0 and other dependency updates.
 - JSON encoding uses Elixir's built-in `JSON` module instead of Jason for
   Phoenix, Postgrex (`jsonb` columns) and Ueberauth. The `jason` package stays
