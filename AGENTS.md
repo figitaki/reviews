@@ -21,6 +21,23 @@ This file is for every coding agent (Claude Code, Codex, Cursor, …). `CLAUDE.m
 
 CI (`.github/workflows/ci.yml`) runs format check, compile with warnings as errors, `bun install --frozen-lockfile`, `mix assets.build`, and `mix test`. Match it locally before pushing.
 
+## Review packets for PRs
+
+Every PR we push, including drafts, must include an up-to-date review packet link in the PR description's **Reviews Packet** section (`- Packet: <URL>`), so reviewers can find and review it. Use the printed `/r/<slug>` URL on `https://reviews-dev.fly.dev` or a reviewer-accessible preview host; name the preview host when using one. A localhost link is not accessible to reviewers.
+
+Follow [writing-review-packets](skills/writing-review-packets/SKILL.md). After committing the changes, capture the full PR diff explicitly (the CLI defaults to only `HEAD~1..HEAD`):
+
+```sh
+# For a PR targeting main; use the PR's actual base branch if different.
+git fetch origin main
+reviews push --dry-run --range origin/main...HEAD --packet /path/to/packet.md
+reviews push --range origin/main...HEAD --packet /path/to/packet.md
+# After each PR revision, refresh the packet and append to the same review.
+reviews push --update <slug> --range origin/main...HEAD --packet /path/to/packet.md
+```
+
+Run these from the PR checkout with the CLI configured for the intended review host. Keep packet prose and hunk references synchronized with the latest pushed PR head and base, covering every changed line exactly once. Refresh the packet after each push or rebase, verify the latest patchset matches the PR diff, and keep the PR description's link current. Use the unpinned review URL so reviewers open the latest patchset. Validate each revision with `--dry-run` before uploading; the CLI also validates packet structure and coverage during upload.
+
 ## Where things are
 
 - `lib/reviews/` contexts: `reviews.ex` (reviews, patchsets), `threads.ex`, `packet_section_decisions.ex`, `anchoring.ex`, `accounts.ex` (users, agent identities, API tokens), `code_snapshots.ex` + `code_storage/` (optional code.storage backend).
