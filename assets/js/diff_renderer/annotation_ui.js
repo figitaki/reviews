@@ -499,7 +499,7 @@ export function attributionDetails(attribution, author) {
       ...row("Workload", "not established", claim("Poppy 1.0 has no workload proof")),
       ...row("Delegation", "owner approval in Reviews", claim("no signed delegation chain")),
       ...tokenRow(attribution.token_binding, row, claim),
-      ...(attribution.link_revoked ? row("Status", "Disconnected by its owner after this comment") : []),
+      ...(attribution.link_revoked ? row("Status", "Disconnected after this comment") : []),
     ]),
   ])
 }

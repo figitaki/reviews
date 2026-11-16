@@ -96,7 +96,8 @@ defmodule Reviews.OAuth do
           {:redirect_error, "invalid_request", request}
 
         # RFC 9449 §10: an optional SHA-256 JWK thumbprint the code is bound to.
-        not (is_nil(request.dpop_jkt) or request.dpop_jkt =~ ~r/\A[A-Za-z0-9_-]{43}\z/) ->
+        not (is_nil(request.dpop_jkt) or
+                 (is_binary(request.dpop_jkt) and request.dpop_jkt =~ ~r/\A[A-Za-z0-9_-]{43}\z/)) ->
           {:redirect_error, "invalid_request", request}
 
         true ->

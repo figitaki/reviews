@@ -214,7 +214,9 @@ defmodule Reviews.Poppy.TokensTest do
       Tokens.verify_dpop_proof(List.wrap(proofs), request, Keyword.take(opts, [:now]))
     end
 
-    test "accepts the RFC 9449 example proofs once, with the RFC's key thumbprint" do
+    # Replay is checked with fresh proofs below: these proofs are from 2019, so
+    # their replay entries are already expired and may be pruned at once.
+    test "accepts the RFC 9449 example proofs, with the RFC's key thumbprint" do
       v = "test/support/fixtures/poppy/rfc9449_vectors.json" |> File.read!() |> JSON.decode!()
       t = v["token_request"]
       r = v["resource_request"]
@@ -222,7 +224,6 @@ defmodule Reviews.Poppy.TokensTest do
       resource_opts = [method: r["method"], url: r["url"], now: r["now"]]
 
       assert {:ok, v["jkt"]} == verify_proof(t["proof"], token_opts)
-      assert {:error, :replayed} = verify_proof(t["proof"], token_opts)
 
       assert {:error, :ath_mismatch} =
                verify_proof(r["proof"], [access_token: "another-token"] ++ resource_opts)

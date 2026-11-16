@@ -73,20 +73,32 @@ async function importRoot() {
   return { key, kid: jwk.kid }
 }
 
-// The spec forbids connecting to loopback, private, or link-local addresses for URLs another
-// party gave us unless configured on purpose (spec 3). --allow-private-addresses is that.
+// The spec requires HTTPS for every URL another party gave us, and forbids connecting to
+// loopback, private, or link-local addresses unless configured on purpose (spec 3).
+// --allow-private-addresses is that; it never allows plain HTTP.
 async function checkAddress(url) {
+  if (!String(url).startsWith("https://")) throw new Error(`Not an HTTPS URL: ${url}`)
   if (flags["allow-private-addresses"]) return
-  const { host } = new URL(url)
-  for (const { address } of await lookup(host.replace(/^\[|\]$/g, ""), { all: true })) {
-    if (/^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|::1$|f[cd]|fe[89ab])/i.test(address)) {
-      throw new Error(`${host} resolves to ${address}, a private address. Pass --allow-private-addresses to test locally.`)
+  const { hostname } = new URL(url)
+  for (const { address } of await lookup(hostname.replace(/^\[|\]$/g, ""), { all: true })) {
+    if (privateAddress(address)) {
+      throw new Error(`${hostname} resolves to ${address}, a private address. Pass --allow-private-addresses to test locally.`)
     }
   }
 }
 
+// IPv4-mapped IPv6 addresses (::ffff:10.0.0.1, or ::ffff:a00:1 as URL parsing writes them)
+// are checked as the IPv4 address they map to.
+function privateAddress(address) {
+  const mapped = /^::ffff:(?:(\d+\.\d+\.\d+\.\d+)|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/i.exec(address)
+  if (mapped) {
+    const [hi, lo] = [parseInt(mapped[2], 16), parseInt(mapped[3], 16)]
+    address = mapped[1] || [hi >> 8, hi & 255, lo >> 8, lo & 255].join(".")
+  }
+  return /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|::1?$|f[cd]|fe[89ab])/i.test(address)
+}
+
 async function getJson(url) {
-  if (!url.startsWith("https://")) throw new Error(`Not an HTTPS URL: ${url}`)
   await checkAddress(url)
   const res = await fetch(url, { redirect: "error", headers: { accept: "application/json" } })
   if (!res.ok) throw new Error(`GET ${url}: HTTP ${res.status}`)
@@ -343,9 +355,11 @@ async function main() {
         client_assertion: await clientAssertion(state, company.issuer),
       })
       const res = await fetch(company.as.revocation_endpoint, { method: "POST", body, redirect: "error" })
+      // Keep the credentials until revocation succeeds, so a failed sign-out can be retried.
+      if (!res.ok) throw new Error(`Revocation failed: HTTP ${res.status}. Still signed in; try again.`)
       delete state.tokens[company.issuer]
       save("state.json", state)
-      return console.log(res.ok ? "Signed out." : `Revocation failed: HTTP ${res.status}`)
+      return console.log("Signed out.")
     }
     default:
       console.log("Commands: keygen, sign-in, get, comment, sign-out. See README.md.")

@@ -51,7 +51,10 @@ defmodule Reviews.Poppy.Tokens do
          {:ok, thumbprint} <- JOSE.thumbprint(delegated_key),
          :ok <- expect(jws.header["kid"] == thumbprint, :kid_not_thumbprint),
          {:ok, claims} <- check_session_claims(jws.claims, request, audience, now, window, skew),
-         :ok <- OAuth.Tokens.remember_jti("session", iss, claims.jti, claims.iat + window + skew) do
+         # Kept one second past the last accepted `iat`, so pruning can't drop
+         # the entry while the JWT still verifies.
+         :ok <-
+           OAuth.Tokens.remember_jti("session", iss, claims.jti, claims.iat + window + skew + 1) do
       {:ok,
        Map.merge(claims, %{
          client: client,
@@ -180,7 +183,7 @@ defmodule Reviews.Poppy.Tokens do
          :ok <- expect(iat <= now + skew, :issued_in_future),
          :ok <- check_proof_ath(jws.claims["ath"], request[:access_token]),
          {:ok, jkt} <- JOSE.thumbprint(jwk),
-         :ok <- OAuth.Tokens.remember_jti("dpop", request.client_id, jti, iat + window + skew) do
+         :ok <- OAuth.Tokens.remember_jti("dpop", request.client_id, jti, iat + window + skew + 1) do
       {:ok, jkt}
     else
       {:error, :malformed} -> {:error, :invalid_dpop_proof}

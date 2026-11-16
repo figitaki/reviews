@@ -947,8 +947,10 @@ defmodule ReviewsWeb.PoppyTest do
       conn = token_post(code_params(ctx.agent, code, verifier), [token_proof(ctx.key)])
       assert json_response(conn, 200)["token_type"] == "DPoP"
 
-      {query, _} = get_code(ctx.agent, ctx.owner, ctx.identity, %{"dpop_jkt" => "short"})
-      assert query["error"] == "invalid_request"
+      for bad <- ["short", [Agent.thumbprint(ctx.key.public)]] do
+        {query, _} = get_code(ctx.agent, ctx.owner, ctx.identity, %{"dpop_jkt" => bad})
+        assert query["error"] == "invalid_request"
+      end
     end
 
     test "without a proof at sign-in, tokens stay Bearer and can't be sent as DPoP", ctx do
