@@ -16,6 +16,14 @@ defmodule ReviewsWeb.ReviewListLiveTest do
     refute has_element?(view, "#nav-reviews")
   end
 
+  test "signing in from the list returns to it, filters included", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/reviews?status=open")
+
+    sign_in = ~p"/auth/github?#{[return_to: "/reviews?status=open"]}"
+    assert has_element?(view, "#reviews-sign-in[href='#{sign_in}']")
+    assert has_element?(view, ".l-nav-signin[href='#{sign_in}']")
+  end
+
   test "signed-in user sees their reviews and a nav link", %{conn: conn} do
     carey = user!("carey")
     conner = user!("conner")

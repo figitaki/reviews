@@ -27,13 +27,16 @@ defmodule ReviewsWeb.ReviewListLive do
      |> assign(:next_offset, nil)
      |> assign(:now, DateTime.utc_now())
      |> assign(:filters, %{})
+     |> assign(:return_to, ~p"/reviews")
      |> assign(:filter_form, to_form(%{}, as: :filters))
      |> stream_configure(:reviews, dom_id: &"review-#{&1.review.id}")
      |> stream(:reviews, [])}
   end
 
   @impl true
-  def handle_params(params, _uri, socket) do
+  def handle_params(params, uri, socket) do
+    %URI{path: path, query: query} = URI.parse(uri)
+
     filters =
       params
       |> Map.take(@filter_keys ++ ["offset"])
@@ -52,6 +55,7 @@ defmodule ReviewsWeb.ReviewListLive do
     {:noreply,
      socket
      |> assign(:filters, filters)
+     |> assign(:return_to, if(query, do: "#{path}?#{query}", else: path))
      |> assign(:filter_form, to_form(form_params, as: :filters))
      |> assign(:count, length(result.entries))
      |> assign(:offset, result.offset)
@@ -74,7 +78,11 @@ defmodule ReviewsWeb.ReviewListLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <main id="reviews-index" class="l-page design-page">
-        <Layouts.landing_topbar current_user={@current_user} active={:reviews} />
+        <Layouts.landing_topbar
+          current_user={@current_user}
+          active={:reviews}
+          return_to={@return_to}
+        />
 
         <div class="design-main is-settings">
           <.ds_page_header
@@ -102,7 +110,11 @@ defmodule ReviewsWeb.ReviewListLive do
                 body="Your list has the reviews you wrote or took part in. Review links still work without signing in."
               >
                 <:actions>
-                  <.link href={~p"/auth/github"} class="ds-button is-primary">
+                  <.link
+                    id="reviews-sign-in"
+                    href={~p"/auth/github?#{[return_to: @return_to]}"}
+                    class="ds-button is-primary"
+                  >
                     Sign in with GitHub
                   </.link>
                 </:actions>
