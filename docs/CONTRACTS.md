@@ -234,7 +234,13 @@ every mounted renderer.
 | Event                             | Payload                      | Meaning                                         |
 | --------------------------------- | ---------------------------- | ----------------------------------------------- |
 | `threads_updated:<file_path>`     | `{ threads: [...] }`         | Published threads in this file changed. Re-render with the new list. |
+| `open_review_thread` | `{ thread_id, file_path, hunk_id? }` | Open and focus a discussion. When `hunk_id` is present, only that Guide renderer handles the event. |
 | `diff_style_updated:<file_path>`  | `{ style: "split" \| "unified" }` | The viewer switched the diff layout.     |
+
+Activity links use `/r/:slug?patchset=N&thread=ID`. They select and expand the
+first Guide hunk containing the thread's anchored line on its diff side. If no
+Guide hunk covers it, navigation falls back to `/r/:slug/changes` with the same
+query. Outdated discussions link to their originating revision.
 
 The patchset-pushed banner is rendered by LiveView itself (no hook event).
 When LiveView receives `{:patchset_pushed, n}` on the `"review:<slug>"`

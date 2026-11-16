@@ -9,6 +9,60 @@ defmodule ReviewsWeb.ReviewLiveTest do
   alias Reviews.Reviews, as: ReviewsCtx
   alias Reviews.Threads
 
+  test "activity previews exclude the viewer's replies and self-only threads" do
+    comment = fn id, author_id, body ->
+      %{
+        id: id,
+        author_id: author_id,
+        author: %{display_name: nil, handle: "person-#{author_id}"},
+        body: body,
+        inserted_at: ~U[2026-11-14 00:00:00Z]
+      }
+    end
+
+    threads = [
+      %{
+        id: 1,
+        file_path: "one.ex",
+        side: "new",
+        anchor: %{"line_number_hint" => 42},
+        status: "open",
+        comments: [comment.(1, 2, "Other feedback"), comment.(3, 1, "My reply")]
+      },
+      %{
+        id: 2,
+        file_path: "two.ex",
+        side: "old",
+        anchor: %{"line_number_hint" => 7},
+        status: "open",
+        comments: [comment.(2, 1, "Only me")]
+      }
+    ]
+
+    data = fn identity ->
+      [json] =
+        render_component(&ReviewsWeb.ReviewLive.ActivityComponents.activity/1,
+          review: %{id: 1, slug: "example"},
+          threads: threads,
+          current_identity: identity,
+          patchset_number: 2
+        )
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#review-activity")
+        |> LazyHTML.attribute("data-activity")
+
+      JSON.decode!(json)
+    end
+
+    assert [entry] = data.(%{id: 1})["threads"]
+    assert %{"id" => "1", "line" => 42, "side" => "new", "comments" => [%{"id" => "1"}]} = entry
+    assert entry["href"] == "/r/example?patchset=2&thread=1"
+    refute Map.has_key?(entry, "preview")
+    refute Map.has_key?(entry, "author")
+
+    assert [%{"id" => "1"}, %{"id" => "2"}] = data.(nil)["threads"]
+  end
+
   defp snapshot!(review) do
     {:ok, snapshot} = ReviewView.snapshot(review, nil, [])
     snapshot
@@ -1272,6 +1326,69 @@ defmodule ReviewsWeb.ReviewLiveTest do
         thread_id: ^thread_id,
         file_path: "lib/foo.ex"
       })
+    end
+
+    test "activity and direct thread links open the first covering Guide hunk", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Comment destinations",
+          raw_diff: """
+          diff --git a/example.ex b/example.ex
+          --- a/example.ex
+          +++ b/example.ex
+          @@ -1 +1 @@
+          -old
+          +new
+          @@ -20 +30 @@
+          -before
+          +after
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Guide",
+            "sections" =>
+              Enum.map([1, 2, 2], fn index ->
+                %{
+                  "title" => "Hunk #{index}",
+                  "rows" => [%{"kind" => "hunk", "path" => "example.ex", "hunk_index" => index}]
+                }
+              end)
+          }
+        })
+
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, author, %{
+          "file_path" => "example.ex",
+          "side" => "new",
+          "body" => "**Check** this",
+          "thread_anchor" => %{
+            "granularity" => "line",
+            "line_number_hint" => 30,
+            "line_text" => "after"
+          }
+        })
+
+      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}/changes")
+      render_click(view, "open_activity_thread", %{"thread_id" => thread.id})
+      path = ~p"/r/#{review.slug}?#{[patchset: 1, thread: thread.id]}"
+      assert_patch(view, path)
+      assert has_element?(view, ~s|#packet-section-1 [data-hunk-expanded="true"]|)
+      refute has_element?(view, "#packet-section-0")
+      refute has_element?(view, "#packet-section-2")
+      thread_id = thread.id
+
+      assert_push_event(view, "open_review_thread", %{
+        thread_id: ^thread_id,
+        file_path: "example.ex",
+        hunk_id: "packet-section-1-row-0--hunk-example-ex-2"
+      })
+
+      {:ok, direct, _} = live(conn, path)
+      assert has_element?(direct, ~s|#packet-section-1 [data-hunk-expanded="true"]|)
+      refute has_element?(direct, "#diff-files")
     end
 
     test "hunk viewed state is shared between packet and changes views", %{

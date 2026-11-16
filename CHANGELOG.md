@@ -7,6 +7,14 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Security
+
+- Restrict browser scripts to same-origin assets, disable embedded objects, and
+  restrict development WebSocket origins to the configured loopback port.
+
+- Update Ecto to 3.14.3 to fix unbounded query cache growth from interpolated
+  JSON paths and splice lists (CVE-2026-118391).
+
 ### Added
 
 - Recent comment activity with unread counts, thread links, and read state saved
@@ -29,6 +37,9 @@ still stabilizing.
   unrelated review routes.
 - All reviews use edge-to-edge diff cards and smaller packet gutters on mobile,
   not only reviews containing Markdown files.
+- Comments render safe Markdown. The collapsible comment sidebar lists only
+  unread thread locations, without message previews; links prefer the first
+  covering hunk in the Guide and fall back to Diff when needed.
 - Preview deployments can provision and delete per-PR databases through
   Fly Managed Postgres v2, without granting SQL database-owner privileges.
 - Selecting diff text offers a row-end comment button instead of opening a
