@@ -103,18 +103,23 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
 
     test "rejects a title over 255 characters with a validation error",
          %{conn: conn, raw_token: raw} do
-      conn =
-        conn
-        |> put_req_header("authorization", "Bearer #{raw}")
-        |> put_req_header("content-type", "application/json")
-        |> post(~p"/api/v1/reviews", %{
-          "title" => String.duplicate("t", 256),
-          "raw_diff" => "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
-        })
+      # Postgres counts code points. "e\u0301" is one grapheme but two code
+      # points, so 128 of them must fail too.
+      for title <- [String.duplicate("t", 256), String.duplicate("e\u0301", 128)] do
+        conn =
+          conn
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> put_req_header("content-type", "application/json")
+          |> post(~p"/api/v1/reviews", %{
+            "title" => title,
+            "raw_diff" =>
+              "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+          })
 
-      assert json_response(conn, 422) == %{
-               "errors" => %{"title" => ["should be at most 255 character(s)"]}
-             }
+        assert json_response(conn, 422) == %{
+                 "errors" => %{"title" => ["should be at most 255 character(s)"]}
+               }
+      end
     end
 
     test "stores the token identity as review author", %{

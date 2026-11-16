@@ -29,7 +29,7 @@ defmodule Reviews.Reviews.Review do
     review
     |> cast(attrs, @required ++ @optional)
     |> validate_required(@required)
-    |> validate_length(:title, max: 255)
+    |> validate_length(:title, max: 255, count: :codepoints)
     |> validate_inclusion(:visibility, @visibilities)
     |> unique_constraint(:slug)
   end

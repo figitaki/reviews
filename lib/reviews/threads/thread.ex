@@ -38,7 +38,7 @@ defmodule Reviews.Threads.Thread do
     thread
     |> cast(attrs, @required ++ @optional)
     |> validate_required(@required)
-    |> validate_length(:file_path, max: 255)
+    |> validate_length(:file_path, max: 255, count: :codepoints)
     |> validate_inclusion(:side, @sides)
     |> validate_inclusion(:status, @statuses)
   end
