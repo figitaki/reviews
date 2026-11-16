@@ -18,7 +18,7 @@ defmodule ReviewsWeb.DesignSystemComponents do
       <header class="ds-shell-topbar">
         <.link navigate={@home} class="design-brand" aria-label={"#{@brand} home"}>
           <span class="design-brand-mark" aria-hidden="true">R</span>
-          <span>{@brand}</span>
+          <span class="design-brand-label">{@brand}</span>
         </.link>
 
         <nav :if={@nav != []} class="ds-shell-nav" aria-label="Primary">

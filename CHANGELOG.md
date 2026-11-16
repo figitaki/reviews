@@ -27,9 +27,11 @@ still stabilizing.
 - Comments follow matching code across revisions. Discussions whose code changed
   stay available on their original revision rather than drifting onto other lines.
 
-- Markdown files in a diff open in a rendered Preview with Before and After
-  excerpts. Source shows the exact lines and comments. Raw HTML, scripts and
-  unsafe links stay escaped.
+- Markdown diffs offer rendered Preview and exact Source views. Files open in
+  Preview, including files with discussions. Explicit choices persist per review
+  and file. Discussion buttons and thread links open Source for that visit,
+  including from collapsed headers. Raw HTML, scripts and unsafe links stay
+  escaped.
 
 ### Changed
 
@@ -37,6 +39,17 @@ still stabilizing.
   November 10, 2026 at 18:31:06.937 UTC; hold merge until November 17 at
   18:31:06.937 UTC under the seven-day dependency rule.
 
+- Markdown excerpts with missing fence, table or indentation context use Source
+  with an explanation. New/deleted documents render in one complete panel.
+  Large documents use virtualized Source; smaller previews reuse cached content.
+  Preview changes include text labels as well as color, and document headings
+  stay below review headings. Repository-relative links no longer navigate to
+  unrelated review routes.
+- All reviews use edge-to-edge diff cards and smaller packet gutters on mobile,
+  not only reviews containing Markdown files.
+- On phones, diffs, their file headers and their unmodified-lines separators
+  use the full screen width, without a side gutter or rounded corners, while
+  Guide prose keeps a 16px inset from the screen edge. Desktop is unchanged.
 - Comments render safe Markdown. The collapsible comment sidebar lists only
   unread thread locations, without message previews; links prefer the first
   covering hunk in the Guide and fall back to Diff when needed.
@@ -87,6 +100,11 @@ still stabilizing.
   diagram rendered ahead of time.
 - Review packets use one centered heading and prose layout in split and stacked
   diffs. Hiding section navigation shows every section in that layout.
+- With split diffs, guide prose uses a 72ch measure. Context prose sits closer
+  to the hunk it introduces. On phones the section heading comes before its
+  meta row.
+- Guide rail ticks are named by section number and title. The decision glyph
+  has its own label, which the tick references as its description.
 - Typography uses shared system-sans reading and interface roles. Decision
   controls have a padded, rounded sticky surface.
 - Review titles, revisions and matching view controls share a sticky toolbar.
@@ -94,6 +112,9 @@ still stabilizing.
 - Mobile review navigation uses one compact sticky row; the brand/account row
   scrolls away, Guide/Diff use icons, and multiple revisions use a native
   selector. Anonymous sign-in prompts stay in the section flow on phones.
+- Below 480px the topbar brand shows only its "R" mark, and the account menu
+  uses the freed width before a long user name truncates. On touch screens the
+  topbar controls are at least 44px tall.
 - Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI). `mix.exs`
   now requires Elixir `~> 1.20`. Elixir 1.20.4 includes the fix for
   CVE-2026-75758.
@@ -123,9 +144,16 @@ still stabilizing.
 
 ### Fixed
 
+- GitHub sign-in now returns you to the page you started from, such as a
+  review, instead of the home page. Only local paths are accepted; anything
+  else goes home.
+
 - Decode Git-quoted filenames consistently in CLI validation, uploaded file
   metadata, and review hunk lookup, including non-ASCII paths.
 
+- Changed lines whose text starts with `--` or `++`, such as a removed SQL
+  `-- note` comment, now count as changes. Packet coverage checks require them,
+  and file and hunk +/- counts include them.
 - Rail height and section jumps account for both headers, including wrapped
   mobile controls.
 - Section jumps use native scrolling instead of a frame-by-frame animation,

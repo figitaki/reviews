@@ -80,7 +80,10 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_params(params, _uri, socket) do
+  def handle_params(params, uri, socket) do
+    %URI{path: path, query: query} = URI.parse(uri)
+    socket = assign(socket, :return_to, if(query, do: "#{path}?#{query}", else: path))
+
     case parse_optional_patchset(params["patchset"]) do
       {:ok, patchset_number} ->
         case refresh_snapshot(socket, patchset_number: patchset_number) do
@@ -504,7 +507,7 @@ defmodule ReviewsWeb.ReviewLive do
     <div class="review-page min-h-screen">
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
-          <.user_menu current_user={@current_user} />
+          <.user_menu current_user={@current_user} return_to={@return_to} />
         </:actions>
 
         <% packet = @selected_patchset && @selected_patchset.packet %>
@@ -610,6 +613,7 @@ defmodule ReviewsWeb.ReviewLive do
                 published_threads={@published_threads}
                 current_user={@current_user}
                 editing_decision_index={@editing_decision_index}
+                return_to={@return_to}
                 diff_style={@diff_style}
                 expanded_hunk_ids={@expanded_hunk_ids}
                 show_packet_outline={show_packet_outline}
@@ -642,10 +646,14 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   attr :current_user, :any, default: nil
+  attr :return_to, :string, default: "/"
 
   defp user_menu(%{current_user: nil} = assigns) do
     ~H"""
-    <a href="/auth/github" class="review-button review-button-secondary">
+    <a
+      href={~p"/auth/github?#{[return_to: @return_to]}"}
+      class="review-button review-button-secondary"
+    >
       Sign in
     </a>
     """
@@ -865,10 +873,8 @@ defmodule ReviewsWeb.ReviewLive do
     |> Map.get(:display_raw_diff, "")
     |> to_string()
     |> String.split("\n")
-    |> Enum.count(fn line ->
-      !String.starts_with?(line, ["diff --git", "index ", "--- ", "+++ ", "@@ "]) &&
-        String.trim(line) != ""
-    end)
+    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
+    |> Enum.count(&(!String.starts_with?(&1, "@@ ") && String.trim(&1) != ""))
   end
 
   defp update_hunk_view(socket, _params, _action) when is_nil(socket.assigns.current_user) do

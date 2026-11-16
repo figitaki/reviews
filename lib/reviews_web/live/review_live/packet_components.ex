@@ -16,6 +16,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
   attr :current_user, :any, required: true
+  attr :return_to, :string, default: "/"
   attr :diff_style, :string, required: true
   attr :expanded_hunk_ids, :any, required: true
   attr :editing_decision_index, :integer, default: nil
@@ -58,7 +59,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       <div class={[
         "review-packet-shell",
         @show_packet_outline && "has-outline",
-        !@show_packet_outline && "is-outline-hidden"
+        !@show_packet_outline && "is-outline-hidden",
+        @show_packet_outline && @diff_style == "split" && "is-guide-split"
       ]}>
         <.packet_guide_shell
           :if={@show_packet_outline}
@@ -119,6 +121,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 section={section}
                 editing={@editing_decision_index == section.index}
                 current_user={@current_user}
+                return_to={@return_to}
                 next_section={@packet_outline_sections_by_index[section.index + 1]}
                 show_nav={@show_packet_outline}
               />
@@ -218,14 +221,18 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-target_id={section.target_id}
             title={"#{section.title} — #{section.status_label}"}
             style={"--guide-item-delay: #{min(section.index + 1, 6) * 24}ms"}
-            aria-label={"#{pad2(section.index + 1)} #{section.title}; decision: #{section.status_label}"}
+            aria-label={"#{pad2(section.index + 1)} #{section.title}"}
+            aria-describedby={section.effective_status && "review-guide-tick-#{section.index}-state"}
             aria-current={if(section.index == @active_section_index, do: "true", else: "false")}
           >
             <span class="review-edge-tick-number">{pad2(section.index + 1)}</span>
             <span
               :if={section.effective_status}
+              id={"review-guide-tick-#{section.index}-state"}
               class={["review-edge-tick-state", "is-#{section.effective_status}"]}
-              aria-hidden="true"
+              role="img"
+              aria-label={"Decision: #{section.status_label}"}
+              title={"Decision: #{section.status_label}"}
             >
               <.section_status_icon status={section.effective_status} />
             </span>
@@ -497,6 +504,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   attr :section, :map, required: true
   attr :current_user, :any, default: nil
+  attr :return_to, :string, default: "/"
   attr :next_section, :map, default: nil
   attr :show_nav, :boolean, default: false
   attr :editing, :boolean, default: false
@@ -591,7 +599,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             </span>
           </button>
         <% else %>
-          <.link href={~p"/auth/github"} class="review-packet-section-signin">
+          <.link
+            href={~p"/auth/github?#{[return_to: @return_to]}"}
+            class="review-packet-section-signin"
+          >
             Sign in to record a section decision
           </.link>
         <% end %>
@@ -1603,6 +1614,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           data-side="new"
           data-patchset-number={@selected_patchset && @selected_patchset.number}
           data-raw-diff={@hunk.display_raw_diff}
+          data-full-diff={
+            @file.status in ["added", "deleted"] &&
+              String.match?(@file.path, ~r/\.(md|markdown|mdown|mkd)$/i) && @file.raw_diff
+          }
           data-threads={threads_json(@published_threads, @file.path)}
           data-signed-in={if @current_user, do: "true", else: "false"}
           data-diff-style={@diff_style}
