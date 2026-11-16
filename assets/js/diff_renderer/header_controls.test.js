@@ -21,32 +21,45 @@ test("header controls consume the click before running their action", () => {
   assert.equal(calls, 1)
 })
 
-test("Markdown mode defaults to Source for discussions and remembers choices per review and file", () => {
+test("Markdown files default to Preview, and saved choices win per review and file", () => {
   const original = globalThis.window
   const saved = new Map()
   globalThis.window = {
     location: { pathname: "/r/one" },
-    localStorage: { getItem: key => saved.get(key) },
+    localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
     matchMedia: () => ({ matches: false, addEventListener() {} }),
   }
-  const container = { addEventListener() {} }
+  const container = { addEventListener() {}, querySelector: () => null }
   const mount = (threads = [], filePath = "a.md") => new VanillaDiffRenderer({
     container, filePath, threads, rawDiff: `diff --git a/${filePath} b/${filePath}\n--- a/${filePath}\n+++ b/${filePath}\n@@ -1 +1 @@\n-old\n+new\n`,
   })
   try {
+    // Discussions no longer change the default.
     assert.equal(mount().preview, true)
-    assert.equal(mount([{}]).preview, false)
-    saved.set("reviews:markdown-view:/r/one:a.md", "preview")
     assert.equal(mount([{}]).preview, true)
-    globalThis.window.location.pathname = "/r/one/changes"
-    assert.equal(mount([{}]).preview, true)
-    assert.equal(mount([{}], "b.md").preview, false)
     saved.set("reviews:markdown-view:/r/one:a.md", "source")
-    assert.equal(mount().preview, false)
-    globalThis.window.location.pathname = "/r/two"
     assert.equal(mount([{}]).preview, false)
+    globalThis.window.location.pathname = "/r/one/changes"
+    assert.equal(mount().preview, false)
+    assert.equal(mount([{}], "b.md").preview, true)
+    globalThis.window.location.pathname = "/r/two"
+    assert.equal(mount([{}]).preview, true)
+
+    // Jumping to a discussion shows Source for this visit only.
+    globalThis.window.location.pathname = "/r/one"
+    saved.set("reviews:markdown-view:/r/one:a.md", "preview")
+    const visit = mount([{}])
+    visit.render = () => {}
+    visit.selectMarkdownMode(false, false)
+    assert.equal(visit.preview, false)
+    assert.equal(saved.get("reviews:markdown-view:/r/one:a.md"), "preview")
+    assert.equal(mount([{}]).preview, true)
+    // A toolbar choice is saved.
+    visit.selectMarkdownMode(false)
+    assert.equal(saved.get("reviews:markdown-view:/r/one:a.md"), "source")
+
     globalThis.window.localStorage.getItem = () => { throw new Error("Storage disabled") }
-    assert.equal(mount().preview, true)
+    assert.equal(mount([{}]).preview, true)
   } finally {
     globalThis.window = original
   }

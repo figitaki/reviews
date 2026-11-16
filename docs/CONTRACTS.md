@@ -191,9 +191,11 @@ unique DOM id, and `phx-update="ignore"` (the hook owns its DOM tree).
 | `data-signed-in`       | string   | `"true"` or `"false"`. Signed-out viewers get a sign-in prompt instead of a composer. |
 | `data-diff-style`      | string   | `"split"` or `"unified"`.                                |
 
-Markdown files with discussions default to Source; other files default to Preview
-unless the excerpt is ambiguous or exceeds 1,500 rendered lines / 200 KiB. Explicit
-mode choices are stored locally per review URL and file path, across revisions.
+Markdown files default to Preview, including files with discussions, unless the
+excerpt is ambiguous or exceeds 1,500 rendered lines / 200 KiB. Explicit mode
+choices are stored locally per review URL and file path, across revisions.
+Opening a discussion (a discussion button or `open_review_thread`) switches that
+file to Source for the current page without changing the stored choice.
 Preview DOM is cached for the lifetime of its renderer, independently of thread,
 viewed, theme and layout updates. Large files use Source's virtualized renderer.
 Added/deleted files preview their complete document with a single panel. Other

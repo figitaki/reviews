@@ -166,12 +166,15 @@ export class VanillaDiffRenderer {
   }
 
   get preview() {
-    return !this.markdownState?.reason && (this.preferredPreview ?? !this.threads?.length)
+    return !this.markdownState?.reason && (this.preferredPreview ?? true)
   }
 
-  selectMarkdownMode(preview) {
+  // Toolbar choices are saved; jumping to a discussion only switches this visit.
+  selectMarkdownMode(preview, persist = true) {
     this.preferredPreview = preview
-    try { window.localStorage.setItem(this.modeKey, preview ? "preview" : "source") } catch { /* Optional persistence. */ }
+    if (persist) {
+      try { window.localStorage.setItem(this.modeKey, preview ? "preview" : "source") } catch { /* Optional persistence. */ }
+    }
     this.render()
     this.container.querySelector('.review-markdown-toolbar [aria-pressed="true"]')?.focus({ preventScroll: true })
   }
@@ -184,7 +187,7 @@ export class VanillaDiffRenderer {
       className: header ? "reviews-diff-header-discussions" : "review-button review-button-ghost review-markdown-discussions",
       "aria-label": `Show ${count} ${count === 1 ? "discussion" : "discussions"} in Source`,
       onclick: event => stopHeaderEvent(event, () => {
-        this.selectMarkdownMode(false)
+        this.selectMarkdownMode(false, false)
         if (this.collapsed()) {
           this.focusSourceOnExpand = true
           this.onToggleHunk?.()
