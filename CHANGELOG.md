@@ -92,6 +92,9 @@ still stabilizing.
 
 ### Fixed
 
+- Decode Git-quoted filenames consistently in CLI validation, uploaded file
+  metadata, and review hunk lookup, including non-ASCII paths.
+
 - Rail height and section jumps account for both headers, including wrapped
   mobile controls.
 - Section jumps use native scrolling instead of a frame-by-frame animation,
