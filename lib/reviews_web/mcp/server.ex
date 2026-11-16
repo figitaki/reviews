@@ -278,7 +278,8 @@ defmodule ReviewsWeb.MCP.Server do
         input_schema:
           object(
             Map.merge(push_props, %{
-              "title" => %{"type" => "string", "minLength" => 1, "maxLength" => 300},
+              # reviews.title is varchar(255).
+              "title" => %{"type" => "string", "minLength" => 1, "maxLength" => 255},
               "description" => %{"type" => "string", "maxLength" => 20_000}
             }),
             ["title", "raw_diff"]

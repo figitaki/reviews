@@ -138,7 +138,8 @@ defmodule ReviewsWeb.MCP.Handlers do
             Enum.with_index(section.rows),
             start,
             left,
-            fn {row, index} -> {index, section_row(row, index, hunks_by_path)} end
+            fn {_row, index} -> index end,
+            fn {row, index} -> section_row(row, index, hunks_by_path) end
           )
 
         if rows == [] and next != nil do
@@ -286,10 +287,11 @@ defmodule ReviewsWeb.MCP.Handlers do
 
         {page, next} =
           stream_items(
-            Enum.map(comments, &{&1, &1.id}),
+            comments,
             start,
             room!(args, header),
-            fn {comment, id} -> {id, comment_parts(comment)} end
+            & &1.id,
+            &comment_parts/1
           )
 
         # A full page of comments may have more after it.
@@ -672,10 +674,11 @@ defmodule ReviewsWeb.MCP.Handlers do
   # `{key, offset}`: the first item at or after `key` continues its text from
   # `offset`. Returns `{entries, next}`, where `next` is `{key, offset}` of
   # the first byte not returned, or nil when everything was returned.
-  defp stream_items(items, {start_key, start_offset}, left, parts) do
+  defp stream_items(items, {start_key, start_offset}, left, key, render) do
+    # Lazy, so items before the cursor and after a full page are never rendered.
     items
-    |> Enum.map(parts)
-    |> Enum.drop_while(fn {key, _} -> key < start_key end)
+    |> Stream.drop_while(&(key.(&1) < start_key))
+    |> Stream.map(&{key.(&1), render.(&1)})
     |> Enum.reduce_while({[], left}, fn {key, {meta, text_key, text}}, {acc, left} ->
       from = if key == start_key, do: start_offset, else: 0
 
@@ -698,8 +701,14 @@ defmodule ReviewsWeb.MCP.Handlers do
     base_cost = Budget.cost(entry(meta, text_key, "", from, false)) + 4
     text_budget = left - base_cost - slack
 
+    # Text already returned in full (or empty) is complete; its empty field is
+    # in base_cost, so it needs no text budget.
     {chunk, next} =
-      if text_budget >= 0, do: Budget.fit_text(text, from, text_budget), else: {"", from}
+      cond do
+        from >= byte_size(text) -> {"", nil}
+        text_budget >= 0 -> Budget.fit_text(text, from, text_budget)
+        true -> {"", from}
+      end
 
     cond do
       text_budget < 0 or (chunk == "" and from < byte_size(text)) ->
@@ -938,6 +947,8 @@ defmodule ReviewsWeb.MCP.Handlers do
               problem != nil,
               do: problem
 
+        problems = problems ++ coverage_problems(packet, hunks_by_path)
+
         if problems == [],
           do: :ok,
           else: {:error, "Invalid packet: " <> Enum.join(Enum.take(problems, 10), "; ")}
@@ -972,13 +983,66 @@ defmodule ReviewsWeb.MCP.Handlers do
     end
   end
 
-  # Rows after the @@ header, as the CLI counts them.
-  defp hunk_row_count(hunk) do
+  defp hunk_row_count(hunk), do: length(hunk_rows(hunk))
+
+  # Rows after the @@ header, numbered as the CLI numbers them: empty strings
+  # and "\\ No newline" markers are not rows.
+  defp hunk_rows(hunk) do
     hunk.raw_diff
     |> String.split("\n")
     |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
     |> Enum.drop(1)
-    |> Enum.count(&(&1 != "" and not String.starts_with?(&1, "\\")))
+    |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "\\")))
+  end
+
+  # Every changed row must be covered exactly once, as the CLI requires, so
+  # the packet view never drops or repeats a change. Rows with other problems
+  # are reported above and skipped here.
+  defp coverage_problems(packet, hunks_by_path) do
+    expected =
+      for {path, hunks} <- hunks_by_path,
+          hunk <- hunks,
+          {line, row} <- Enum.with_index(hunk_rows(hunk), 1),
+          changed_line?(line),
+          into: MapSet.new(),
+          do: {path, hunk.hunk_index, row}
+
+    covered =
+      for section <- ReviewPacket.sections(packet),
+          row <- section.rows,
+          ReviewPacket.text(row, "kind") == "hunk",
+          is_nil(hunk_row_problem(hunks_by_path, row)),
+          path = ReviewPacket.text(row, "path"),
+          hunk_index = ReviewPacket.int(row, "hunk_index"),
+          hunk = ReviewHunks.find(hunks_by_path, path, hunk_index),
+          first = ReviewPacket.int(row, "line_start") || 1,
+          last = ReviewPacket.int(row, "line_end") || hunk_row_count(hunk),
+          n <- first..last//1,
+          MapSet.member?(expected, {path, hunk_index, n}),
+          reduce: %{} do
+        acc -> Map.update(acc, {path, hunk_index, n}, 1, &(&1 + 1))
+      end
+
+    missing =
+      expected
+      |> Enum.reject(&Map.has_key?(covered, &1))
+      |> Enum.sort()
+      |> Enum.map(fn {path, i, n} -> "changed line #{path}##{i}:L#{n} is not in any hunk row" end)
+
+    repeated =
+      covered
+      |> Enum.filter(fn {_, count} -> count > 1 end)
+      |> Enum.sort()
+      |> Enum.map(fn {{path, i, n}, count} ->
+        "changed line #{path}##{i}:L#{n} is covered #{count} times"
+      end)
+
+    missing ++ repeated
+  end
+
+  defp changed_line?(line) do
+    (String.starts_with?(line, "+") and not String.starts_with?(line, "+++")) or
+      (String.starts_with?(line, "-") and not String.starts_with?(line, "---"))
   end
 
   defp comment_params(_review, %{"thread_id" => thread_id} = args) when not is_nil(thread_id) do

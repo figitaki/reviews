@@ -379,6 +379,21 @@ defmodule ReviewsWeb.MCPTest do
 
       assert Enum.map(listed, & &1["row"]) == Enum.to_list(0..299)
       assert listed |> Enum.filter(& &1["missing"]) |> length() == 30
+
+      # Whatever budget is left after a row's metadata, an empty row comes
+      # back once, complete, and paging never repeats a row.
+      for max_bytes <- 2_000..2_040 do
+        rows =
+          page_all(
+            ctx.owner_token,
+            "reviews_get_packet_section",
+            %{"review" => slug, "section_index" => 0, "max_bytes" => max_bytes},
+            "rows"
+          )
+
+        assert Enum.map(rows, & &1["row"]) == Enum.to_list(0..299)
+        assert Enum.all?(rows, & &1["complete"])
+      end
     end
 
     test "return long paths whole, so they still select the file", ctx do
@@ -651,6 +666,88 @@ defmodule ReviewsWeb.MCPTest do
         })
 
       assert error_text(refused) =~ "is owned by this account"
+    end
+
+    test "require packets to cover every changed line exactly once", ctx do
+      create = fn rows ->
+        call(ctx.agent_token, "reviews_create_review", %{
+          "title" => "Coverage",
+          "raw_diff" => @diff_v1,
+          "packet" => %{"title" => "P", "sections" => [%{"title" => "S", "rows" => rows}]}
+        })
+      end
+
+      hunk = fn path, i, extra ->
+        Map.merge(%{"kind" => "hunk", "path" => path, "hunk_index" => i}, extra)
+      end
+
+      all = [hunk.("lib/a.ex", 1, %{}), hunk.("lib/a.ex", 2, %{}), hunk.("docs/b.md", 1, %{})]
+
+      assert %{slug: _} = create.(all) |> then(&(&1 || flunk("no result")))
+
+      missing = create.(Enum.take(all, 2))
+      assert error_text(missing) =~ "changed line docs/b.md#1:L2 is not in any hunk row"
+
+      repeated = create.(all ++ [hunk.("lib/a.ex", 1, %{"line_start" => 2, "line_end" => 2})])
+      assert error_text(repeated) =~ "changed line lib/a.ex#1:L2 is covered 2 times"
+    end
+
+    test "slice hunks around no-newline markers the way the CLI numbers rows", ctx do
+      raw = """
+      diff --git a/x.txt b/x.txt
+      --- a/x.txt
+      +++ b/x.txt
+      @@ -1 +1 @@
+      -old
+      \\ No newline at end of file
+      +new
+      \\ No newline at end of file
+      """
+
+      rows = [
+        %{
+          "kind" => "hunk",
+          "path" => "x.txt",
+          "hunk_index" => 1,
+          "line_start" => 1,
+          "line_end" => 1
+        },
+        %{
+          "kind" => "hunk",
+          "path" => "x.txt",
+          "hunk_index" => 1,
+          "line_start" => 2,
+          "line_end" => 2
+        }
+      ]
+
+      %{slug: slug} =
+        call!(ctx.agent_token, "reviews_create_review", %{
+          "title" => "Markers",
+          "raw_diff" => raw,
+          "packet" => %{"title" => "P", "sections" => [%{"title" => "S", "rows" => rows}]}
+        })
+
+      %{rows: [first, second]} =
+        call!(ctx.agent_token, "reviews_get_packet_section", %{
+          "review" => slug,
+          "section_index" => 0
+        })
+
+      assert first.diff =~ "-old\n\\ No newline at end of file"
+      refute first.diff =~ "+new"
+      assert second.diff =~ "+new\n\\ No newline at end of file"
+      refute second.diff =~ "-old"
+    end
+
+    test "refuse titles longer than the column", ctx do
+      assert {:error, %{code: :invalid_params}} =
+               FastestMCP.call_tool(
+                 Server,
+                 "reviews_create_review",
+                 %{"title" => String.duplicate("t", 256), "raw_diff" => @diff_v2},
+                 auth_input: bearer(ctx.agent_token)
+               )
     end
 
     test "resolve and reopen threads", ctx do
