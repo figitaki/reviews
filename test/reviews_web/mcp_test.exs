@@ -692,6 +692,34 @@ defmodule ReviewsWeb.MCPTest do
       assert error_text(repeated) =~ "changed line lib/a.ex#1:L2 is covered 2 times"
     end
 
+    test "count hunk rows starting with +++ or --- as changes", ctx do
+      raw = """
+      diff --git a/notes.md b/notes.md
+      --- a/notes.md
+      +++ b/notes.md
+      @@ -1,2 +1,2 @@
+       keep
+      --- note
+      +++ x
+      """
+
+      create = fn extra ->
+        row = Map.merge(%{"kind" => "hunk", "path" => "notes.md", "hunk_index" => 1}, extra)
+
+        call(ctx.agent_token, "reviews_create_review", %{
+          "title" => "Dashes",
+          "raw_diff" => raw,
+          "packet" => %{"title" => "P", "sections" => [%{"title" => "S", "rows" => [row]}]}
+        })
+      end
+
+      context_only = create.(%{"line_start" => 1, "line_end" => 1})
+      assert error_text(context_only) =~ "changed line notes.md#1:L2 is not in any hunk row"
+      assert error_text(context_only) =~ "changed line notes.md#1:L3 is not in any hunk row"
+
+      assert %{slug: _} = create.(%{})
+    end
+
     test "slice hunks around no-newline markers the way the CLI numbers rows", ctx do
       raw = """
       diff --git a/x.txt b/x.txt

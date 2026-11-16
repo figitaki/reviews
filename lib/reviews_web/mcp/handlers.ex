@@ -1040,10 +1040,8 @@ defmodule ReviewsWeb.MCP.Handlers do
     missing ++ repeated
   end
 
-  defp changed_line?(line) do
-    (String.starts_with?(line, "+") and not String.starts_with?(line, "+++")) or
-      (String.starts_with?(line, "-") and not String.starts_with?(line, "---"))
-  end
+  # Hunk-body rows only, so "+++" and "---" are changes here, not file headers.
+  defp changed_line?(line), do: String.starts_with?(line, ["+", "-"])
 
   defp comment_params(_review, %{"thread_id" => thread_id} = args) when not is_nil(thread_id) do
     # A reply keeps its thread's file, side, anchor, and revision.
