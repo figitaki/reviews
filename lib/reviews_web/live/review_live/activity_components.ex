@@ -112,6 +112,10 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
           </svg>
           <span class="review-activity-label">Comments</span>
           <span data-activity-count class="review-activity-count"></span>
+          <%!-- The summary closes the open panel; this shows that it does. --%>
+          <svg class="review-activity-close" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
         </summary>
         <div class="review-activity-body">
           <p data-activity-storage class="sr-only">

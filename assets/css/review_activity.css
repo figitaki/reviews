@@ -39,6 +39,19 @@
   stroke-linejoin: round;
 }
 
+.review-activity-close {
+  display: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  fill: none;
+  stroke: var(--ds-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.review-activity-panel[open] .review-activity-close { display: block; }
+
 .review-activity-count,
 .review-activity-read {
   color: var(--ds-muted);
