@@ -67,44 +67,19 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
       phx-update="ignore"
       data-activity={JSON.encode!(@activity_data)}
     >
-      <%!-- Phones: one floating menu button holds Comments, while any are
-           unread, and, in the guide, Sections. Hidden on wider screens, where
-           the rail shows itself. --%>
+      <%!-- Phones: icon buttons stacked above the section decision button.
+           Sections shows only in the Guide; the comments summary below is the
+           Comments button. Hidden on wider screens. --%>
       <button
-        id={"#{@id}-menu-toggle"}
+        id={"#{@id}-sections"}
         type="button"
-        class="review-quick-toggle"
-        data-quick-toggle
-        aria-expanded="false"
-        aria-controls={"#{@id}-menu"}
-        aria-label="Open review menu"
+        class="review-quick-button"
+        data-quick-sections
+        aria-label="Sections"
+        title="Sections"
       >
-        <.icon name="hero-ellipsis-horizontal" class="review-quick-open" />
-        <.icon name="hero-x-mark" class="review-quick-close" />
+        <.icon name="hero-bars-3" class="review-quick-icon" />
       </button>
-      <div id={"#{@id}-menu"} class="review-quick-menu" data-quick-menu hidden>
-        <button
-          id={"#{@id}-menu-sections"}
-          type="button"
-          class="review-quick-item"
-          data-quick-sections
-        >
-          <span>Sections</span>
-          <.icon name="hero-bars-3" class="review-quick-icon" />
-        </button>
-        <button
-          id={"#{@id}-menu-comments"}
-          type="button"
-          class="review-quick-item"
-          data-quick-comments
-        >
-          <span>Comments</span>
-          <span data-quick-count class="review-activity-count"></span>
-          <svg class="review-activity-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M8 10h8M8 14h5M21 12a9 9 0 0 1-9 9H3l1.5-4A9 9 0 1 1 21 12Z" />
-          </svg>
-        </button>
-      </div>
       <details id={"#{@id}-panel"} class="review-activity-panel">
         <summary id={"#{@id}-summary"} class="review-activity-summary">
           <svg class="review-activity-icon" viewBox="0 0 24 24" aria-hidden="true">

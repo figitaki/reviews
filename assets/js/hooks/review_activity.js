@@ -15,21 +15,8 @@ export const ReviewActivity = {
   mounted() {
     this.states = new Map()
     this.details = this.el.querySelector("details")
-    this.menu = this.el.querySelector("[data-quick-menu]")
-    this.menuToggle = this.el.querySelector("[data-quick-toggle]")
     this.onClick = event => {
-      if (event.target.closest("[data-quick-toggle]")) {
-        this.setMenu(this.menu.hidden)
-        return
-      }
-      if (event.target.closest("[data-quick-comments]")) {
-        this.setMenu(false)
-        this.details.open = true
-        this.details.querySelector("summary").focus({ preventScroll: true })
-        return
-      }
       if (event.target.closest("[data-quick-sections]")) {
-        this.setMenu(false)
         // The guide's section bar scrolls away on phones; bring it back and
         // open its map, the same as pressing its menu button.
         const guide = document.getElementById("review-guide-shell")
@@ -64,17 +51,16 @@ export const ReviewActivity = {
       this.renderActivity()
     }
     this.onOpen = event => this.pushEvent("open_activity_thread", { thread_id: event.detail.threadId })
-    // On phones the menu and the open list float over the code; a tap
-    // elsewhere closes them.
+    // On phones the open list floats over the code; a tap elsewhere or
+    // Escape closes it.
+    const phone = () => window.matchMedia("(max-width: 640px)").matches
     this.onOutside = event => {
-      if (this.el.contains(event.target)) return
-      if (!this.menu.hidden) this.setMenu(false)
-      if (this.details.open && window.matchMedia("(max-width: 640px)").matches) this.details.open = false
+      if (!this.el.contains(event.target) && this.details.open && phone()) this.details.open = false
     }
     this.onKeydown = event => {
-      if (event.key !== "Escape" || this.menu.hidden) return
-      this.setMenu(false)
-      this.menuToggle.focus()
+      if (event.key !== "Escape" || !this.details.open || !phone()) return
+      this.details.open = false
+      this.details.querySelector("summary").focus()
     }
     this.el.addEventListener("click", this.onClick)
     this.el.addEventListener("keydown", this.onKeydown)
@@ -85,12 +71,6 @@ export const ReviewActivity = {
   },
 
   updated() { this.updateActivity() },
-
-  setMenu(open) {
-    this.menu.hidden = !open
-    this.menuToggle.setAttribute("aria-expanded", String(open))
-    this.menuToggle.setAttribute("aria-label", open ? "Close review menu" : "Open review menu")
-  },
 
   updateActivity() {
     this.activity = JSON.parse(this.el.dataset.activity)
@@ -115,11 +95,6 @@ export const ReviewActivity = {
       ? `${this.activity.commentCount} comments, ${total} unread`
       : "No comments")
     this.details.dataset.unread = String(total > 0)
-    this.el.dataset.unread = String(total > 0)
-    // The menu offers Comments only when its list has something to show.
-    const menuCount = this.el.querySelector("[data-quick-count]")
-    menuCount.textContent = `${total} unread`
-    menuCount.setAttribute("aria-label", `${total} unread comments`)
     this.el.querySelector("[data-activity-empty]").hidden = total > 0
     this.el.querySelector("[data-activity-status]").textContent = `${total} unread comments in ${unreadThreads.length} threads.`
     this.el.querySelector("[data-activity-storage]").textContent = this.readState.persistent

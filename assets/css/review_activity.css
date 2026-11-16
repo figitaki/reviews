@@ -123,13 +123,11 @@
   .review-activity-body { max-height: 50dvh; overflow-y: auto; }
 }
 
-/* The review menu exists only on phones. */
-.review-quick-toggle,
-.review-quick-menu { display: none; }
+/* The Sections button exists only on phones. */
+.review-quick-button { display: none; }
 
-/* Phones: one small floating menu button replaces the comments row. It
-   stacks above the section decision button when one is showing, centred on
-   it, and its menu opens upwards. */
+/* Phones: icon-only floating buttons, Sections (Guide only) above Comments,
+   stacked above the section decision button and centred on it. */
 @media (max-width: 640px) {
   .review-activity {
     --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
@@ -142,18 +140,11 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 8px;
+    gap: 12px;
   }
   .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity {
-    --review-quick-right: calc(16px + 6px + env(safe-area-inset-right));
+    --review-quick-right: calc(16px + 4px + env(safe-area-inset-right));
     --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
-  }
-  /* Offer only items with something to open: Comments while any are unread,
-     Sections in the Guide. With neither, there is no menu. */
-  .review-activity[data-unread="false"] [data-quick-comments],
-  .review-page:not(:has([data-guide-flyout-toggle])) [data-quick-sections] { display: none; }
-  .review-page:not(:has([data-guide-flyout-toggle])) .review-activity[data-unread="false"]:not(:has(details[open])) {
-    display: none;
   }
   /* Sections scrolls the Guide map in below the sticky review toolbar, so its
      close button stays visible. */
@@ -167,65 +158,77 @@
     padding-bottom: 72px;
   }
 
-  .review-quick-toggle,
-  .review-quick-item {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
+  .review-quick-button,
+  .review-activity-panel:not([open]) {
+    width: 48px;
+    height: 48px;
     border: 1px solid var(--review-line-strong, var(--ds-line));
+    border-radius: 14px;
     background: var(--ds-panel-raised, var(--ds-panel));
     color: var(--ds-text);
     box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
-    font: inherit;
+  }
+  .review-quick-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     cursor: pointer;
   }
-  .review-quick-toggle {
-    order: 2;
-    width: 44px;
-    border-radius: 14px;
-  }
-  .review-activity[data-unread="true"] .review-quick-toggle {
-    border-color: var(--ds-blue);
-    box-shadow: 0 0 0 1px var(--ds-blue), 0 4px 12px rgb(0 0 0 / 0.18);
-  }
-  .review-quick-toggle .review-quick-open,
-  .review-quick-toggle .review-quick-close { width: 22px; height: 22px; }
-  .review-quick-toggle .review-quick-close,
-  .review-quick-toggle[aria-expanded="true"] .review-quick-open { display: none; }
-  .review-quick-toggle[aria-expanded="true"] .review-quick-close { display: inline-block; }
-
-  .review-quick-menu:not([hidden]) {
-    order: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
-  }
-  .review-quick-item {
-    gap: 8px;
-    padding: 0 14px;
-    border-radius: 22px;
-    font-weight: var(--weight-medium);
-  }
-  .review-quick-icon { width: 18px; height: 18px; }
-  .review-quick-toggle:focus-visible,
-  .review-quick-item:focus-visible {
+  .review-page:not(:has([data-guide-flyout-toggle])) .review-quick-button { display: none; }
+  .review-quick-icon { width: 22px; height: 22px; }
+  .review-quick-button:focus-visible {
     outline: 2px solid var(--ds-focus);
     outline-offset: 2px;
   }
 
-  /* Closed, the comments panel is reached from the menu. Open, it floats
-     above the buttons across the screen. */
-  .review-activity-panel:not([open]) { display: none; }
+  /* Closed, the comments panel is the Comments button: its icon, with the
+     comment count as a badge and a blue outline while any are unread. */
+  .review-activity-panel:not([open]) { overflow: visible; }
+  .review-activity-panel:not([open])[data-unread="true"] {
+    border-color: var(--ds-blue);
+    box-shadow: 0 0 0 1px var(--ds-blue), 0 4px 12px rgb(0 0 0 / 0.18);
+  }
+  .review-activity-panel:not([open]) .review-activity-summary {
+    position: relative;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+  }
+  .review-activity-panel:not([open]) .review-activity-icon { width: 22px; height: 22px; }
+  .review-activity-panel:not([open]) .review-activity-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .review-activity-panel:not([open]) .review-activity-count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border: 1px solid var(--review-line-strong, var(--ds-line));
+    border-radius: 10px;
+    background: var(--ds-panel-raised, var(--ds-panel));
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+  }
+  .review-activity-panel:not([open])[data-unread="true"] .review-activity-count { border-color: var(--ds-blue); }
+  .review-activity-panel:not([open]) .review-activity-count:empty { display: none; }
+
+  /* Open, the list floats above the decision button across the screen. */
   .review-activity:has(details[open]) {
     left: calc(16px + env(safe-area-inset-left));
     right: calc(16px + env(safe-area-inset-right));
   }
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity:has(details[open]) {
-    bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
-  }
-  .review-activity:has(details[open]) :is(.review-quick-toggle, .review-quick-menu) { display: none; }
+  .review-activity:has(details[open]) .review-quick-button { display: none; }
   .review-activity-panel[open] {
     align-self: stretch;
     box-shadow: 0 8px 28px rgb(0 0 0 / 0.22);
