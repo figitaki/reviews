@@ -63,5 +63,13 @@ defmodule Reviews.OAuth.Resource do
   @doc "Fields this resource adds to the issuer's metadata (RFC 8414 §2)."
   @callback authorization_server_metadata() :: map()
 
-  @optional_callbacks protected_resource_metadata: 0, authorization_server_metadata: 0
+  @doc """
+  DPoP proof algorithms (RFC 9449) this resource accepts. A resource that
+  lists any gets tokens bound to the key of a token request's proof.
+  """
+  @callback dpop_signing_algs() :: [String.t()]
+
+  @optional_callbacks protected_resource_metadata: 0,
+                      authorization_server_metadata: 0,
+                      dpop_signing_algs: 0
 end

@@ -72,8 +72,9 @@ config :phoenix, :filter_parameters, [
 ]
 
 # The OAuth issuer (Reviews.OAuth). Each API that accepts its tokens is a
-# Reviews.OAuth.Resource listed here; none is listed yet.
-config :reviews, Reviews.OAuth, resources: []
+# Reviews.OAuth.Resource listed here. A request without `resource` or a scope
+# it recognizes goes to the default.
+config :reviews, Reviews.OAuth, resources: [Reviews.Poppy], default_resource: Reviews.Poppy
 config :postgrex, :json_library, JSON
 
 # Import environment specific config. This must remain at the bottom

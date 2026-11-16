@@ -82,6 +82,7 @@ defmodule Reviews.OAuth do
         state: params["state"],
         scope: params["scope"],
         code_challenge: params["code_challenge"],
+        dpop_jkt: params["dpop_jkt"],
         provider: nil,
         resource: nil
       }
@@ -94,9 +95,14 @@ defmodule Reviews.OAuth do
             not (request.code_challenge =~ ~r/\A[A-Za-z0-9_-]{43}\z/) ->
           {:redirect_error, "invalid_request", request}
 
+        # RFC 9449 §10: an optional SHA-256 JWK thumbprint the code is bound to.
+        not (is_nil(request.dpop_jkt) or
+                 (is_binary(request.dpop_jkt) and request.dpop_jkt =~ ~r/\A[A-Za-z0-9_-]{43}\z/)) ->
+          {:redirect_error, "invalid_request", request}
+
         true ->
           case requested_grant(params["resource"], params["scope"], client) do
-            {:ok, grant} -> {:ok, Map.merge(request, grant)}
+            {:ok, grant} -> {:ok, request |> Map.merge(grant) |> drop_unsupported_dpop()}
             {:error, error} -> {:redirect_error, error, request}
           end
       end
@@ -105,6 +111,20 @@ defmodule Reviews.OAuth do
       {:error, _} -> {:error, :invalid_client}
     end
   end
+
+  # Only a resource that takes DPoP-bound tokens binds codes to a key.
+  defp drop_unsupported_dpop(request) do
+    if dpop?(resource_for(request.provider)), do: request, else: %{request | dpop_jkt: nil}
+  end
+
+  @doc """
+  Whether the resource takes DPoP-bound tokens (RFC 9449): it lists proof
+  algorithms in `dpop_signing_algs/0`, an optional callback.
+  """
+  def dpop?(nil), do: false
+
+  def dpop?(resource),
+    do: function_exported?(resource, :dpop_signing_algs, 0) and resource.dpop_signing_algs() != []
 
   # Which resource the request is for, and its scopes.
   defp requested_grant(resource_param, scope, client) do
@@ -209,6 +229,7 @@ defmodule Reviews.OAuth do
         client_name: request.client.client_name,
         redirect_uri: request.redirect_uri,
         code_challenge: request.code_challenge,
+        dpop_jkt: request.dpop_jkt,
         provider: request.provider,
         resource: request.resource,
         scopes: granted_scopes,
@@ -234,8 +255,14 @@ defmodule Reviews.OAuth do
   Consuming the code and creating its link happen in one transaction. The
   update holds the code's row lock until then, so a concurrent reuse waits
   and finds the link to revoke.
+
+  `dpop_jkt` is the thumbprint of the request's verified DPoP proof key, or
+  nil. For a resource that takes DPoP, the refresh token and access token are
+  bound to it and `token_type` is `DPoP`; without a key they are Bearer. A
+  code whose authorization request named a `dpop_jkt` needs a proof from that
+  key (RFC 9449 §10). Other resources ignore the key.
   """
-  def exchange_code(client_id, auth_method, params) do
+  def exchange_code(client_id, auth_method, params, dpop_jkt \\ nil) do
     code = params["code"]
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
@@ -248,7 +275,7 @@ defmodule Reviews.OAuth do
       Repo.transaction(fn ->
         case Repo.update_all(query, set: [consumed_at: now]) do
           {1, [code_row]} ->
-            redeem_code(code_row, client_id, auth_method, params, now)
+            redeem_code(code_row, client_id, auth_method, params, now, dpop_jkt)
 
           {0, _} ->
             revoke_reused_code(code, client_id, auth_method)
@@ -260,17 +287,19 @@ defmodule Reviews.OAuth do
   end
 
   # A failed check still commits `consumed_at`: a code gets one attempt.
-  defp redeem_code(code_row, client_id, auth_method, params, now) do
+  defp redeem_code(code_row, client_id, auth_method, params, now, dpop_jkt) do
     resource = resource_for(code_row.provider)
+    dpop_jkt = if dpop?(resource), do: dpop_jkt
 
     with :ok <- expect(code_row.client_id == client_id),
          :ok <- expect(DateTime.compare(code_row.expires_at, now) == :gt),
          :ok <- expect(code_row.redirect_uri == params["redirect_uri"]),
          :ok <- check_pkce(code_row.code_challenge, params["code_verifier"]),
+         :ok <- expect(is_nil(code_row.dpop_jkt) or code_row.dpop_jkt == dpop_jkt),
          :ok <- check_auth_method(resource, auth_method),
          :ok <- check_enabled(resource),
          :ok <- check_resource(params["resource"], code_row.resource) do
-      create_link(code_row)
+      create_link(code_row, dpop_jkt)
     else
       {:error, :invalid_target} -> {:error, :invalid_target}
       _ -> {:error, :invalid_grant}
@@ -309,7 +338,7 @@ defmodule Reviews.OAuth do
 
   defp revoke_reused_code(_code, _client_id, _auth_method), do: :ok
 
-  defp create_link(%AuthorizationCode{} = code) do
+  defp create_link(%AuthorizationCode{} = code, dpop_jkt) do
     refresh_token = random_token("ppr_")
 
     Repo.transaction(fn ->
@@ -322,7 +351,8 @@ defmodule Reviews.OAuth do
           subject: code.client_id,
           subject_name: code.client_name,
           scopes: code.scopes,
-          refresh_token_hash: hash(refresh_token)
+          refresh_token_hash: hash(refresh_token),
+          dpop_jkt: dpop_jkt
         })
         |> Repo.insert!()
 
@@ -330,7 +360,7 @@ defmodule Reviews.OAuth do
         set: [identity_link_id: link.id]
       )
 
-      issue_access_token(link, code.scopes)
+      issue_access_token(link, code.scopes, dpop_jkt)
       |> Map.put("refresh_token", refresh_token)
     end)
   end
@@ -342,8 +372,13 @@ defmodule Reviews.OAuth do
   the old one stops working. Presenting a replaced token again means it
   leaked or was copied, so it revokes the link and every token issued under
   it (OAuth 2.1 §4.3.1). Other refresh tokens are not rotated.
+
+  A refresh token bound to a DPoP key needs a proof from that key: a missing
+  proof or another key is `invalid_grant`. An unbound refresh token stays
+  unbound, and the access token is bound to the proof's key if the request
+  has one and the resource takes DPoP (RFC 9449 §5).
   """
-  def refresh(client_id, auth_method, params) do
+  def refresh(client_id, auth_method, params, dpop_jkt \\ nil) do
     hash = hash(params["refresh_token"] || "")
     providers = Enum.map(resources(), & &1.provider())
 
@@ -360,7 +395,9 @@ defmodule Reviews.OAuth do
 
         case link do
           %IdentityLink{} = link ->
-            refresh_link(link, resource_for(link.provider), hash, client_id, auth_method, params)
+            resource = resource_for(link.provider)
+            dpop_jkt = if dpop?(resource), do: dpop_jkt
+            refresh_link(link, resource, hash, client_id, auth_method, params, dpop_jkt)
 
           nil ->
             revoke_reused_refresh_token(hash, client_id, auth_method)
@@ -371,15 +408,16 @@ defmodule Reviews.OAuth do
     result
   end
 
-  defp refresh_link(link, resource, hash, client_id, auth_method, params) do
+  defp refresh_link(link, resource, hash, client_id, auth_method, params, dpop_jkt) do
     with :ok <- expect(link.subject == client_id),
          :ok <- check_auth_method(resource, auth_method),
          :ok <- check_enabled(resource),
          :ok <- expect(active_link?(link)),
+         :ok <- expect(is_nil(link.dpop_jkt) or link.dpop_jkt == dpop_jkt),
          {:ok, scopes} <- requested_scopes(params["scope"], link.scopes, resource),
          :ok <- check_resource(params["resource"], resource.resource()),
          {:ok, refresh_token} <- maybe_rotate(resource, link, hash) do
-      body = issue_access_token(link, scopes)
+      body = issue_access_token(link, scopes, dpop_jkt)
       {:ok, if(refresh_token, do: Map.put(body, "refresh_token", refresh_token), else: body)}
     else
       {:error, :invalid_scope} -> {:error, :invalid_scope}
@@ -465,19 +503,20 @@ defmodule Reviews.OAuth do
   defp active_link?(_), do: false
 
   # Issues an access token and returns the token response.
-  defp issue_access_token(%IdentityLink{} = link, scopes) do
+  defp issue_access_token(%IdentityLink{} = link, scopes, dpop_jkt) do
     token = random_token("ppa_")
 
     Repo.insert!(%AccessToken{
       token_hash: hash(token),
       identity_link_id: link.id,
       scopes: scopes,
+      dpop_jkt: dpop_jkt,
       expires_at: in_seconds(@access_token_ttl)
     })
 
     %{
       "access_token" => token,
-      "token_type" => "Bearer",
+      "token_type" => if(dpop_jkt, do: "DPoP", else: "Bearer"),
       "expires_in" => @access_token_ttl,
       "scope" => Enum.join(scopes, " ")
     }
@@ -526,7 +565,8 @@ defmodule Reviews.OAuth do
   Looks up an access token for the resource whose links have `provider`. It
   is valid only while unexpired and while its link is active, so revoking the
   link takes effect on the next request. A token issued for one resource is
-  invalid at every other.
+  invalid at every other. `dpop_jkt` is the key a DPoP-bound token is bound
+  to, or nil.
   """
   def authenticate_access_token(token, provider) when is_binary(token) do
     now = DateTime.utc_now()
@@ -546,7 +586,7 @@ defmodule Reviews.OAuth do
           {:error, :invalid_token}
         else
           touch_link(link)
-          {:ok, %{link: link, scopes: access_token.scopes}}
+          {:ok, %{link: link, scopes: access_token.scopes, dpop_jkt: access_token.dpop_jkt}}
         end
 
       nil ->

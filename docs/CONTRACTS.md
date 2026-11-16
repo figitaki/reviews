@@ -188,6 +188,27 @@ an `rvc_` ID from registration. Discovery and the JSON endpoints send
 `Access-Control-Allow-Origin: *`. Tokens of one resource are refused by every
 other.
 
+### Poppy API (`/api/poppy/v1`)
+
+Personal Agents use Poppy 1.0 instead of bearer API tokens. Each request carries `Poppy-Session` and
+`Poppy-Version: 1.0`. A signed-in request also carries an access token from Direct Sign-In
+(`/oauth/authorize`, `/oauth/token`). `GET /api/poppy/v1/reviews/:slug` returns the same body as
+`GET /api/v1/reviews/:slug`. `POST /api/poppy/v1/reviews/:slug/comments` takes the same body and
+response as the CLI endpoint and needs the `comments:write` scope. Session errors are HTTP 400 with
+`{"error": "invalid_session" | "session_ended" | "version_unsupported"}`. Token errors are 401 or 403
+in `WWW-Authenticate`, with a `Bearer` and a `DPoP` challenge. A token issued with
+`token_type: "DPoP"` is sent as `Authorization: DPoP <token>` with a `DPoP` proof (RFC 9449). A
+missing or invalid proof is 401 `invalid_dpop_proof`. Bearer API tokens are refused on these routes, and Poppy tokens are refused
+on `/api/v1`. See `docs/POPPY.md`.
+
+Comments posted this way store `attribution` (a map of what was verified) and `identity_link_id`.
+Thread payloads sent to the diff renderer include `comments[].attribution`, which is `null` for
+comments made in the browser or through the CLI. It contains only `provider`, `verified_at`,
+`client_id`, `client_domain`, `client_name_claimed`, `agent_id_claimed` (a boolean), `owner_username`,
+`approved_at`, `link_revoked`, and `token_binding`: `"dpop"` when the comment's access token was
+bound to the agent's DPoP key, `"bearer"` when it wasn't, and `null` for comments recorded before
+Reviews kept the binding.
+
 ### Body size
 
 `Plug.Parsers` is configured with `length: 50_000_000` so diffs up to ~50 MB
