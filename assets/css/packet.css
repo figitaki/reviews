@@ -2906,19 +2906,19 @@ details[open] > summary .review-collapse-icon,
 
   .review-packet-grid,
   .review-packet-shell.has-outline .review-packet-grid {
-    padding: 18px 8px 56px;
+    padding: 18px 16px 56px;
   }
 
   /* Diffs use the full screen width: no side borders or corners, and in the
-     packet the card cancels the grid's 8px inline padding. Top and bottom
-     borders still separate stacked files. */
+     packet the card cancels the grid's 16px inline padding, which the Guide
+     prose keeps. Top and bottom borders still separate stacked files. */
   .review-hunk-card {
     border-inline-width: 0;
     border-radius: 0;
   }
 
   .review-packet-grid .review-hunk-card {
-    margin-inline: -8px;
+    margin-inline: -16px;
   }
 
   .review-guide-shell {
