@@ -67,5 +67,5 @@ Do not reopen these without the maintainer.
 ## Deferred
 
 - Syntax highlighting worker pool for Pierre/Shiki.
-- CSP headers.
+- Broader CSP restrictions for styles, images and connections (script/object restrictions are enabled).
 - Phoenix base-path support (`.plans/phoenix-base-path-support.md`), until a deployment needs it.

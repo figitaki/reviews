@@ -117,8 +117,10 @@ const DiffRenderer = {
     }
     this._systemThemeQuery?.addEventListener?.("change", this._systemThemeListener)
 
-    this.handleEvent("open_review_thread", ({ thread_id, file_path }) => {
-      if (file_path === filePath) this._renderer?.openThread(thread_id)
+    this.handleEvent("open_review_thread", ({ thread_id, file_path, hunk_id }) => {
+      if (file_path === filePath && (!hunk_id || hunk_id === this._island?.hunkId)) {
+        this._renderer?.openThread(thread_id)
+      }
     })
   },
 
