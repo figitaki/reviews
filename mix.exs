@@ -4,7 +4,7 @@ defmodule Reviews.MixProject do
   def project do
     [
       app: :reviews,
-      version: "0.0.1-alpha.2",
+      version: "0.0.1",
       elixir: "~> 1.20",
       description: "Code-review tool for arbitrary diffs (Phoenix + Rust CLI).",
       package: [
@@ -36,7 +36,7 @@ defmodule Reviews.MixProject do
   def application do
     [
       mod: {Reviews.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools, :inets, :ssl]
     ]
   end
 
@@ -82,7 +82,8 @@ defmodule Reviews.MixProject do
       {:ueberauth, "~> 0.10"},
       {:ueberauth_github, "~> 0.8"},
       {:req, "~> 0.5"},
-      {:joken, "~> 2.6"}
+      {:joken, "~> 2.6"},
+      {:fastest_mcp, "~> 1.0.1"}
     ]
   end
 

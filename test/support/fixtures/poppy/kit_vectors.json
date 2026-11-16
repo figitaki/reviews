@@ -1,0 +1,63 @@
+{
+  "source": {
+    "repository": "https://github.com/personal-agent-protocol/personal-agent-protocol",
+    "commit": "85b41ff27e8f6a098d06b71f14d83b1513c728a5",
+    "file": "kit/company/validate/jose.ts"
+  },
+  "now": 1800000000,
+  "issuer": "https://reviews.test",
+  "metadata": {
+    "client_id": "https://kit-agent.example/agent.json",
+    "client_name": "Kit test agent",
+    "jwks_uri": "https://kit-agent.example/jwks.json",
+    "redirect_uris": [
+      "https://kit-agent.example/callback"
+    ],
+    "token_endpoint_auth_method": "private_key_jwt"
+  },
+  "jwks": {
+    "keys": [
+      {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "iQ3utrYwYFSf2GNjswJN1El1S5qUF6mmOgHKSuR80Qk",
+        "y": "sY81nBwHNDYDg6mXOKlXfJ3q3bOn9IeOIfI2Y3OR4FE",
+        "kid": "kit-es256",
+        "alg": "ES256",
+        "use": "sig"
+      },
+      {
+        "kty": "RSA",
+        "n": "z_uU3uqAkxT6L2yfDo8vOW-ZG9FhDoAO4bNxB9rrfML3JB1XueAp2fzKip8UHTPKVWXkyMYaTylKI8FH9RWA42CWr3fXleqrJv6XFAPvBe9H7wSGuNbECN4gSarnKp2qK2Ld8jut4beq5k0ARJY5ttV-PTaIYImzbCz-hYZc0gf3eiVYpmHsvBukvgn9nh3LSnG96Qpu7QjEyqML8YGJRQlsZNmB20AioDsJv85zyTBJ1rG_3zP6n6ZTty_2JAU8MtbTBWqIJU3uIFOvaf1dG1oJrFvq0GimXzYVYHO6P2DDb5Mr_GHNurU8X1KBocRZ3aCnCEF0KFx3XwynnmU-rQ",
+        "e": "AQAB",
+        "kid": "kit-ps384",
+        "alg": "PS384",
+        "use": "sig"
+      }
+    ]
+  },
+  "delegated_key_thumbprint": "RZWueJpBG64fbaoW2j63ATykdEYwpmrGJt2mwcqKwKY",
+  "sessions": {
+    "signed_out": {
+      "method": "GET",
+      "url": "https://reviews.test/api/poppy/v1/reviews/abc",
+      "jwt": "eyJ0eXAiOiJwb3BweS1zZXNzaW9uK2p3dCIsImFsZyI6IkVTMjU2Iiwia2lkIjoiUlpXdWVKcEJHNjRmYmFvVzJqNjNBVHlrZEVZd3BtckdKdDJtd2NxS3dLWSIsInBvcHB5X2RsZyI6ImV5SmhiR2NpT2lKRlV6STFOaUlzSW5SNWNDSTZJbkJ2Y0hCNUxXUmxiR1ZuWVhScGIyNHJhbmQwSWl3aWEybGtJam9pYTJsMExXVnpNalUySW4wLmV5SnBjM01pT2lKb2RIUndjem92TDJ0cGRDMWhaMlZ1ZEM1bGVHRnRjR3hsTDJGblpXNTBMbXB6YjI0aUxDSmpibVlpT25zaWFuZHJJanA3SW10MGVTSTZJa1ZESWl3aVkzSjJJam9pVUMweU5UWWlMQ0o0SWpvaVQydEJiM2hVYldGWVdYZDRTVjh4UjJaSmN6SXlTUzB3VkRFeWFYUnRZVEZtU0haTFltTXlhM0JLUVNJc0lua2lPaUp1WmpOSE5tVXhURU5XY0RoM2REVlpNMmhPWDB4TlFUSnJTMWRwVEc1VlEzaEJOVlIxVEd4eFUxbEJJbjE5TENKcFlYUWlPakUzT1RrNU9UazBNREFzSW1WNGNDSTZNVGd3TURBd05qWXdNQ3dpYW5ScElqb2lhblV6UzBRMVozYzNSakJ0V0Mwd2JFWjVjMVJQVVNKOS5PUVJmaEtLQm04YUVWN1FvcjAyUVdTZm5TR0RWTGZfZG0xWENGb0h0THFXQmdKOWRiR05oNnltalBoUVlyTzM4bm9ha3FsR1JOc1NsdTV1SVNPN1lOUSJ9.eyJpc3MiOiJodHRwczovL2tpdC1hZ2VudC5leGFtcGxlL2FnZW50Lmpzb24iLCJhdWQiOiJodHRwczovL3Jldmlld3MudGVzdCIsInNpZCI6ImtpdF9zZXNzaW9uXzEiLCJzdWIiOiJraXRfdXNlcl8xIiwiaHRtIjoiR0VUIiwiaHR1IjoiaHR0cHM6Ly9yZXZpZXdzLnRlc3QvYXBpL3BvcHB5L3YxL3Jldmlld3MvYWJjIiwiaWF0IjoxNzk5OTk5OTk1LCJqdGkiOiJYQVlEUVdieHppRTgxTkNlU21jU21nIn0.eHqE-dElaVZeqDnf9bBzG0edimV-cEzCEElvLAFOuEV--kvo0Y2LSouhBgViw-ytnrWIY7nNy1vAYEWVpOkRKg"
+    },
+    "ps384_delegation": {
+      "method": "GET",
+      "url": "https://reviews.test/api/poppy/v1/reviews/abc",
+      "jwt": "eyJ0eXAiOiJwb3BweS1zZXNzaW9uK2p3dCIsImFsZyI6IkVTMjU2Iiwia2lkIjoiUlpXdWVKcEJHNjRmYmFvVzJqNjNBVHlrZEVZd3BtckdKdDJtd2NxS3dLWSIsInBvcHB5X2RsZyI6ImV5SmhiR2NpT2lKUVV6TTROQ0lzSW5SNWNDSTZJbkJ2Y0hCNUxXUmxiR1ZuWVhScGIyNHJhbmQwSWl3aWEybGtJam9pYTJsMExYQnpNemcwSW4wLmV5SnBjM01pT2lKb2RIUndjem92TDJ0cGRDMWhaMlZ1ZEM1bGVHRnRjR3hsTDJGblpXNTBMbXB6YjI0aUxDSmpibVlpT25zaWFuZHJJanA3SW10MGVTSTZJa1ZESWl3aVkzSjJJam9pVUMweU5UWWlMQ0o0SWpvaVQydEJiM2hVYldGWVdYZDRTVjh4UjJaSmN6SXlTUzB3VkRFeWFYUnRZVEZtU0haTFltTXlhM0JLUVNJc0lua2lPaUp1WmpOSE5tVXhURU5XY0RoM2REVlpNMmhPWDB4TlFUSnJTMWRwVEc1VlEzaEJOVlIxVEd4eFUxbEJJbjE5TENKcFlYUWlPakUzT1RrNU9UazBNREFzSW1WNGNDSTZNVGd3TURBd05qWXdNQ3dpYW5ScElqb2lUakZIY1djME9WazJjVk55WjJReFREbDFZalZhZHlKOS5DbXVUanczVnhlbVpuV2R0SElCdFg1Tm56cEV3NlJqN29PQy1OMnpQaU9odGNOY3FBdGRITFdZZnpPbWpPWEZnNzV4SUV3YjNzQVIxVERYTlpfRWZoZnpNQmJEdUF2VGpmVDBkZW5nNzl1ZEpKQWRXSlYtY0dvanFSaGJ6QnRGLWZqZW9CZkVVSE90S09EVm1JRURRRnJfWDFGUk00OGoyV3gxXzlZaVUwNDdsZmpyVHpvRHo4X2tEXzctbWxfMm5YOUdrajExWDdwQzR5TjY0U0t6NlRhSXdtOC04Mng2b09vNHFIQlZtRXZ3MkF4OHZqWjFhMkZPSkRfUm9oNndVSnNySURQTmRFY1pWaFo3T3lTbGpoVVV6ckR4VU83NkhvTWRJNVNwTU9ERGx0WGJyOFBiaTE0bW54VlJFT3BsMFZ4SWpmVVFseW5RcWFLN3AtdzE0Z3cifQ.eyJpc3MiOiJodHRwczovL2tpdC1hZ2VudC5leGFtcGxlL2FnZW50Lmpzb24iLCJhdWQiOiJodHRwczovL3Jldmlld3MudGVzdCIsInNpZCI6ImtpdF9zZXNzaW9uXzEiLCJzdWIiOiJraXRfdXNlcl8xIiwiaHRtIjoiR0VUIiwiaHR1IjoiaHR0cHM6Ly9yZXZpZXdzLnRlc3QvYXBpL3BvcHB5L3YxL3Jldmlld3MvYWJjIiwiaWF0IjoxNzk5OTk5OTk1LCJqdGkiOiJYZjFZdjlfendMUVFVbGs5RzdERDRRIn0.WARMxvyd2OQ7wInilOooPPYC7Dlxfn_HPZt8WTXF7medBu6aMjkfP1o6iL6HRZdWqecYJw0hbPLMiYAfBiSwHA"
+    },
+    "signed_in": {
+      "method": "POST",
+      "url": "https://reviews.test/api/poppy/v1/reviews/abc/comments",
+      "access_token": "ppa_kit_access_token",
+      "agent_id": "kit_agent_1",
+      "jwt": "eyJ0eXAiOiJwb3BweS1zZXNzaW9uK2p3dCIsImFsZyI6IkVTMjU2Iiwia2lkIjoiUlpXdWVKcEJHNjRmYmFvVzJqNjNBVHlrZEVZd3BtckdKdDJtd2NxS3dLWSIsInBvcHB5X2RsZyI6ImV5SmhiR2NpT2lKRlV6STFOaUlzSW5SNWNDSTZJbkJ2Y0hCNUxXUmxiR1ZuWVhScGIyNHJhbmQwSWl3aWEybGtJam9pYTJsMExXVnpNalUySW4wLmV5SnBjM01pT2lKb2RIUndjem92TDJ0cGRDMWhaMlZ1ZEM1bGVHRnRjR3hsTDJGblpXNTBMbXB6YjI0aUxDSmpibVlpT25zaWFuZHJJanA3SW10MGVTSTZJa1ZESWl3aVkzSjJJam9pVUMweU5UWWlMQ0o0SWpvaVQydEJiM2hVYldGWVdYZDRTVjh4UjJaSmN6SXlTUzB3VkRFeWFYUnRZVEZtU0haTFltTXlhM0JLUVNJc0lua2lPaUp1WmpOSE5tVXhURU5XY0RoM2REVlpNMmhPWDB4TlFUSnJTMWRwVEc1VlEzaEJOVlIxVEd4eFUxbEJJbjE5TENKcFlYUWlPakUzT1RrNU9UazBNREFzSW1WNGNDSTZNVGd3TURBd05qWXdNQ3dpYW5ScElqb2lhblV6UzBRMVozYzNSakJ0V0Mwd2JFWjVjMVJQVVNKOS5PUVJmaEtLQm04YUVWN1FvcjAyUVdTZm5TR0RWTGZfZG0xWENGb0h0THFXQmdKOWRiR05oNnltalBoUVlyTzM4bm9ha3FsR1JOc1NsdTV1SVNPN1lOUSJ9.eyJpc3MiOiJodHRwczovL2tpdC1hZ2VudC5leGFtcGxlL2FnZW50Lmpzb24iLCJhdWQiOiJodHRwczovL3Jldmlld3MudGVzdCIsInNpZCI6ImtpdF9zZXNzaW9uXzEiLCJzdWIiOiJraXRfdXNlcl8xIiwiYWdlbnRfaWQiOiJraXRfYWdlbnRfMSIsImh0bSI6IlBPU1QiLCJodHUiOiJodHRwczovL3Jldmlld3MudGVzdC9hcGkvcG9wcHkvdjEvcmV2aWV3cy9hYmMvY29tbWVudHMiLCJpYXQiOjE3OTk5OTk5OTUsImp0aSI6IlBERzF6bGtEYTIxaGVYVVZTWWhqZVEiLCJhdGgiOiI5TDhXWFlsRThnT29yX0xrZV9oYkk5S1BtLVRfSUZsbG9aemg1RXVHSHBRIn0.0Cj94le4MqhC91TXNQkN0JuhkSMEs2xbbV13UQ5Cae89xw6d1u-RoS-YbWy3VFQxOUMxmwdTC6pLpgK7irpQHQ"
+    }
+  },
+  "client_assertions": {
+    "es256": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImtpdC1lczI1NiJ9.eyJpc3MiOiJodHRwczovL2tpdC1hZ2VudC5leGFtcGxlL2FnZW50Lmpzb24iLCJzdWIiOiJodHRwczovL2tpdC1hZ2VudC5leGFtcGxlL2FnZW50Lmpzb24iLCJhdWQiOiJodHRwczovL3Jldmlld3MudGVzdCIsImlhdCI6MTc5OTk5OTk5NSwiZXhwIjoxODAwMDAwMTE1LCJqdGkiOiJraXRfYXNzZXJ0aW9uX2VzMjU2In0.kar6a5cnHqKI5rfGLqyUMGJ2tW4tIOd5V2ZaNzH-3yKHBafpIYox9lcdycuwRF63HE1UrtJjpkBFP23xbDlwhQ",
+    "ps384": "eyJhbGciOiJQUzM4NCIsInR5cCI6IkpXVCIsImtpZCI6ImtpdC1wczM4NCJ9.eyJpc3MiOiJodHRwczovL2tpdC1hZ2VudC5leGFtcGxlL2FnZW50Lmpzb24iLCJzdWIiOiJodHRwczovL2tpdC1hZ2VudC5leGFtcGxlL2FnZW50Lmpzb24iLCJhdWQiOiJodHRwczovL3Jldmlld3MudGVzdCIsImlhdCI6MTc5OTk5OTk5NSwiZXhwIjoxODAwMDAwMTE1LCJqdGkiOiJraXRfYXNzZXJ0aW9uX3BzMzg0In0.sjP6hsispX0rl5UQG_5rhUwO4W6er9Q6i3dcl6MZfUHT6DI-kpjlU93SvWryw2MmFhK3GvB-RMSQJbY5bsDQyA6p5jVcb1oFxN2KBXXDG3yVMfvmgG00ZSbadNjRTIXoOy8coxMqjuAAeii6ecwyJZKoRjEro0tdwwkZKNY38ZENyb7Ug5bU2vxN1VyiuAADReXRyqj9YpX2DXFCF5oXzHpZ_HaxAIBaG1G-J7W7hzRGUPKJEjg5TlQKGH91zsJz9c1tS08QxVoAlt1fWjHPOOsAKPZayuw2Q4OOMHhCT2p3HVWPiH4gqW-6DGyAM64eV7uBUZ5Yo1mSIA49oZK-tg"
+  }
+}

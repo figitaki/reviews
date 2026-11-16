@@ -40,7 +40,95 @@ defmodule Reviews.Threads do
 
     Repo.all(query)
     |> Enum.filter(fn thread -> thread.comments != [] end)
-    |> Repo.preload(comments: :author)
+    |> Repo.preload(comments: [:author, :identity_link])
+  end
+
+  @doc "Thread counts by status, such as `%{\"open\" => 2}`."
+  def count_by_status(%Review{id: review_id}) do
+    Repo.all(
+      from t in Thread,
+        where: t.review_id == ^review_id,
+        group_by: t.status,
+        select: {t.status, count(t.id)}
+    )
+    |> Map.new()
+  end
+
+  @doc """
+  One page of threads in id order, after `after_id`, with authors preloaded.
+
+  Filters: `:max_origin_number` (required; threads started on later revisions
+  are left out), `:status`, and `:path`.
+  """
+  def list_thread_page(%Review{id: review_id}, filters, after_id, limit) do
+    review_id
+    |> filtered_threads(filters)
+    |> where([t], t.id > ^after_id)
+    |> order_by([t], asc: t.id)
+    |> limit(^limit)
+    |> preload([:author, :resolved_by])
+    |> Repo.all()
+  end
+
+  def count_threads(%Review{id: review_id}, filters) do
+    review_id |> filtered_threads(filters) |> Repo.aggregate(:count)
+  end
+
+  defp filtered_threads(review_id, filters) do
+    max_origin = Keyword.fetch!(filters, :max_origin_number)
+
+    query =
+      from t in Thread,
+        join: p in assoc(t, :originating_patchset),
+        where: t.review_id == ^review_id and p.number <= ^max_origin
+
+    query =
+      if status = filters[:status], do: where(query, [t], t.status == ^status), else: query
+
+    if path = filters[:path], do: where(query, [t], t.file_path == ^path), else: query
+  end
+
+  @doc "A thread of this review, with its author and resolver, or `{:error, :not_found}`."
+  def get_review_thread(%Review{id: review_id}, thread_id) do
+    with {:ok, id} <- cast_thread_id(thread_id),
+         %Thread{} = thread <- Repo.get_by(Thread, id: id, review_id: review_id) do
+      {:ok, Repo.preload(thread, [:author, :resolved_by])}
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
+  @doc "Comments of a thread in id order, after `after_id`, with authors."
+  def list_comment_page(thread_id, after_id, limit) do
+    Repo.all(
+      from c in Comment,
+        where: c.thread_id == ^thread_id and c.id > ^after_id,
+        order_by: [asc: c.id],
+        limit: ^limit,
+        preload: [:author]
+    )
+  end
+
+  def comment_counts([]), do: %{}
+
+  def comment_counts(thread_ids) do
+    Repo.all(
+      from c in Comment,
+        where: c.thread_id in ^thread_ids,
+        group_by: c.thread_id,
+        select: {c.thread_id, count(c.id)}
+    )
+    |> Map.new()
+  end
+
+  def open_counts_by_path(%Review{id: review_id}, paths) do
+    Repo.all(
+      from t in Thread,
+        where: t.review_id == ^review_id and t.status == "open" and t.file_path in ^paths,
+        group_by: t.file_path,
+        select: {t.file_path, count(t.id)}
+    )
+    |> Map.new()
   end
 
   ## Commenting
@@ -71,7 +159,10 @@ defmodule Reviews.Threads do
   Returns `{:ok, %{thread: t, comment: c}}` or `{:error, reason}`.
   Broadcasts `{:thread_published, thread}` on `"review:<slug>"`.
   """
-  def publish_comment(%Review{} = review, %Identity{} = author, params) when is_map(params) do
+  def publish_comment(review, author, params, attribution \\ nil)
+
+  def publish_comment(%Review{} = review, %Identity{} = author, params, attribution)
+      when is_map(params) do
     file_path = params["file_path"] || params[:file_path]
     side = params["side"] || params[:side]
     body = String.trim(to_string(params["body"] || params[:body] || ""))
@@ -97,20 +188,41 @@ defmodule Reviews.Threads do
       true ->
         with {:ok, existing} <- fetch_reply_thread(review, thread_id),
              {:ok, origin_id} <- originating_patchset_id(review, existing, params) do
-          insert_comment(review, author, existing, file_path, side, anchor, body, origin_id)
+          insert_comment(
+            review,
+            author,
+            existing,
+            file_path,
+            side,
+            anchor,
+            body,
+            origin_id,
+            attribution
+          )
         end
     end
   rescue
     error in [Ecto.InvalidChangesetError, Postgrex.Error] -> {:error, error}
   end
 
-  def publish_comment(%Review{} = review, %User{} = user, params) when is_map(params) do
+  def publish_comment(%Review{} = review, %User{} = user, params, attribution)
+      when is_map(params) do
     with {:ok, identity} <- Accounts.ensure_human_identity(user) do
-      publish_comment(review, identity, params)
+      publish_comment(review, identity, params, attribution)
     end
   end
 
-  defp insert_comment(review, author, existing, file_path, side, anchor, body, origin_id) do
+  defp insert_comment(
+         review,
+         author,
+         existing,
+         file_path,
+         side,
+         anchor,
+         body,
+         origin_id,
+         attribution
+       ) do
     result =
       Repo.transaction(fn ->
         thread = existing || create_thread(review, author, file_path, side, anchor, origin_id)
@@ -120,7 +232,9 @@ defmodule Reviews.Threads do
           |> Comment.changeset(%{
             thread_id: thread.id,
             author_id: author.id,
-            body: body
+            body: body,
+            identity_link_id: attribution && attribution["link_id"],
+            attribution: attribution
           })
           |> Repo.insert!()
 
@@ -227,7 +341,7 @@ defmodule Reviews.Threads do
   defp comments_query do
     from c in Comment,
       order_by: [asc: c.inserted_at],
-      preload: [:author]
+      preload: [:author, :identity_link]
   end
 
   # No thread_id starts a new thread. A thread_id that is not a thread of this
