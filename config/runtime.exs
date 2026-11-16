@@ -29,6 +29,15 @@ config :ueberauth, Ueberauth.Strategy.Github.OAuth,
   client_id: System.get_env("GITHUB_CLIENT_ID"),
   client_secret: System.get_env("GITHUB_CLIENT_SECRET")
 
+# Preview sign-in relay (Reviews.AuthRelay, docs/PREVIEW_ENVS.md). Production
+# is the relay: AUTH_RELAY_SECRET plus the GitHub OAuth app above.
+# Previews are clients: AUTH_RELAY_SECRET plus AUTH_RELAY_URL.
+env_present = fn name -> if System.get_env(name) not in [nil, ""], do: System.get_env(name) end
+
+config :reviews, :auth_relay,
+  secret: env_present.("AUTH_RELAY_SECRET"),
+  url: env_present.("AUTH_RELAY_URL")
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
