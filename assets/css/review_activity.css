@@ -110,6 +110,64 @@
   .review-activity-body { max-height: 50dvh; overflow-y: auto; }
 }
 
+/* Phones: a floating button instead of a row above the section navigation.
+   It stacks above the section decision button when one is showing. */
+@media (max-width: 640px) {
+  .review-activity {
+    --review-activity-fab-bottom: calc(16px + env(safe-area-inset-bottom));
+
+    position: fixed;
+    right: calc(16px + env(safe-area-inset-right));
+    bottom: var(--review-activity-fab-bottom);
+    z-index: 9;
+  }
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity {
+    --review-activity-fab-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
+  }
+  /* Leave room so the buttons never cover the last lines of code. The Guide
+     grid already reserves space for the decision button. */
+  .review-workspace-content { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
+    padding-bottom: 72px;
+  }
+
+  .review-activity-panel:not([open]) {
+    border-radius: 16px;
+    border-color: var(--review-line-strong, var(--ds-line));
+    background: var(--ds-panel-raised, var(--ds-panel));
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
+  }
+  .review-activity-panel:not([open])[data-unread="true"] { border-color: var(--ds-blue); }
+
+  .review-activity-panel:not([open]) .review-activity-summary {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    width: 54px;
+    height: 54px;
+    padding: 0;
+  }
+  .review-activity-panel:not([open]) .review-activity-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .review-activity-panel:not([open]) .review-activity-count { margin: 0; line-height: 1; }
+
+  /* Open, the list floats above the buttons rather than pushing code down. */
+  .review-activity:has(details[open]) {
+    left: calc(16px + env(safe-area-inset-left));
+  }
+  .review-activity-panel[open] {
+    box-shadow: 0 8px 28px rgb(0 0 0 / 0.22);
+  }
+  .review-activity-panel[open] .review-activity-body {
+    max-height: calc(60dvh - var(--review-activity-fab-bottom));
+  }
+}
+
 /* Comments use the same escaped Markdown renderer as the Guide, at UI scale. */
 .review-rich-markdown.review-comment-markdown { padding: 0; font-size: 13px; line-height: 1.5; }
 .review-comment-markdown > :first-child { margin-top: 0; }

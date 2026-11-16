@@ -28,6 +28,8 @@ export const ReviewActivity = {
       if (!thread) return
       this.readState.markRead([thread])
       this.renderActivity()
+      // On phones the open list floats over the code; get out of the way.
+      if (window.matchMedia("(max-width: 640px)").matches) this.details.open = false
       // Navigation owns revealing the section/file, opening the thread and focus.
       window.dispatchEvent(new CustomEvent("reviews:open-thread", {
         detail: { threadId: thread.id, filePath: thread.filePath },

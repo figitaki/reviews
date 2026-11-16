@@ -833,8 +833,10 @@
   gap: 14px;
 }
 
+/* Fill backwards only: a transform kept after the animation would make the
+   body the containing block for the fixed mobile decision button. */
 .review-packet-section.is-open .review-packet-section-body {
-  animation: review-packet-section-open 250ms linear 75ms both;
+  animation: review-packet-section-open 250ms linear 75ms backwards;
 }
 
 @keyframes review-packet-section-open {
