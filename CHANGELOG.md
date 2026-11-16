@@ -70,7 +70,7 @@ still stabilizing.
   now requires Elixir `~> 1.20`. Elixir 1.20.4 includes the fix for
   CVE-2026-75758.
 - Phoenix 1.8.15, LiveView 1.2.12, Phoenix LiveDashboard 0.9.1, Ecto SQL 3.14,
-  Tailwind CLI 4.3.3, esbuild 0.28.2, @pierre/diffs 1.5.1 and other dependency
+  Tailwind CLI 4.3.3, esbuild 0.28.2, @pierre/diffs 1.6.4 and other dependency
   updates. Security patches already on main (Bandit 1.14.1, Plug Crypto 2.2.1,
   Thousand Island 1.6.0, Zod 4.6.7, Phoenix HTML 4.4.0) are kept.
 - JSON encoding uses Elixir's built-in `JSON` module instead of Jason for
