@@ -153,6 +153,32 @@ defmodule ReviewsWeb.ReviewLiveTest do
   describe "anonymous viewer" do
     setup :seed!
 
+    test "new Markdown files expose the complete patch to the preview", %{
+      conn: conn,
+      author: author
+    } do
+      patch = """
+      diff --git a/guide.md b/guide.md
+      new file mode 100644
+      --- /dev/null
+      +++ b/guide.md
+      @@ -0,0 +1,3 @@
+      +```elixir
+      +:ready
+      +```
+      """
+
+      {:ok, %{review: review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "New guide",
+          raw_diff: patch
+        })
+
+      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}/changes")
+      island = element(view, "##{changes_hunk_id(review, "guide.md")}-diff") |> render()
+      assert island |> LazyHTML.from_fragment() |> LazyHTML.attribute("data-full-diff") == [patch]
+    end
+
     test "current and historical review pages discourage indexing", %{review: review} do
       {:ok, _patchset} =
         ReviewsCtx.append_patchset(review, %{
@@ -316,11 +342,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
                "#packet-section-0 .review-packet-row-list + #packet-section-0-decision"
              )
 
+      sign_in_href = ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}"]}"
+
       assert has_element?(
                view,
-               "#packet-section-0-decision .review-packet-section-signin",
+               ~s|#packet-section-0-decision .review-packet-section-signin[href="#{sign_in_href}"]|,
                "Sign in to record a section decision"
              )
+
+      assert has_element?(view, ~s|.review-button[href="#{sign_in_href}"]|, "Sign in")
 
       assert has_element?(view, "#review-packet .review-hunk-card")
       refute has_element?(view, "#review-packet .review-hunk-summary")
@@ -1603,6 +1633,19 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#packet-section-0.is-open")
 
       assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
+
+      assert has_element?(view, ".review-packet-shell.is-guide-split")
+
+      # The rail glyph carries the decision label; the tick keeps a neutral name.
+      assert has_element?(
+               view,
+               ~s|#review-guide-tick-0[aria-label="01 Main change"][aria-describedby="review-guide-tick-0-state"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#review-guide-tick-0-state[role="img"][aria-label="Decision: Approved"]|
+             )
 
       assert has_element?(
                view,

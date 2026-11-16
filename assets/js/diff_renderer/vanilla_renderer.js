@@ -1,6 +1,6 @@
 import * as Diffs from "@pierre/diffs"
-import { isMarkdown, markdownPatchExcerpts } from "../lib/markdown.js"
-import { markdownPreview, previewNotice } from "./markdown_preview.js"
+import { isMarkdown } from "../lib/markdown.js"
+import { discussionCount, markdownPreview, markdownPreviewState, previewNotice } from "./markdown_preview.js"
 
 import {
   commentComposer,
@@ -90,6 +90,16 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     font: 600 10px/12px var(--diffs-header-font-family, system-ui, sans-serif);
     text-align: center;
     font-variant-numeric: tabular-nums;
+  }
+  /* Phones: "N unmodified lines" separators span the card edge to edge and
+     drop their rounded corners, matching the card (packet.css, 768px). */
+  @media (max-width: 768px) {
+    [data-separator="line-info"] [data-separator-wrapper] {
+      padding-inline: 0;
+    }
+    [data-separator="line-info"] :is([data-separator-wrapper], [data-separator-content], [data-expand-button]) {
+      border-radius: 0;
+    }
   }
 `
 
@@ -193,6 +203,7 @@ export class VanillaDiffRenderer {
     container,
     filePath,
     rawDiff,
+    fullDiff,
     signedIn,
     threads,
     diffStyle,
@@ -230,9 +241,49 @@ export class VanillaDiffRenderer {
     // which runs before this one.
     this.onPointerDown = () => this.labelGutterUtility()
     container.addEventListener("pointerdown", this.onPointerDown)
-    // Markdown files open rendered; Source shows the exact lines and comments.
-    this.preview = true
-    this.hasMarkdownPreview = isMarkdown(filePath) && markdownPatchExcerpts(rawDiff).length > 0
+    this.hasMarkdownPreview = isMarkdown(filePath) && (this.fileDiff?.hunks.length || 0) > 0
+    if (this.hasMarkdownPreview) {
+      // Added/deleted files carry the whole document even in a sliced packet hunk.
+      const previewPatch = fullDiff || rawDiff
+      this.markdownState = markdownPreviewState(previewPatch, fullDiff ? parsePatch(fullDiff, filePath) : this.fileDiff)
+      const reviewPath = window.location.pathname.replace(/\/changes\/?$/, "")
+      this.modeKey = `reviews:markdown-view:${reviewPath}:${filePath}`
+      try {
+        const saved = window.localStorage.getItem(this.modeKey)
+        if (saved === "source" || saved === "preview") this.preferredPreview = saved === "preview"
+      } catch { /* Storage may be disabled; the choice still lasts for this mount. */ }
+    }
+  }
+
+  get preview() {
+    return !this.markdownState?.reason && (this.preferredPreview ?? true)
+  }
+
+  // Toolbar choices are saved; jumping to a discussion only switches this visit.
+  selectMarkdownMode(preview, persist = true) {
+    this.preferredPreview = preview
+    if (persist) {
+      try { window.localStorage.setItem(this.modeKey, preview ? "preview" : "source") } catch { /* Optional persistence. */ }
+    }
+    this.render()
+    this.container.querySelector('.review-markdown-toolbar [aria-pressed="true"]')?.focus({ preventScroll: true })
+  }
+
+  discussionButton(header = false) {
+    const count = discussionCount(this.threads, this.fileDiff?.hunks)
+    if (!count) return null
+    return el("button", {
+      type: "button",
+      className: header ? "reviews-diff-header-discussions" : "review-button review-button-ghost review-markdown-discussions",
+      "aria-label": `Show ${count} ${count === 1 ? "discussion" : "discussions"} in Source`,
+      onclick: event => stopHeaderEvent(event, () => {
+        this.selectMarkdownMode(false, false)
+        if (this.collapsed()) {
+          this.focusSourceOnExpand = true
+          this.onToggleHunk?.()
+        }
+      }),
+    }, `${count} ${count === 1 ? "discussion" : "discussions"}`)
   }
 
   update({ threads }) {
@@ -246,7 +297,10 @@ export class VanillaDiffRenderer {
     this.hunkUI = next
     const focused = this.focusedHeaderControl()
     this.render()
-    if (focused) this.restoreHeaderFocus(focused)
+    if (this.focusSourceOnExpand && !this.collapsed()) {
+      this.focusSourceOnExpand = false
+      this.container.querySelector('.review-markdown-toolbar [aria-pressed="true"]')?.focus({ preventScroll: true })
+    } else if (focused) this.restoreHeaderFocus(focused)
   }
 
   // Re-rendering rebuilds Pierre's header, which destroys the slotted control
@@ -462,7 +516,8 @@ export class VanillaDiffRenderer {
   openThread(id) {
     const thread = this.threads.find(thread => String(thread.id) === String(id))
     if (!thread) return
-    this.preview = false
+    // Threads live in Source. Navigating to one is not a saved view choice.
+    this.preferredPreview = false
     this.threadUI.set(thread.id, { ...this.threadUI.get(thread.id), expanded: true })
     this.focusedThreadId = thread.id
     this.pendingThreadFocus = thread.id
@@ -517,6 +572,7 @@ export class VanillaDiffRenderer {
     if (!this.hunkUI) return null
 
     const children = []
+    if (this.hasMarkdownPreview && this.collapsed()) children.push(this.discussionButton(true))
 
     if (this.hunkUI.hunkLabel) {
       children.push(
@@ -637,19 +693,22 @@ export class VanillaDiffRenderer {
         toolbar.append(el("button", {
           type: "button", className: "review-button review-button-ghost",
           "aria-pressed": String(this.preview === preview),
-          onclick: () => {
-            this.preview = preview
-            this.render()
-            this.container.querySelector(`.review-markdown-toolbar [aria-pressed="true"]`)?.focus()
-          },
+          disabled: preview && Boolean(this.markdownState.reason),
+          title: preview ? this.markdownState.reason : null,
+          onclick: () => this.selectMarkdownMode(preview),
         }, label))
       }
-      toolbar.append(el("p", { className: "review-markdown-notice" }, previewNotice(this.threads, this.fileDiff?.hunks)))
+      toolbar.append(el("p", { className: "review-markdown-notice", role: "status" }, previewNotice(this.preview, this.markdownState)))
+      const discussions = this.discussionButton()
+      if (discussions) toolbar.append(discussions)
       this.sourceContainer = el("div")
       if (!this.collapsed()) {
         this.container.append(toolbar, this.sourceContainer)
         if (this.preview) {
-          this.sourceContainer.append(markdownPreview(this.rawDiff, this.diffStyle))
+          // This detached subtree survives mode, thread, theme and viewed updates.
+          this.markdownContent ||= markdownPreview(this.markdownState, this.diffStyle)
+          this.markdownContent.dataset.diffStyle = this.diffStyle
+          this.sourceContainer.append(this.markdownContent)
         } else {
           this.renderSource({ ...this.options(), disableFileHeader: true })
         }

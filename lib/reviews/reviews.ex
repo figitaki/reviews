@@ -234,11 +234,13 @@ defmodule Reviews.Reviews do
     end
   end
 
+  # File headers (`--- a/`, `+++ b/`) only come before the first `@@`; inside a
+  # hunk, a row like `--- note` is a removed `-- note` line.
   defp count_hunk_changes(lines) do
-    Enum.reduce(lines, {0, 0}, fn line, {adds, dels} ->
+    lines
+    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
+    |> Enum.reduce({0, 0}, fn line, {adds, dels} ->
       cond do
-        String.starts_with?(line, "+++") -> {adds, dels}
-        String.starts_with?(line, "---") -> {adds, dels}
         String.starts_with?(line, "+") -> {adds + 1, dels}
         String.starts_with?(line, "-") -> {adds, dels + 1}
         true -> {adds, dels}
