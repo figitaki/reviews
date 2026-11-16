@@ -9,6 +9,7 @@ defmodule Reviews.Reviews do
 
   alias Reviews.Accounts
   alias Reviews.Accounts.{Identity, User}
+  alias Reviews.Policy
   alias Reviews.Repo
   alias Reviews.Reviews.{File, Patchset, Review}
 
@@ -93,12 +94,11 @@ defmodule Reviews.Reviews do
 
   Returns `{:error, :forbidden}` without writing when the actor is not an owner.
   """
-  def append_patchset(%Review{} = review, %Identity{} = actor, attrs) when is_map(attrs) do
-    if owned_by?(review, actor), do: append_patchset(review, attrs), else: {:error, :forbidden}
+  def append_patchset(%Review{} = review, actor, attrs) when is_map(attrs) do
+    if Policy.can?(actor, :push, review),
+      do: append_patchset(review, attrs),
+      else: {:error, :forbidden}
   end
-
-  def append_patchset(%Review{}, _actor, attrs) when is_map(attrs),
-    do: {:error, :forbidden}
 
   @doc """
   Appends a new patchset to an existing review. Auto-numbers to (max+1).

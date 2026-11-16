@@ -804,6 +804,17 @@ defmodule ReviewsWeb.MCPTest do
           "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
         })
 
+      refused =
+        call(ctx.stranger_token, "reviews_update_thread_status", %{
+          "review" => ctx.review.slug,
+          "thread_id" => thread.id,
+          "status" => "resolved"
+        })
+
+      # MCP keeps its owner-only limit until it moves to the shared rules (#176).
+      assert error_text(refused) =~ "is owned by this account"
+      assert [%{status: "open"}] = Threads.list_published_threads(ctx.review.id)
+
       assert %{status: "resolved", resolved_by: %{handle: "codex"}} =
                call!(ctx.agent_token, "reviews_update_thread_status", %{
                  "review" => ctx.review.slug,

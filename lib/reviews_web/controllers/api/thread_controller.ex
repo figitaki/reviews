@@ -32,6 +32,15 @@ defmodule ReviewsWeb.Api.ThreadController do
             |> put_status(:not_found)
             |> json(%{errors: %{detail: "Thread not found"}})
 
+          {:error, :forbidden} ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{
+              errors: %{
+                detail: "Only the review owner or the thread's author can resolve or reopen it"
+              }
+            })
+
           {:error, :invalid_status} ->
             conn
             |> put_status(:unprocessable_entity)

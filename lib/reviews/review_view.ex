@@ -10,6 +10,7 @@ defmodule Reviews.ReviewView do
   alias Reviews.Accounts.Identity
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
+  alias Reviews.Policy
   alias Reviews.ReviewHunks
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.{File, Patchset, Review}
@@ -36,6 +37,8 @@ defmodule Reviews.ReviewView do
   end
 
   def snapshot(%Review{} = review, viewer, opts \\ []) do
+    # The author decides what the viewer may do; load it once for every thread.
+    review = Reviews.Repo.preload(review, :author)
     patchsets = ReviewsContext.list_patchsets(review)
     selected = pick_patchset(patchsets, Keyword.get(opts, :patchset_number))
 
@@ -106,7 +109,16 @@ defmodule Reviews.ReviewView do
       hunks_by_path: hunks_by_path,
       packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
-      published_threads: project_threads(review, patchsets, selected),
+      published_threads:
+        review
+        |> project_threads(patchsets, selected)
+        |> Enum.map(
+          &Map.put(
+            &1,
+            :can_update_status,
+            Policy.can?(viewer, {:update_thread_status, &1}, review)
+          )
+        ),
       viewer: viewer
     }
   end
@@ -230,6 +242,7 @@ defmodule Reviews.ReviewView do
       resolved_by: user_to_payload(thread.resolved_by),
       inserted_at: encode_dt(thread.inserted_at),
       author: user_to_payload(thread.author),
+      can_update_status: Map.get(thread, :can_update_status, false),
       comments:
         Enum.map(thread.comments || [], fn c ->
           %{
