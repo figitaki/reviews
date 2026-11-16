@@ -9,6 +9,12 @@ still stabilizing.
 
 ### Security
 
+- Add bounded per-instance request budgets before expensive request handling,
+  authenticate API writes before body parsing, and limit small bodies to 64KB
+  while preserving authenticated 50MB review/patchset uploads. Unsupported
+  multipart bodies now return 415. See `docs/ABUSE_PROTECTION.md` for the Fly
+  client-IP trust prerequisite and remaining limits.
+
 - Restrict browser scripts to same-origin assets, disable embedded objects, and
   restrict development WebSocket origins to the configured loopback port.
 

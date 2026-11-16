@@ -24,6 +24,21 @@ endpoint — tokens are user-initiated through the browser.
 
 Missing/invalid token → `401` with body `{ "errors": { "detail": "Unauthorized" } }`.
 
+### Request budgets
+
+Requests can return `429` JSON with `Retry-After: 60`. IP budgets apply before
+DB/auth/body work; API writes also share an authenticated account budget across
+tokens. Clients should wait before retrying, and should not retry writes blindly
+when a response was lost. Counters are local to each instance and reset on restart.
+
+Protected API writes authenticate before parsing (`401` takes precedence over
+body errors). Review/patchset POSTs retain a 50,000,000-byte total JSON body limit;
+other parsed requests are limited to 64,000 bytes. Limits count bytes actually
+read; oversized bodies receive `413`. Unsupported body media, including
+multipart, receives `415`. CLI JSON and browser URL-encoded forms remain supported.
+See [application request budgets](ABUSE_PROTECTION.md) for defaults, client-IP
+trust prerequisites, configuration, and limitations.
+
 ### `POST /api/v1/reviews`
 
 Creates a new review and its first patchset.

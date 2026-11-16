@@ -10,13 +10,21 @@ defmodule ReviewsWeb.Plugs.RequireApiToken do
 
   def init(opts), do: opts
 
+  # Only this plug writes the private marker, after successful authentication.
+  # Caller-supplied assigns alone must never bypass authentication.
+  def call(%{private: %{reviews_api_authenticated: {user, identity}}} = conn, _opts) do
+    conn |> assign(:current_user, user) |> assign(:current_identity, identity)
+  end
+
   def call(conn, _opts) do
     with [raw] <- get_req_header(conn, "authorization"),
          "Bearer " <> token <- raw,
+         true <- byte_size(token) == 36 and String.starts_with?(token, "rev_"),
          {:ok, %{user: user, identity: identity}} <- Accounts.authenticate_token(token) do
       conn
       |> assign(:current_user, user)
       |> assign(:current_identity, identity)
+      |> put_private(:reviews_api_authenticated, {user, identity})
     else
       _ ->
         conn
