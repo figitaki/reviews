@@ -133,19 +133,24 @@
     --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
     --review-quick-right: calc(16px + env(safe-area-inset-right));
 
-    /* The viewport's bottom edge drops by 100dvh - 100svh when Safari's
-       toolbars collapse. Adding that keeps the buttons and the open list
-       where they were with the toolbars shown, instead of jumping as the
-       reader scrolls. */
+    /* The stack sits at the foot of a box hung from the top of the screen,
+       as tall as the small viewport. When the browser's toolbars collapse,
+       the viewport's bottom edge and 100dvh move, and on iPhone they do not
+       always move in the same frame, so anything anchored to them jumps.
+       The top edge and 100svh stay put. The box lets taps through. */
     position: fixed;
+    top: 0;
     right: var(--review-quick-right);
-    bottom: calc(var(--review-quick-bottom) + 100dvh - 100svh);
+    height: calc(100svh - var(--review-quick-bottom));
     z-index: 9;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+    justify-content: flex-end;
     gap: 12px;
+    pointer-events: none;
   }
+  .review-activity > * { pointer-events: auto; }
   .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity {
     --review-quick-right: calc(16px + 4px + env(safe-area-inset-right));
     --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
