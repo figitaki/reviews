@@ -1458,22 +1458,13 @@ details[open] > summary .review-collapse-icon,
     padding-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
-  /* Measured from the top of the small viewport, like the Sections and
-     Comments buttons (review_activity.css), so the 56px button stays put
-     while the browser's toolbars collapse and expand. */
   .review-packet-shell.has-outline .review-section-decision {
     position: fixed;
-    top: calc(100svh - 16px - 56px - env(safe-area-inset-bottom));
     right: calc(16px + env(safe-area-inset-right));
-    bottom: auto;
     margin: 0;
   }
 
-  /* The open panel's height varies, so it keeps a bottom anchor; the dvh term
-     cancels the toolbars' resize once the browser reports it. */
   .review-packet-shell.has-outline .review-section-decision.is-editing {
-    top: auto;
-    bottom: calc(16px + env(safe-area-inset-bottom) + 100dvh - 100svh);
     width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
   }
 
