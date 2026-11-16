@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use clap::{Args, ValueEnum};
 use serde::Deserialize;
 use serde_json::Value;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::api::ListReviewsQuery;
 use crate::auth;
@@ -174,10 +175,10 @@ fn render_table(body: &Value, args: &ListArgs) -> Result<String> {
         "THREADS",
         "UPDATED (UTC)",
     ];
-    let mut widths: Vec<usize> = header.iter().map(|h| h.chars().count()).collect();
+    let mut widths: Vec<usize> = header.iter().map(|h| h.width()).collect();
     for row in &rows {
         for (i, cell) in row.iter().enumerate() {
-            widths[i] = widths[i].max(cell.chars().count());
+            widths[i] = widths[i].max(cell.width());
         }
     }
 
@@ -210,7 +211,7 @@ fn push_row(out: &mut String, cells: impl Iterator<Item = String>, widths: &[usi
             if i == last {
                 cell
             } else {
-                let pad = widths[i] - cell.chars().count();
+                let pad = widths[i] - cell.width();
                 format!("{cell}{}", " ".repeat(pad))
             }
         })
@@ -228,14 +229,24 @@ fn clean(text: &str) -> String {
         .collect()
 }
 
+/// Widths are terminal columns, not characters: CJK and emoji take two,
+/// combining marks none, so wide titles still line up with ASCII ones.
 fn truncate(text: &str, max: usize) -> String {
-    if text.chars().count() <= max {
-        text.to_string()
-    } else {
-        let mut cut: String = text.chars().take(max - 1).collect();
-        cut.push('…');
-        cut
+    if text.width() <= max {
+        return text.to_string();
     }
+    let mut cut = String::new();
+    let mut used = 0;
+    for c in text.chars() {
+        let w = c.width().unwrap_or(0);
+        if used + w > max - 1 {
+            break;
+        }
+        used += w;
+        cut.push(c);
+    }
+    cut.push('…');
+    cut
 }
 
 /// `2026-10-09T15:04:05Z` -> `2026-10-09 15:04`. Other shapes print as is.
@@ -353,6 +364,31 @@ mod tests {
         // Columns line up: the TITLE column starts at the same place on each row.
         let title_col = lines[0].find("TITLE").unwrap();
         assert_eq!(&lines[1][title_col..title_col + 4], "Make");
+    }
+
+    #[test]
+    fn wide_titles_keep_columns_aligned() {
+        let mut body = sample();
+        // Four CJK characters take eight terminal columns; a combining accent takes none.
+        body["reviews"][0]["title"] = json!("修复登录 cafe\u{301}");
+        body["reviews"][1]["title"] = json!("修".repeat(40));
+        let out = render_table(&body, &parse(&[])).unwrap();
+        let lines: Vec<&str> = out.lines().collect();
+
+        let column = |line: &str, needle: &str| line[..line.find(needle).unwrap()].width();
+        let author = column(lines[0], "AUTHOR");
+        assert_eq!(column(lines[1], "@conner"), author);
+        assert_eq!(column(lines[2], "@codex"), author);
+
+        let title = column(lines[0], "TITLE");
+        let cut =
+            &lines[2][lines[2].find('修').unwrap()..lines[2].find('…').unwrap() + '…'.len_utf8()];
+        assert!(
+            cut.width() <= TITLE_WIDTH,
+            "{} > {TITLE_WIDTH}",
+            cut.width()
+        );
+        assert!(title + cut.width() <= author);
     }
 
     #[test]
