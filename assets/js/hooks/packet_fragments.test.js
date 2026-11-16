@@ -81,6 +81,7 @@ test("malformed and unrelated fragments are ignored; missing targets do not focu
 
 test("back to the fragment-free overview restores overview without adding history", () => {
   const {listeners, requests} = setup("#packet-section-0-row-1")
+  requests[0].reply({id: "card"})
   window.location.hash = ""
   listeners.get("hashchange")()
   assert.equal(requests[1].name, "restore_packet_location")
@@ -90,6 +91,7 @@ test("back to the fragment-free overview restores overview without adding histor
 test("back from an encoded packet prefix restores Overview", () => {
   const {listeners, requests} = setup("#packet%2Dsection-0-row-1")
   assert.equal(requests[0].payload.id, "packet-section-0-row-1")
+  requests[0].reply({id: "card"})
   window.location.hash = ""
   listeners.get("hashchange")()
   assert.equal(requests[1]?.name, "restore_packet_location")
@@ -105,8 +107,46 @@ test("back from a malformed fragment does not change section selection", () => {
 
 test("back to a thread URL restores its discussion instead of Overview", () => {
   const {listeners, requests} = setup("?patchset=1&thread=42#packet-section-0-row-1")
+  requests[0].reply({id: "card"})
   window.location.hash = ""
   listeners.get("hashchange")()
   assert.equal(requests[1].name, "restore_packet_location")
   assert.deepEqual(requests[1].payload, {thread: "42"})
+})
+
+test("Back from a rejected target preserves the selected section", () => {
+  const {listeners, requests} = setup("#packet-section-999-row-0")
+  requests[0].reply({id: null})
+  window.location.hash = ""
+  listeners.get("hashchange")()
+  assert.equal(requests.length, 1)
+})
+
+test("Back before resolution restores location only for an accepted target", () => {
+  for (const id of ["card", null]) {
+    const {listeners, requests, events} = setup("#packet-section-0-row-1")
+    window.location.hash = ""
+    listeners.get("hashchange")()
+    assert.equal(requests.length, 1)
+    requests[0].reply({id})
+    assert.equal(requests.length, id ? 2 : 1)
+    if (id) assert.equal(requests[1].name, "restore_packet_location")
+    assert.deepEqual(events, [])
+  }
+})
+
+
+test("new navigation and destruction cancel deferred history restoration", () => {
+  for (const destroy of [false, true]) {
+    const {hook, listeners, requests} = setup("#packet-section-0-row-1")
+    window.location.hash = ""
+    listeners.get("hashchange")()
+    if (destroy) hook.destroyed()
+    else {
+      window.location.hash = "#packet-section-1-row-0"
+      listeners.get("hashchange")()
+    }
+    requests[0].reply({id: "old"})
+    assert.equal(requests.some(request => request.name === "restore_packet_location"), false)
+  }
 })

@@ -5,11 +5,11 @@ export default {
     this.patchset = this.el.dataset.patchset
     this.sequence = 0
     this.onHash = () => {
-      const previous = this.fragmentId
+      const previous = this.fragment
       this.revealFragment()
       if (!window.location.hash && previous) {
-        const thread = new URL(window.location.href).searchParams.get("thread")
-        this.pushEvent("restore_packet_location", {thread})
+        if (previous.accepted) this.restoreLocation()
+        else if (previous.accepted === null) this.returnedFragment = previous
       }
     }
     this.onClick = event => {
@@ -36,15 +36,27 @@ export default {
 
   reconnected() { this.revealFragment() },
 
+  restoreLocation() {
+    const thread = new URL(window.location.href).searchParams.get("thread")
+    this.pushEvent("restore_packet_location", {thread})
+  },
+
   revealFragment() {
     const sequence = ++this.sequence
     const hash = window.location.hash
-    this.fragmentId = null
+    this.fragment = null
+    this.returnedFragment = null
     let id
     try { id = decodeURIComponent(hash.slice(1)) } catch { return }
     if (!id.startsWith("packet-section-")) return
-    this.fragmentId = id
+    const fragment = this.fragment = {id, accepted: null}
     this.pushEvent("reveal_packet_fragment", {id}, reply => {
+      fragment.accepted = Boolean(reply.id)
+      // Back can arrive before the server has accepted or rejected the target.
+      if (this.returnedFragment === fragment) {
+        this.returnedFragment = null
+        if (fragment.accepted && !window.location.hash) this.restoreLocation()
+      }
       if (!reply.id || sequence !== this.sequence || hash !== window.location.hash) return
       window.dispatchEvent(new CustomEvent("phx:packet_nav_jump", {detail: {id: reply.id}}))
     })
@@ -52,6 +64,7 @@ export default {
 
   destroyed() {
     ++this.sequence
+    this.returnedFragment = null
     window.removeEventListener("hashchange", this.onHash)
     this.el.removeEventListener("click", this.onClick)
   },
