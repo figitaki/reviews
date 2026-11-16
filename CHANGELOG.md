@@ -63,10 +63,11 @@ still stabilizing.
   visible viewport. Empty comments cannot be submitted.
 - Reseeding keeps the real demo review and its comments unless its bundled
   fixture changes.
-- On phones, comments open from a floating button stacked above the section
-  decision button, replacing the comments row above the section navigation.
-  The button shows the comment count and a blue outline while comments are
-  unread; opening it floats the unread list above the code. The decision button
+- On phones, one small floating menu button beside the section decision
+  button replaces the comments row above the section navigation. It opens
+  upwards to Comments, with the comment count, and in the Guide to Sections,
+  which opens the Guide map. The button has a blue outline while comments are
+  unread; Comments floats the unread list above the code. The decision button
   now stays fixed to the screen inside open Guide sections.
 - Section decisions keep a floating island on desktop and use a compact
   floating action button on phones, including before sign-in. After voting,

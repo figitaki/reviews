@@ -15,7 +15,29 @@ export const ReviewActivity = {
   mounted() {
     this.states = new Map()
     this.details = this.el.querySelector("details")
+    this.menu = this.el.querySelector("[data-quick-menu]")
+    this.menuToggle = this.el.querySelector("[data-quick-toggle]")
     this.onClick = event => {
+      if (event.target.closest("[data-quick-toggle]")) {
+        this.setMenu(this.menu.hidden)
+        return
+      }
+      if (event.target.closest("[data-quick-comments]")) {
+        this.setMenu(false)
+        this.details.open = true
+        this.details.querySelector("summary").focus({ preventScroll: true })
+        return
+      }
+      if (event.target.closest("[data-quick-sections]")) {
+        this.setMenu(false)
+        // The guide's section bar scrolls away on phones; bring it back and
+        // open its map, the same as pressing its menu button.
+        const guide = document.getElementById("review-guide-shell")
+        guide?.scrollIntoView({ block: "start" })
+        const map = guide?.querySelector("[data-guide-flyout-toggle]")
+        if (map?.getAttribute("aria-expanded") !== "true") map?.click()
+        return
+      }
       if (event.target.closest("[data-activity-mark-all]")) {
         this.readState.markRead(this.activity.threads)
         this.renderActivity()
@@ -42,13 +64,30 @@ export const ReviewActivity = {
       this.renderActivity()
     }
     this.onOpen = event => this.pushEvent("open_activity_thread", { thread_id: event.detail.threadId })
+    this.onOutside = event => {
+      if (!this.menu.hidden && !this.el.contains(event.target)) this.setMenu(false)
+    }
+    this.onKeydown = event => {
+      if (event.key !== "Escape" || this.menu.hidden) return
+      this.setMenu(false)
+      this.menuToggle.focus()
+    }
     this.el.addEventListener("click", this.onClick)
+    this.el.addEventListener("keydown", this.onKeydown)
+    document.addEventListener("pointerdown", this.onOutside)
     window.addEventListener("reviews:open-thread", this.onOpen)
     window.addEventListener("storage", this.onStorage)
     this.updateActivity()
   },
 
   updated() { this.updateActivity() },
+
+  setMenu(open) {
+    this.menu.hidden = !open
+    this.el.querySelector("[data-quick-sections]").hidden = !document.querySelector("[data-guide-flyout-toggle]")
+    this.menuToggle.setAttribute("aria-expanded", String(open))
+    this.menuToggle.setAttribute("aria-label", open ? "Close review menu" : "Open review menu")
+  },
 
   updateActivity() {
     this.activity = JSON.parse(this.el.dataset.activity)
@@ -70,6 +109,10 @@ export const ReviewActivity = {
     count.textContent = String(this.activity.commentCount)
     count.setAttribute("aria-label", `${this.activity.commentCount} comments, ${total} unread`)
     this.details.dataset.unread = String(total > 0)
+    this.el.dataset.unread = String(total > 0)
+    const menuCount = this.el.querySelector("[data-quick-count]")
+    menuCount.textContent = count.textContent
+    menuCount.setAttribute("aria-label", count.getAttribute("aria-label"))
     this.el.querySelector("[data-activity-empty]").hidden = total > 0
     this.el.querySelector("[data-activity-status]").textContent = `${total} unread comments in ${unreadThreads.length} threads.`
     this.el.querySelector("[data-activity-storage]").textContent = this.readState.persistent
@@ -115,6 +158,8 @@ export const ReviewActivity = {
 
   destroyed() {
     this.el.removeEventListener("click", this.onClick)
+    this.el.removeEventListener("keydown", this.onKeydown)
+    document.removeEventListener("pointerdown", this.onOutside)
     window.removeEventListener("storage", this.onStorage)
     window.removeEventListener("reviews:open-thread", this.onOpen)
   },

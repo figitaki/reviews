@@ -110,61 +110,106 @@
   .review-activity-body { max-height: 50dvh; overflow-y: auto; }
 }
 
-/* Phones: a floating button instead of a row above the section navigation.
-   It stacks above the section decision button when one is showing. */
+/* The review menu exists only on phones. */
+.review-quick-toggle,
+.review-quick-menu { display: none; }
+
+/* Phones: one small floating menu button replaces the comments row. It sits
+   beside the section decision button when one is showing, centred on it, and
+   its menu opens upwards. */
 @media (max-width: 640px) {
   .review-activity {
-    --review-activity-fab-bottom: calc(16px + env(safe-area-inset-bottom));
+    --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
+    --review-quick-right: calc(16px + env(safe-area-inset-right));
 
     position: fixed;
-    right: calc(16px + env(safe-area-inset-right));
-    bottom: var(--review-activity-fab-bottom);
+    right: var(--review-quick-right);
+    bottom: var(--review-quick-bottom);
     z-index: 9;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
   }
   .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity {
-    --review-activity-fab-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
+    --review-quick-right: calc(16px + 56px + 12px + env(safe-area-inset-right));
+    --review-quick-bottom: calc(16px + 6px + env(safe-area-inset-bottom));
   }
+  /* The open decision panel spans the screen. */
+  .review-page:has(.review-section-decision.is-editing) .review-activity { display: none; }
   /* Leave room so the buttons never cover the last lines of code. The Guide
      grid already reserves space for the decision button. */
-  .review-workspace-content { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
   .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
     padding-bottom: 72px;
   }
 
-  .review-activity-panel:not([open]) {
-    border-radius: 16px;
-    border-color: var(--review-line-strong, var(--ds-line));
-    background: var(--ds-panel-raised, var(--ds-panel));
-    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
-  }
-  .review-activity-panel:not([open])[data-unread="true"] { border-color: var(--ds-blue); }
-
-  .review-activity-panel:not([open]) .review-activity-summary {
-    flex-direction: column;
+  .review-quick-toggle,
+  .review-quick-item {
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
-    gap: 0;
-    width: 54px;
-    height: 54px;
-    padding: 0;
+    min-height: 44px;
+    border: 1px solid var(--review-line-strong, var(--ds-line));
+    background: var(--ds-panel-raised, var(--ds-panel));
+    color: var(--ds-text);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
+    font: inherit;
+    cursor: pointer;
   }
-  .review-activity-panel:not([open]) .review-activity-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
+  .review-quick-toggle {
+    order: 2;
+    width: 44px;
+    border-radius: 14px;
   }
-  .review-activity-panel:not([open]) .review-activity-count { margin: 0; line-height: 1; }
+  .review-activity[data-unread="true"] .review-quick-toggle {
+    border-color: var(--ds-blue);
+    box-shadow: 0 0 0 1px var(--ds-blue), 0 4px 12px rgb(0 0 0 / 0.18);
+  }
+  .review-quick-toggle .review-quick-open,
+  .review-quick-toggle .review-quick-close { width: 22px; height: 22px; }
+  .review-quick-toggle .review-quick-close,
+  .review-quick-toggle[aria-expanded="true"] .review-quick-open { display: none; }
+  .review-quick-toggle[aria-expanded="true"] .review-quick-close { display: inline-block; }
 
-  /* Open, the list floats above the buttons rather than pushing code down. */
+  .review-quick-menu:not([hidden]) {
+    order: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .review-quick-item {
+    gap: 8px;
+    padding: 0 14px;
+    border-radius: 22px;
+    font-weight: var(--weight-medium);
+  }
+  .review-quick-item[hidden] { display: none; }
+  .review-quick-icon { width: 18px; height: 18px; }
+  .review-quick-toggle:focus-visible,
+  .review-quick-item:focus-visible {
+    outline: 2px solid var(--ds-focus);
+    outline-offset: 2px;
+  }
+
+  /* Closed, the comments panel is reached from the menu. Open, it floats
+     above the buttons across the screen. */
+  .review-activity-panel:not([open]) { display: none; }
   .review-activity:has(details[open]) {
     left: calc(16px + env(safe-area-inset-left));
+    right: calc(16px + env(safe-area-inset-right));
   }
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity:has(details[open]) {
+    bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
+  }
+  .review-activity:has(details[open]) :is(.review-quick-toggle, .review-quick-menu) { display: none; }
   .review-activity-panel[open] {
+    align-self: stretch;
     box-shadow: 0 8px 28px rgb(0 0 0 / 0.22);
   }
   .review-activity-panel[open] .review-activity-body {
-    max-height: calc(60dvh - var(--review-activity-fab-bottom));
+    max-height: calc(60dvh - var(--review-quick-bottom));
   }
 }
 
