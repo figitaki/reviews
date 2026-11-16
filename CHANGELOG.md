@@ -27,12 +27,25 @@ still stabilizing.
 - Comments follow matching code across revisions. Discussions whose code changed
   stay available on their original revision rather than drifting onto other lines.
 
-- Markdown files in a diff open in a rendered Preview with Before and After
-  excerpts. Source shows the exact lines and comments. Raw HTML, scripts and
-  unsafe links stay escaped.
+- Markdown diffs offer rendered Preview and exact Source views. Files open in
+  Preview, including files with discussions. Explicit choices persist per review
+  and file. Discussion buttons and thread links open Source for that visit,
+  including from collapsed headers. Raw HTML, scripts and unsafe links stay
+  escaped.
 
 ### Changed
 
+- Markdown excerpts with missing fence, table or indentation context use Source
+  with an explanation. New/deleted documents render in one complete panel.
+  Large documents use virtualized Source; smaller previews reuse cached content.
+  Preview changes include text labels as well as color, and document headings
+  stay below review headings. Repository-relative links no longer navigate to
+  unrelated review routes.
+- All reviews use edge-to-edge diff cards and smaller packet gutters on mobile,
+  not only reviews containing Markdown files.
+- On phones, diffs, their file headers and their unmodified-lines separators
+  use the full screen width, without a side gutter or rounded corners. Desktop
+  is unchanged.
 - Comments render safe Markdown. The collapsible comment sidebar lists only
   unread thread locations, without message previews; links prefer the first
   covering hunk in the Guide and fall back to Diff when needed.
@@ -99,6 +112,10 @@ still stabilizing.
   fails the release command instead of being ignored.
 
 ### Fixed
+
+- GitHub sign-in now returns you to the page you started from, such as a
+  review, instead of the home page. Only local paths are accepted; anything
+  else goes home.
 
 - Decode Git-quoted filenames consistently in CLI validation, uploaded file
   metadata, and review hunk lookup, including non-ASCII paths.
