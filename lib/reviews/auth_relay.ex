@@ -14,7 +14,8 @@ defmodule Reviews.AuthRelay do
 
   Config (`config :reviews, :auth_relay`, set in `config/runtime.exs`):
 
-    * relay: `:secret`, `:github_client_id` and `:github_client_secret`
+    * relay: `:secret` and no `:url`. It signs in with the app's own GitHub
+      OAuth app (`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`).
     * preview: `:secret` and `:url`, the relay's origin
   """
   import Ecto.Query
@@ -28,10 +29,10 @@ defmodule Reviews.AuthRelay do
 
   @doc "Returns true when this app can act as the relay."
   def relay? do
-    config = config()
+    github = Application.get_env(:ueberauth, Ueberauth.Strategy.Github.OAuth, [])
 
-    present?(config[:secret]) and present?(config[:github_client_id]) and
-      present?(config[:github_client_secret])
+    present?(config()[:secret]) and not present?(config()[:url]) and
+      present?(github[:client_id]) and present?(github[:client_secret])
   end
 
   @doc "Returns true when this app signs in through a relay."

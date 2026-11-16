@@ -8,7 +8,7 @@ defmodule ReviewsWeb.AuthRelayController do
       confirm the preview they are signing in to. Any host other than
       `reviews-pr-<digits>.fly.dev` gets a 400 and no redirect.
     * `POST /auth/relay`: keeps the host and state in the session and starts
-      GitHub sign-in with the preview OAuth app.
+      GitHub sign-in with production's GitHub OAuth app.
     * `GET /auth/relay/github/callback`: GitHub returns here. Sends the user to
       `https://<host>/auth/relay/accept?code=<code>`. It does not sign the
       user in to the relay.

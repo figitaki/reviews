@@ -158,13 +158,18 @@ may leave WireGuard peers that need separate retirement.
 
 ### 3. GitHub sign-in on previews
 
-A GitHub OAuth app has one callback URL. GitHub only sends users back to
-that URL's host and port, so `reviews-pr-42.fly.dev` cannot finish sign-in
-with an app registered for another host. Wildcard matching on `fly.dev`
-would not be safe: anyone can create a `*.fly.dev` app.
+GitHub only redirects to a callback URL registered on the OAuth app. With
+wildcard matching off, the redirect URL must match a callback exactly. With
+it on, the host and port must match (subdomains of the callback host are
+also allowed) and the path must be the callback's path or below it. See
+GitHub's [redirect URL rules](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#redirect-urls).
+So `reviews-pr-42.fly.dev` cannot finish sign-in with an app registered for
+another host. Registering every preview host is not practical, and a wildcard
+on `fly.dev` would not be safe: anyone can create a `*.fly.dev` app.
 
 Previews sign in through a **relay** on production instead
-(`Reviews.AuthRelay`, `ReviewsWeb.AuthRelayController`):
+(`Reviews.AuthRelay`, `ReviewsWeb.AuthRelayController`), using production's
+GitHub OAuth app:
 
 1. **Sign in** on a preview goes to
    `https://reviews.figitaki.dev/auth/relay?host=reviews-pr-42.fly.dev&state=…`.
@@ -172,8 +177,8 @@ Previews sign in through a **relay** on production instead
    own session.
 2. The relay accepts only hosts matching `reviews-pr-<digits>.fly.dev`.
    Anything else gets a 400 and no redirect. It asks the user to confirm
-   the host, then signs in with the **preview** GitHub OAuth app, whose
-   callback is `https://reviews.figitaki.dev/auth/relay/github/callback`.
+   the host, then starts GitHub sign-in with production's OAuth app and the
+   callback `https://reviews.figitaki.dev/auth/relay/github/callback`.
 3. The relay sends the user to
    `https://reviews-pr-42.fly.dev/auth/relay/accept?code=…`. The code is
    encrypted and signed with `AUTH_RELAY_SECRET`. It names the host and
@@ -182,45 +187,47 @@ Previews sign in through a **relay** on production instead
 4. The preview checks the code and signs the user in, then returns them
    to the page they started from.
 
-The relay never signs anyone in to production. Production's own sign-in
-(`/auth/github`, production OAuth app) does not change. Production never
-accepts relay codes, because its host is not a preview host.
+The relay has its own callback path, so it never runs production's sign-in
+callback and never signs anyone in to production. Production's own sign-in
+(`/auth/github`) does not change. Production never accepts relay codes,
+because its host is not a preview host.
 
-The relay is on when production has `AUTH_RELAY_SECRET`,
-`AUTH_RELAY_GITHUB_CLIENT_ID` and `AUTH_RELAY_GITHUB_CLIENT_SECRET`. A preview
-uses it when it has `AUTH_RELAY_SECRET` and `AUTH_RELAY_URL`, which
-`fly.preview.toml` sets. Previews no longer get GitHub OAuth credentials.
+The relay is on when production has `AUTH_RELAY_SECRET` (plus its existing
+`GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`) and no `AUTH_RELAY_URL`. A
+preview uses it when it has `AUTH_RELAY_SECRET` and `AUTH_RELAY_URL`, which
+`fly.preview.toml` sets. Previews get no GitHub OAuth credentials.
 
 To set it up:
 
-1. In the preview GitHub OAuth app (the one whose ID was in
-   `PREVIEW_GITHUB_CLIENT_ID`), set **Authorization callback URL** to
-   `https://reviews.figitaki.dev/auth/relay/github/callback`. Leave
-   wildcard matching off.
+1. In production's GitHub OAuth app, keep the callback URL
+   `https://reviews.figitaki.dev/auth/github/callback` and add a second one,
+   `https://reviews.figitaki.dev/auth/relay/github/callback`. Turn wildcard
+   matching off on both. (The existing callback does not cover the relay
+   path even with wildcard matching on, because `/auth/relay/...` is not
+   below `/auth/github/callback`.)
 2. Generate a relay secret with `mix phx.gen.secret`. Use it in the next
    two steps, and nowhere else.
-3. Set the production secrets:
+3. Set it on production:
 
    ```sh
-   fly secrets set --app reviews-dev \
-     AUTH_RELAY_SECRET=<relay secret> \
-     AUTH_RELAY_GITHUB_CLIENT_ID=<preview OAuth app client ID> \
-     AUTH_RELAY_GITHUB_CLIENT_SECRET=<preview OAuth app client secret>
+   fly secrets set --app reviews-dev AUTH_RELAY_SECRET=<relay secret>
    ```
 
 4. Add `PREVIEW_AUTH_RELAY_SECRET` (the same relay secret) to the `preview`
    GitHub Environment's secrets. Previews pick it up on their next deploy.
 5. Delete `PREVIEW_GITHUB_CLIENT_ID` and `PREVIEW_GITHUB_CLIENT_SECRET` from
-   the `preview` Environment once no open PR branch predates this change.
-   Previews no longer use them.
+   the `preview` Environment, and delete the old preview OAuth app. Nothing
+   uses them: previews never could finish sign-in with that app, and older
+   PR branches that still stage the secrets get empty values.
 
 To turn the relay off, unset `AUTH_RELAY_SECRET` on production. Sign in on a
 preview then ends on a "Not Found" page on production; previews stay
 viewable anonymously.
 
 **Trust.** Approved preview code receives `AUTH_RELAY_SECRET`, so it could
-mint codes that sign anyone in to *any preview*, but not to production.
-Rotate the secret on production and in the `preview` Environment together.
+mint codes that sign anyone in to *any preview*, but not to production. It
+never receives a GitHub client secret or a user's GitHub token. Rotate the
+relay secret on production and in the `preview` Environment together.
 Fly app names are global, so someone else could create a
 `reviews-pr-<N>` app. That is why the relay asks before sending a user to a
 host. A code reveals the user's GitHub ID, username, avatar and email to the

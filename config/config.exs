@@ -38,15 +38,15 @@ config :ueberauth, Ueberauth,
   json_library: JSON,
   providers: [
     github: {Ueberauth.Strategy.Github, [default_scope: "read:user user:email"]},
-    # Preview sign-in relay (ReviewsWeb.AuthRelayController), with the preview
-    # GitHub OAuth app's credentials.
+    # Preview sign-in relay (ReviewsWeb.AuthRelayController). Same GitHub
+    # OAuth app as :github, with its own callback so the relay never runs
+    # production's sign-in callback.
     github_relay:
       {Ueberauth.Strategy.Github,
        [
          default_scope: "read:user user:email",
          request_path: "/auth/relay/github",
-         callback_path: "/auth/relay/github/callback",
-         oauth2_module: ReviewsWeb.AuthRelayGithubOAuth
+         callback_path: "/auth/relay/github/callback"
        ]}
   ]
 

@@ -8,18 +8,15 @@ defmodule ReviewsWeb.AuthRelayControllerTest do
 
   @relay_url "https://reviews.figitaki.dev"
   @preview "reviews-pr-42.fly.dev"
+  @secret String.duplicate("s", 64)
 
   setup do
     original_relay = Application.get_env(:reviews, :auth_relay)
     original_oauth = Application.get_env(:ueberauth, Ueberauth.Strategy.Github.OAuth)
 
-    # One app plays both roles here; real apps differ by host and config.
-    Application.put_env(:reviews, :auth_relay,
-      secret: String.duplicate("s", 64),
-      url: @relay_url,
-      github_client_id: "relay-client-id",
-      github_client_secret: "relay-client-secret"
-    )
+    # The relay role: the secret plus the app's own GitHub OAuth app. The
+    # preview tests below add AUTH_RELAY_URL, which makes the app a client.
+    Application.put_env(:reviews, :auth_relay, secret: @secret)
 
     Application.put_env(:ueberauth, Ueberauth.Strategy.Github.OAuth,
       client_id: "prod-client-id",
@@ -107,7 +104,7 @@ defmodule ReviewsWeb.AuthRelayControllerTest do
       end
     end
 
-    test "confirming starts GitHub sign-in with the preview OAuth app", %{
+    test "confirming starts GitHub sign-in with production's OAuth app", %{
       conn: conn,
       state: state
     } do
@@ -120,7 +117,7 @@ defmodule ReviewsWeb.AuthRelayControllerTest do
       %URI{host: "github.com", path: "/login/oauth/authorize", query: query} = URI.parse(github)
       query = URI.decode_query(query)
 
-      assert query["client_id"] == "relay-client-id"
+      assert query["client_id"] == "prod-client-id"
       assert query["redirect_uri"] =~ ~r|/auth/relay/github/callback\z|
     end
 
@@ -170,17 +167,32 @@ defmodule ReviewsWeb.AuthRelayControllerTest do
       assert get_resp_header(conn, "location") == []
     end
 
-    test "is off unless configured", %{conn: conn, state: state} do
-      Application.put_env(:reviews, :auth_relay,
-        url: @relay_url,
-        secret: String.duplicate("s", 64)
+    test "is off without the secret or GitHub OAuth, and on previews", %{state: state} do
+      path = ~p"/auth/relay?#{[host: @preview, state: state]}"
+
+      Application.put_env(:reviews, :auth_relay, [])
+      assert build_conn() |> get(path) |> response(404)
+
+      # A preview is a relay client, never a relay.
+      Application.put_env(:reviews, :auth_relay, secret: @secret, url: @relay_url)
+      assert build_conn() |> get(path) |> response(404)
+
+      Application.put_env(:reviews, :auth_relay, secret: @secret)
+
+      Application.put_env(:ueberauth, Ueberauth.Strategy.Github.OAuth,
+        client_id: nil,
+        client_secret: nil
       )
 
-      assert conn |> get(~p"/auth/relay?#{[host: @preview, state: state]}") |> response(404)
+      assert build_conn() |> get(path) |> response(404)
     end
   end
 
   describe "preview" do
+    setup do
+      Application.put_env(:reviews, :auth_relay, secret: @secret, url: @relay_url)
+    end
+
     test "sign-in goes to the relay with this host and a fresh state", %{conn: conn} do
       conn =
         conn |> on_host(@preview) |> get(~p"/auth/github?#{[return_to: "/r/abc?patchset=2"]}")
