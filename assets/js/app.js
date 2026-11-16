@@ -29,6 +29,58 @@ import PacketNavTree from "./hooks/packet_nav_tree"
 import Markdown from "./hooks/markdown"
 import ReviewActivity from "./hooks/review_activity"
 
+// LiveView saves window.scrollY into history.state 100 ms after every scroll
+// so back and forward can restore it. Brave on iOS (Chromium's ios/web)
+// treats each replaceState as a navigation and expands its toolbars, so the
+// bars came back whenever a scroll stopped. Keep that scroll-only write in memory
+// and store it only when it is needed: before a new history entry is pushed,
+// with any other replaceState, and when the page is hidden.
+const deferScrollHistoryWrites = () => {
+  const {pushState, replaceState} = History.prototype
+  let pendingScroll = null
+
+  const isScrollOnly = (state, current, url) => {
+    if (!state || typeof state.scroll !== "number") return false
+    if (url != null && new URL(url, window.location.href).href !== window.location.href) return false
+    current = current || {}
+    const keys = new Set([...Object.keys(state), ...Object.keys(current)])
+    keys.delete("scroll")
+    return [...keys].every(key => state[key] === current[key])
+  }
+
+  // A state copied from history.state carries the old scroll; one that sets
+  // its own scroll (LiveView does for redirects) keeps it.
+  const withPendingScroll = (state, current) => {
+    if (pendingScroll === null || !state || typeof state !== "object") return state
+    const scroll = state.scroll === current?.scroll ? pendingScroll : state.scroll
+    pendingScroll = null
+    return {...state, scroll}
+  }
+
+  const flush = () => {
+    if (pendingScroll === null) return
+    const current = history.state || {}
+    replaceState.call(history, withPendingScroll({...current}, current), "", window.location.href)
+  }
+
+  History.prototype.replaceState = function (state, title, url) {
+    if (isScrollOnly(state, this.state, url)) {
+      pendingScroll = state.scroll
+      return
+    }
+    return replaceState.call(this, withPendingScroll(state, this.state), title, url)
+  }
+
+  History.prototype.pushState = function (...args) {
+    flush()
+    return pushState.apply(this, args)
+  }
+
+  window.addEventListener("pagehide", flush)
+}
+
+deferScrollHistoryWrites()
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,

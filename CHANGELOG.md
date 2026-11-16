@@ -167,6 +167,9 @@ still stabilizing.
 - On phones, lockfiles such as `mix.lock` and `package-lock.json` scroll
   sideways instead of wrapping, so each entry stays one row. Opening a thread
   in one keeps the start of each line in view.
+- Brave on iPhone no longer brings its toolbars back each time a scroll
+  stops. The page now saves its scroll position for back and forward
+  only when it leaves the page, not after every scroll.
 
 ## [0.0.1-alpha.2] - 2026-05-21
 
