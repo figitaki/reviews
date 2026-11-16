@@ -23,6 +23,15 @@ function fenceMarker(line) {
   return /^\s*(`{3,}|~{3,})(.*)$/.exec(line.slice(offset))
 }
 
+function tableDelimiter(line) {
+  // Separate cells before validating them so whitespace cannot be redistributed
+  // across optional/repeated regex groups on a near-matching untrusted row.
+  let row = line.trim()
+  if (row.startsWith("|")) row = row.slice(1)
+  if (row.endsWith("|")) row = row.slice(0, -1)
+  return row.split("|").every(cell => /^:?-+:?$/.test(cell.trim()))
+}
+
 // A patch cannot tell us the surrounding structure of an arbitrary excerpt.
 // Refuse visibly ambiguous fragments rather than inventing a document structure.
 export function markdownPreviewState(patch, fileDiff) {
@@ -56,7 +65,7 @@ export function markdownPreviewState(patch, fileDiff) {
         })
         const tableFragment = prose.some((line, index) =>
           line.includes("|") && !(prose[index - 1] || "").includes("|") &&
-          !/^ {0,3}\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/.test(prose[index + 1] || ""))
+          !tableDelimiter(prose[index + 1] || ""))
         // Two or more leading spaces can continue a list item whose marker is omitted.
         if (fence || tableFragment || (start > 1 && (/^(?: {2,}|\t)/.test(first) || sawFence))) {
           return { reason: "Surrounding Markdown is missing. Use Source for this excerpt." }

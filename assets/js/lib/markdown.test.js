@@ -220,3 +220,17 @@ test("container fence scans remain bounded on adversarial whitespace", () => {
   const nestedFence = "-    ".repeat(1600) + "```js"
   assert.match(markdownPreviewState("@@ -1 +1 @@\n+" + nestedFence).reason, /Surrounding/)
 }, 1000)
+
+
+test("table delimiters reject adversarial whitespace without backtracking", () => {
+  for (const row of ["-" + " ".repeat(100000) + "x", "| - | -" + " ".repeat(100000) + "x"]) {
+    const patch = "@@ -1,2 +1,2 @@\n A | B\n " + row
+    assert.match(markdownPreviewState(patch).reason, /Surrounding/)
+  }
+  for (const row of ["| :--- | ---: |", " :---: | --- ", "| - | - |", "---"]) {
+    assert.equal(markdownPreviewState("@@ -1,2 +1,2 @@\n A | B\n " + row).reason, null)
+  }
+  for (const row of ["| |", "| - || - |", "| - | text |", ":", ""]) {
+    assert.match(markdownPreviewState("@@ -1,2 +1,2 @@\n A | B\n " + row).reason, /Surrounding/)
+  }
+})
