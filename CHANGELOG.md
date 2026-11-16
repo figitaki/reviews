@@ -43,8 +43,9 @@ still stabilizing.
   unrelated review routes.
 - All reviews use edge-to-edge diff cards and smaller packet gutters on mobile,
   not only reviews containing Markdown files.
-- On phones, diffs and their file headers use the full screen width, without
-  a side gutter or rounded corners. Desktop is unchanged.
+- On phones, diffs, their file headers and their unmodified-lines separators
+  use the full screen width, without a side gutter or rounded corners. Desktop
+  is unchanged.
 - Comments render safe Markdown. The collapsible comment sidebar lists only
   unread thread locations, without message previews; links prefer the first
   covering hunk in the Guide and fall back to Diff when needed.
