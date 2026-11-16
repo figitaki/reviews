@@ -57,7 +57,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       <div class={[
         "review-packet-shell",
         @show_packet_outline && "has-outline",
-        !@show_packet_outline && "is-outline-hidden"
+        !@show_packet_outline && "is-outline-hidden",
+        @show_packet_outline && @diff_style == "split" && "is-guide-split"
       ]}>
         <.packet_guide_shell
           :if={@show_packet_outline}
@@ -216,14 +217,18 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             phx-value-target_id={section.target_id}
             title={"#{section.title} — #{section.status_label}"}
             style={"--guide-item-delay: #{min(section.index + 1, 6) * 24}ms"}
-            aria-label={"#{pad2(section.index + 1)} #{section.title}; decision: #{section.status_label}"}
+            aria-label={"#{pad2(section.index + 1)} #{section.title}"}
+            aria-describedby={section.effective_status && "review-guide-tick-#{section.index}-state"}
             aria-current={if(section.index == @active_section_index, do: "true", else: "false")}
           >
             <span class="review-edge-tick-number">{pad2(section.index + 1)}</span>
             <span
               :if={section.effective_status}
+              id={"review-guide-tick-#{section.index}-state"}
               class={["review-edge-tick-state", "is-#{section.effective_status}"]}
-              aria-hidden="true"
+              role="img"
+              aria-label={"Decision: #{section.status_label}"}
+              title={"Decision: #{section.status_label}"}
             >
               <.section_status_icon status={section.effective_status} />
             </span>

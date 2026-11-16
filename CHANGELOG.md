@@ -17,6 +17,11 @@ still stabilizing.
 
 ### Added
 
+- `reviews push --dry-run` (alias `--validate`) checks the diff and packet
+  and prints what would be sent, without contacting the server. It lists
+  every packet problem with `file:line`, flags an empty review title or
+  `--update` slug, and exits 1 if there are any problems. A real push now
+  also lists every packet problem at once.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed
@@ -54,6 +59,11 @@ still stabilizing.
   diagram rendered ahead of time.
 - Review packets use one centered heading and prose layout in split and stacked
   diffs. Hiding section navigation shows every section in that layout.
+- With split diffs, guide prose uses a 72ch measure. Context prose sits closer
+  to the hunk it introduces. On phones the section heading comes before its
+  meta row.
+- Guide rail ticks are named by section number and title. The decision glyph
+  has its own label, which the tick references as its description.
 - Typography uses shared system-sans reading and interface roles. Decision
   controls have a padded, rounded sticky surface.
 - Review titles, revisions and matching view controls share a sticky toolbar.
@@ -90,6 +100,12 @@ still stabilizing.
 
 ### Fixed
 
+- Decode Git-quoted filenames consistently in CLI validation, uploaded file
+  metadata, and review hunk lookup, including non-ASCII paths.
+
+- Changed lines whose text starts with `--` or `++`, such as a removed SQL
+  `-- note` comment, now count as changes. Packet coverage checks require them,
+  and file and hunk +/- counts include them.
 - Rail height and section jumps account for both headers, including wrapped
   mobile controls.
 - Section jumps use native scrolling instead of a frame-by-frame animation,
