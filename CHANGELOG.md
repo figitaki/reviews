@@ -41,6 +41,9 @@ still stabilizing.
   disconnect an agent in Settings. The CLI and its API tokens are unchanged. See `docs/POPPY.md`.
 - Poppy Personal Agents that send DPoP proofs get tokens bound to their key, so a copied access or
   refresh token is useless without it. Agents without DPoP keep getting Bearer tokens.
+- Agents whose metadata declares `dpop_bound_access_tokens: true` get no Bearer tokens: a token
+  request without a DPoP proof gets `invalid_dpop_proof`. The "Verified agent" details on a comment
+  say whether its token was bound to the agent's key.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed

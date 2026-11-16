@@ -56,6 +56,7 @@ const Attribution = z
     owner_username: z.string().nullable(),
     approved_at: z.string().nullable(),
     link_revoked: z.boolean(),
+    token_binding: z.enum(["dpop", "bearer"]).nullable().optional(),
   })
   .nullable()
   .optional()

@@ -144,13 +144,17 @@ defmodule ReviewsWeb.OAuthController do
     end
   end
 
-  # A DPoP proof is optional (Poppy spec 4.5). With one, the issued tokens are
-  # bound to its key. It is checked before the grant, so a bad proof doesn't
-  # use up the code.
+  # A DPoP proof is optional (Poppy spec 4.5), except for a client whose
+  # metadata declares `dpop_bound_access_tokens`: it never gets unbound tokens
+  # (RFC 9449 §5.2). With a proof, the issued tokens are bound to its key. It
+  # is checked before the grant, so a bad or missing proof doesn't use up the
+  # code.
   defp dpop_key(conn, client) do
     case get_req_header(conn, "dpop") do
       [] ->
-        {:ok, nil}
+        if match?(%{dpop_bound: true}, client),
+          do: {:error, :invalid_dpop_proof},
+          else: {:ok, nil}
 
       proofs ->
         request = %{

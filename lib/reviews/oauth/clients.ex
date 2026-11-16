@@ -64,6 +64,7 @@ defmodule Reviews.OAuth.Clients do
           jwks_uri: String.t() | nil,
           redirect_uris: [String.t()],
           auth_methods: [String.t()],
+          dpop_bound: boolean(),
           registered: boolean(),
           keys: [map()]
         }
@@ -223,6 +224,8 @@ defmodule Reviews.OAuth.Clients do
            jwks_uri: jwks_uri,
            redirect_uris: redirect_uris,
            auth_methods: auth_methods,
+           # RFC 9449 §5.2: the client always uses DPoP-bound tokens.
+           dpop_bound: metadata["dpop_bound_access_tokens"] == true,
            registered: false
          }}
     end

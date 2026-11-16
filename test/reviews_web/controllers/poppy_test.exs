@@ -155,6 +155,16 @@ defmodule ReviewsWeb.PoppyTest do
 
   defp comment_count, do: Repo.aggregate(Comment, :count)
 
+  # The token binding the review page shows for the review's one comment.
+  defp binding_shown(review) do
+    {:ok, snapshot} = Reviews.ReviewView.snapshot(review, nil)
+
+    [%{comments: [%{attribution: payload}]}] =
+      Reviews.ReviewView.thread_payloads_for_file(snapshot, "foo")
+
+    payload.token_binding
+  end
+
   describe "discovery" do
     test "poppy.json, protected resource, and issuer metadata point at one another", %{conn: conn} do
       poppy = conn |> get("/.well-known/poppy.json") |> json_response(200)
@@ -246,7 +256,8 @@ defmodule ReviewsWeb.PoppyTest do
                agent_id_claimed: true,
                owner_username: ctx.owner.username,
                approved_at: comment.attribution["approved_at"],
-               link_revoked: false
+               link_revoked: false,
+               token_binding: "bearer"
              }
 
       [link] = OAuth.list_links_for(ctx.owner)
@@ -765,6 +776,43 @@ defmodule ReviewsWeb.PoppyTest do
       assert comment.author_id == ctx.identity.id
       assert comment.attribution["access_token_dpop_key"] == jkt
       assert Repo.one!(from l in IdentityLink, select: l.dpop_jkt) == jkt
+
+      assert binding_shown(ctx.review) == "dpop"
+
+      # A comment recorded before Reviews kept the binding claims neither.
+      comment
+      |> Ecto.Changeset.change(
+        attribution: Map.delete(comment.attribution, "access_token_dpop_key")
+      )
+      |> Repo.update!()
+
+      assert binding_shown(ctx.review) == nil
+    end
+
+    test "an agent whose metadata declares dpop_bound_access_tokens gets no unbound tokens",
+         ctx do
+      agent = Agent.new(metadata: %{"dpop_bound_access_tokens" => true})
+      {%{"code" => code}, verifier} = get_code(agent, ctx.owner, ctx.identity)
+
+      # The refusal doesn't use up the code.
+      conn = token_post(code_params(agent, code, verifier), [])
+      assert %{"error" => "invalid_dpop_proof"} = json_response(conn, 400)
+
+      conn = token_post(code_params(agent, code, verifier), [token_proof(ctx.key)])
+      assert json_response(conn, 200)["token_type"] == "DPoP"
+
+      # An agent that starts declaring it after getting Bearer tokens can't
+      # refresh them unbound.
+      tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
+      assert tokens["token_type"] == "Bearer"
+      Agent.publish(ctx.agent, %{"dpop_bound_access_tokens" => true})
+      Reviews.OAuth.Clients.forget(ctx.agent.client_id)
+      params = fn -> refresh_params(ctx.agent, tokens["refresh_token"]) end
+
+      assert %{"error" => "invalid_dpop_proof"} = json_response(token_post(params.(), []), 400)
+
+      assert json_response(token_post(params.(), [token_proof(ctx.key)]), 200)["token_type"] ==
+               "DPoP"
     end
 
     test "a DPoP-bound token sent as a bearer token is refused", ctx do

@@ -234,7 +234,9 @@ defmodule Reviews.ReviewView do
   end
 
   # Only what the adapter verified, plus the agent's own claims labelled as
-  # such. The pairwise User ID, Session, and key thumbprint stay server-side.
+  # such. The pairwise User ID, Session, and key thumbprint stay server-side;
+  # `token_binding` says only whether the token was bound to a DPoP key, and is
+  # nil for comments recorded before Reviews kept that.
   defp attribution_payload(%{attribution: %{"provider" => "poppy"} = a} = comment) do
     link = Map.get(comment, :identity_link)
 
@@ -247,11 +249,16 @@ defmodule Reviews.ReviewView do
       agent_id_claimed: is_binary(a["agent_id_claimed"]),
       owner_username: a["owner_username"],
       approved_at: a["approved_at"],
-      link_revoked: match?(%{revoked_at: %DateTime{}}, link)
+      link_revoked: match?(%{revoked_at: %DateTime{}}, link),
+      token_binding: token_binding(a)
     }
   end
 
   defp attribution_payload(_comment), do: nil
+
+  defp token_binding(%{"access_token_dpop_key" => jkt}) when is_binary(jkt), do: "dpop"
+  defp token_binding(%{"access_token_dpop_key" => nil}), do: "bearer"
+  defp token_binding(_attribution), do: nil
 
   defp user_to_payload(%Identity{} = identity) do
     %{

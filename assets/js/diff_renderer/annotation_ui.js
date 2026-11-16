@@ -498,9 +498,18 @@ export function attributionDetails(attribution, author) {
       ...(attribution.agent_id_claimed ? row("Agent ID", "sent", claim("not verified")) : []),
       ...row("Workload", "not established", claim("Poppy 1.0 has no workload proof")),
       ...row("Delegation", "owner approval in Reviews", claim("no signed delegation chain")),
+      ...tokenRow(attribution.token_binding, row, claim),
       ...(attribution.link_revoked ? row("Status", "Disconnected by its owner after this comment") : []),
     ]),
   ])
+}
+
+// Whether the comment's access token was bound to the agent's key. Comments
+// recorded before Reviews kept this have no row.
+function tokenRow(binding, row, claim) {
+  if (binding === "dpop") return row("Token", "Bound to agent key (DPoP)")
+  if (binding === "bearer") return row("Token", "Bearer", claim("not bound to a key"))
+  return []
 }
 
 function formatDate(iso) {

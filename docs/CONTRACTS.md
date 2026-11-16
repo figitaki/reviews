@@ -205,7 +205,9 @@ Comments posted this way store `attribution` (a map of what was verified) and `i
 Thread payloads sent to the diff renderer include `comments[].attribution`, which is `null` for
 comments made in the browser or through the CLI. It contains only `provider`, `verified_at`,
 `client_id`, `client_domain`, `client_name_claimed`, `agent_id_claimed` (a boolean), `owner_username`,
-`approved_at`, and `link_revoked`.
+`approved_at`, `link_revoked`, and `token_binding`: `"dpop"` when the comment's access token was
+bound to the agent's DPoP key, `"bearer"` when it wasn't, and `null` for comments recorded before
+Reviews kept the binding.
 
 ### Body size
 

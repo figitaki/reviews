@@ -78,7 +78,15 @@ signed-out request to the comment endpoint gets
 Poppy 1.0 leaves DPoP (RFC 9449) to the Company (spec 4.5). Reviews supports it but doesn't require
 it. The issuer advertises `dpop_signing_alg_values_supported: ["ES256"]`, and Personal Agents that
 support DPoP send a proof with their token requests. Reviews then binds the tokens to the proof's
-key. Agents that don't send a proof get Bearer tokens, as before.
+key. Agents that don't send a proof get Bearer tokens, as before, unless their metadata requires
+DPoP.
+
+- **Agents that require DPoP.** A Personal Agent whose client metadata document declares
+  `dpop_bound_access_tokens: true` (RFC 9449 §5.2) never gets unbound tokens. A token request from
+  it without a `DPoP` proof gets 400 `invalid_dpop_proof`, for both the code exchange and refresh.
+  The refusal doesn't use up the code, and a later request with a proof succeeds. An agent that
+  starts declaring the flag after it got Bearer tokens has to send a proof to refresh them, and
+  gets a DPoP access token. Dynamically registered clients can't declare the flag.
 
 - **Sign-in.** A token request with a valid `DPoP` proof gets `token_type: "DPoP"`. The access
   token and the link's refresh token are both bound to the key's RFC 7638 thumbprint
@@ -107,7 +115,9 @@ key. Agents that don't send a proof get Bearer tokens, as before.
   code then needs a proof from that key, and anything else gets `invalid_grant`. Reviews doesn't
   offer PAR, so it has no pushed request to bind the code from (spec 4.2, RFC 9449 §10.1).
 - **Attribution.** Comments posted with a DPoP-bound token record the key's thumbprint in
-  `attribution["access_token_dpop_key"]`. It's `nil` for Bearer tokens.
+  `attribution["access_token_dpop_key"]`. It's `nil` for Bearer tokens. The review page shows only
+  which kind it was: the "Verified agent" details have a Token row, "Bound to agent key (DPoP)" or
+  "Bearer (not bound to a key)". Comments recorded before Reviews kept the binding have no row.
 
 ## Revocation
 
