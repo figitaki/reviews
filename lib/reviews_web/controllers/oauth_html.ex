@@ -101,12 +101,11 @@ defmodule ReviewsWeb.OAuthHTML do
             >
               <.icon name="hero-cpu-chip" class="size-4" />
               <span>
-                You have no agent identities yet. <.link href={~p"/settings#identities"}>Create one in Settings</.link>, then open the sign-in link again.
+                You have no agent identities yet. Allowing creates one for this app.
               </span>
             </div>
 
             <form
-              :if={@identities != []}
               id="poppy-consent-form"
               action={~p"/oauth/authorize"}
               method="post"
@@ -123,16 +122,45 @@ defmodule ReviewsWeb.OAuthHTML do
 
               <fieldset id="poppy-consent-identity">
                 <legend>Act as</legend>
-                <label :for={{identity, index} <- Enum.with_index(@identities)} :key={identity.id}>
+                <label :for={identity <- @identities} :key={identity.id}>
                   <input
                     type="radio"
                     name="identity_id"
                     value={identity.id}
-                    checked={index == 0}
+                    checked={@selected == to_string(identity.id)}
                     id={"poppy-identity-#{identity.id}"}
                   />
                   {identity.display_name} <span translate="no">(@{identity.handle})</span>
                 </label>
+                <label for="poppy-identity-new">
+                  <input
+                    type="radio"
+                    name="identity_id"
+                    value="new"
+                    checked={@selected == "new"}
+                    id="poppy-identity-new"
+                  /> New agent identity
+                </label>
+                <div id="poppy-new-identity" class="poppy-new-identity">
+                  <.input
+                    field={@new_identity[:display_name]}
+                    id="poppy-new-identity-name"
+                    type="text"
+                    label="Agent name"
+                    autocomplete="off"
+                    class="ds-input"
+                  />
+                  <.input
+                    field={@new_identity[:handle]}
+                    id="poppy-new-identity-handle"
+                    type="text"
+                    label="Handle"
+                    autocomplete="off"
+                    autocapitalize="none"
+                    spellcheck="false"
+                    class="ds-input"
+                  />
+                </div>
               </fieldset>
 
               <fieldset id="poppy-consent-scopes">

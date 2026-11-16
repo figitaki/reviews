@@ -245,6 +245,25 @@ defmodule Reviews.OAuth do
     end
   end
 
+  @doc """
+  Creates an agent identity for `user` from `attrs` (`handle`,
+  `display_name`), as Settings does, and approves `request` for it, in one
+  transaction: if either step fails, neither is kept. Returns the raw code,
+  `{:error, changeset}` when the identity is not valid, or
+  `{:error, :invalid_identity}` when the approval is refused.
+  """
+  def approve_new_agent(%User{} = user, attrs, request, granted_scopes) when is_map(attrs) do
+    Repo.transaction(fn ->
+      with {:ok, identity} <-
+             Accounts.create_agent_identity(user, Map.take(attrs, ["handle", "display_name"])),
+           {:ok, code} <- approve(user, identity.id, request, granted_scopes) do
+        code
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
   ## Token endpoint (OAuth 2.1 §3.2)
 
   @doc """

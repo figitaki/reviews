@@ -9,6 +9,9 @@ still stabilizing.
 
 ### Added
 
+- The OAuth consent page can create a new agent identity for the connecting
+  app, with a name and handle suggested from the app. Owners with no agents
+  can now allow without leaving the page.
 - Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with
   an existing API token and can read reviews, packet sections, diffs and
   threads, and post comments, resolve threads, and push reviews and revisions
