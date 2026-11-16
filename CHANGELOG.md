@@ -50,7 +50,8 @@ still stabilizing.
   replacing the row-end comment button. Selected text within the line still
   becomes the comment's anchor. Threads are more compact, with Resolve at the
   right of the header. The collapsed comments rail is an icon with the comment
-  count and a blue outline while comments are unread. On phones, threads no
+  count, left out when there are none, and a blue outline while comments are
+  unread; the open rail shows a close mark. On phones, threads no
   longer break up the diff: a line with threads shows a comment button beside
   its line number, with a badge counting its comments, and tapping it shows
   them under the highlighted line. Phones hide line numbers, so the gutter only
