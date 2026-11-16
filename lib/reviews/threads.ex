@@ -40,7 +40,7 @@ defmodule Reviews.Threads do
 
     Repo.all(query)
     |> Enum.filter(fn thread -> thread.comments != [] end)
-    |> Repo.preload(comments: :author)
+    |> Repo.preload(comments: [:author, :identity_link])
   end
 
   ## Commenting
@@ -71,7 +71,10 @@ defmodule Reviews.Threads do
   Returns `{:ok, %{thread: t, comment: c}}` or `{:error, reason}`.
   Broadcasts `{:thread_published, thread}` on `"review:<slug>"`.
   """
-  def publish_comment(%Review{} = review, %Identity{} = author, params) when is_map(params) do
+  def publish_comment(review, author, params, attribution \\ nil)
+
+  def publish_comment(%Review{} = review, %Identity{} = author, params, attribution)
+      when is_map(params) do
     file_path = params["file_path"] || params[:file_path]
     side = params["side"] || params[:side]
     body = String.trim(to_string(params["body"] || params[:body] || ""))
@@ -97,20 +100,41 @@ defmodule Reviews.Threads do
       true ->
         with {:ok, existing} <- fetch_reply_thread(review, thread_id),
              {:ok, origin_id} <- originating_patchset_id(review, existing, params) do
-          insert_comment(review, author, existing, file_path, side, anchor, body, origin_id)
+          insert_comment(
+            review,
+            author,
+            existing,
+            file_path,
+            side,
+            anchor,
+            body,
+            origin_id,
+            attribution
+          )
         end
     end
   rescue
     error in [Ecto.InvalidChangesetError, Postgrex.Error] -> {:error, error}
   end
 
-  def publish_comment(%Review{} = review, %User{} = user, params) when is_map(params) do
+  def publish_comment(%Review{} = review, %User{} = user, params, attribution)
+      when is_map(params) do
     with {:ok, identity} <- Accounts.ensure_human_identity(user) do
-      publish_comment(review, identity, params)
+      publish_comment(review, identity, params, attribution)
     end
   end
 
-  defp insert_comment(review, author, existing, file_path, side, anchor, body, origin_id) do
+  defp insert_comment(
+         review,
+         author,
+         existing,
+         file_path,
+         side,
+         anchor,
+         body,
+         origin_id,
+         attribution
+       ) do
     result =
       Repo.transaction(fn ->
         thread = existing || create_thread(review, author, file_path, side, anchor, origin_id)
@@ -120,7 +144,9 @@ defmodule Reviews.Threads do
           |> Comment.changeset(%{
             thread_id: thread.id,
             author_id: author.id,
-            body: body
+            body: body,
+            identity_link_id: attribution && attribution["link_id"],
+            attribution: attribution
           })
           |> Repo.insert!()
 
@@ -227,7 +253,7 @@ defmodule Reviews.Threads do
   defp comments_query do
     from c in Comment,
       order_by: [asc: c.inserted_at],
-      preload: [:author]
+      preload: [:author, :identity_link]
   end
 
   # No thread_id starts a new thread. A thread_id that is not a thread of this

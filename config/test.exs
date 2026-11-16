@@ -50,8 +50,8 @@ config :phoenix,
 config :reviews, Reviews.OAuth,
   issuer: "https://reviews.test",
   fetcher: Reviews.OAuthTestClient.Fetcher,
-  resources: [Reviews.OAuthTestResource.KeysOnly, Reviews.OAuthTestResource],
-  default_resource: Reviews.OAuthTestResource.KeysOnly
+  resources: [Reviews.Poppy, Reviews.OAuthTestResource.KeysOnly, Reviews.OAuthTestResource],
+  default_resource: Reviews.Poppy
 
 # Raise on LiveView test-time template problems instead of warning.
 config :phoenix_live_view, :test_warnings,

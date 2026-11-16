@@ -24,6 +24,16 @@ defmodule ReviewsWeb.Router do
     plug ReviewsWeb.Plugs.RequireApiToken
   end
 
+  pipeline :poppy_api do
+    plug :accepts, ["json"]
+    plug ReviewsWeb.Plugs.PoppyAuth
+  end
+
+  pipeline :poppy_comments do
+    plug :accepts, ["json"]
+    plug ReviewsWeb.Plugs.PoppyAuth, scope: "comments:write"
+  end
+
   # JSON-only OAuth endpoints: nothing here should ever load or frame.
   pipeline :oauth_endpoint do
     plug :put_secure_browser_headers, %{
@@ -70,6 +80,10 @@ defmodule ReviewsWeb.Router do
         :protected_resource
 
     options "/.well-known/*path", OAuthDiscoveryController, :authorization_server
+
+    # Poppy (Personal Agent Protocol 1.0) Company discovery.
+    get "/.well-known/poppy.json", PoppyDiscoveryController, :poppy_json
+    get "/api/poppy/openapi.json", PoppyDiscoveryController, :openapi
   end
 
   scope "/oauth", ReviewsWeb do
@@ -86,6 +100,19 @@ defmodule ReviewsWeb.Router do
     post "/revoke", OAuthController, :revoke
     post "/register", OAuthController, :register
     options "/:endpoint", OAuthController, :token
+  end
+
+  # The Poppy API. Bearer API tokens are refused here, and Poppy tokens on /api/v1.
+  scope "/api/poppy/v1", ReviewsWeb.Api do
+    pipe_through [:poppy_api, :review_content]
+
+    get "/reviews/:slug", ReviewController, :show
+  end
+
+  scope "/api/poppy/v1", ReviewsWeb.Api do
+    pipe_through :poppy_comments
+
+    post "/reviews/:slug/comments", CommentController, :create
   end
 
   # Preview sign-in relay. Before /auth/:provider, which would match /auth/relay.
