@@ -31,6 +31,14 @@ config :reviews, ReviewsWeb.Endpoint,
   secret_key_base: "PksNuEADSq2cFj3rPjGzuMlw2ulffcTg5IHJLaFhVcq8wWgjFfUr/EhTVD4cpvRl",
   server: false
 
+config :reviews, :mcp,
+  enabled: true,
+  writes_enabled: true,
+  allowed_hosts: ["localhost", "www.example.com"],
+  # Paging tests send many requests from one identity.
+  requests_per_second: 1_000.0,
+  burst: 1_000
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

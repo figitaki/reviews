@@ -80,7 +80,8 @@ defmodule Reviews.MixProject do
       {:dns_cluster, "~> 0.3.0"},
       {:bandit, "~> 1.14.1"},
       {:ueberauth, "~> 0.10"},
-      {:ueberauth_github, "~> 0.8"}
+      {:ueberauth_github, "~> 0.8"},
+      {:fastest_mcp, "~> 1.0.1"}
     ]
   end
 

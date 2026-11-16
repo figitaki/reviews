@@ -35,6 +35,8 @@ end
 
 http_port = parse_int_env.("PORT", 4000)
 
+config :reviews, :mcp, enabled: true, writes_enabled: true
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

@@ -140,10 +140,22 @@ defmodule Reviews.ReviewHunks do
     {header_lines, rest} = Enum.split_while(lines, &(not String.starts_with?(&1, "@@ ")))
     [hunk_header | hunk_lines] = rest
 
-    hunk_lines =
+    # Rows are numbered as the CLI validates slices: "\\ No newline" markers
+    # are not rows, and stay with the row they follow.
+    {kept, _row, _kept?} =
       hunk_lines
       |> Enum.reject(&(&1 == ""))
-      |> Enum.slice((line_start - 1)..(line_end - 1))
+      |> Enum.reduce({[], 0, false}, fn line, {acc, row, prev_kept?} ->
+        if String.starts_with?(line, "\\") do
+          {if(prev_kept?, do: [line | acc], else: acc), row, prev_kept?}
+        else
+          row = row + 1
+          keep? = row >= line_start and row <= line_end
+          {if(keep?, do: [line | acc], else: acc), row, keep?}
+        end
+      end)
+
+    hunk_lines = Enum.reverse(kept)
 
     Enum.join(header_lines ++ [hunk_header | hunk_lines], "\n")
   end

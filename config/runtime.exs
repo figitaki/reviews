@@ -72,6 +72,13 @@ if config_env() == :prod do
 
   config :reviews, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
+  mcp_enabled = System.get_env("MCP_ENABLED") in ~w(true 1)
+
+  config :reviews, :mcp,
+    enabled: mcp_enabled,
+    writes_enabled: mcp_enabled and System.get_env("MCP_WRITES_ENABLED") in ~w(true 1),
+    allowed_hosts: [host]
+
   config :reviews, ReviewsWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     # Accept WebSocket origins from both the canonical host and the legacy

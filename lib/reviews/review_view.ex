@@ -111,11 +111,19 @@ defmodule Reviews.ReviewView do
     }
   end
 
-  defp project_threads(_review, _patchsets, nil), do: []
+  @doc """
+  Published threads projected onto `selected`, without building file or hunk
+  payloads. `patchsets` needs `id` and `number`; raw diffs are loaded only for
+  the selected revision and the older revisions threads started on. Pass
+  `threads` to project one page instead of every thread of the review.
+  """
+  def project_threads(review, patchsets, selected, threads \\ nil)
 
-  defp project_threads(review, patchsets, selected) do
+  def project_threads(_review, _patchsets, nil, _threads), do: []
+
+  def project_threads(review, patchsets, selected, threads) do
     by_id = Map.new(patchsets, &{&1.id, &1})
-    threads = Threads.list_published_threads(review.id)
+    threads = threads || Threads.list_published_threads(review.id)
 
     historical_origins =
       threads
@@ -127,7 +135,7 @@ defmodule Reviews.ReviewView do
       if historical_origins == [] do
         %{}
       else
-        Map.new([selected | historical_origins], &{&1.id, Reviews.Anchoring.index(&1)})
+        Map.new([selected | historical_origins], &{&1.id, Reviews.Anchoring.index(with_diff(&1))})
       end
 
     Enum.flat_map(threads, fn thread ->
@@ -161,6 +169,9 @@ defmodule Reviews.ReviewView do
       end
     end)
   end
+
+  defp with_diff(%Patchset{raw_diff: raw_diff} = patchset) when is_binary(raw_diff), do: patchset
+  defp with_diff(%{id: id}), do: ReviewsContext.get_patchset!(id)
 
   defp file_diff_meta(_files, nil), do: []
 
