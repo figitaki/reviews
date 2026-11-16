@@ -50,10 +50,12 @@ still stabilizing.
   replacing the row-end comment button. Selected text within the line still
   becomes the comment's anchor. Threads are more compact, with Resolve at the
   right of the header. The collapsed comments rail is an icon with the comment
-  count and a blue outline while comments are unread. On phones, the composer
-  and threads stay inline under their line instead of a floating panel, inputs
-  use 16px text so focusing them does not zoom the page, and keyboard hints are
-  hidden. Opening a composer in a large virtualized file keeps your place.
+  count and a blue outline while comments are unread. On phones, threads no
+  longer break up the diff: a line with threads shows a comment button beside
+  its line number, with a badge counting its comments, and tapping it shows
+  them under the highlighted line. The composer stays inline under its line
+  instead of a floating panel, inputs use 16px text so focusing them does not
+  zoom the page, and keyboard hints are hidden. Opening a composer in a large virtualized file keeps your place.
 - Inline conversations share one shelf with an expandable reply entry and
   compact resolved history. On mobile, conversations float above the review
   without shifting code, preserve reply text when dismissed, and follow the
