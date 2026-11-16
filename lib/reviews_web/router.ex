@@ -24,6 +24,21 @@ defmodule ReviewsWeb.Router do
     plug ReviewsWeb.Plugs.RequireApiToken
   end
 
+  # JSON-only OAuth endpoints: nothing here should ever load or frame.
+  pipeline :oauth_endpoint do
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" => "default-src 'none'; frame-ancestors 'none'"
+    }
+
+    plug :put_oauth_cors
+  end
+
+  # Discovery documents are public; browser-based clients, such as the MCP
+  # Inspector, read them from another origin.
+  pipeline :oauth_discovery do
+    plug :put_oauth_cors
+  end
+
   pipeline :review_content do
     plug :put_review_robots_header
   end
@@ -48,6 +63,37 @@ defmodule ReviewsWeb.Router do
 
     live "/r/:slug", ReviewLive, :show
     live "/r/:slug/changes", ReviewLive, :changes
+  end
+
+  # The OAuth issuer (Reviews.OAuth): discovery, authorization, and tokens.
+  # The CLI's bearer-token API under /api/v1 is unchanged.
+  scope "/", ReviewsWeb do
+    pipe_through :oauth_discovery
+
+    get "/.well-known/oauth-authorization-server", OAuthDiscoveryController, :authorization_server
+    get "/.well-known/oauth-protected-resource", OAuthDiscoveryController, :protected_resource
+
+    get "/.well-known/oauth-protected-resource/*path",
+        OAuthDiscoveryController,
+        :protected_resource
+
+    options "/.well-known/*path", OAuthDiscoveryController, :authorization_server
+  end
+
+  scope "/oauth", ReviewsWeb do
+    pipe_through :browser
+
+    get "/authorize", OAuthController, :authorize
+    post "/authorize", OAuthController, :approve
+  end
+
+  scope "/oauth", ReviewsWeb do
+    pipe_through :oauth_endpoint
+
+    post "/token", OAuthController, :token
+    post "/revoke", OAuthController, :revoke
+    post "/register", OAuthController, :register
+    options "/:endpoint", OAuthController, :token
   end
 
   # Preview sign-in relay. Before /auth/:provider, which would match /auth/relay.
@@ -117,6 +163,25 @@ defmodule ReviewsWeb.Router do
       |> put_resp_content_type("application/json")
       |> send_resp(404, JSON.encode!(%{errors: %{detail: "Not Found"}}))
       |> halt()
+    end
+  end
+
+  # No cookies are read here, so any origin may call. A preflight ends here.
+  defp put_oauth_cors(conn, _opts) do
+    conn = put_resp_header(conn, "access-control-allow-origin", "*")
+
+    if conn.method == "OPTIONS" do
+      conn
+      |> put_resp_header("access-control-allow-methods", "GET, POST, OPTIONS")
+      |> put_resp_header(
+        "access-control-allow-headers",
+        "authorization, content-type, dpop, mcp-protocol-version"
+      )
+      |> put_resp_header("access-control-max-age", "600")
+      |> send_resp(204, "")
+      |> halt()
+    else
+      conn
     end
   end
 end

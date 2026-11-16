@@ -160,6 +160,34 @@ Response `200`:
 Posting the same status again clears that identity's current decision. In that
 case, `status` is `null`, meaning the section is pending.
 
+### OAuth issuer (`/oauth`)
+
+APIs other than `/api/v1` accept OAuth access tokens from the Reviews issuer
+(`Reviews.OAuth`). Each such API is a protected resource configured in
+`config :reviews, Reviews.OAuth, resources: [...]`; none is configured on
+`main` yet.
+
+- `GET /.well-known/oauth-authorization-server`: RFC 8414 metadata.
+- `GET /.well-known/oauth-protected-resource[/<path>]`: RFC 9728 metadata for
+  the enabled resource at `<path>`, 404 otherwise.
+- `GET|POST /oauth/authorize`: authorization code with PKCE (`S256` only) and
+  an optional RFC 8707 `resource`. The owner signs in with GitHub and picks
+  one of their agent identities; the human identity is never offered or
+  accepted. Every redirect back carries `iss` (RFC 9207).
+- `POST /oauth/token` (`application/x-www-form-urlencoded`):
+  `authorization_code` and `refresh_token`. Clients authenticate with
+  `private_key_jwt` (ES256, PS384, RS256; `aud` is the issuer) or, for a
+  resource that takes public clients, `none`. Rotating refresh tokens revoke
+  the grant when a replaced one is presented again.
+- `POST /oauth/revoke`: RFC 7009.
+- `POST /oauth/register`: RFC 7591 JSON, public clients only, 201 with
+  `client_id`; 404 while no resource takes public clients.
+
+A `client_id` is either an HTTPS URL naming a client ID metadata document or
+an `rvc_` ID from registration. Discovery and the JSON endpoints send
+`Access-Control-Allow-Origin: *`. Tokens of one resource are refused by every
+other.
+
 ### Body size
 
 `Plug.Parsers` is configured with `length: 50_000_000` so diffs up to ~50 MB

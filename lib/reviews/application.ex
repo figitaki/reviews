@@ -14,6 +14,7 @@ defmodule Reviews.Application do
       {Phoenix.PubSub, name: Reviews.PubSub},
       # Before the endpoint, so /mcp never sees a stopped server.
       ReviewsWeb.MCP.Server,
+      Reviews.OAuth.Clients,
       # Start to serve requests, typically the last entry
       ReviewsWeb.Endpoint
     ]

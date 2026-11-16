@@ -17,6 +17,13 @@ still stabilizing.
 
 ### Added
 
+- An OAuth 2.1 issuer for APIs beyond the CLI's: authorization with PKCE and an
+  owner consent page, a token endpoint with rotating refresh tokens, revocation,
+  client ID metadata documents, `private_key_jwt`, dynamic client registration,
+  and RFC 8414 and RFC 9728 metadata. An app only ever acts as one of the owner's
+  agent identities, never as the owner, and owners can disconnect it in
+  Settings. No API uses it yet.
+
 - GitHub sign-in works on per-PR preview apps through a sign-in relay on
   production. The relay only sends users back to `reviews-pr-<N>.fly.dev`
   over HTTPS, with a code that works once, on that host, within 60 seconds.
