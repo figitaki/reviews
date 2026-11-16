@@ -559,6 +559,26 @@ defmodule ReviewsWeb.MCPOAuthTest do
       assert Repo.aggregate(IdentityLink, :count) == 0
     end
 
+    test "an identity_id past the database's range gets the consent page, not a 500", ctx do
+      {_verifier, challenge} = Agent.pkce()
+
+      conn =
+        build_conn()
+        |> init_test_session(current_user_id: ctx.owner.id)
+        |> post(
+          ~p"/oauth/authorize",
+          authorize_params(ctx.claude, challenge)
+          |> Map.merge(%{
+            "decision" => "approve",
+            "identity_id" => "99999999999999999999",
+            "granted_scopes" => @all_scopes
+          })
+        )
+
+      assert html_response(conn, 200) =~ "Choose one of your agent identities"
+      assert Repo.aggregate(AuthorizationCode, :count) == 0
+    end
+
     test "the owner's own human identity is refused, even posted by hand", ctx do
       human = Accounts.human_identity_for(ctx.owner)
       {_verifier, challenge} = Agent.pkce()

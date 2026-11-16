@@ -218,7 +218,9 @@ defmodule Reviews.OAuth do
   never acts as the person.
   """
   def approve(%User{} = user, identity_id, request, granted_scopes) do
-    with {:ok, id} when is_integer(id) <- Ecto.Type.cast(:id, identity_id),
+    # IDs are bigints; a larger number would make the query raise.
+    with {:ok, id} when is_integer(id) and id <= 9_223_372_036_854_775_807 <-
+           Ecto.Type.cast(:id, identity_id),
          %Identity{kind: "agent"} = identity <- Accounts.get_owned_identity(user, id),
          true <- granted_scopes != [] and granted_scopes -- request.scopes == [] do
       code = random_token("ppc_")
