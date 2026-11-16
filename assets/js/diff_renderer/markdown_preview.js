@@ -10,7 +10,18 @@ export function discussionCount(threads = [], hunks = []) {
 }
 
 // A fence may follow blockquote or list markers, or sit indented inside a list item.
-const FENCE = /^(?: {0,3}>\s?| {0,3}(?:[-+*]|\d{1,9}[.)])\s+)*\s*(`{3,}|~{3,})(.*)$/
+function fenceMarker(line) {
+  // Each match consumes one prefix; never reconsider earlier container boundaries.
+  const container = / {0,3}(?:>\s?|(?:[-+*]|\d{1,9}[.)])\s+)/y
+  let offset = 0
+  while (true) {
+    container.lastIndex = offset
+    const prefix = container.exec(line)
+    if (!prefix) break
+    offset = container.lastIndex
+  }
+  return /^\s*(`{3,}|~{3,})(.*)$/.exec(line.slice(offset))
+}
 
 // A patch cannot tell us the surrounding structure of an arbitrary excerpt.
 // Refuse visibly ambiguous fragments rather than inventing a document structure.
@@ -33,7 +44,7 @@ export function markdownPreviewState(patch, fileDiff) {
         let sawFence = false
         // Fenced lines are blanked so pipes in code are not read as table rows.
         const prose = lines.map(line => {
-          const marker = FENCE.exec(line)
+          const marker = fenceMarker(line)
           if (marker) sawFence = true
           if (!fence) {
             if (!marker) return line

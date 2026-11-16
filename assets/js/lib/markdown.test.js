@@ -210,3 +210,13 @@ test("preview headings fit the review outline and repository-relative links cann
   assert.match(renderMarkdown("[setup](setup.md)"), /href="setup.md"/)
   assert.doesNotMatch(renderMarkdown("[x](/\\\\evil)"), /<a\b/)
 })
+
+
+test("container fence scans remain bounded on adversarial whitespace", () => {
+  for (const line of ["-    ".repeat(1600) + "text", "-" + " ".repeat(128 * 1024) + "text"]) {
+    const patch = "@@ -1 +1 @@\n+" + line
+    assert.equal(markdownPreviewState(patch).reason, null)
+  }
+  const nestedFence = "-    ".repeat(1600) + "```js"
+  assert.match(markdownPreviewState("@@ -1 +1 @@\n+" + nestedFence).reason, /Surrounding/)
+}, 1000)
