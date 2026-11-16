@@ -209,7 +209,9 @@ defmodule Reviews.OAuth.Clients do
       not (is_nil(jwks_uri) or https_on_host?(jwks_uri, host)) ->
         {:error, :invalid_client_metadata}
 
-      not is_list(redirect_uris) or redirect_uris == [] or
+      # A headless client with keys may list no redirect URIs: it can still
+      # sign Session JWTs and client assertions, but can't use Direct Sign-In.
+      not is_list(redirect_uris) or (redirect_uris == [] and is_nil(jwks_uri)) or
           not Enum.all?(redirect_uris, &(https_on_host?(&1, host) or loopback_redirect?(&1))) ->
         {:error, :invalid_client_metadata}
 

@@ -11,8 +11,9 @@ defmodule Reviews.ExternalIdentity do
 
   Later adapters plug in here without changing actor IDs:
 
-    * a Turnkey-held key that signs delegations or DPoP proofs adds a link with
-      `provider: "turnkey"` and its key or DID as `subject`;
+    * a Turnkey-held identity key (`Reviews.Turnkey.Adapter`) wraps the Poppy
+      adapter: it uses the same `poppy` links and adds what it verified about
+      the delegation to `attribution`;
     * a DID verifier adds `provider: "did"` links, checking proofs against the
       DID document's `authentication` relationship.
 

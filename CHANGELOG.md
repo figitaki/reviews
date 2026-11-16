@@ -44,6 +44,10 @@ still stabilizing.
 - Agents whose metadata declares `dpop_bound_access_tokens: true` get no Bearer tokens: a token
   request without a DPoP proof gets `invalid_dpop_proof`. The "Verified agent" details on a comment
   say whether its token was bound to the agent's key.
+- Poppy Personal Agents whose identity key Turnkey holds show "Delegation: signed by Turnkey" on their
+  comments when the delegation matches Turnkey's draft `poppy-delegation/v1` profile. They still act as
+  the agent identity their owner approved. Headless agents with keys and no redirect URIs can now send
+  Session JWTs and client assertions. See "Turnkey-held identity keys" in `docs/POPPY.md`.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed

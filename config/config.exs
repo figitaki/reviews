@@ -75,6 +75,13 @@ config :phoenix, :filter_parameters, [
 # Reviews.OAuth.Resource listed here. A request without `resource` or a scope
 # it recognizes goes to the default.
 config :reviews, Reviews.OAuth, resources: [Reviews.Poppy], default_resource: Reviews.Poppy
+
+# Poppy requests go through the Turnkey adapter, which adds what it verified
+# about Turnkey-hosted agents and otherwise is the Poppy adapter. The agent
+# host comes from Turnkey's draft Personal Agent Protocol guide and is
+# provisional until Turnkey ships it (see Reviews.Turnkey).
+config :reviews, Reviews.Poppy, adapter: Reviews.Turnkey.Adapter
+config :reviews, Reviews.Turnkey, agent_hosts: ["id.turnkey.com"]
 config :postgrex, :json_library, JSON
 
 # Import environment specific config. This must remain at the bottom

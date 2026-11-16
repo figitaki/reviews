@@ -43,7 +43,8 @@ defmodule Reviews.OAuth.Tokens do
          :ok <- expect(exp > now - skew, :expired),
          :ok <- expect(iat <= now + skew, :issued_in_future),
          :ok <- expect(exp - iat <= @max_assertion_lifetime, :assertion_too_long),
-         :ok <- expect(jti != "" and byte_size(jti) <= 255, :bad_jti),
+         # Turnkey's client-assertion profile allows 256 characters.
+         :ok <- expect(jti != "" and byte_size(jti) <= 256, :bad_jti),
          :ok <- remember_jti("assertion", iss, jti, exp + skew) do
       {:ok, client}
     else

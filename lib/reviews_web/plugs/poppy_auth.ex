@@ -1,7 +1,9 @@
 defmodule ReviewsWeb.Plugs.PoppyAuth do
   @moduledoc """
-  Authenticates Poppy API requests (`/api/poppy/v1/*`) with
-  `Reviews.Poppy.Adapter` and maps failures to the spec's errors (section 7).
+  Authenticates Poppy API requests (`/api/poppy/v1/*`) with the configured
+  `Reviews.ExternalIdentity` adapter (`config :reviews, Reviews.Poppy,
+  adapter:`, default `Reviews.Poppy.Adapter`) and maps failures to the spec's
+  errors (section 7).
 
   Options:
 
@@ -34,7 +36,9 @@ defmodule ReviewsWeb.Plugs.PoppyAuth do
 
     {scheme, _token} = Poppy.Adapter.credentials(request.headers["authorization"])
 
-    case Poppy.Adapter.authenticate(request) do
+    adapter = Poppy.config(:adapter, Poppy.Adapter)
+
+    case adapter.authenticate(request, []) do
       {:ok, result} -> authorize(conn, result, opts[:scope], scheme)
       {:error, reason} -> reject(conn, reason, scheme)
     end
