@@ -917,13 +917,74 @@ fn diff_index(raw_diff: &str) -> DiffIndex {
 }
 
 fn path_from_header(header: &str, chunk: &str) -> Option<String> {
-    let (_, new_path) = header.strip_prefix("a/")?.split_once(" b/")?;
+    let (old_path, new_path) = if header.starts_with('"') {
+        let (old, rest) = unquote_git_path(header)?;
+        (old, rest.strip_prefix(' ')?)
+    } else {
+        // Git leaves spaces unquoted, so splitting on whitespace loses paths.
+        let boundary = header
+            .find(" b/")
+            .into_iter()
+            .chain(header.find(" \"b/"))
+            .min()?;
+        (header[..boundary].to_string(), &header[boundary + 1..])
+    };
+    let new_path = if new_path.starts_with('"') {
+        let (path, rest) = unquote_git_path(new_path)?;
+        if !rest.is_empty() {
+            return None;
+        }
+        path
+    } else {
+        new_path.to_string()
+    };
+    let old_path = old_path.strip_prefix("a/")?;
+    let new_path = new_path.strip_prefix("b/")?;
     if chunk.contains("\ndeleted file mode") {
-        let (old_path, _) = header.strip_prefix("a/")?.split_once(" b/")?;
         Some(old_path.to_string())
     } else {
         Some(new_path.to_string())
     }
+}
+
+/// Git quotes paths as C strings, using three octal digits for non-ASCII bytes.
+/// Decode bytes before UTF-8 so a multibyte filename remains one path.
+fn unquote_git_path(input: &str) -> Option<(String, &str)> {
+    let bytes = input.strip_prefix('"')?.as_bytes();
+    let mut decoded = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => return Some((String::from_utf8(decoded).ok()?, &input[i + 2..])),
+            b'\\' => {
+                i += 1;
+                let escaped = *bytes.get(i)?;
+                decoded.push(match escaped {
+                    b'a' => 7,
+                    b'b' => 8,
+                    b't' => b'\t',
+                    b'n' => b'\n',
+                    b'v' => 11,
+                    b'f' => 12,
+                    b'r' => b'\r',
+                    b'\\' | b'"' => escaped,
+                    b'0'..=b'3' => {
+                        let second = *bytes.get(i + 1)?;
+                        let third = *bytes.get(i + 2)?;
+                        if !(b'0'..=b'7').contains(&second) || !(b'0'..=b'7').contains(&third) {
+                            return None;
+                        }
+                        i += 2;
+                        (escaped - b'0') * 64 + (second - b'0') * 8 + (third - b'0')
+                    }
+                    _ => return None,
+                });
+            }
+            byte => decoded.push(byte),
+        }
+        i += 1;
+    }
+    None
 }
 
 fn trim_join(lines: &[String]) -> String {
@@ -1198,6 +1259,29 @@ Second thought.
                 },
             ]
         );
+    }
+
+    #[test]
+    fn decodes_quoted_git_headers_and_mixed_rename_paths() {
+        for header in [
+            r#""a/caf\303\251.png" "b/caf\303\251.png""#,
+            r#"a/old name.png "b/caf\303\251.png""#,
+        ] {
+            assert_eq!(path_from_header(header, ""), Some("café.png".into()));
+        }
+        let header = r#""a/caf\303\251.png" b/new name.png"#;
+        assert_eq!(path_from_header(header, ""), Some("new name.png".into()));
+        assert_eq!(
+            path_from_header(header, "\ndeleted file mode 100644"),
+            Some("café.png".into())
+        );
+        assert_eq!(
+            unquote_git_path(r#""a/line\t\"\\\n.txt" rest"#),
+            Some(("a/line\t\"\\\n.txt".into(), " rest"))
+        );
+        for invalid in [r#""a/\400""#, r#""a/\3""#, r#""a/\q""#, r#""a/unfinished"#] {
+            assert!(unquote_git_path(invalid).is_none(), "{invalid}");
+        }
     }
 
     #[test]

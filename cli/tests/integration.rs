@@ -132,6 +132,39 @@ mod dry_run {
     }
 
     #[test]
+    fn quoted_filenames_are_listed_and_checked_without_requests() {
+        let mut server = Server::new();
+        let mocks = refuse_all_requests(&mut server);
+        let repo = repo();
+        let home = home(&server.url());
+        git(repo.path(), &["config", "core.quotePath", "true"]);
+        fs::write(repo.path().join("café.png"), b"\0binary").unwrap();
+        fs::write(repo.path().join("café.txt"), "hello\n").unwrap();
+        git(repo.path(), &["add", "."]);
+        git(repo.path(), &["commit", "-q", "-m", "quoted files"]);
+        write_packet(repo.path(), "# Quoted files\n\n## Text\n@hunk café.txt#1\n");
+
+        let out = push(repo.path(), home.path(), &["--dry-run"]);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(out.status.success(), "out = {out:?}");
+        assert!(stdout.contains("2 files, 1 hunk"), "{stdout}");
+        assert!(stdout.contains("café.png  0 hunks"), "{stdout}");
+        assert!(stdout.contains("café.txt  1 hunk"), "{stdout}");
+        assert!(stdout.contains("Packet is valid"), "{stdout}");
+
+        write_packet(
+            repo.path(),
+            "# Quoted files\n\n## Text\nMissing coverage.\n",
+        );
+        let out = push(repo.path(), home.path(), &["--dry-run"]);
+        assert_eq!(out.status.code(), Some(1), "out = {out:?}");
+        assert!(String::from_utf8_lossy(&out.stdout).contains("café.txt"));
+        for mock in mocks {
+            mock.assert();
+        }
+    }
+
+    #[test]
     fn valid_packet_prints_what_would_be_sent_and_sends_nothing() {
         let mut server = Server::new();
         let mocks = refuse_all_requests(&mut server);
