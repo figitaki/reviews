@@ -1,214 +1,181 @@
 # Reviews
 
-Reviews is a code-review tool for arbitrary diffs. It gives agents and humans a
-shareable review surface before, during, or outside a GitHub PR workflow.
+**Code review for any diff, written for the person reading it.**
 
-The app is Phoenix 1.8 + LiveView, with diffs rendered by vanilla
-`@pierre/diffs` from a LiveView hook, and a Rust CLI (`reviews push`) for
-uploading diffs.
+Push a diff from any Git checkout and get a link. Attach a review packet that
+walks the reviewer through the change in the order it makes sense, with prose
+between the hunks. Reviewers comment and approve section by section, and agents
+take part under their own names.
 
-Current version: `0.0.1`.
+- Hosted: <https://reviews.figitaki.dev>. See a [demo review](https://reviews.figitaki.dev/r/demo-review).
+- Latest release: [CLI `0.0.1`](https://github.com/figitaki/reviews/releases/tag/cli-v0.0.1) for macOS and Linux.
 
-## What It Provides
+```sh
+curl -fsSL https://raw.githubusercontent.com/figitaki/reviews/main/install.sh | sh
+reviews login
+reviews push --title "Review this change"
+```
 
-- Link-based reviews for any uploaded diff.
-- Patchsets for iterating on the same review as the work changes.
-- Review packets: markdown guides that group hunks with prose for humans.
-- Lazy hunk rendering so large diffs do not eagerly mount every diff island.
-- Explicit hunk viewed state shared between packet and Changes views.
-- Packet section decisions for approve, deny, or ignore.
-- Line and token comments that every viewer sees as soon as they are posted.
+## Why Reviews
 
-For packet-writing guidance and a reusable packet template, see
-[`skills/writing-review-packets/SKILL.md`](skills/writing-review-packets/SKILL.md).
-The companion skills in [`skills/`](skills/) explain the Reviews platform and
-local workflow for agents. For Codex, Claude, and custom harness integration,
-see [`skills/README.md`](skills/README.md).
+**Any diff, not only pull requests.** A local branch, uncommitted work, or a
+range of commits all become a shareable review. Use it before you open a PR,
+alongside one, or with no PR at all. Each update is a new patchset on the same
+link, and comments follow their code across patchsets.
 
-## Install The CLI
+**Review packets tell the story.** A packet is Markdown that groups hunks into
+sections, puts reasoning next to the code it explains, and covers every changed
+line exactly once. Reviewers approve, deny, or ignore each section, and those
+decisions carry forward until the section changes. The raw Changes view is
+always one click away.
 
-Released CLI builds are published from `cli-vX.Y.Z` tags. The first alpha CLI
-tag is `cli-v0.0.1-alpha.0`. The installer downloads the right binary for macOS
-or Linux and can optionally install the repo's agent skills:
+**Agents are first-class reviewers.** An agent can push, comment, reply, and
+decide under its own identity and API token, so its work is never mixed up with
+yours. Personal Agents that support the
+[Personal Agent Protocol](https://personalagentprotocol.org/docs/1.0/spec)
+(Poppy) can connect after their owner approves them. Their comments carry a
+"Verified agent" label that separates what Reviews verified, such as the
+approving owner and the agent's domain, from what the agent only claims about
+itself.
+
+## Try it
+
+### 1. Install the CLI
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/figitaki/reviews/main/install.sh | sh
 ```
 
-Use `--with-skills --yes` for non-interactive agent setup, or `--no-skills` for
-binary-only installs.
+The installer downloads the release binary for your platform, checks its
+checksum, and puts `reviews` in `~/.local/bin`. It asks whether to install the
+Reviews agent skills too; pass `--with-skills --yes` or `--no-skills` to skip
+the prompt, and `--version <version>` to pin a release. Run
+`install.sh --help` for every option. Upgrading keeps your config.
 
-You can also build the CLI from source in a repo checkout:
+To build from source instead, run
+`cargo build --manifest-path cli/Cargo.toml --release` and use
+`cli/target/release/reviews`.
 
-```sh
-cargo build --manifest-path cli/Cargo.toml --release
-```
+### 2. Sign in
 
-Then either put `cli/target/release/reviews` on your `PATH` or use that path in
-place of `reviews` in the examples below.
-
-Then connect it to a Reviews server:
+Sign in at <https://reviews.figitaki.dev> with GitHub, mint an API token at
+[`/settings`](https://reviews.figitaki.dev/settings), then run:
 
 ```sh
 reviews login
 ```
 
-For the hosted alpha, use `https://reviews.figitaki.dev` as the server URL and
-mint an API token from `/settings`.
+Press Enter to accept the hosted server URL and paste the token. The CLI saves
+both in `~/.config/reviews/config.toml`.
 
-## Getting Started
+### 3. Push a review
+
+From any Git checkout:
 
 ```sh
-cd path/to/any/git-checkout
-reviews push --title "Review this change"
+reviews push --title "Review this change"    # last commit, HEAD~1..HEAD
+reviews push --range main..HEAD              # a whole branch
+reviews push --range HEAD                    # uncommitted work
 ```
 
-The CLI prints a review URL. Share that URL with a teammate or an agent. As the
-branch changes, add a new patchset to the same review:
+The CLI prints a `/r/<slug>` URL to share. As the work changes, add a patchset
+to the same review:
 
 ```sh
 reviews push --update <slug>
 ```
 
-At the end of a Codex session, a useful handoff prompt is:
+### 4. Add a packet
 
-```text
-Use the Reviews skills already loaded in this session. Push the current branch
-to Reviews, open the generated review URL, inspect the diff and review packet,
-leave comments for any correctness or UX issues.
+Write a packet and check it before you send it:
+
+```sh
+reviews push --dry-run --packet packet.md
+reviews push --packet packet.md
 ```
 
-## Prereqs
+`--dry-run` (alias `--validate`) runs every packet check without contacting the
+server, lists each problem as `file:line: message`, and exits 1 if there are
+any. The format, with an example, is in
+[writing-review-packets](skills/writing-review-packets/SKILL.md).
 
-- Elixir 1.20 / Erlang 28
-- Node 22+ (or Bun)
-- Postgres 14+ running locally. The default dev config talks to a Postgres
-  on the `/tmp` unix socket as user `reviews` (no password). To avoid clashing
-  with another local project on port `5432`, set `POSTGRES_HOST=localhost` and
-  `POSTGRES_PORT=55432`.
+The CLI also reads reviews and works on threads: `reviews show`, `comment`,
+`threads`, `reply`, `resolve`, `reopen`, and `section`. Run `reviews --help`
+for details.
 
-## Setup
+## Use it with an agent
+
+The installer can add three skills that teach an agent when to use Reviews, how
+to write a packet, and how to push and respond to feedback. See
+[`skills/README.md`](skills/README.md) for Codex, Claude Code, and custom
+harnesses. A useful handoff at the end of a session:
+
+```text
+Use the Reviews skills. Write a review packet for the current branch, check it
+with reviews push --dry-run, push it, and give me the review URL.
+```
+
+Give the agent its own identity and token in Settings so its pushes, comments,
+and decisions appear under its name.
+
+## Documentation
+
+| Topic | Where |
+| --- | --- |
+| Writing review packets | [`skills/writing-review-packets/SKILL.md`](skills/writing-review-packets/SKILL.md) |
+| Agent skills and harness setup | [`skills/README.md`](skills/README.md) |
+| Verified agents with Poppy | [`docs/POPPY.md`](docs/POPPY.md) and [`examples/poppy-agent/`](examples/poppy-agent/) |
+| REST API and LiveView hook contracts | [`docs/CONTRACTS.md`](docs/CONTRACTS.md) |
+| What 0.0.1 includes and its known limits | [`docs/RELEASE_0.0.1.md`](docs/RELEASE_0.0.1.md) |
+| Release notes | [`CHANGELOG.md`](CHANGELOG.md) |
+| Cutting a release | [`docs/RELEASE.md`](docs/RELEASE.md) |
+| Per-PR preview apps | [`docs/PREVIEW_ENVS.md`](docs/PREVIEW_ENVS.md) |
+| MCP server (prototype, off on the hosted service) | [`docs/MCP.md`](docs/MCP.md) |
+
+## Run it locally
+
+Reviews is a Phoenix 1.8 and LiveView app with diffs rendered by
+[`@pierre/diffs`](https://www.npmjs.com/package/@pierre/diffs), plus a Rust CLI
+in `cli/`.
+
+You need Elixir 1.20 / Erlang 28, Bun or Node 22+, and Postgres 14 or later.
+The dev config connects to Postgres on the `/tmp` Unix socket as user `reviews`
+with no password. To avoid another project on port 5432, set
+`POSTGRES_HOST=localhost` and `POSTGRES_PORT=55432`.
 
 ```sh
 cp .env.example .env.local
-set -a; source .env.local; set +a
-mix setup        # fetches deps, creates DB, runs migrations, installs assets
-./bin/server     # starts the app on http://localhost:4000
+mix setup        # deps, database, migrations, assets
+./bin/server     # sources .env.local, then serves http://localhost:4000
 ```
 
-This fetches dependencies, creates the database, runs migrations, and installs
-assets.
+Viewing reviews works without OAuth. Signing in, commenting, and minting API
+tokens need a GitHub OAuth app with the callback URL
+`http://localhost:4000/auth/github/callback`; put its `GITHUB_CLIENT_ID` and
+`GITHUB_CLIENT_SECRET` in `.env.local`. Without them, `/auth/github` redirects
+home and says what to set.
 
-## Running The Dev Server
+Point the CLI at your server by entering `http://localhost:4000` at the
+`reviews login` prompt.
 
-Prefer `./bin/server` over `mix phx.server`. It sources `.env.local`
-(gitignored) before starting Phoenix on <http://localhost:4000>.
+### Tests
 
 ```sh
-cp .env.example .env.local
-./bin/server
+mix precommit                 # warnings as errors, unused deps, format, tests
+cd assets && bun run test     # JS unit tests
+cd cli && cargo test          # CLI tests
 ```
 
-Anonymous viewing works without OAuth. Signing in, commenting, and API token
-management require GitHub OAuth.
-
-## GitHub OAuth
-
-Register an OAuth app at <https://github.com/settings/developers> with callback
-URL:
-
-```text
-http://localhost:4000/auth/github/callback
-```
-
-Then set these in `.env.local`:
-
-```sh
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-```
-
-If the env vars are missing, `/auth/github` redirects home with a flash
-explaining what to set.
-
-## CLI Workflow
-
-Mint an API token from `/settings`, then configure the CLI:
-
-```toml
-[default]
-server_url = "http://localhost:4000"
-api_token = "rev_..."
-```
-
-Create a review:
-
-```sh
-reviews push --packet /path/to/packet.md
-```
-
-Append a new patchset:
-
-```sh
-reviews push --update <slug> --packet /path/to/packet.md
-```
-
-Use `--range HEAD` when pushing current uncommitted work.
-
-Check a push before you send it:
-
-```sh
-reviews push --dry-run --packet /path/to/packet.md
-reviews push --dry-run --update <slug> --packet /path/to/packet.md
-```
-
-`--dry-run` (alias `--validate`) runs the same packet checks as a real push,
-but it does not contact the server and does not write files. It prints the
-server, the review title or target slug, the diff files and hunks, and the
-packet sections. It lists every packet problem with `file:line`, flags an
-empty review title or `--update` slug, and exits with status 1 if there are
-any problems. It cannot check that the slug exists or that your token works.
-
-## MCP (prototype)
-
-The server can also serve agents over MCP at `/mcp`, using the same API token.
-It is on in dev and on preview apps, and off in production unless
-`MCP_ENABLED=true`. For example, with Claude Code:
-
-```sh
-claude mcp add --transport http reviews http://localhost:4000/mcp \
-  --header "Authorization: Bearer rev_..."
-```
-
-See [docs/MCP.md](docs/MCP.md) for the tools, access rules, and other clients.
-
-## Layout
-
-- `lib/reviews/` — domain contexts and schemas.
-- `lib/reviews_web/` — controllers, LiveViews, plugs, and components.
-- `assets/js/hooks/diff_renderer.js` — `DiffRenderer` LiveView hook; rendering
-  code is in `assets/js/diff_renderer/`.
-- `cli/` — Rust CLI.
-- `docs/CONTRACTS.md` — REST and hook contracts.
-- `CHANGELOG.md` — release notes, starting with `0.0.1-alpha.0`.
-- `skills/` — repo-local Codex skills for Reviews workflows.
-- `install.sh` — release installer for the CLI and optional agent skills.
-
-## Tests
-
-```sh
-mix format --check-formatted
-mix compile --warnings-as-errors
-mix test
-```
+Contributor and agent conventions, including where code lives, are in
+[`AGENTS.md`](AGENTS.md).
 
 ### Browser security
 
-Browser pages restrict scripts to same-origin assets and disable embedded objects.
-The small `theme.js` bundle loads synchronously before content so saved themes
-apply before first paint; keep it in the esbuild entrypoints and release assets.
-Style, image and connection restrictions are deliberately not added yet, to avoid
-breaking diff-renderer styles, avatars or LiveView.
+Browser pages restrict scripts to same-origin assets and disable embedded
+objects. The small `theme.js` bundle loads synchronously before content so saved
+themes apply before first paint; keep it in the esbuild entrypoints and release
+assets. Style, image and connection restrictions are deliberately not added yet,
+to avoid breaking diff-renderer styles, avatars or LiveView.
 
 Development sockets accept only `http://localhost:$PORT` and
 `http://127.0.0.1:$PORT` (port 4000 by default). When using a local tunnel or
