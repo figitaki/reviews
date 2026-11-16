@@ -9,6 +9,9 @@ still stabilizing.
 
 ### Security
 
+- Restrict browser scripts to same-origin assets, disable embedded objects, and
+  restrict development WebSocket origins to the configured loopback port.
+
 - Update Ecto to 3.14.3 to fix unbounded query cache growth from interpolated
   JSON paths and splice lists (CVE-2026-118391).
 
