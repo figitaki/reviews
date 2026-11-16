@@ -507,11 +507,17 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
     test "bad filter values return 400 with a message per param", ctx do
       body =
         ctx.conn
-        |> list(ctx.human_raw, %{"role" => "boss", "limit" => "0"})
+        |> list(ctx.human_raw, %{
+          "role" => "boss",
+          "limit" => "0",
+          "offset" => "9223372036854775808"
+        })
         |> json_response(400)
 
       assert body["errors"]["role"] =~ "must be one of"
       assert body["errors"]["limit"] == "must be 1 or more"
+      # One past PostgreSQL's bigint OFFSET; the query would raise instead.
+      assert body["errors"]["offset"] == "must be 9223372036854775807 or less"
     end
   end
 end

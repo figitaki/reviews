@@ -34,6 +34,8 @@ defmodule Reviews.ReviewIndex do
 
   @default_limit 25
   @max_limit 100
+  # PostgreSQL's OFFSET is a signed bigint; a larger value makes the query raise.
+  @max_offset 9_223_372_036_854_775_807
   @roles ~w(all authored involved)
   @statuses ~w(all open updated)
 
@@ -80,7 +82,7 @@ defmodule Reviews.ReviewIndex do
       author: text(params["author"]),
       q: text(params["q"]),
       limit: integer(params["limit"], @default_limit, 1, @max_limit),
-      offset: integer(params["offset"], 0, 0, nil)
+      offset: integer(params["offset"], 0, 0, @max_offset)
     ]
 
     errors = for {key, {:error, message}} <- results, into: %{}, do: {key, message}
