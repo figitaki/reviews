@@ -46,6 +46,14 @@ still stabilizing.
   composer. File controls stay visible while scrolling on desktop and mobile;
   marking viewed collapses the diff and leaves a compact green check.
 - Unified diffs wrap long lines; split diffs retain horizontal scrolling.
+- Comments start from Pierre Diffs' gutter button beside the line number,
+  replacing the row-end comment button. Selected text within the line still
+  becomes the comment's anchor. Threads are more compact, with Resolve at the
+  right of the header. The collapsed comments rail is an icon with the comment
+  count and a blue outline while comments are unread. On phones, the composer
+  and threads stay inline under their line instead of a floating panel, inputs
+  use 16px text so focusing them does not zoom the page, and keyboard hints are
+  hidden. Opening a composer in a large virtualized file keeps your place.
 - Inline conversations share one shelf with an expandable reply entry and
   compact resolved history. On mobile, conversations float above the review
   without shifting code, preserve reply text when dismissed, and follow the

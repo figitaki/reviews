@@ -65,8 +65,9 @@ export const ReviewActivity = {
     const total = threads.reduce((sum, thread) => sum + this.readState.unread(thread, identityId), 0)
     const unreadThreads = threads.filter(thread => this.readState.unread(thread, identityId) > 0)
     const count = this.el.querySelector("[data-activity-count]")
-    count.textContent = String(total)
-    count.setAttribute("aria-label", `${total} unread comments`)
+    count.textContent = String(this.activity.commentCount)
+    count.setAttribute("aria-label", `${this.activity.commentCount} comments, ${total} unread`)
+    this.details.dataset.unread = String(total > 0)
     this.el.querySelector("[data-activity-empty]").hidden = total > 0
     this.el.querySelector("[data-activity-status]").textContent = `${total} unread comments in ${unreadThreads.length} threads.`
     this.el.querySelector("[data-activity-storage]").textContent = this.readState.persistent
