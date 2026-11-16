@@ -23,7 +23,7 @@ CI (`.github/workflows/ci.yml`) runs format check, compile with warnings as erro
 
 ## Review packets for PRs
 
-Every PR we push, including drafts, must include an up-to-date review packet link in the PR description's **Reviews Packet** section (`- Packet: <URL>`), so reviewers can find and review it. Use the printed `/r/<slug>` URL on `https://reviews-dev.fly.dev` or a reviewer-accessible preview host; name the preview host when using one. A localhost link is not accessible to reviewers.
+Every PR we push, including drafts, must include an up-to-date review packet link in the PR description's **Reviews Packet** section (`- Packet: <URL>`), so reviewers can find and review it. Use the printed `/r/<slug>` URL on `https://reviews.figitaki.dev` or a reviewer-accessible preview host; name the preview host when using one. Point the CLI at `https://reviews.figitaki.dev`, not `reviews-dev.fly.dev`: that hostname 301-redirects, and the redirect turns the CLI's POSTs into GETs that fail with 404. A localhost link is not accessible to reviewers.
 
 Follow [writing-review-packets](skills/writing-review-packets/SKILL.md). After committing the changes, capture the full PR diff explicitly (the CLI defaults to only `HEAD~1..HEAD`):
 
