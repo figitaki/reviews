@@ -155,6 +155,20 @@ reviews push --update <slug> --packet /path/to/packet.md
 
 Use `--range HEAD` when pushing current uncommitted work.
 
+Check a push before you send it:
+
+```sh
+reviews push --dry-run --packet /path/to/packet.md
+reviews push --dry-run --update <slug> --packet /path/to/packet.md
+```
+
+`--dry-run` (alias `--validate`) runs the same packet checks as a real push,
+but it does not contact the server and does not write files. It prints the
+server, the review title or target slug, the diff files and hunks, and the
+packet sections. It lists every packet problem with `file:line`, flags an
+empty review title or `--update` slug, and exits with status 1 if there are
+any problems. It cannot check that the slug exists or that your token works.
+
 ## Layout
 
 - `lib/reviews/` — domain contexts and schemas.

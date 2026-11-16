@@ -339,11 +339,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
                "#packet-section-0 .review-packet-row-list + #packet-section-0-decision"
              )
 
+      sign_in_href = ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}"]}"
+
       assert has_element?(
                view,
-               "#packet-section-0-decision .review-packet-section-signin",
+               ~s|#packet-section-0-decision .review-packet-section-signin[href="#{sign_in_href}"]|,
                "Sign in to record a section decision"
              )
+
+      assert has_element?(view, ~s|.review-button[href="#{sign_in_href}"]|, "Sign in")
 
       assert has_element?(view, "#review-packet .review-hunk-card")
       refute has_element?(view, "#review-packet .review-hunk-summary")
@@ -1626,6 +1630,19 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#packet-section-0.is-open")
 
       assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
+
+      assert has_element?(view, ".review-packet-shell.is-guide-split")
+
+      # The rail glyph carries the decision label; the tick keeps a neutral name.
+      assert has_element?(
+               view,
+               ~s|#review-guide-tick-0[aria-label="01 Main change"][aria-describedby="review-guide-tick-0-state"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#review-guide-tick-0-state[role="img"][aria-label="Decision: Approved"]|
+             )
 
       assert has_element?(
                view,

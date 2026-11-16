@@ -200,8 +200,8 @@ defmodule Reviews.Reviews do
 
     # Header looks like:  a/lib/foo.ex b/lib/foo.ex
     {old_path, new_path} =
-      case Regex.run(~r|^a/(.+?) b/(.+)$|, header_line) do
-        [_, o, n] -> {o, n}
+      case Reviews.GitDiffPaths.parse(header_line) do
+        {:ok, o, n} -> {o, n}
         _ -> {nil, nil}
       end
 
@@ -234,11 +234,13 @@ defmodule Reviews.Reviews do
     end
   end
 
+  # File headers (`--- a/`, `+++ b/`) only come before the first `@@`; inside a
+  # hunk, a row like `--- note` is a removed `-- note` line.
   defp count_hunk_changes(lines) do
-    Enum.reduce(lines, {0, 0}, fn line, {adds, dels} ->
+    lines
+    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
+    |> Enum.reduce({0, 0}, fn line, {adds, dels} ->
       cond do
-        String.starts_with?(line, "+++") -> {adds, dels}
-        String.starts_with?(line, "---") -> {adds, dels}
         String.starts_with?(line, "+") -> {adds + 1, dels}
         String.starts_with?(line, "-") -> {adds, dels + 1}
         true -> {adds, dels}
@@ -290,11 +292,12 @@ defmodule Reviews.Reviews do
     Enum.find_value(chunks, fn chunk ->
       header = chunk |> String.split("\n", parts: 2) |> List.first()
 
-      cond do
-        is_nil(header) -> nil
-        String.contains?(header, " b/" <> path) -> "diff --git " <> chunk
-        String.contains?(header, "a/" <> path <> " ") -> "diff --git " <> chunk
-        true -> nil
+      case Reviews.GitDiffPaths.parse(header || "") do
+        {:ok, old_path, new_path} when path == old_path or path == new_path ->
+          "diff --git " <> chunk
+
+        _ ->
+          nil
       end
     end)
   end
