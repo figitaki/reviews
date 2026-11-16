@@ -5,9 +5,9 @@ export default {
     this.patchset = this.el.dataset.patchset
     this.sequence = 0
     this.onHash = () => {
-      const previous = this.hash
+      const previous = this.fragmentId
       this.revealFragment()
-      if (!window.location.hash && previous?.startsWith("#packet-section-")) {
+      if (!window.location.hash && previous) {
         this.pushEvent("select_packet_overview", {})
       }
     }
@@ -38,10 +38,11 @@ export default {
   revealFragment() {
     const sequence = ++this.sequence
     const hash = window.location.hash
-    this.hash = hash
+    this.fragmentId = null
     let id
     try { id = decodeURIComponent(hash.slice(1)) } catch { return }
     if (!id.startsWith("packet-section-")) return
+    this.fragmentId = id
     this.pushEvent("reveal_packet_fragment", {id}, reply => {
       if (!reply.id || sequence !== this.sequence || hash !== window.location.hash) return
       window.dispatchEvent(new CustomEvent("phx:packet_nav_jump", {detail: {id: reply.id}}))

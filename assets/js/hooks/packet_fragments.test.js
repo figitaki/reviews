@@ -85,3 +85,18 @@ test("back to the fragment-free overview restores overview without adding histor
   listeners.get("hashchange")()
   assert.equal(requests[1].name, "select_packet_overview")
 })
+
+test("back from an encoded packet prefix restores Overview", () => {
+  const {listeners, requests} = setup("#packet%2Dsection-0-row-1")
+  assert.equal(requests[0].payload.id, "packet-section-0-row-1")
+  window.location.hash = ""
+  listeners.get("hashchange")()
+  assert.equal(requests[1]?.name, "select_packet_overview")
+})
+
+test("back from a malformed fragment does not change section selection", () => {
+  const {listeners, requests} = setup("#packet-section-%ZZ")
+  window.location.hash = ""
+  listeners.get("hashchange")()
+  assert.equal(requests.length, 0)
+})
