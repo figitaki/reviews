@@ -20,10 +20,12 @@ neither kind of token works on the other's routes.
 | Execution workload | Poppy 1.0 has no proof of it | "not established" |
 | Delegation chain | Poppy 1.0 has none. Approval happens in Reviews. | "owner approval in Reviews" |
 
-The approval is an `identity_links` row: `(identity_id, approved_by_user_id, provider: "poppy",
-subject: client_id, scopes)`. It never creates an identity. A DID or Turnkey-held key adds rows with
-another `provider` through the `Reviews.ExternalIdentity` behaviour, so actor IDs stay the same
-(see "Adding other verification methods").
+The approval is a grant of the OAuth issuer, which runs on
+[gatekeep](https://github.com/figitaki/gatekeep): a `gatekeep_grants` row with the Personal Agent's
+`client_id`, the agent identity's ID as `subject`, the approving user's ID as `owner`, the domain as
+`resource`, and the scopes (`Reviews.OAuth.Grant`). It never creates an identity. Other verification
+methods plug in through the `Reviews.ExternalIdentity` behaviour, so actor IDs stay the same (see
+"Adding other verification methods").
 
 ## Endpoints
 
@@ -35,7 +37,7 @@ another `provider` through the `Reviews.ExternalIdentity` behaviour, so actor ID
 | `GET /api/poppy/openapi.json` | OpenAPI 3.1 description of the Poppy API |
 | `GET /oauth/authorize`, `POST /oauth/authorize` | Direct Sign-In: GitHub sign-in, then a consent page where the owner picks one of their agent identities |
 | `POST /oauth/token` | `authorization_code` (PKCE S256) and `refresh_token`. `private_key_jwt` client assertion (ES256 or PS384, `aud` = issuer). An optional `DPoP` proof binds the tokens (see "DPoP"). |
-| `POST /oauth/revoke` | RFC 7009. Revoking the refresh token revokes the link and its access tokens. |
+| `POST /oauth/revoke` | RFC 7009. Revoking the refresh token revokes the grant and its access tokens. Revoking an access token revokes only that token. |
 | `GET /api/poppy/v1/reviews/:slug` | Read a review. Works signed out with a verified Session header. |
 | `POST /api/poppy/v1/reviews/:slug/comments` | Post a comment. Needs an access token with `comments:write`. |
 
@@ -64,10 +66,11 @@ To refuse an agent, add its `client_id` to `config :reviews, Reviews.OAuth, bloc
    compared against the configured public origin, never the `Host` header. `iat` must fall within 60
    seconds, plus 30 seconds of clock skew.
 7. `jti` hasn't been seen. The replay cache is the `oauth_seen_jtis` table, shared by every server.
-8. With an access token, `ath` must match it. The token must be unexpired, its link not revoked, and
-   the link's `subject` equal to the JWT's `iss`. Without a token, `ath` must be absent.
-9. A DPoP-bound token must come with the `DPoP` scheme and a valid proof from its key. A Bearer token
-   must come with the `Bearer` scheme. See "DPoP".
+8. With an access token, `ath` must match it. Without a token, `ath` must be absent.
+9. The access token must be unexpired, issued for the domain, and its grant not revoked
+   (`Gatekeep.Token`). A DPoP-bound token must come with the `DPoP` scheme and a valid proof from its
+   key; a Bearer token must come with the `Bearer` scheme. See "DPoP". The token's client must be
+   the JWT's `iss`.
 10. The Session (`client_id`, `sid`, `sub`) is created or continued. It can't switch to another
    identity (`session_ended`) or change `agent_id`.
 
@@ -94,8 +97,8 @@ DPoP.
   gets a DPoP access token. Dynamically registered clients can't declare the flag.
 
 - **Sign-in.** A token request with a valid `DPoP` proof gets `token_type: "DPoP"`. The access
-  token and the link's refresh token are both bound to the key's RFC 7638 thumbprint
-  (`identity_links.dpop_jkt`, `oauth_access_tokens.dpop_jkt`). Without a proof, both are Bearer.
+  token and the grant's refresh token are both bound to the key's RFC 7638 thumbprint
+  (`gatekeep_grants.dpop_jkt`, `gatekeep_access_tokens.dpop_jkt`). Without a proof, both are Bearer.
 - **Refresh.** A refresh token bound to a key needs a proof from that key. A missing proof or a
   proof from another key gets `invalid_grant` (spec 4.4). A Bearer refresh token stays Bearer. A
   proof sent with it binds only the new access token (RFC 9449 §5).
@@ -105,14 +108,15 @@ DPoP.
   whose `htm`/`htu` match the request, with `iat` within the same window as Session JWTs (60
   seconds, plus 30 of skew), an unseen `jti`, and `ath` equal to the token's hash. A missing,
   replayed, or invalid proof gets `invalid_dpop_proof`. A valid proof from another key gets
-  `invalid_token` (RFC 9449 Figure 16). A DPoP-bound token sent as `Bearer` is refused
+  `invalid_dpop_proof` too, for now: RFC 9449 Figure 16 makes it `invalid_token`, as Reviews answered
+  before gatekeep, and figitaki/gatekeep#4 restores that. A DPoP-bound token sent as `Bearer` is refused
   (`invalid_token`) so it can't be downgraded, and a Bearer token sent as `DPoP` is refused too.
 - **Two signatures.** A signed-in DPoP request carries both the Session JWT and the DPoP proof
   (spec 5.2). The Session JWT is signed with the delegated key and names the Session and User. The
   proof is signed with the DPoP key in its own `jwk` header. Both carry `ath`. The Session JWT
   check is unchanged.
-- **Replay.** Proof `jti`s go into the same `oauth_seen_jtis` table as Session JWTs, as `kind`
-  `dpop`, per `client_id`, so a proof works once on any server.
+- **Replay.** Proof `jti`s go into gatekeep's `gatekeep_seen_jtis` table, per proof key, so a proof
+  works once on any server. Session JWT `jti`s stay in Reviews' `oauth_seen_jtis`.
 - **No nonces.** Reviews doesn't issue `DPoP-Nonce` (RFC 9449 §8, §9). The `iat` window and the
   shared replay cache already limit how long a proof works. Nonces would also add a round trip to
   each agent's first token request and API call.
@@ -128,9 +132,9 @@ DPoP.
 
 - **Owner:** Settings → Connected agents → Disconnect. Access and refresh tokens stop on the next request.
 - **Agent:** `POST /oauth/revoke` with the refresh token (sign-out).
-- **Reused code:** redeeming an authorization code twice revokes the link it created.
+- **Reused code:** redeeming an authorization code twice revokes the grant it created.
 - **Personal Agent key:** after removal from `jwks_uri`, the key stops verifying once the
-  client cache expires (`client_cache_seconds`, default 300) or `Reviews.OAuth.Clients.forget/1` runs.
+  client cache expires (`client_cache_seconds`, default 300) or `Gatekeep.Clients.forget(Reviews.OAuth.config(), client_id)` runs.
   Delegations can't be withdrawn early (spec 10.7).
 - **Block a client:** `config :reviews, Reviews.OAuth, blocked_clients: [client_id]`.
 
@@ -151,7 +155,7 @@ node kit/company/validate/index.ts check https://<reviews host> --milestone foun
 
 ## Adding other verification methods
 
-Implement `Reviews.ExternalIdentity.authenticate/2` and resolve to an `IdentityLink` with a new
-`provider` (`"turnkey"`, `"did"`). Store what was verified in `attribution`, using the Poppy
+Implement `Reviews.ExternalIdentity.authenticate/2` and resolve to an owner's grant of one agent
+identity. Store what was verified in `attribution`, using the Poppy
 adapter's map as the shape, and leave parties you can't verify unset or mark them as claims. Owner
 approval, revocation, and the UI label stay the same. Reviews actor IDs don't change.

@@ -81,7 +81,10 @@ defmodule Reviews.MixProject do
       {:bandit, "~> 1.14.1"},
       {:ueberauth, "~> 0.10"},
       {:ueberauth_github, "~> 0.8"},
-      {:fastest_mcp, "~> 1.0.1"}
+      {:fastest_mcp, "~> 1.0.1"},
+      # The OAuth issuer (Reviews.OAuth). Not on Hex yet; pinned to the merge
+      # of figitaki/gatekeep#1.
+      {:gatekeep, github: "figitaki/gatekeep", ref: "cbf179924604ad111cdf165adadf7169f81b9a24"}
     ]
   end
 

@@ -14,7 +14,8 @@ defmodule Reviews.Threads.Comment do
     # in the browser or with a bearer API token.
     field :attribution, :map
 
-    belongs_to :identity_link, Reviews.Accounts.IdentityLink
+    # The OAuth grant the comment was posted under, for external identities.
+    belongs_to :oauth_grant, Reviews.OAuth.Grant
 
     belongs_to :thread, Reviews.Threads.Thread
     belongs_to :author, Reviews.Accounts.Identity
@@ -26,7 +27,7 @@ defmodule Reviews.Threads.Comment do
 
   def changeset(comment, attrs) do
     comment
-    |> cast(attrs, @required ++ [:identity_link_id, :attribution])
+    |> cast(attrs, @required ++ [:oauth_grant_id, :attribution])
     |> validate_required(@required)
   end
 end

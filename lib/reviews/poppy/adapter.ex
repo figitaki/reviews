@@ -4,30 +4,30 @@ defmodule Reviews.Poppy.Adapter do
   `Poppy-Version`, and, when signed in, an access token from Direct Sign-In.
 
   Order of checks (spec 3.4, 5.3): version, Session JWT and delegation, the
-  access token and its link, that the token was issued to the JWT's `iss`, the
-  token's DPoP binding (spec 4.5, RFC 9449 §7), then the Session record.
+  access token with its grant and DPoP binding (spec 4.5, RFC 9449 §7;
+  `Reviews.OAuth.authenticate_access_token/2`), that the token was issued to
+  the JWT's `iss`, then the Session record.
 
   `headers` holds the first value of each header, except `"dpop"`, which is
   the list of every `DPoP` header value.
   """
   @behaviour Reviews.ExternalIdentity
 
-  alias Reviews.Poppy
+  alias Reviews.{OAuth, Poppy}
   alias Reviews.Poppy.Tokens
 
   @impl true
-  def authenticate(%{method: method, url: url, headers: headers} = request, opts \\ []) do
-    {scheme, token} = credentials(headers["authorization"])
+  def authenticate(%{method: method, url: url, headers: headers}, opts \\ []) do
+    {_scheme, token} = credentials(headers["authorization"])
 
     with :ok <- check_version(headers["poppy-version"]),
          {:ok, jwt} <- session_header(headers["poppy-session"]),
          {:ok, claims} <-
            Tokens.verify_session(jwt, %{method: method, url: url, access_token: token}, opts),
-         {:ok, grant} <- access(token),
-         :ok <- same_client(grant, claims),
-         :ok <- check_binding(scheme, grant, token, request, claims.client, opts),
-         {:ok, session} <- Poppy.touch_session(claims, grant && grant.link.identity_id) do
-      {:ok, result(claims, grant, session)}
+         {:ok, access} <- access(token, method, url, headers),
+         :ok <- same_client(access, claims),
+         {:ok, session} <- Poppy.touch_session(claims, access && access.grant.identity.id) do
+      {:ok, result(claims, access, session)}
     end
   end
 
@@ -62,73 +62,62 @@ defmodule Reviews.Poppy.Adapter do
   defp session_header(jwt) when is_binary(jwt) and jwt != "", do: {:ok, jwt}
   defp session_header(_), do: {:error, :missing_session}
 
-  defp access(nil), do: {:ok, nil}
-  defp access(token), do: Poppy.authenticate_access_token(token)
+  # A Bearer token comes with the Bearer scheme. A DPoP-bound token comes with
+  # the DPoP scheme and a proof from its key, over the configured public URL
+  # of this request, never the Host header; as a bearer token it is refused,
+  # so it can't be downgraded (RFC 9449 §7.2). A bad proof is
+  # invalid_dpop_proof, and any other problem invalid_token.
+  defp access(nil, _method, _url, _headers), do: {:ok, nil}
+
+  defp access(_token, method, url, headers) do
+    OAuth.authenticate_access_token(Poppy.resource(), %{
+      authorization: headers["authorization"],
+      dpop: headers["dpop"] || [],
+      method: method,
+      path: URI.parse(url).path
+    })
+  end
 
   # Spec 5.3 step 3: the token was issued to the same client_id as `iss`.
   defp same_client(nil, _claims), do: :ok
 
-  defp same_client(%{link: link}, %{client: client}) do
-    if link.subject == client.client_id, do: :ok, else: {:error, :token_client_mismatch}
+  defp same_client(%{token: token}, %{client: client}) do
+    if token.client_id == client.client_id, do: :ok, else: {:error, :token_client_mismatch}
   end
-
-  # A Bearer token comes with the Bearer scheme. A DPoP-bound token comes with
-  # the DPoP scheme and a proof from its key; as a bearer token it is refused,
-  # so it can't be downgraded (RFC 9449 §7.2). A wrong key is invalid_token
-  # (RFC 9449 §7.1, Figure 16); any other proof problem is invalid_dpop_proof.
-  defp check_binding(_scheme, nil, _token, _request, _client, _opts), do: :ok
-  defp check_binding(:bearer, %{dpop_jkt: nil}, _token, _request, _client, _opts), do: :ok
-
-  defp check_binding(:dpop, %{dpop_jkt: jkt}, token, request, client, opts)
-       when is_binary(jkt) do
-    proof_request = %{
-      method: request.method,
-      url: request.url,
-      access_token: token,
-      client_id: client.client_id
-    }
-
-    case Tokens.verify_dpop_proof(request.headers["dpop"] || [], proof_request, opts) do
-      {:ok, ^jkt} -> :ok
-      {:ok, _other_key} -> {:error, :invalid_token}
-      {:error, _reason} -> {:error, :invalid_dpop_proof}
-    end
-  end
-
-  defp check_binding(_scheme, _grant, _token, _request, _client, _opts),
-    do: {:error, :invalid_token}
 
   defp result(claims, nil, session) do
     %{
       identity: nil,
       owner: nil,
-      link: nil,
+      grant: nil,
       scopes: [],
       attribution: attribution(claims, nil, session)
     }
   end
 
-  defp result(claims, %{link: link, scopes: scopes, dpop_jkt: dpop_jkt}, session) do
+  defp result(claims, %{grant: grant, token: token}, session) do
     attribution =
       claims
-      |> attribution(link, session)
-      |> Map.put("access_token_dpop_key", dpop_jkt)
+      |> attribution(grant, session)
+      |> Map.put("access_token_dpop_key", token.dpop_jkt)
 
     %{
-      identity: link.identity,
-      owner: link.approved_by_user,
-      link: link,
-      scopes: scopes,
+      identity: grant.identity,
+      owner: grant.approved_by_user,
+      grant: grant,
+      scopes: token.scopes,
       attribution: attribution
     }
   end
 
   # What was verified, kept with the records the request creates. The
   # Personal Agent's name and Agent ID are its own claims; the owner and agent
-  # identity come from the owner's approval in Reviews. Poppy 1.0 has no
+  # identity come from the owner's approval in Reviews. `link_id` is the
+  # grant's ID; the name predates gatekeep and stays for stored comments.
+  # Poppy 1.0 has no
   # workload attestation or owner-to-agent delegation chain, so neither is
   # recorded as verified.
-  defp attribution(claims, link, session) do
+  defp attribution(claims, grant, session) do
     %{
       "provider" => Poppy.provider(),
       "protocol_version" => Poppy.protocol_version(),
@@ -142,19 +131,19 @@ defmodule Reviews.Poppy.Adapter do
       "delegation_expires_at" =>
         DateTime.from_unix!(claims.delegation_exp) |> DateTime.to_iso8601()
     }
-    |> Map.merge(link_attribution(link))
+    |> Map.merge(grant_attribution(grant))
   end
 
-  defp link_attribution(nil), do: %{}
+  defp grant_attribution(nil), do: %{}
 
-  defp link_attribution(link) do
+  defp grant_attribution(grant) do
     %{
-      "link_id" => link.id,
-      "approved_at" => DateTime.to_iso8601(link.inserted_at),
-      "owner_user_id" => link.approved_by_user_id,
-      "owner_username" => link.approved_by_user.username,
-      "identity_id" => link.identity_id,
-      "identity_handle" => link.identity.handle
+      "link_id" => grant.id,
+      "approved_at" => DateTime.to_iso8601(grant.inserted_at),
+      "owner_user_id" => grant.approved_by_user.id,
+      "owner_username" => grant.approved_by_user.username,
+      "identity_id" => grant.identity.id,
+      "identity_handle" => grant.identity.handle
     }
   end
 end

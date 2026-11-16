@@ -10,9 +10,8 @@ defmodule ReviewsWeb.OAuthTest do
   import Ecto.Query
 
   alias Reviews.Accounts
-  alias Reviews.Accounts.IdentityLink
   alias Reviews.OAuth
-  alias Reviews.OAuth.{AccessToken, AuthorizationCode}
+  alias Reviews.OAuth.Grant
   alias Reviews.OAuthTestClient, as: Client
   alias Reviews.OAuthTestClient.Fetcher
   alias Reviews.Repo
@@ -134,9 +133,15 @@ defmodule ReviewsWeb.OAuthTest do
     })
   end
 
-  # Whether the resource `provider` names accepts the access token.
-  defp valid?(token, provider \\ "test"),
-    do: match?({:ok, _}, OAuth.authenticate_access_token(token, provider))
+  # Whether `resource` accepts the access token as a Bearer token.
+  defp valid?(token, resource \\ @resource),
+    do: match?({:ok, _}, OAuth.authenticate_access_token(resource, bearer(token)))
+
+  defp bearer(token),
+    do: %{authorization: "Bearer " <> token, dpop: [], method: "GET", path: "/api/test"}
+
+  # Gatekeep's tables (`Gatekeep.Storage.Ecto`), for the cases that need a row changed or counted.
+  defp code_count, do: Repo.aggregate("gatekeep_codes", :count)
 
   # A client with keys signs in to the keys-only resource at the issuer's root.
   defp keys_sign_in(client, user, identity, extra \\ %{}) do
@@ -321,14 +326,15 @@ defmodule ReviewsWeb.OAuthTest do
       assert body["scope"] == "test:read"
       assert get_resp_header(exchange(ctx.app, "x", verifier), "cache-control") == ["no-store"]
 
-      assert {:ok, %{link: link, scopes: ["test:read"]}} =
-               OAuth.authenticate_access_token(body["access_token"], "test")
+      assert {:ok, %{grant: grant, token: %{scopes: ["test:read"]}}} =
+               OAuth.authenticate_access_token(@resource, bearer(body["access_token"]))
 
-      assert link.identity_id == ctx.agent.id
-      assert link.provider == "test"
-      assert link.subject == ctx.app.client_id
-      assert [%{id: id}] = OAuth.list_links_for(ctx.owner)
-      assert id == link.id
+      assert grant.identity.id == ctx.agent.id
+      assert grant.approved_by_user.id == ctx.owner.id
+      assert grant.resource == @resource
+      assert grant.client_id == ctx.app.client_id
+      assert [%{id: id}] = OAuth.list_grants_for(ctx.owner)
+      assert id == grant.id
     end
   end
 
@@ -373,10 +379,10 @@ defmodule ReviewsWeb.OAuthTest do
 
       second = token(Map.merge(Client.client_auth(client), params)) |> json_response(200)
       refute Map.has_key?(second, "refresh_token")
-      assert valid?(second["access_token"], "keys")
+      assert valid?(second["access_token"], @keys_resource)
 
       assert token(Map.merge(Client.client_auth(client), params)) |> json_response(200)
-      assert valid?(second["access_token"], "keys")
+      assert valid?(second["access_token"], @keys_resource)
     end
 
     test "can narrow scopes but never widen them", ctx do
@@ -502,7 +508,7 @@ defmodule ReviewsWeb.OAuthTest do
         )
 
       assert html_response(conn, 200) =~ "Choose one of your"
-      assert Repo.aggregate(IdentityLink, :count) == 0
+      assert Repo.aggregate(Grant, :count) == 0
     end
 
     test "a missing or malformed identity is refused, not a crash", ctx do
@@ -522,7 +528,7 @@ defmodule ReviewsWeb.OAuthTest do
         assert html_response(conn, 200) =~ "Choose one of your"
       end
 
-      assert Repo.aggregate(AuthorizationCode, :count) == 0
+      assert code_count() == 0
     end
 
     test "the owner's own human identity is refused, even posted by hand", ctx do
@@ -544,7 +550,7 @@ defmodule ReviewsWeb.OAuthTest do
 
       assert html_response(conn, 200) =~ "Choose one of your agent identities"
       assert get_resp_header(conn, "location") == []
-      assert Repo.aggregate(AuthorizationCode, :count) == 0
+      assert code_count() == 0
     end
 
     test "no granted scope, or only ones the request lacks, is refused", ctx do
@@ -567,7 +573,7 @@ defmodule ReviewsWeb.OAuthTest do
         assert html_response(conn, 200) =~ "at least one permission"
       end
 
-      assert Repo.aggregate(AuthorizationCode, :count) == 0
+      assert code_count() == 0
     end
 
     test "an owner with no agents is asked to create one instead of approving", ctx do
@@ -641,7 +647,7 @@ defmodule ReviewsWeb.OAuthTest do
 
     test "an expired code", ctx do
       {%{"code" => code}, verifier} = approve(ctx.app, ctx.owner, ctx.agent)
-      Repo.update_all(AuthorizationCode, set: [expires_at: ~U[2020-01-01 00:00:00Z]])
+      Repo.update_all("gatekeep_codes", set: [expires_at: ~U[2020-01-01 00:00:00Z]])
 
       assert %{"error" => "invalid_grant"} =
                exchange(ctx.app, code, verifier) |> json_response(400)
@@ -702,7 +708,7 @@ defmodule ReviewsWeb.OAuthTest do
   describe "access tokens" do
     test "an expired token is refused", ctx do
       tokens = sign_in(ctx.app, ctx.owner, ctx.agent)
-      Repo.update_all(AccessToken, set: [expires_at: ~U[2020-01-01 00:00:00Z]])
+      Repo.update_all("gatekeep_access_tokens", set: [expires_at: ~U[2020-01-01 00:00:00Z]])
 
       refute valid?(tokens["access_token"])
     end
@@ -711,9 +717,9 @@ defmodule ReviewsWeb.OAuthTest do
       tokens = sign_in(ctx.app, ctx.owner, ctx.agent)
       assert valid?(tokens["access_token"])
 
-      [link] = OAuth.list_links_for(ctx.owner)
-      assert {:error, :not_found} = OAuth.revoke_link(user_fixture("other"), link.id)
-      :ok = OAuth.revoke_link(ctx.owner, link.id)
+      [grant] = OAuth.list_grants_for(ctx.owner)
+      assert {:error, :not_found} = OAuth.revoke_grant(user_fixture("other"), grant.id)
+      :ok = OAuth.revoke_grant(ctx.owner, grant.id)
 
       refute valid?(tokens["access_token"])
       assert refresh(ctx.app, tokens["refresh_token"]) |> json_response(400)
@@ -747,12 +753,12 @@ defmodule ReviewsWeb.OAuthTest do
 
     test "a token issued for one resource is refused by another", ctx do
       tokens = sign_in(ctx.app, ctx.owner, ctx.agent)
-      assert valid?(tokens["access_token"], "test")
-      refute valid?(tokens["access_token"], "keys")
+      assert valid?(tokens["access_token"], @resource)
+      refute valid?(tokens["access_token"], @keys_resource)
 
       keys = keys_sign_in(Client.new(), ctx.owner, ctx.agent) |> json_response(200)
-      assert valid?(keys["access_token"], "keys")
-      refute valid?(keys["access_token"], "test")
+      assert valid?(keys["access_token"], @keys_resource)
+      refute valid?(keys["access_token"], @resource)
     end
 
     test "blocking the client stops its access tokens at once", ctx do
@@ -945,8 +951,13 @@ defmodule ReviewsWeb.OAuthTest do
 
   test "codes and refresh tokens are stored only as hashes", ctx do
     tokens = sign_in(ctx.app, ctx.owner, ctx.agent)
-    [link] = Repo.all(from l in IdentityLink, where: l.provider == "test")
-    refute link.refresh_token_hash == tokens["refresh_token"]
-    assert link.refresh_token_hash == :crypto.hash(:sha256, tokens["refresh_token"])
+
+    [hash] =
+      Repo.all(
+        from g in "gatekeep_grants", where: g.resource == @resource, select: g.refresh_token_hash
+      )
+
+    refute hash == tokens["refresh_token"]
+    assert hash == :crypto.hash(:sha256, tokens["refresh_token"])
   end
 end

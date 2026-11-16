@@ -40,7 +40,7 @@ defmodule Reviews.Threads do
 
     Repo.all(query)
     |> Enum.filter(fn thread -> thread.comments != [] end)
-    |> Repo.preload(comments: [:author, :identity_link])
+    |> Repo.preload(comments: [:author, :oauth_grant])
   end
 
   @doc "Thread counts by status, such as `%{\"open\" => 2}`."
@@ -233,7 +233,7 @@ defmodule Reviews.Threads do
             thread_id: thread.id,
             author_id: author.id,
             body: body,
-            identity_link_id: attribution && attribution["link_id"],
+            oauth_grant_id: attribution && attribution["link_id"],
             attribution: attribution
           })
           |> Repo.insert!()
@@ -341,7 +341,7 @@ defmodule Reviews.Threads do
   defp comments_query do
     from c in Comment,
       order_by: [asc: c.inserted_at],
-      preload: [:author, :identity_link]
+      preload: [:author, :oauth_grant]
   end
 
   # No thread_id starts a new thread. A thread_id that is not a thread of this

@@ -58,7 +58,9 @@ config :phoenix,
 config :reviews, Reviews.OAuth,
   issuer: "https://reviews.test",
   fetcher: Reviews.OAuthTestClient.Fetcher,
-  resources: [Reviews.Poppy, Reviews.OAuthTestResource.KeysOnly, Reviews.OAuthTestResource],
+  # Public clients first, so the metadata lists `none` first, as it did
+  # before gatekeep.
+  resources: [Reviews.OAuthTestResource, Reviews.OAuthTestResource.KeysOnly, Reviews.Poppy],
   default_resource: Reviews.Poppy
 
 # Raise on LiveView test-time template problems instead of warning.
