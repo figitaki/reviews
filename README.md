@@ -143,7 +143,7 @@ To turn it on, set these in `.env.local` (or the deploy environment):
 ```sh
 CODE_STORAGE_ADAPTER=code_storage
 CODE_STORAGE_ORG=<code.storage org>
-CODE_STORAGE_JWT_PRIVATE_KEY="<P-256 private key, PKCS8 PEM>"
+CODE_STORAGE_JWT_PRIVATE_KEY="<named-curve P-256 private key, unencrypted PKCS8 PEM>"
 # Optional. "optional" (default) or "required".
 CODE_STORAGE_POLICY=optional
 ```
@@ -152,6 +152,16 @@ The server signs short-lived ES256 tokens with the private key. The CLI gets a
 token that can write only the two refs of one snapshot. Signing goes through
 `Reviews.CodeStorage.CodeDotStorage.Signer`; the only signer today reads the
 PEM key above.
+
+Use named-curve parameters (`prime256v1` / `secp256r1`), not explicit EC
+parameters. OTP 29's PEM decoder rejects explicit parameters even for P-256.
+Both actual newlines and literal `\n` separators in environment values work.
+Encrypted keys, public-only keys, other curves, and bundles of keys are rejected
+with `invalid_named_curve_p256_pem`; error details never include the key.
+
+Snapshot refs remain mutable while an upload token is valid: `no-force-push`
+allows fast-forwards and deletion. Future source readers must use the verified
+commit IDs stored on the snapshot, rather than assume its branch refs are immutable.
 
 With the `optional` policy, a failed upload prints a warning and the push
 continues without code. With `required`, the CLI stops before it creates the

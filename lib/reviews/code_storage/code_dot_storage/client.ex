@@ -10,16 +10,13 @@ defmodule Reviews.CodeStorage.CodeDotStorage.Client do
   """
 
   @doc """
-  Create the repository named by the JWT `repo` claim. Idempotent: a 409
-  (already exists — a retried reserve) resolves to the existing repository.
+  Create the repository named by the JWT `repo` claim. The provider returns
+  201 for a new repository and 200 when it already exists. A 409 is a conflict.
   """
-  def create_repo(config, token, repo_path) do
+  def create_repo(config, token, _repo_path) do
     case request(config, token, :post, "/repos", json: %{}) do
       {:ok, %{status: status, body: body}} when status in [200, 201] ->
-        {:ok, %{provider_repo_id: body["id"]}}
-
-      {:ok, %{status: 409}} ->
-        get_repo(config, token, repo_path)
+        repository_identity(body)
 
       other ->
         request_error(other)
@@ -28,19 +25,31 @@ defmodule Reviews.CodeStorage.CodeDotStorage.Client do
 
   def get_repo(config, token, repo_path) do
     case request(config, token, :get, "/repos/#{encode(repo_path)}", []) do
-      {:ok, %{status: 200, body: body}} -> {:ok, %{provider_repo_id: body["id"]}}
+      {:ok, %{status: 200, body: body}} -> repository_identity(body)
       other -> request_error(other)
     end
   end
 
   @doc "Resolve a branch name, short SHA, or full SHA to a commit."
   def get_commit(config, token, repo_path, ref) do
-    path = "/repos/#{encode(repo_path)}/commits/#{encode(ref)}"
+    path = "/repos/#{encode(repo_path)}/commit"
 
-    case request(config, token, :get, path, []) do
-      {:ok, %{status: 200, body: body}} -> {:ok, %{sha: body["sha"]}}
-      {:ok, %{status: 404}} -> {:error, :not_found}
-      other -> request_error(other)
+    case request(config, token, :get, path, params: [ref: ref]) do
+      {:ok, %{status: 200, body: %{"commit" => %{"sha" => sha}}}}
+      when is_binary(sha) ->
+        case Regex.match?(~r/\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/, sha) do
+          true -> {:ok, %{sha: sha}}
+          false -> {:error, :invalid_response}
+        end
+
+      {:ok, %{status: 200}} ->
+        {:error, :invalid_response}
+
+      {:ok, %{status: 404}} ->
+        {:error, :not_found}
+
+      other ->
+        request_error(other)
     end
   end
 
@@ -56,12 +65,23 @@ defmodule Reviews.CodeStorage.CodeDotStorage.Client do
   # path segment.
   defp encode(value), do: URI.encode(value, &URI.char_unreserved?/1)
 
+  # repo_id remains a documented legacy field; current responses identify the
+  # repository by repo_name. Neither create nor get documents an "id" field.
+  defp repository_identity(%{"repo_id" => id}) when is_binary(id) and byte_size(id) > 0,
+    do: {:ok, %{provider_repo_id: id}}
+
+  defp repository_identity(%{"repo_name" => name}) when is_binary(name) and byte_size(name) > 0,
+    do: {:ok, %{provider_repo_id: name}}
+
+  defp repository_identity(_), do: {:error, :invalid_response}
+
   defp request(config, token, method, path, opts) do
     [
       method: method,
       url: base_url(config) <> path,
       auth: {:bearer, token},
       retry: false,
+      redirect: false,
       # Reserve and complete run inside CLI requests; a slow provider must
       # fail fast so the push can fall back to diff-only.
       connect_options: [timeout: 5_000],

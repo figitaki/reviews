@@ -31,8 +31,8 @@ still stabilizing.
   excerpts. Source shows the exact lines and comments. Raw HTML, scripts and
   unsafe links stay escaped.
 - Code storage (Phase 0 and 1 of the code storage plan in #74):
-  every code-enabled patchset gets immutable base/head Git refs stored in a
-  provider-neutral backend. code.storage (Pierre) is the production adapter;
+  every code-enabled patchset gets verified base/head commit IDs and scoped
+  Git refs in a provider-neutral backend. code.storage (Pierre) is the production adapter;
   storage is off by default (`CODE_STORAGE_ADAPTER=code_storage` enables it).
 - `GET /api/v1/capabilities` for CLI feature discovery, plus
   `POST /api/v1/code-snapshots` and `POST /api/v1/code-snapshots/:id/complete`

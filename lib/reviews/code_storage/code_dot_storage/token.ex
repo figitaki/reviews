@@ -40,8 +40,9 @@ defmodule Reviews.CodeStorage.CodeDotStorage.Token do
   @doc """
   Upload token handed to the CLI: `git:write` only, allowed to update exactly
   the snapshot's two refs. Everything else is rejected by the trailing
-  no-push rule. `no-force-push` on the snapshot refs makes an already-pushed
-  ref immutable for the token's remaining lifetime.
+  no-push rule. `no-force-push` rejects non-fast-forward updates, but permits
+  fast-forwards and deletion. These refs are mutable during the token lifetime;
+  consumers must use the verified commit OIDs rather than trust ref immutability.
   """
   def upload_token(config, repo_path, snapshot_public_id, ttl_seconds) do
     sign(config, %{

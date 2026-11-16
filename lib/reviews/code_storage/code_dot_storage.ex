@@ -21,9 +21,10 @@ defmodule Reviews.CodeStorage.CodeDotStorage do
   token's ref policy allowlists those two branches and no-pushes everything
   else.
 
-  `delete_snapshot/2` is deliberately a no-op: upload tokens cannot delete
-  refs, and claimed refs live for the review's lifetime. Expired-but-claimed
-  snapshot refs are reclaimed when the repository is deleted.
+  `delete_snapshot/2` is deliberately a no-op; individual ref cleanup is deferred.
+  The upload token's `no-force-push` rule still permits fast-forwards and deletion,
+  so claimed refs must not be treated as immutable. Repository deletion reclaims
+  its remaining snapshot refs.
   """
   @behaviour Reviews.CodeStorage
 

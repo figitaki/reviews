@@ -44,7 +44,7 @@ defmodule Reviews.CodeStorage.CodeDotStorageTest do
 
     Req.Test.stub(__MODULE__, fn conn ->
       send(test_pid, {:req, conn.method, conn.request_path, auth_header(conn)})
-      Req.Test.json(conn, %{"id" => "prov-123"})
+      Req.Test.json(conn, %{"repo_id" => "prov-123"})
     end)
 
     assert {:ok, %{storage_key: storage_key, provider_repo_id: "prov-123"}} =
@@ -57,12 +57,10 @@ defmodule Reviews.CodeStorage.CodeDotStorageTest do
     assert "repo:write" in claims["scopes"]
   end
 
-  test "create_repository resolves an already-existing repo via GET", ctx do
+  test "create_repository accepts the idempotent 200 response", ctx do
     Req.Test.stub(__MODULE__, fn conn ->
-      case {conn.method, conn.request_path} do
-        {"POST", "/api/repos"} -> Plug.Conn.send_resp(conn, 409, "{}")
-        {"GET", _} -> Req.Test.json(conn, %{"id" => "prov-existing"})
-      end
+      assert {conn.method, conn.request_path} == {"POST", "/api/repos"}
+      Req.Test.json(conn, %{"repo_id" => "prov-existing"})
     end)
 
     assert {:ok, %{provider_repo_id: "prov-existing"}} =
@@ -89,11 +87,11 @@ defmodule Reviews.CodeStorage.CodeDotStorageTest do
   test "verify succeeds when both refs resolve to the reserved OIDs", ctx do
     Req.Test.stub(__MODULE__, fn conn ->
       sha =
-        if String.ends_with?(conn.request_path, "base"),
+        if String.ends_with?(URI.decode_query(conn.query_string)["ref"], "base"),
           do: ctx.snapshot.base_oid,
           else: ctx.snapshot.head_oid
 
-      Req.Test.json(conn, %{"sha" => sha})
+      Req.Test.json(conn, %{"commit" => %{"sha" => sha}})
     end)
 
     assert {:ok, %{base_oid: base, head_oid: head}} =
@@ -105,7 +103,7 @@ defmodule Reviews.CodeStorage.CodeDotStorageTest do
 
   test "verify returns ref_mismatch on wrong OID and on missing ref", ctx do
     Req.Test.stub(__MODULE__, fn conn ->
-      Req.Test.json(conn, %{"sha" => String.duplicate("f", 40)})
+      Req.Test.json(conn, %{"commit" => %{"sha" => String.duplicate("f", 40)}})
     end)
 
     assert {:error, :ref_mismatch} = CodeDotStorage.verify(ctx.repository, ctx.snapshot)
