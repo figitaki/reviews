@@ -257,13 +257,27 @@ defmodule ReviewsWeb.ReviewListLive do
         font-size: 12px;
       }
 
+      /* Agent handles can be 80 characters with no break; keep them inside
+         the row on phones instead of clipping. */
       .rl-author {
         display: inline-flex;
         align-items: center;
         gap: 6px;
+        min-width: 0;
+        max-width: 100%;
+      }
+
+      .rl-author > span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .rl-author > span + span {
+        flex-shrink: 0;
       }
 
       .rl-author img {
+        flex-shrink: 0;
         width: 18px;
         height: 18px;
         border: 1px solid var(--ds-line);
