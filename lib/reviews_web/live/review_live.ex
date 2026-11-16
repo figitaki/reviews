@@ -116,6 +116,15 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("restore_packet_location", %{"thread" => id}, socket) when id in [nil, ""] do
+    handle_event("select_packet_overview", %{}, socket)
+  end
+
+  def handle_event("restore_packet_location", %{"thread" => id}, socket) do
+    {:noreply, reveal_activity_thread(socket, id)}
+  end
+
+  @impl true
   def handle_event("select_patchset", %{"number" => number}, socket) do
     case Integer.parse(to_string(number)) do
       {n, _} ->

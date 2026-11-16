@@ -83,7 +83,8 @@ test("back to the fragment-free overview restores overview without adding histor
   const {listeners, requests} = setup("#packet-section-0-row-1")
   window.location.hash = ""
   listeners.get("hashchange")()
-  assert.equal(requests[1].name, "select_packet_overview")
+  assert.equal(requests[1].name, "restore_packet_location")
+  assert.deepEqual(requests[1].payload, {thread: null})
 })
 
 test("back from an encoded packet prefix restores Overview", () => {
@@ -91,7 +92,8 @@ test("back from an encoded packet prefix restores Overview", () => {
   assert.equal(requests[0].payload.id, "packet-section-0-row-1")
   window.location.hash = ""
   listeners.get("hashchange")()
-  assert.equal(requests[1]?.name, "select_packet_overview")
+  assert.equal(requests[1]?.name, "restore_packet_location")
+  assert.deepEqual(requests[1].payload, {thread: null})
 })
 
 test("back from a malformed fragment does not change section selection", () => {
@@ -99,4 +101,12 @@ test("back from a malformed fragment does not change section selection", () => {
   window.location.hash = ""
   listeners.get("hashchange")()
   assert.equal(requests.length, 0)
+})
+
+test("back to a thread URL restores its discussion instead of Overview", () => {
+  const {listeners, requests} = setup("?patchset=1&thread=42#packet-section-0-row-1")
+  window.location.hash = ""
+  listeners.get("hashchange")()
+  assert.equal(requests[1].name, "restore_packet_location")
+  assert.deepEqual(requests[1].payload, {thread: "42"})
 })

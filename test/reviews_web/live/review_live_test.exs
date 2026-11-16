@@ -1402,6 +1402,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
       {:ok, direct, _} = live(conn, path)
       assert has_element?(direct, ~s|#packet-section-1 [data-hunk-expanded="true"]|)
       refute has_element?(direct, "#diff-files")
+
+      render_hook(direct, "reveal_packet_fragment", %{"id" => "packet-section-0-row-0"})
+      assert has_element?(direct, "#packet-section-0")
+      render_hook(direct, "restore_packet_location", %{"thread" => to_string(thread.id)})
+      assert has_element?(direct, ~s|#packet-section-1 [data-hunk-expanded="true"]|)
+      refute has_element?(direct, "#packet-section-0")
+
+      assert_push_event(direct, "open_review_thread", %{
+        thread_id: ^thread_id,
+        file_path: "example.ex",
+        hunk_id: "packet-section-1-row-0--hunk-example-ex-2"
+      })
+
+      render_hook(direct, "restore_packet_location", %{"thread" => nil})
+      refute has_element?(direct, "#packet-section-1")
     end
 
     test "hunk viewed state is shared between packet and changes views", %{

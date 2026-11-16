@@ -8,7 +8,8 @@ export default {
       const previous = this.fragmentId
       this.revealFragment()
       if (!window.location.hash && previous) {
-        this.pushEvent("select_packet_overview", {})
+        const thread = new URL(window.location.href).searchParams.get("thread")
+        this.pushEvent("restore_packet_location", {thread})
       }
     }
     this.onClick = event => {

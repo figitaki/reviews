@@ -286,7 +286,9 @@ connection, hash changes, repeated same-fragment clicks, and revision changes.
 The server validates the ID against rendered packet units, reveals the section,
 expands its card, and replies with `{id: canonical_dom_id}` (or `{id: null}` for
 an unknown target). The client focuses and scrolls after the patch is applied.
-Native anchor navigation owns URL/history; returning to an empty fragment
-restores Overview. Modified clicks, external links, and different URLs retain
+Native anchor navigation owns URL/history; returning to an empty fragment sends
+`restore_packet_location` with the URL's `thread` value. It restores that
+discussion when present, or Overview otherwise. Modified clicks, external links,
+and different URLs retain
 native browser behavior. This does not enable packet fragments on the raw
 `/changes` view or make hunk IDs stable across changed packet contents.
