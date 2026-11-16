@@ -58,52 +58,85 @@ defmodule Reviews.CodeSnapshots do
 
   @doc """
   Verify an uploaded snapshot: ask the provider to resolve both refs and
-  compare them with the reserved OIDs. Idempotent — completing a `ready` or
-  `claimed` snapshot succeeds without another provider call.
+  compare them with the reserved OIDs. Idempotent — completing an unexpired `ready` or a `claimed` snapshot
+  succeeds without another provider call. Unclaimed deadlines are checked
+  before verification and again under a row lock before recording its result.
   """
   def complete(%Identity{} = identity, snapshot_public_id) do
-    case get_snapshot_by_public_id(snapshot_public_id) do
-      nil ->
-        {:error, :snapshot_not_ready}
+    snapshot = get_snapshot_by_public_id(snapshot_public_id)
 
-      %CodeSnapshot{reserved_by_id: owner_id} when owner_id != identity.id ->
-        {:error, :snapshot_not_authorized}
-
-      %CodeSnapshot{status: status} = snapshot when status in ["ready", "claimed"] ->
-        {:ok, snapshot}
-
-      %CodeSnapshot{status: "expired"} ->
-        {:error, :upload_expired}
-
-      %CodeSnapshot{status: "failed"} ->
-        {:error, :ref_mismatch}
-
-      %CodeSnapshot{} = snapshot ->
-        verify_snapshot(snapshot)
+    case completion_state(snapshot, identity) do
+      :verify -> verify_snapshot(snapshot, identity)
+      result -> result
     end
   end
 
-  defp verify_snapshot(snapshot) do
-    case CodeStorage.adapter().verify(snapshot.code_repository, snapshot) do
-      {:ok, _oids} ->
-        {:ok,
-         snapshot
-         |> Ecto.Changeset.change(status: "ready")
-         |> Repo.update!()}
+  defp completion_state(nil, _identity), do: {:error, :snapshot_not_ready}
 
-      {:error, :ref_mismatch} ->
-        snapshot
-        |> Ecto.Changeset.change(status: "failed", last_error: "ref_mismatch")
-        |> Repo.update!()
+  defp completion_state(%CodeSnapshot{reserved_by_id: owner_id}, %Identity{id: id})
+       when owner_id != id,
+       do: {:error, :snapshot_not_authorized}
 
-        {:error, :ref_mismatch}
+  defp completion_state(%CodeSnapshot{status: "claimed"} = snapshot, _identity),
+    do: {:ok, snapshot}
 
-      {:error, reason} ->
-        # Transient provider failure: leave the snapshot for a retried
-        # complete call (or expiry).
-        {:error, {:verify_failed, reason}}
+  defp completion_state(%CodeSnapshot{status: "expired"}, _identity),
+    do: {:error, :upload_expired}
+
+  defp completion_state(%CodeSnapshot{} = snapshot, _identity) do
+    with :ok <- check_deadline(snapshot) do
+      case snapshot.status do
+        "ready" -> {:ok, snapshot}
+        "failed" -> {:error, :ref_mismatch}
+        status when status in ["reserved", "uploading"] -> :verify
+        _ -> {:error, :snapshot_not_ready}
+      end
     end
   end
+
+  defp verify_snapshot(snapshot, identity) do
+    # Do not hold a database lock while waiting on the provider. Its result
+    # may arrive after expiry, another completion, or a claim.
+    result = CodeStorage.adapter().verify(snapshot.code_repository, snapshot)
+
+    {:ok, outcome} =
+      Repo.transaction(fn ->
+        with {:ok, current} <- lock_snapshot(snapshot.public_id) do
+          case completion_state(current, identity) do
+            :verify -> record_verification(current, result)
+            outcome -> outcome
+          end
+        end
+      end)
+
+    outcome
+  end
+
+  defp record_verification(snapshot, {:ok, _oids}) do
+    snapshot
+    |> Ecto.Changeset.change(status: "ready")
+    |> Repo.update()
+  end
+
+  defp record_verification(snapshot, {:error, :ref_mismatch}) do
+    snapshot
+    |> Ecto.Changeset.change(status: "failed", last_error: "ref_mismatch")
+    |> Repo.update!()
+
+    {:error, :ref_mismatch}
+  end
+
+  defp record_verification(_snapshot, {:error, reason}),
+    do: {:error, {:verify_failed, reason}}
+
+  defp check_deadline(%CodeSnapshot{expires_at: %DateTime{} = deadline}) do
+    case DateTime.compare(deadline, DateTime.utc_now()) do
+      :gt -> :ok
+      _ -> {:error, :upload_expired}
+    end
+  end
+
+  defp check_deadline(_snapshot), do: {:error, :snapshot_not_ready}
 
   defp validate_reserve_attrs(attrs) do
     cond do
@@ -270,6 +303,7 @@ defmodule Reviews.CodeSnapshots do
     with {:ok, snapshot} <- lock_snapshot(public_id),
          :ok <- check_owner(snapshot, identity),
          :ok <- check_status(snapshot),
+         :ok <- check_deadline(snapshot),
          {:ok, repository} <- attach_repository(snapshot.code_repository, review) do
       snapshot =
         snapshot
@@ -347,7 +381,7 @@ defmodule Reviews.CodeSnapshots do
           where:
             s.status in ["reserved", "uploading", "ready"] and
               is_nil(s.patchset_id) and
-              s.expires_at < ^now
+              s.expires_at <= ^now
         ),
         set: [status: "expired", updated_at: DateTime.truncate(now, :second)]
       )

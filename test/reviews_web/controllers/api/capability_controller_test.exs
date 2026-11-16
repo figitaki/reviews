@@ -9,7 +9,8 @@ defmodule ReviewsWeb.Api.CapabilityControllerTest do
                "enabled" => false,
                "required" => false,
                "supported_object_formats" => ["sha1"],
-               "max_upload_bytes" => 536_870_912
+               "max_upload_bytes" => 536_870_912,
+               "max_upload_bytes_enforced" => false
              },
              "lsp" => %{"enabled" => false, "languages" => []}
            } = json_response(conn, 200)

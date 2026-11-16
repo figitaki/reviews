@@ -168,6 +168,11 @@ continues without code. With `required`, the CLI stops before it creates the
 review or patchset. Use `reviews push --no-code-storage` to skip the upload
 when the policy is `optional`.
 
+The advertised `max_upload_bytes` budget is not enforced; capabilities explicitly
+report `max_upload_bytes_enforced: false`. Initial uploads may include all history
+reachable from the base commit. This setting does not cap transfer or storage costs.
+Submodule snapshots store gitlink commit IDs, not nested uncommitted files.
+
 The CLI asks `GET /api/v1/capabilities` first. Older servers return `404`, and
 the CLI then pushes diff-only. The API contract is in `docs/CONTRACTS.md`.
 

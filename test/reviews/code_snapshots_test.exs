@@ -63,11 +63,34 @@ defmodule Reviews.CodeSnapshotsTest do
       assert claimed.status == "claimed"
       assert claimed.patchset_id == ctx.patchset.id
       assert claimed.expires_at == nil
+      assert {:ok, %{status: "claimed"}} = CodeSnapshots.complete(ctx.identity, claimed.public_id)
 
       repository = Repo.get!(CodeRepository, repository.id)
       assert repository.review_id == ctx.review.id
       assert repository.status == "ready"
       assert repository.expires_at == nil
+    end
+
+    test "rejects a ready snapshot past its deadline before the sweeper runs", ctx do
+      repository = code_repository_fixture(ctx.identity)
+
+      snapshot =
+        code_snapshot_fixture(ctx.identity, repository, %{
+          expires_at: DateTime.add(DateTime.utc_now(), -1)
+        })
+
+      Repo.transaction(fn ->
+        assert {:error, :upload_expired} =
+                 CodeSnapshots.claim_for_patchset(
+                   ctx.identity,
+                   ctx.review,
+                   ctx.patchset,
+                   snapshot.public_id
+                 )
+      end)
+
+      assert Repo.get!(CodeSnapshot, snapshot.id).patchset_id == nil
+      assert Repo.get!(CodeRepository, repository.id).review_id == nil
     end
 
     test "rejects a snapshot reserved by another identity", ctx do
@@ -255,7 +278,7 @@ defmodule Reviews.CodeSnapshotsTest do
 
       stale = code_snapshot_fixture(ctx.identity, repository, %{expires_at: past})
       fresh = code_snapshot_fixture(ctx.identity, repository)
-      claimed = code_snapshot_fixture(ctx.identity, repository, %{expires_at: past})
+      claimed = code_snapshot_fixture(ctx.identity, repository)
 
       Repo.transaction(fn ->
         {:ok, _} =

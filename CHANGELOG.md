@@ -162,6 +162,11 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 
 ### Fixed
 
+- Enforce snapshot reservation deadlines during completion and claiming, and
+  prevent late provider results from overwriting newer snapshot states.
+- Ignore dirty submodule contents in snapshot diffs while preserving gitlink
+  changes; disclose that the advertised upload budget is not enforced.
+
 - GitHub sign-in now returns you to the page you started from, such as a
   review, instead of the home page. Only local paths are accepted; anything
   else goes home.

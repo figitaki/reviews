@@ -67,6 +67,7 @@ defmodule Reviews.CodeStorage do
     config()[:supported_object_formats] || ["sha1"]
   end
 
+  @doc "Advisory upload budget only; enforcement is not implemented."
   def max_upload_bytes do
     config()[:max_upload_bytes] || 536_870_912
   end
@@ -87,7 +88,8 @@ defmodule Reviews.CodeStorage do
         enabled: enabled?(),
         required: policy() == :required,
         supported_object_formats: supported_object_formats(),
-        max_upload_bytes: max_upload_bytes()
+        max_upload_bytes: max_upload_bytes(),
+        max_upload_bytes_enforced: false
       },
       lsp: %{enabled: false, languages: []}
     }

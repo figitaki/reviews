@@ -50,7 +50,9 @@ defmodule Reviews.CodeStorage.Stub do
   def checkout_source(_repository, _ref, _destination), do: {:error, :not_implemented}
 
   defp respond(callback, default) do
-    Application.get_env(:reviews, __MODULE__, [])
-    |> Keyword.get(callback, default)
+    case Keyword.get(Application.get_env(:reviews, __MODULE__, []), callback, default) do
+      fun when is_function(fun, 0) -> fun.()
+      result -> result
+    end
   end
 end

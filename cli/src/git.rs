@@ -92,6 +92,10 @@ fn canonical_diff(repo: &Path, extra: &[&str]) -> Result<String> {
         "diff",
         "--no-ext-diff",
         "--no-textconv",
+        // Gitlinks store commit IDs, not nested worktree dirt. Override
+        // local ignore/format settings while retaining changed commit IDs.
+        "--ignore-submodules=dirty",
+        "--submodule=short",
         "--binary",
     ];
     args.extend_from_slice(extra);
@@ -320,7 +324,11 @@ fn synthetic_commit(repo: &Path, base_oid: &str, include_worktree: bool) -> Resu
     if include_worktree {
         // Stage tracked modifications and deletions only — never untracked
         // or ignored files.
-        run_git_env(repo, &["add", "-u"], index_env)?;
+        run_git_env(
+            repo,
+            &["-c", "diff.ignoreSubmodules=none", "add", "-u"],
+            index_env,
+        )?;
     }
 
     let tree = run_git_env(repo, &["write-tree"], index_env)?
@@ -714,6 +722,63 @@ mod tests {
         let status = run_git(&repo, &["status", "--porcelain"]).unwrap();
         assert!(status.contains(" M a.txt"), "status = {status}");
         assert!(status.contains(" D gone.txt"), "status = {status}");
+    }
+
+    #[test]
+    fn worktree_snapshot_ignores_submodule_dirt_but_preserves_gitlink_updates() {
+        let (_g, repo) = init_repo();
+        let (_sub_guard, sub) = init_repo();
+        commit_file(&sub, "nested.txt", "one\n", "sub1");
+        commit_file(&repo, "parent.txt", "one\n", "parent1");
+        run_git(
+            &repo,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                sub.to_str().unwrap(),
+                "nested",
+            ],
+        )
+        .unwrap();
+        run_git(&repo, &["commit", "-qm", "add submodule"]).unwrap();
+        let nested = repo.join("nested");
+        run_git(&nested, &["config", "user.name", "T"]).unwrap();
+        run_git(&nested, &["config", "user.email", "t@t"]).unwrap();
+        run_git(&nested, &["config", "commit.gpgsign", "false"]).unwrap();
+        fs::write(nested.join("nested.txt"), "dirty\n").unwrap();
+        fs::write(nested.join("untracked.txt"), "untracked\n").unwrap();
+        fs::write(repo.join("parent.txt"), "parent edit\n").unwrap();
+        let cap = capture_diff(&repo, Some("HEAD")).unwrap();
+        let commits = create_snapshot_commits(&repo, &cap).unwrap();
+        assert!(!cap.raw_diff.contains("-dirty"));
+        assert!(!cap.raw_diff.contains("diff --git a/nested"));
+        assert_eq!(
+            rev_parse(&repo, &format!("{}:nested", commits.head_oid)).unwrap(),
+            rev_parse(&nested, "HEAD").unwrap()
+        );
+
+        commit_file(&nested, "nested.txt", "two\n", "sub2");
+        let gitlink = rev_parse(&nested, "HEAD").unwrap();
+        fs::write(nested.join("nested.txt"), "dirty again\n").unwrap();
+        // Local settings must neither hide a real gitlink change nor expand
+        // the submodule into a different diff format.
+        run_git(&repo, &["config", "diff.ignoreSubmodules", "all"]).unwrap();
+        run_git(&repo, &["config", "submodule.nested.ignore", "all"]).unwrap();
+        run_git(&repo, &["config", "diff.submodule", "log"]).unwrap();
+        let cap = capture_diff(&repo, Some("HEAD")).unwrap();
+        let before = run_git(&repo, &["ls-files", "--stage"]).unwrap();
+        let commits = create_snapshot_commits(&repo, &cap).unwrap();
+        assert!(cap
+            .raw_diff
+            .contains(&format!("+Subproject commit {gitlink}")));
+        assert!(!cap.raw_diff.contains("-dirty"));
+        assert_eq!(
+            rev_parse(&repo, &format!("{}:nested", commits.head_oid)).unwrap(),
+            gitlink
+        );
+        assert_eq!(run_git(&repo, &["ls-files", "--stage"]).unwrap(), before);
     }
 
     #[test]

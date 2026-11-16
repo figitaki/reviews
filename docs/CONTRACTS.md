@@ -129,11 +129,17 @@ route; treat a `404` as code storage disabled.
     "enabled": false,
     "required": false,
     "supported_object_formats": ["sha1"],
-    "max_upload_bytes": 536870912
+    "max_upload_bytes": 536870912,
+    "max_upload_bytes_enforced": false
   },
   "lsp": { "enabled": false, "languages": [] }
 }
 ```
+
+`max_upload_bytes` is an advisory budget, not a rejection threshold.
+`max_upload_bytes_enforced: false` means neither the CLI nor server enforces
+that budget. The first push can transfer all history reachable from the base
+commit; operators must not rely on this field to bound storage or transfer costs.
 
 ### `POST /api/v1/code-snapshots`
 
@@ -183,7 +189,11 @@ logs.
 ### `POST /api/v1/code-snapshots/:id/complete`
 
 Asks the server to verify the uploaded refs against the reserved object ids.
-Idempotent. Response `200`:
+Unclaimed reservations return `upload_expired` (410) at or after their deadline,
+even before the sweeper runs. Completion rechecks state and deadline after
+provider verification; a late result cannot revive an expired snapshot or
+overwrite a completed/claimed one. Claiming also checks the deadline under
+the snapshot lock. Claimed snapshots remain idempotently completable. Response `200`:
 
 ```json
 { "id": "<snapshot uuid>", "status": "ready", "base_oid": "...", "head_oid": "..." }

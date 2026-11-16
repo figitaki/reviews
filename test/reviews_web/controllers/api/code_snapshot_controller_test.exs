@@ -216,6 +216,77 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
       assert %{"status" => "ready"} = json_response(conn2, 200)
     end
 
+    test "complete rejects past-deadline reservations without calling the provider", ctx do
+      Application.put_env(:reviews, Reviews.CodeStorage.Stub,
+        verify: fn -> flunk("expired reservations must not contact the provider") end
+      )
+
+      repository = code_repository_fixture(ctx.identity)
+
+      for status <- ["reserved", "ready"] do
+        snapshot =
+          code_snapshot_fixture(ctx.identity, repository, %{
+            status: status,
+            expires_at: DateTime.add(DateTime.utc_now(:second), -1)
+          })
+
+        conn = post(ctx.conn, ~p"/api/v1/code-snapshots/#{snapshot.public_id}/complete")
+        assert %{"errors" => %{"code" => "upload_expired"}} = json_response(conn, 410)
+      end
+    end
+
+    test "provider results cannot resurrect an expired reservation", ctx do
+      repository = code_repository_fixture(ctx.identity)
+
+      for result <- [{:ok, %{}}, {:error, :ref_mismatch}] do
+        snapshot = code_snapshot_fixture(ctx.identity, repository, %{status: "reserved"})
+
+        Application.put_env(:reviews, Reviews.CodeStorage.Stub,
+          verify: fn ->
+            snapshot |> Ecto.Changeset.change(status: "expired") |> Repo.update!()
+            result
+          end
+        )
+
+        conn = post(ctx.conn, ~p"/api/v1/code-snapshots/#{snapshot.public_id}/complete")
+        assert %{"errors" => %{"code" => "upload_expired"}} = json_response(conn, 410)
+        assert Repo.get!(CodeSnapshot, snapshot.id).status == "expired"
+      end
+    end
+
+    test "completion rechecks the deadline after provider verification", ctx do
+      repository = code_repository_fixture(ctx.identity)
+      snapshot = code_snapshot_fixture(ctx.identity, repository, %{status: "reserved"})
+
+      Application.put_env(:reviews, Reviews.CodeStorage.Stub,
+        verify: fn ->
+          snapshot
+          |> Ecto.Changeset.change(expires_at: DateTime.add(DateTime.utc_now(:second), -1))
+          |> Repo.update!()
+
+          {:ok, %{}}
+        end
+      )
+
+      assert {:error, :upload_expired} = CodeSnapshots.complete(ctx.identity, snapshot.public_id)
+      refute Repo.get!(CodeSnapshot, snapshot.id).status == "ready"
+    end
+
+    test "a late mismatch cannot overwrite another successful completion", ctx do
+      repository = code_repository_fixture(ctx.identity)
+      snapshot = code_snapshot_fixture(ctx.identity, repository, %{status: "reserved"})
+
+      Application.put_env(:reviews, Reviews.CodeStorage.Stub,
+        verify: fn ->
+          snapshot |> Ecto.Changeset.change(status: "ready") |> Repo.update!()
+          {:error, :ref_mismatch}
+        end
+      )
+
+      assert {:ok, %{status: "ready"}} = CodeSnapshots.complete(ctx.identity, snapshot.public_id)
+      assert Repo.get!(CodeSnapshot, snapshot.id).status == "ready"
+    end
+
     test "complete marks a mismatched upload failed", %{conn: conn, identity: identity} do
       Application.put_env(:reviews, Reviews.CodeStorage.Stub, verify: {:error, :ref_mismatch})
 
