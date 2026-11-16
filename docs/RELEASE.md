@@ -26,9 +26,14 @@ You need (one-time):
 
 ## 2. Versioning, tags, and changelog
 
-Reviews starts public release tracking at `0.0.1-alpha.0`. Use semver
-prerelease tags until the CLI contract, hosted service, and install assets are
-stable enough for a non-alpha release.
+The next release is `0.0.1`, the first non-alpha release. Alpha exit means a
+reasonably settled packet format and functional comments, replies, resolution
+and reopening. The public hosted service is already used in production; fresh
+self-hosting validation is not an additional hosted-release gate. Further fixes
+can follow in `0.0.2`. See [the candidate checklist](RELEASE_0.0.1.md).
+
+Preparing a candidate does not authorize tagging, publishing, merging or
+deploying. The commands below are for a separately authorized release.
 
 Before cutting a release:
 
@@ -38,9 +43,9 @@ Before cutting a release:
 3. Tag the CLI and server release separately:
 
    ```sh
-   git tag cli-v0.0.1-alpha.0
-   git tag server-v0.0.1-alpha.0
-   git push origin cli-v0.0.1-alpha.0 server-v0.0.1-alpha.0
+   git tag -s cli-v0.0.1 -m "Reviews CLI 0.0.1"
+   git tag -s server-v0.0.1 -m "Reviews server 0.0.1"
+   git push origin cli-v0.0.1 server-v0.0.1
    ```
 
 The `release-cli.yml` workflow publishes GitHub release assets named:
