@@ -33,6 +33,8 @@ else
   config :reviews, Reviews.Repo, socket_dir: System.get_env("POSTGRES_SOCKET_DIR", "/tmp")
 end
 
+http_port = parse_int_env.("PORT", 4000)
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -42,8 +44,9 @@ end
 config :reviews, ReviewsWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}, port: parse_int_env.("PORT", 4000)],
-  check_origin: false,
+  http: [ip: {127, 0, 0, 1}, port: http_port],
+  # Reject cross-site access to local LiveView and live-reload sockets.
+  check_origin: ["http://localhost:#{http_port}", "http://127.0.0.1:#{http_port}"],
   code_reloader: true,
   debug_errors: true,
   secret_key_base: "QvHBFC4SOKHRmpTypta5jnSlDtzgcEm6iwlihpZpdZDITcvIySerEdJx9nx24xFW",
