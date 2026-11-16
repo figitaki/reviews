@@ -149,6 +149,57 @@ defmodule Reviews.Reviews do
 
   def get_patchset!(id), do: Repo.get!(Patchset, id)
 
+  def get_patchset_by_number(%Review{id: review_id}, number) when is_integer(number) do
+    Repo.get_by(Patchset, review_id: review_id, number: number)
+  end
+
+  @doc "The packet of one patchset, without loading its diff."
+  def get_packet(%{id: patchset_id}) do
+    Repo.one(from p in Patchset, where: p.id == ^patchset_id, select: p.packet)
+  end
+
+  def get_file(%{id: patchset_id}, path) when is_binary(path) do
+    Repo.get_by(File, patchset_id: patchset_id, path: path)
+  end
+
+  @doc """
+  Revision metadata without diffs or packets, oldest first, with file and line
+  totals from the stored file rows. For readers that must not load every
+  revision's raw diff.
+  """
+  def list_patchset_summaries(%Review{id: review_id}) do
+    stats =
+      from f in File,
+        group_by: f.patchset_id,
+        select: %{
+          patchset_id: f.patchset_id,
+          files: count(f.id),
+          additions: coalesce(sum(f.additions), 0),
+          deletions: coalesce(sum(f.deletions), 0)
+        }
+
+    Repo.all(
+      from p in Patchset,
+        where: p.review_id == ^review_id,
+        left_join: s in subquery(stats),
+        on: s.patchset_id == p.id,
+        order_by: [asc: p.number],
+        select: %{
+          id: p.id,
+          number: p.number,
+          pushed_at: p.pushed_at,
+          branch_name: p.branch_name,
+          base_sha: p.base_sha,
+          packet_present: not is_nil(p.packet),
+          stats: %{
+            files: coalesce(s.files, 0),
+            additions: coalesce(s.additions, 0),
+            deletions: coalesce(s.deletions, 0)
+          }
+        }
+    )
+  end
+
   def latest_patchset(%Review{id: review_id}) do
     Repo.one(
       from p in Patchset,
@@ -167,6 +218,33 @@ defmodule Reviews.Reviews do
 
   def list_files(%Patchset{id: patchset_id}) do
     Repo.all(from f in File, where: f.patchset_id == ^patchset_id, order_by: [asc: f.path])
+  end
+
+  def list_files(%{id: patchset_id}, paths) when is_list(paths) do
+    Repo.all(
+      from f in File,
+        where: f.patchset_id == ^patchset_id and f.path in ^paths,
+        order_by: [asc: f.path]
+    )
+  end
+
+  @doc "File metadata of a revision without diffs, in path order, one page at a time."
+  def list_file_summaries(%{id: patchset_id}, offset, limit) do
+    Repo.all(
+      from f in File,
+        where: f.patchset_id == ^patchset_id,
+        order_by: [asc: f.path],
+        offset: ^offset,
+        limit: ^limit,
+        select: %{
+          path: f.path,
+          old_path: f.old_path,
+          status: f.status,
+          additions: f.additions,
+          deletions: f.deletions,
+          bytes: coalesce(fragment("octet_length(?)", f.raw_diff), 0)
+        }
+    )
   end
 
   defp next_patchset_number(review_id) do

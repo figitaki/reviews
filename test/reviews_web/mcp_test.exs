@@ -4,7 +4,7 @@ defmodule ReviewsWeb.MCPTest do
   alias Reviews.Accounts
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
-  alias ReviewsWeb.MCP.Server
+  alias ReviewsWeb.MCP.{Budget, Server}
 
   # Two files; the second has a multi-byte line so byte paging has to respect
   # UTF-8 boundaries.
@@ -168,17 +168,62 @@ defmodule ReviewsWeb.MCPTest do
                String.replace(error_text(unknown), "nosuchslug", ctx.review.slug)
     end
 
-    test "page a file diff on UTF-8 boundaries and pin continuations to a revision", ctx do
+    test "page a long file diff within max_bytes, counting the whole response", ctx do
+      # About 30 KB of multi-byte lines, so pages must cut between characters.
+      lines = for n <- 1..600, do: "+Ünïcödé line #{n} — ✓\n"
+
+      raw =
+        "diff --git a/big.md b/big.md\n--- a/big.md\n+++ b/big.md\n@@ -0,0 +1,600 @@\n" <>
+          Enum.join(lines)
+
+      slug = review_fixture(ctx.owner, raw).slug
+
+      pages =
+        Stream.unfold(0, fn
+          nil ->
+            nil
+
+          offset ->
+            {size, page} =
+              http_call(ctx.owner_token, "reviews_get_file_diff", %{
+                "review" => slug,
+                "path" => "big.md",
+                "revision" => 1,
+                "offset" => offset,
+                "max_bytes" => 2_000
+              })
+
+            assert size <= 2_000
+            {page, page["next_offset"]}
+        end)
+        |> Enum.to_list()
+
+      assert length(pages) > 10
+      assert Enum.all?(pages, &String.valid?(&1["diff"]))
+      [file] = ReviewsContext.parse_diff_files(raw)
+      assert Enum.map_join(pages, & &1["diff"]) == file.raw_diff
+
+      unpinned =
+        call(ctx.owner_token, "reviews_get_file_diff", %{
+          "review" => slug,
+          "path" => "big.md",
+          "offset" => 5
+        })
+
+      assert error_text(unpinned) =~ "Pass the revision"
+    end
+
+    test "keep old revisions readable after a new push", ctx do
       {:ok, _} = ReviewsContext.append_patchset(ctx.review, ctx.agent, %{raw_diff: @diff_v2})
 
-      [full] =
-        for f <- ReviewsContext.parse_diff_files(@diff_v1), f.path == "docs/b.md", do: f.raw_diff
+      old =
+        call!(ctx.owner_token, "reviews_get_file_diff", %{
+          "review" => ctx.review.slug,
+          "path" => "docs/b.md",
+          "revision" => 1
+        })
 
-      # Revision 1 stays readable after revision 2 lands.
-      pages = collect_pages(ctx.owner_token, ctx.review.slug, "docs/b.md", 1, 0, [])
-      assert length(pages) >= 2
-      assert Enum.all?(pages, &String.valid?/1)
-      assert Enum.join(pages) == full
+      assert old.diff =~ "Second line ✓"
 
       # Revision 2 does not touch docs/b.md, so the latest default reports it.
       latest =
@@ -188,53 +233,122 @@ defmodule ReviewsWeb.MCPTest do
         })
 
       assert error_text(latest) =~ "No file"
-
-      unpinned =
-        call(ctx.owner_token, "reviews_get_file_diff", %{
-          "review" => ctx.review.slug,
-          "path" => "lib/a.ex",
-          "offset" => 5
-        })
-
-      assert error_text(unpinned) =~ "Pass the revision"
     end
 
-    test "byte windows never split a UTF-8 sequence" do
+    test "cut text without splitting a character or going over budget" do
       text = String.duplicate("é✓", 50)
 
-      for max <- [1, 2, 3, 4, 5, 7, 11] do
-        chunks = take_all(text, 0, max, [])
+      # 14 bytes is the cost of one "✓", the largest character here.
+      for budget <- [14, 15, 20, 33, 50, 400] do
+        chunks =
+          Stream.unfold(0, fn
+            nil -> nil
+            offset -> Budget.fit_text(text, offset, budget)
+          end)
+          |> Enum.take(200)
+
         assert Enum.join(chunks) == text
-        assert Enum.all?(chunks, &(&1 != "" and String.valid?(&1)))
+        assert Enum.all?(chunks, &(&1 != "" and String.valid?(&1) and Budget.cost(&1) <= budget))
       end
 
-      assert {:error, _} = ReviewsWeb.MCP.Handlers.take_bytes(text, 1, 10)
+      # Strict: when no whole character fits, nothing is returned.
+      assert Budget.fit_text("✓", 0, 5) == {"", 0}
     end
 
-    test "cut packet sections to the byte budget and say so", ctx do
-      section =
-        call!(ctx.owner_token, "reviews_get_packet_section", %{
-          "review" => ctx.review.slug,
-          "section_index" => 0
-        })
+    test "page packet sections row by row, continuing long prose", ctx do
+      prose = String.duplicate("Prose with ünïcödé — ", 400)
 
-      assert [%{kind: "markdown", body: "Intro prose."}, h1, h2] = section.rows
-      assert h1.diff =~ "+  def a, do: :new"
-      assert h2.diff =~ "+# added"
-      refute section.truncated
+      packet = %{
+        "title" => "Long",
+        "sections" => [
+          %{
+            "title" => "Only",
+            "rows" => [
+              %{"kind" => "markdown", "body" => prose},
+              %{"kind" => "hunk", "path" => "lib/a.ex", "hunk_index" => 1},
+              %{"kind" => "hunk", "path" => "lib/a.ex", "hunk_index" => 2}
+            ]
+          }
+        ]
+      }
 
-      # Room for the prose and the first hunk only: the second keeps its place
-      # in the reading order but loses its diff.
-      cut =
-        call!(ctx.owner_token, "reviews_get_packet_section", %{
-          "review" => ctx.review.slug,
-          "section_index" => 0,
-          "max_bytes" => byte_size("Intro prose.") + byte_size(h1.diff) + 1
-        })
+      slug = review_fixture(ctx.owner, @diff_v1, packet).slug
 
-      assert [_, %{diff: d1}, %{diff: nil, path: "lib/a.ex", hunk_index: 2}] = cut.rows
-      assert d1 == h1.diff
-      assert cut.truncated
+      {pages, _} =
+        Enum.reduce_while(1..50, {[], nil}, fn _, {acc, cursor} ->
+          args = %{"review" => slug, "section_index" => 0, "revision" => 1, "max_bytes" => 2_000}
+          args = if cursor, do: Map.put(args, "cursor", cursor), else: args
+          {size, page} = http_call(ctx.owner_token, "reviews_get_packet_section", args)
+          assert size <= 2_000
+
+          if page["next_cursor"],
+            do: {:cont, {[page | acc], page["next_cursor"]}},
+            else: {:halt, {Enum.reverse([page | acc]), nil}}
+        end)
+
+      assert length(pages) > 5
+      rows = Enum.flat_map(pages, & &1["rows"])
+      body = rows |> Enum.filter(&(&1["row"] == 0)) |> Enum.map_join(& &1["body"])
+      assert body == prose
+
+      assert [%{"diff" => d1, "complete" => true}] = Enum.filter(rows, &(&1["row"] == 1))
+      assert d1 =~ "+  def a, do: :new"
+      assert [%{"diff" => d2}] = Enum.filter(rows, &(&1["row"] == 2))
+      assert d2 =~ "+# added"
+    end
+
+    test "page files, threads, and the comments of one thread", ctx do
+      files =
+        for n <- 1..40,
+            do:
+              "diff --git a/f#{n}.ex b/f#{n}.ex\n--- a/f#{n}.ex\n+++ b/f#{n}.ex\n@@ -1 +1 @@\n-a\n+b\n"
+
+      review = review_fixture(ctx.owner, Enum.join(files))
+
+      listed =
+        page_all(ctx.owner_token, "reviews_list_files", %{"review" => review.slug}, "files")
+
+      assert length(listed) == 40
+      assert listed |> Enum.map(& &1["path"]) |> Enum.uniq() |> length() == 40
+
+      for n <- 1..6 do
+        {:ok, _} =
+          Threads.publish_comment(review, ctx.owner, %{
+            "file_path" => "f#{n}.ex",
+            "side" => "new",
+            "body" => String.duplicate("Long note ✓ ", 150),
+            "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+          })
+      end
+
+      threads =
+        page_all(
+          ctx.owner_token,
+          "reviews_list_threads",
+          %{"review" => review.slug, "limit" => 4},
+          "threads"
+        )
+
+      assert length(threads) == 6
+      assert threads |> Enum.map(& &1["id"]) |> Enum.uniq() |> length() == 6
+      assert Enum.all?(threads, &(&1["comments_complete"] == false))
+
+      # The full comment is readable through reviews_get_thread in pieces.
+      [first | _] = threads
+
+      comments =
+        page_all(
+          ctx.owner_token,
+          "reviews_get_thread",
+          %{"review" => review.slug, "thread_id" => first["id"]},
+          "comments"
+        )
+
+      # publish_comment trims the body.
+      assert Enum.map_join(comments, & &1["body"]) ==
+               String.trim(String.duplicate("Long note ✓ ", 150))
+
+      assert length(comments) > 1
     end
 
     test "list threads projected onto the requested revision", ctx do
@@ -375,6 +489,47 @@ defmodule ReviewsWeb.MCPTest do
 
       assert error_text(bad) =~ "lib/a.ex#2"
 
+      for {slice, message} <- [
+            {%{"line_start" => 1}, "both line_start and line_end"},
+            {%{"line_start" => 2, "line_end" => 9}, "outside the hunk"},
+            {%{"line_start" => 3, "line_end" => 2}, "outside the hunk"}
+          ] do
+        row = Map.merge(%{"kind" => "hunk", "path" => "lib/a.ex", "hunk_index" => 1}, slice)
+
+        sliced =
+          call(ctx.agent_token, "reviews_create_review", %{
+            "title" => "Bad slice",
+            "raw_diff" => @diff_v2,
+            "packet" => %{"title" => "P", "sections" => [%{"title" => "S", "rows" => [row]}]}
+          })
+
+        assert error_text(sliced) =~ message
+      end
+
+      # The hunk has four rows (context, -, +, context), so L1-L4 is the whole hunk.
+      assert %{slug: _} =
+               call!(ctx.agent_token, "reviews_create_review", %{
+                 "title" => "Good slice",
+                 "raw_diff" => @diff_v2,
+                 "packet" => %{
+                   "title" => "P",
+                   "sections" => [
+                     %{
+                       "title" => "S",
+                       "rows" => [
+                         %{
+                           "kind" => "hunk",
+                           "path" => "lib/a.ex",
+                           "hunk_index" => 1,
+                           "line_start" => 2,
+                           "line_end" => 4
+                         }
+                       ]
+                     }
+                   ]
+                 }
+               })
+
       out =
         call!(ctx.agent_token, "reviews_create_review", %{
           "title" => "Agent review",
@@ -418,27 +573,50 @@ defmodule ReviewsWeb.MCPTest do
 
   ## Helpers
 
-  defp take_all(text, offset, max, acc) do
-    {:ok, chunk, next} = ReviewsWeb.MCP.Handlers.take_bytes(text, offset, max)
-    if next, do: take_all(text, next, max, [chunk | acc]), else: Enum.reverse([chunk | acc])
+  # Calls a tool until next_cursor runs out, at the smallest budget, checking
+  # each complete HTTP response against it. Returns the concatenated `key` lists.
+  defp page_all(token, tool, args, key) do
+    args = Map.merge(%{"revision" => 1, "max_bytes" => 2_000}, args)
+
+    Stream.unfold(:start, fn
+      nil ->
+        nil
+
+      cursor ->
+        args = if cursor == :start, do: args, else: Map.put(args, "cursor", cursor)
+        {size, page} = http_call(token, tool, args)
+        assert size <= 2_000, "#{tool} returned #{size} bytes"
+        refute page["isError"]
+        {page[key], page["next_cursor"]}
+    end)
+    |> Enum.take(100)
+    |> Enum.concat()
   end
 
-  defp collect_pages(token, slug, path, revision, offset, acc) do
-    page =
-      call!(token, "reviews_get_file_diff", %{
-        "review" => slug,
-        "path" => path,
-        "revision" => revision,
-        "offset" => offset,
-        "max_bytes" => 100
+  defp review_fixture(owner, raw_diff, packet \\ nil) do
+    {:ok, %{review: review}} =
+      ReviewsContext.create_review_with_initial_patchset(owner, %{
+        title: "Fixture",
+        raw_diff: raw_diff,
+        packet: packet
       })
 
-    acc = [page.diff | acc]
+    review
+  end
 
-    case page.next_offset do
-      nil -> Enum.reverse(acc)
-      next -> collect_pages(token, slug, path, revision, next, acc)
-    end
+  # One tools/call over HTTP. Returns the response body size and the
+  # structured content.
+  defp http_call(token, tool, args) do
+    conn =
+      build_conn()
+      |> auth(token)
+      |> mcp_request("tools/call", %{"name" => tool, "arguments" => args})
+
+    body = conn.resp_body
+    assert conn.status == 200, body
+    %{"result" => result} = JSON.decode!(body)
+    refute result["isError"], inspect(result["content"])
+    {byte_size(body), result["structuredContent"]}
   end
 
   defp user_fixture(prefix) do

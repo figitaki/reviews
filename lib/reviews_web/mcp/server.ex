@@ -67,8 +67,8 @@ defmodule ReviewsWeb.MCP.Server do
     |> FastestMCP.add_auth(&authenticate/2)
     |> FastestMCP.add_middleware(
       FastestMCP.Middleware.rate_limiting(
-        max_requests_per_second: 5.0,
-        burst_capacity: 20,
+        max_requests_per_second: Keyword.get(config(), :requests_per_second, 5.0),
+        burst_capacity: Keyword.get(config(), :burst, 20),
         get_client_id: fn operation -> operation.context.principal["identity_id"] end
       )
     )
@@ -116,9 +116,16 @@ defmodule ReviewsWeb.MCP.Server do
       [
         title: "Get review",
         description:
-          "Returns a review's title, URL, revisions with diff stats, packet outline " <>
-            "(section indexes and titles), and thread counts. Start here.",
-        input_schema: object(%{"review" => review_prop(), "revision" => revision_prop()})
+          "Returns a review's title, URL, description, thread counts, packet outline " <>
+            "(section indexes and titles), and revisions with diff stats, newest first. " <>
+            "Start here. Long reviews continue with next_cursor.",
+        input_schema:
+          object(%{
+            "review" => review_prop(),
+            "revision" => revision_prop(),
+            "cursor" => cursor_prop(),
+            "max_bytes" => max_bytes_prop()
+          })
       ] ++ read
     )
     |> FastestMCP.add_tool(
@@ -128,7 +135,7 @@ defmodule ReviewsWeb.MCP.Server do
         title: "Get packet section",
         description:
           "Returns one packet section's rows in reading order: Markdown prose and the diff " <>
-            "of each hunk it narrates. Rows past max_bytes come back without their diff.",
+            "of each hunk it narrates. A row with complete: false continues with next_cursor.",
         input_schema:
           object(
             %{
@@ -139,6 +146,7 @@ defmodule ReviewsWeb.MCP.Server do
                 "description" => "Zero-based index from reviews_get_review."
               },
               "revision" => revision_prop(),
+              "cursor" => cursor_prop(),
               "max_bytes" => max_bytes_prop()
             },
             ["review", "section_index"]
@@ -152,8 +160,14 @@ defmodule ReviewsWeb.MCP.Server do
         title: "List files",
         description:
           "Lists the files changed in a revision with status, line counts, diff size, " <>
-            "and open thread count.",
-        input_schema: object(%{"review" => review_prop(), "revision" => revision_prop()})
+            "and open thread count, in path order. Continues with next_cursor.",
+        input_schema:
+          object(%{
+            "review" => review_prop(),
+            "revision" => revision_prop(),
+            "cursor" => cursor_prop(),
+            "max_bytes" => max_bytes_prop()
+          })
       ] ++ read
     )
     |> FastestMCP.add_tool(
@@ -183,9 +197,10 @@ defmodule ReviewsWeb.MCP.Server do
       [
         title: "List threads",
         description:
-          "Lists review feedback threads with their comments, projected onto a revision " <>
-            "(latest by default). line is null when the thread's line is outdated. " <>
-            "Defaults to open threads.",
+          "Lists review feedback threads with their first comments, projected onto a " <>
+            "revision (latest by default). line is null when the thread's line is outdated. " <>
+            "Defaults to open threads. When comments_complete is false, read the thread with " <>
+            "reviews_get_thread.",
         input_schema:
           object(%{
             "review" => review_prop(),
@@ -197,8 +212,30 @@ defmodule ReviewsWeb.MCP.Server do
               "minimum" => 1,
               "maximum" => Handlers.thread_limit()
             },
-            "cursor" => %{"type" => "string", "maxLength" => 20}
+            "cursor" => cursor_prop(),
+            "max_bytes" => max_bytes_prop()
           })
+      ] ++ read
+    )
+    |> FastestMCP.add_tool(
+      "reviews_get_thread",
+      &Handlers.get_thread/2,
+      [
+        title: "Get thread",
+        description:
+          "Returns one thread and all of its comments in order, projected onto a revision " <>
+            "(latest by default). Long threads and comments continue with next_cursor.",
+        input_schema:
+          object(
+            %{
+              "review" => review_prop(),
+              "thread_id" => %{"type" => "integer", "minimum" => 1},
+              "revision" => revision_prop(),
+              "cursor" => cursor_prop(),
+              "max_bytes" => max_bytes_prop()
+            },
+            ["review", "thread_id"]
+          )
       ] ++ read
     )
   end
@@ -329,13 +366,21 @@ defmodule ReviewsWeb.MCP.Server do
     }
   end
 
+  defp cursor_prop do
+    %{
+      "type" => "string",
+      "maxLength" => 64,
+      "description" => "next_cursor from the previous page. Send it with the same revision."
+    }
+  end
+
   defp max_bytes_prop do
     %{
       "type" => "integer",
-      "minimum" => 100,
+      "minimum" => Handlers.min_max_bytes(),
       "maximum" => Handlers.max_bytes_limit(),
       "description" =>
-        "Byte budget for diff and prose text. Default #{Handlers.default_max_bytes()}."
+        "Most bytes this result may take, metadata included. Default #{Handlers.default_max_bytes()}."
     }
   end
 

@@ -34,7 +34,10 @@ config :reviews, ReviewsWeb.Endpoint,
 config :reviews, :mcp,
   enabled: true,
   writes_enabled: true,
-  allowed_hosts: ["localhost", "www.example.com"]
+  allowed_hosts: ["localhost", "www.example.com"],
+  # Paging tests send many requests from one identity.
+  requests_per_second: 1_000.0,
+  burst: 1_000
 
 # Print only warnings and errors during test
 config :logger, level: :warning

@@ -34,6 +34,32 @@ defmodule ReviewsWeb.MCPFlagsTest do
     assert Reviews.Repo.reload!(ctx.thread).status == "open"
   end
 
+  @tag :capture_log
+  test "a production canonical host does not redirect MCP requests elsewhere", ctx do
+    endpoint = Application.get_env(:reviews, ReviewsWeb.Endpoint)
+    on_exit(fn -> Application.put_env(:reviews, ReviewsWeb.Endpoint, endpoint) end)
+
+    Application.put_env(
+      :reviews,
+      ReviewsWeb.Endpoint,
+      Keyword.put(endpoint, :url, host: "reviews.example", port: 443, scheme: "https")
+    )
+
+    request = fn path ->
+      %{build_conn() | host: "evil.example"}
+      |> put_req_header("authorization", "Bearer " <> ctx.token)
+      |> put_req_header("content-type", "application/json")
+      |> post(path, JSON.encode!(%{"jsonrpc" => "2.0", "id" => 1, "method" => "tools/list"}))
+    end
+
+    # Other paths still redirect to the canonical host.
+    assert request.("/api/v1/reviews").status == 301
+
+    mcp = request.("/mcp")
+    assert mcp.status == 403
+    assert get_resp_header(mcp, "location") == []
+  end
+
   test "a disabled endpoint answers 404 before authentication", ctx do
     Application.put_env(:reviews, :mcp, Keyword.put(ctx.previous, :enabled, false))
 
