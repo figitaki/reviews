@@ -13,8 +13,8 @@ using `--format sarif --out sobelow.sarif` and uploads it to GitHub's
 All confidence levels are reported. Confidence is not severity: a
 low-confidence finding can still identify a serious vulnerability. Findings
 are initially report-only, rather than failing every PR for existing issues.
-Scanner failures and unreadable/unparseable source are not ignored; `--strict`
-fails on parse errors. Review findings individually before adding narrowly
+Scanner failures and parse errors fail the job (`--strict`); unreadable-file
+warnings remain visible in the report. Review findings individually before adding narrowly
 scoped, documented suppressions. No blanket baseline or skip list is applied.
 
 The scanner runs in GitHub Actions, not a separate hosted scanning service.

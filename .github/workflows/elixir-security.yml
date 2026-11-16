@@ -58,5 +58,6 @@ jobs:
         with:
           elixir-version: ${{ env.ELIXIR_VERSION }}
           otp-version: ${{ env.OTP_VERSION }}
+      - run: mix deps.get --check-locked
       - name: Audit locked Hex dependencies
         run: mix hex.audit
