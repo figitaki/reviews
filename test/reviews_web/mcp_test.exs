@@ -318,6 +318,23 @@ defmodule ReviewsWeb.MCPTest do
 
       assert listed |> Enum.map(& &1["path"]) |> Enum.uniq() |> length() == 40
 
+      # Bare positions are not cursors: the schema refuses them, and a
+      # well-formed cursor of the wrong kind is refused by the tool.
+      page = fn tool, cursor ->
+        call(ctx.owner_token, tool, %{
+          "review" => review.slug,
+          "revision" => 1,
+          "cursor" => cursor
+        })
+      end
+
+      assert %FastestMCP.Error{code: :invalid_params} = page.("reviews_list_files", "12")
+
+      assert %FastestMCP.Error{code: :invalid_params} =
+               page.("reviews_list_threads", "0.10")
+
+      assert error_text(page.("reviews_list_threads", "s3")) =~ "Invalid cursor"
+
       for n <- 1..6 do
         {:ok, _} =
           Threads.publish_comment(review, ctx.owner, %{
@@ -812,7 +829,10 @@ defmodule ReviewsWeb.MCPTest do
         {size, page} = http_call(token, tool, args)
         assert size <= 2_000, "#{tool} returned #{size} bytes"
         refute page["isError"]
-        {page[key], page["next_cursor"]}
+        next = page["next_cursor"]
+        # Opaque: a string no client could read as a JSON number.
+        assert is_nil(next) or (is_binary(next) and not match?({:ok, _}, JSON.decode(next)))
+        {page[key], next}
     end)
     |> Enum.take(100)
     |> Enum.concat()

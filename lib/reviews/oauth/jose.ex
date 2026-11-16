@@ -6,7 +6,8 @@ defmodule Reviews.OAuth.JOSE do
 
   Verification only. Callers choose which algorithms a JWT type allows; `none`
   and symmetric algorithms are never used. Callers also choose the key: keys
-  embedded in a JWT (`jku`, `x5u`, `jwk`) are never used.
+  embedded in a JWT (`jku`, `x5u`, `jwk`) are used only for DPoP proofs, whose
+  `jwk` header is how they work (RFC 9449 §4.2).
   """
 
   @type decoded :: %{

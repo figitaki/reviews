@@ -187,7 +187,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             error_result(@too_small)
 
           count < length(fetched) ->
-            next = Integer.to_string(offset + count)
+            next = encode_int(offset + count)
             %{header | next_cursor: next} |> Map.put(:files, files) |> with_hint(next)
 
           true ->
@@ -260,7 +260,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             error_result(@too_small)
 
           count < length(page) ->
-            next = Integer.to_string(Enum.at(projected, count - 1).id)
+            next = encode_int(Enum.at(projected, count - 1).id)
             %{header | next_cursor: next} |> Map.put(:threads, threads) |> with_hint(next)
 
           true ->
@@ -643,26 +643,35 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   ## Cursors
 
+  # Every cursor starts with a letter, so no client can read one as a number
+  # (the MCP Inspector CLI turns "12" or "0.8892" into JSON numbers).
+
   defp parse_int_cursor(nil), do: {:ok, nil}
 
   defp parse_int_cursor(cursor) when is_binary(cursor) do
-    case Integer.parse(cursor) do
-      {n, ""} when n >= 0 -> {:ok, n}
+    case Regex.run(~r/\Ac(\d{1,18})\z/, cursor) do
+      [_, n] -> {:ok, String.to_integer(n)}
       _ -> {:error, @bad_cursor}
     end
   end
 
+  defp parse_int_cursor(_), do: {:error, @bad_cursor}
+
+  defp encode_int(n), do: "c#{n}"
+
   defp parse_pair_cursor(nil), do: {:ok, nil}
 
   defp parse_pair_cursor(cursor) when is_binary(cursor) do
-    case Regex.run(~r/\A(\d{1,18})\.(\d{1,18})\z/, cursor) do
+    case Regex.run(~r/\Ac(\d{1,18})\.(\d{1,18})\z/, cursor) do
       [_, a, b] -> {:ok, {String.to_integer(a), String.to_integer(b)}}
       _ -> {:error, @bad_cursor}
     end
   end
 
+  defp parse_pair_cursor(_), do: {:error, @bad_cursor}
+
   defp encode_pair(nil), do: nil
-  defp encode_pair({a, b}), do: "#{a}.#{b}"
+  defp encode_pair({a, b}), do: "c#{a}.#{b}"
 
   defp parse_review_cursor(nil), do: {:ok, {:fields, 0, 0}}
 

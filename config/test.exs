@@ -58,9 +58,14 @@ config :phoenix,
 config :reviews, Reviews.OAuth,
   issuer: "https://reviews.test",
   fetcher: Reviews.OAuthTestClient.Fetcher,
-  resources: [Reviews.MCPAuth, Reviews.OAuthTestResource.KeysOnly, Reviews.OAuthTestResource],
+  resources: [
+    Reviews.Poppy,
+    Reviews.MCPAuth,
+    Reviews.OAuthTestResource.KeysOnly,
+    Reviews.OAuthTestResource
+  ],
   token_endpoint_audience_clients: ["https://chatgpt.com/oauth/client.json"],
-  default_resource: Reviews.OAuthTestResource.KeysOnly
+  default_resource: Reviews.Poppy
 
 # Raise on LiveView test-time template problems instead of warning.
 config :phoenix_live_view, :test_warnings,

@@ -8,6 +8,8 @@ defmodule Reviews.OAuth.AuthorizationCode do
     field :client_name, :string
     field :redirect_uri, :string
     field :code_challenge, :string
+    # The DPoP key the authorization request bound the code to (RFC 9449 §10).
+    field :dpop_jkt, :string
     field :scopes, {:array, :string}
     # The resource the code was issued for (RFC 8707) and its links' provider.
     field :provider, :string

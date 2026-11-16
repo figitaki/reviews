@@ -22,6 +22,8 @@ defmodule Reviews.Accounts.IdentityLink do
     field :subject_name, :string
     field :scopes, {:array, :string}, default: []
     field :refresh_token_hash, :binary, redact: true
+    # Thumbprint of the DPoP key the refresh token is bound to (Poppy 4.4).
+    field :dpop_jkt, :string
     field :revoked_at, :utc_datetime
     field :last_used_at, :utc_datetime
 
@@ -40,7 +42,8 @@ defmodule Reviews.Accounts.IdentityLink do
       :subject,
       :subject_name,
       :scopes,
-      :refresh_token_hash
+      :refresh_token_hash,
+      :dpop_jkt
     ])
     |> validate_required([:identity_id, :approved_by_user_id, :provider, :subject, :scopes])
     |> validate_length(:subject_name, max: 255)

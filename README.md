@@ -7,7 +7,7 @@ The app is Phoenix 1.8 + LiveView, with diffs rendered by vanilla
 `@pierre/diffs` from a LiveView hook, and a Rust CLI (`reviews push`) for
 uploading diffs.
 
-Current alpha version: `0.0.1-alpha.2`.
+Current version: `0.0.1`.
 
 ## What It Provides
 

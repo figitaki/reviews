@@ -8,7 +8,8 @@ defmodule ReviewsWeb.OAuthController do
     * `POST /oauth/token` - `authorization_code` with PKCE and
       `refresh_token`. Clients with keys authenticate with a
       `private_key_jwt` client assertion; public clients send `client_id`
-      and no assertion and rely on PKCE.
+      and no assertion and rely on PKCE. For a resource that takes DPoP, a
+      `DPoP` proof binds the tokens to its key (Poppy spec 4.5).
     * `POST /oauth/revoke` - RFC 7009 revocation.
     * `POST /oauth/register` - dynamic client registration (RFC 7591) for
       clients that don't use a client metadata document.
@@ -21,7 +22,7 @@ defmodule ReviewsWeb.OAuthController do
   alias Reviews.OAuth
   alias Reviews.OAuth.{Clients, Registration, Tokens}
 
-  @authorize_params ~w(response_type client_id redirect_uri scope state code_challenge code_challenge_method resource)
+  @authorize_params ~w(response_type client_id redirect_uri scope state code_challenge code_challenge_method dpop_jkt resource)
 
   def authorize(conn, params) do
     case OAuth.check_authorization_request(params) do
@@ -124,11 +125,12 @@ defmodule ReviewsWeb.OAuthController do
   end
 
   def token(conn, params) do
-    with {:ok, client, method} <- authenticate_client(params) do
+    with {:ok, client, method} <- authenticate_client(params),
+         {:ok, dpop_jkt} <- dpop_key(conn, client) do
       result =
         case params["grant_type"] do
-          "authorization_code" -> OAuth.exchange_code(client.client_id, method, params)
-          "refresh_token" -> OAuth.refresh(client.client_id, method, params)
+          "authorization_code" -> OAuth.exchange_code(client.client_id, method, params, dpop_jkt)
+          "refresh_token" -> OAuth.refresh(client.client_id, method, params, dpop_jkt)
           _ -> {:error, :unsupported_grant_type}
         end
 
@@ -138,6 +140,33 @@ defmodule ReviewsWeb.OAuthController do
       end
     else
       {:error, :invalid_client} -> oauth_error(conn, 401, :invalid_client)
+      {:error, :invalid_dpop_proof} -> oauth_error(conn, 400, :invalid_dpop_proof)
+    end
+  end
+
+  # A DPoP proof is optional (Poppy spec 4.5), except for a client whose
+  # metadata declares `dpop_bound_access_tokens`: it never gets unbound tokens
+  # (RFC 9449 §5.2). With a proof, the issued tokens are bound to its key. It
+  # is checked before the grant, so a bad or missing proof doesn't use up the
+  # code.
+  defp dpop_key(conn, client) do
+    case get_req_header(conn, "dpop") do
+      [] ->
+        if match?(%{dpop_bound: true}, client),
+          do: {:error, :invalid_dpop_proof},
+          else: {:ok, nil}
+
+      proofs ->
+        request = %{
+          method: conn.method,
+          url: OAuth.issuer() <> conn.request_path,
+          client_id: client.client_id
+        }
+
+        case Reviews.Poppy.Tokens.verify_dpop_proof(proofs, request) do
+          {:ok, jkt} -> {:ok, jkt}
+          {:error, _reason} -> {:error, :invalid_dpop_proof}
+        end
     end
   end
 

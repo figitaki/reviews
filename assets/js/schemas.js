@@ -44,10 +44,28 @@ export const Anchor = z.discriminatedUnion("granularity", [
   TokenRangeAnchor,
 ])
 
+// Mirrors `attribution_payload/1` in `lib/reviews/review_view.ex`.
+const Attribution = z
+  .object({
+    provider: z.literal("poppy"),
+    verified_at: z.string().nullable(),
+    client_id: z.string(),
+    client_domain: z.string().nullable(),
+    client_name_claimed: z.string().nullable(),
+    agent_id_claimed: z.boolean(),
+    owner_username: z.string().nullable(),
+    approved_at: z.string().nullable(),
+    link_revoked: z.boolean(),
+    token_binding: z.enum(["dpop", "bearer"]).nullable().optional(),
+  })
+  .nullable()
+  .optional()
+
 export const Comment = z.object({
   id: z.number(),
   body: z.string(),
   author: Author,
+  attribution: Attribution,
   inserted_at: z.string().nullable(),
   updated_at: z.string().nullable().optional(),
 })
