@@ -37,6 +37,9 @@ defmodule Reviews.Poppy do
 
   @scope_hints %{"comments:write" => %{"changes" => "irreversible", "personal_data" => false}}
 
+  # DPoP proof algorithms (RFC 9449), the same one Session JWTs use.
+  @dpop_signing_algs ["ES256"]
+
   @impl true
   def provider, do: @provider
   def protocol_version, do: @protocol_version
@@ -45,6 +48,8 @@ defmodule Reviews.Poppy do
   @impl true
   def scope_names, do: Map.keys(@scopes)
   def scope_hints, do: @scope_hints
+  @impl true
+  def dpop_signing_algs, do: @dpop_signing_algs
 
   @doc "Reads `config :reviews, Reviews.Poppy, key: value`."
   def config(key, default \\ nil) do
@@ -87,6 +92,20 @@ defmodule Reviews.Poppy do
   end
 
   def parse_scopes(_), do: :error
+
+  # RFC 9728 §2: the API accepts DPoP-bound tokens and Bearer tokens.
+  @impl true
+  def protected_resource_metadata do
+    %{
+      dpop_signing_alg_values_supported: @dpop_signing_algs,
+      dpop_bound_access_tokens_required: false
+    }
+  end
+
+  # RFC 9449 §5.1: Personal Agents that support DPoP send a proof with token
+  # requests, and Reviews binds the tokens to its key (spec 4.5).
+  @impl true
+  def authorization_server_metadata, do: %{dpop_signing_alg_values_supported: @dpop_signing_algs}
 
   @impl true
   def consent_text(client_label) do

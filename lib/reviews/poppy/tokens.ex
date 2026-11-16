@@ -1,7 +1,7 @@
 defmodule Reviews.Poppy.Tokens do
   @moduledoc """
   Verifies the Session JWTs a Personal Agent signs, with their delegations
-  (spec 5.2, 5.3). Client assertions are the issuer's
+  (spec 5.2, 5.3), and DPoP proofs (RFC 9449). Client assertions are the issuer's
   (`Reviews.OAuth.Tokens`), and so is the replay cache both use.
 
   Every failure returns `{:error, reason}` with a specific atom so tests and
@@ -145,6 +145,57 @@ defmodule Reviews.Poppy.Tokens do
         :invalid
     end
   end
+
+  @doc """
+  Verifies the DPoP proof of a request (RFC 9449 §4.3) and returns the
+  thumbprint of its key. `proofs` is every `DPoP` header value the request
+  carried. `request.access_token` is set at a protected resource, where `ath`
+  must match it, and nil at the token endpoint. `request.client_id` is the
+  verified client, which scopes the replay cache.
+
+  The proof is separate from the Session JWT and signed with its own key
+  (Poppy 5.2), the public key in its `jwk` header. Reviews issues no DPoP
+  nonces; `iat` and the replay cache limit how long a proof works.
+  """
+  @spec verify_dpop_proof([String.t()], map(), keyword()) ::
+          {:ok, String.t()} | {:error, atom()}
+  def verify_dpop_proof(proofs, request, opts \\ [])
+
+  def verify_dpop_proof([proof], request, opts) do
+    now = Keyword.get_lazy(opts, :now, &now/0)
+    window = Poppy.config(:session_window_seconds, 60)
+    skew = Poppy.config(:clock_skew_seconds, 30)
+
+    with {:ok, jws} <- JOSE.decode(proof),
+         %{"typ" => "dpop+jwt", "jwk" => jwk} when is_map(jwk) <- jws.header,
+         :ok <- expect(jws.header["alg"] in Poppy.dpop_signing_algs(), :bad_alg),
+         :ok <- expect(JOSE.public_key?(jwk), :bad_dpop_key),
+         :ok <- verify_signature(jws, jwk, Poppy.dpop_signing_algs(), :bad_signature),
+         %{"jti" => jti, "htm" => htm, "htu" => htu, "iat" => iat}
+         when is_binary(jti) and is_integer(iat) <- jws.claims,
+         :ok <- expect(jti != "" and byte_size(jti) <= 255, :bad_jti),
+         :ok <- expect(htm == request.method, :wrong_method),
+         :ok <- expect(htu_matches?(htu, request.url), :wrong_url),
+         :ok <- expect(iat >= now - window - skew, :expired),
+         :ok <- expect(iat <= now + skew, :issued_in_future),
+         :ok <- check_proof_ath(jws.claims["ath"], request[:access_token]),
+         {:ok, jkt} <- JOSE.thumbprint(jwk),
+         :ok <- OAuth.Tokens.remember_jti("dpop", request.client_id, jti, iat + window + skew) do
+      {:ok, jkt}
+    else
+      {:error, :malformed} -> {:error, :invalid_dpop_proof}
+      {:error, _} = error -> error
+      _ -> {:error, :invalid_dpop_proof}
+    end
+  end
+
+  def verify_dpop_proof([], _request, _opts), do: {:error, :missing_dpop_proof}
+  def verify_dpop_proof(_proofs, _request, _opts), do: {:error, :multiple_dpop_proofs}
+
+  # At a protected resource, ath must match the access token (RFC 9449 §4.3
+  # step 12). The token endpoint has no token to cover.
+  defp check_proof_ath(_ath, nil), do: :ok
+  defp check_proof_ath(ath, token), do: expect(ath == JOSE.digest(token), :ath_mismatch)
 
   defp verify_signature(jws, key, algs, error) do
     if JOSE.verify(jws, key, algs), do: :ok, else: {:error, error}

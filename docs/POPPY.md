@@ -30,11 +30,11 @@ another `provider` through the `Reviews.ExternalIdentity` behaviour, so actor ID
 | Path | Purpose |
 | --- | --- |
 | `GET /.well-known/poppy.json` | Discovery (spec 3) |
-| `GET /.well-known/oauth-protected-resource` | RFC 9728. Names the issuer. |
-| `GET /.well-known/oauth-authorization-server` | RFC 8414. Lists the domain in `protected_resources`. |
+| `GET /.well-known/oauth-protected-resource` | RFC 9728. Names the issuer, and the DPoP algorithms the API accepts (`dpop_bound_access_tokens_required: false`). |
+| `GET /.well-known/oauth-authorization-server` | RFC 8414. Lists the domain in `protected_resources`, and `dpop_signing_alg_values_supported: ["ES256"]`. |
 | `GET /api/poppy/openapi.json` | OpenAPI 3.1 description of the Poppy API |
 | `GET /oauth/authorize`, `POST /oauth/authorize` | Direct Sign-In: GitHub sign-in, then a consent page where the owner picks one of their agent identities |
-| `POST /oauth/token` | `authorization_code` (PKCE S256) and `refresh_token`. `private_key_jwt` client assertion (ES256 or PS384, `aud` = issuer). |
+| `POST /oauth/token` | `authorization_code` (PKCE S256) and `refresh_token`. `private_key_jwt` client assertion (ES256 or PS384, `aud` = issuer). An optional `DPoP` proof binds the tokens (see "DPoP"). |
 | `POST /oauth/revoke` | RFC 7009. Revoking the refresh token revokes the link and its access tokens. |
 | `GET /api/poppy/v1/reviews/:slug` | Read a review. Works signed out with a verified Session header. |
 | `POST /api/poppy/v1/reviews/:slug/comments` | Post a comment. Needs an access token with `comments:write`. |
@@ -58,15 +58,56 @@ that reaches the server.
 6. `aud` equals the issuer character for character. `htm` and `htu` match the request, and `htu` is
    compared against the configured public origin, never the `Host` header. `iat` must fall within 60
    seconds, plus 30 seconds of clock skew.
-7. `jti` hasn't been seen. The replay cache is the `poppy_seen_jtis` table, shared by every server.
+7. `jti` hasn't been seen. The replay cache is the `oauth_seen_jtis` table, shared by every server.
 8. With an access token, `ath` must match it. The token must be unexpired, its link not revoked, and
    the link's `subject` equal to the JWT's `iss`. Without a token, `ath` must be absent.
-9. The Session (`client_id`, `sid`, `sub`) is created or continued. It can't switch to another
+9. A DPoP-bound token must come with the `DPoP` scheme and a valid proof from its key. A Bearer token
+   must come with the `Bearer` scheme. See "DPoP".
+10. The Session (`client_id`, `sid`, `sub`) is created or continued. It can't switch to another
    identity (`session_ended`) or change `agent_id`.
 
 Every other failure is 400 `invalid_session` with no reason in the body. Access-token problems
-return 401 `invalid_token` in `WWW-Authenticate`. A signed-out request to the comment endpoint gets
-401 with `Bearer scope="comments:write"`.
+return 401 `invalid_token` in `WWW-Authenticate`, and DPoP proof problems return 401
+`invalid_dpop_proof`. Each 401 has a `Bearer` and a `DPoP` challenge (spec 7). The error is in the
+challenge of the scheme the request used (RFC 9449 §7.2), and the DPoP challenge lists `algs`. A
+signed-out request to the comment endpoint gets
+`Bearer scope="comments:write", DPoP scope="comments:write", algs="ES256"`.
+
+## DPoP
+
+Poppy 1.0 leaves DPoP (RFC 9449) to the Company (spec 4.5). Reviews supports it but doesn't require
+it. The issuer advertises `dpop_signing_alg_values_supported: ["ES256"]`, and Personal Agents that
+support DPoP send a proof with their token requests. Reviews then binds the tokens to the proof's
+key. Agents that don't send a proof get Bearer tokens, as before.
+
+- **Sign-in.** A token request with a valid `DPoP` proof gets `token_type: "DPoP"`. The access
+  token and the link's refresh token are both bound to the key's RFC 7638 thumbprint
+  (`identity_links.dpop_jkt`, `oauth_access_tokens.dpop_jkt`). Without a proof, both are Bearer.
+- **Refresh.** A refresh token bound to a key needs a proof from that key. A missing proof or a
+  proof from another key gets `invalid_grant` (spec 4.4). A Bearer refresh token stays Bearer. A
+  proof sent with it binds only the new access token (RFC 9449 §5).
+- **Token endpoint errors.** A bad proof gets 400 `invalid_dpop_proof`. The proof is checked after
+  the client assertion and before the grant, so a bad proof doesn't use up the code.
+- **API requests.** A DPoP-bound token needs `Authorization: DPoP <token>` and one `DPoP` proof
+  whose `htm`/`htu` match the request, with `iat` within the same window as Session JWTs (60
+  seconds, plus 30 of skew), an unseen `jti`, and `ath` equal to the token's hash. A missing,
+  replayed, or invalid proof gets `invalid_dpop_proof`. A valid proof from another key gets
+  `invalid_token` (RFC 9449 Figure 16). A DPoP-bound token sent as `Bearer` is refused
+  (`invalid_token`) so it can't be downgraded, and a Bearer token sent as `DPoP` is refused too.
+- **Two signatures.** A signed-in DPoP request carries both the Session JWT and the DPoP proof
+  (spec 5.2). The Session JWT is signed with the delegated key and names the Session and User. The
+  proof is signed with the DPoP key in its own `jwk` header. Both carry `ath`. The Session JWT
+  check is unchanged.
+- **Replay.** Proof `jti`s go into the same `oauth_seen_jtis` table as Session JWTs, as `kind`
+  `dpop`, per `client_id`, so a proof works once on any server.
+- **No nonces.** Reviews doesn't issue `DPoP-Nonce` (RFC 9449 §8, §9). The `iat` window and the
+  shared replay cache already limit how long a proof works. Nonces would also add a round trip to
+  each agent's first token request and API call.
+- **Code binding.** An authorization request may name the key in `dpop_jkt` (RFC 9449 §10). The
+  code then needs a proof from that key, and anything else gets `invalid_grant`. Reviews doesn't
+  offer PAR, so it has no pushed request to bind the code from (spec 4.2, RFC 9449 §10.1).
+- **Attribution.** Comments posted with a DPoP-bound token record the key's thumbprint in
+  `attribution["access_token_dpop_key"]`. It's `nil` for Bearer tokens.
 
 ## Revocation
 

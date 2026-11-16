@@ -3,7 +3,7 @@
 // Node 20+, no dependencies. See README.md.
 //
 //   node poppy-agent.mjs keygen --base-url https://you.example/agent
-//   node poppy-agent.mjs sign-in https://reviews.example
+//   node poppy-agent.mjs sign-in https://reviews.example [--no-dpop]
 //   node poppy-agent.mjs get https://reviews.example /api/poppy/v1/reviews/<slug>
 //   node poppy-agent.mjs comment https://reviews.example <slug> --file lib/a.ex --line 3 --body "Looks good"
 //   node poppy-agent.mjs sign-out https://reviews.example
@@ -123,7 +123,27 @@ async function clientAssertion(state, issuer) {
   )
 }
 
-async function tokenRequest(state, company, params) {
+// DPoP (RFC 9449). The Company binds tokens to a key when its issuer lists ES256 in
+// dpop_signing_alg_values_supported (spec 4.5). Each key serves one User ID and is kept with
+// the refresh token it was issued with, for every refresh (spec 4.4). It is separate from the
+// delegated key that signs Session JWTs (spec 5.2).
+const offersDpop = (company) => !flags["no-dpop"] && (company.as.dpop_signing_alg_values_supported || []).includes("ES256")
+
+async function newDpopKey() {
+  const pair = await crypto.subtle.generateKey(EC, true, ["sign", "verify"])
+  return crypto.subtle.exportKey("jwk", pair.privateKey)
+}
+
+async function dpopProof(jwk, method, url, accessToken) {
+  const key = await crypto.subtle.importKey("jwk", jwk, EC, false, ["sign"])
+  const u = new URL(url)
+  const claims = { jti: randomId(), htm: method, htu: `${u.origin}${u.pathname}`, iat: now() }
+  if (accessToken) claims.ath = await sha256(accessToken)
+  const { kty, crv, x, y } = jwk
+  return signJwt({ typ: "dpop+jwt", alg: "ES256", jwk: { kty, crv, x, y } }, claims, key)
+}
+
+async function tokenRequest(state, company, params, dpopKey) {
   await checkAddress(company.as.token_endpoint)
   const body = new URLSearchParams({
     ...params,
@@ -131,7 +151,8 @@ async function tokenRequest(state, company, params) {
     client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
     client_assertion: await clientAssertion(state, company.issuer),
   })
-  const res = await fetch(company.as.token_endpoint, { method: "POST", body, redirect: "error" })
+  const headers = dpopKey ? { DPoP: await dpopProof(dpopKey, "POST", company.as.token_endpoint) } : {}
+  const res = await fetch(company.as.token_endpoint, { method: "POST", body, headers, redirect: "error" })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(`Token endpoint: ${json.error || res.status}`)
   return json
@@ -154,7 +175,8 @@ async function delegatedKey(state) {
   return delegated
 }
 
-async function poppyRequest(state, company, method, url, { accessToken, body, sid } = {}) {
+async function poppyRequest(state, company, method, url, { token, body, sid } = {}) {
+  const value = token?.access_token
   await checkAddress(url)
   const user = (state.user_ids[company.identifier] ||= `usr_${randomId()}`)
   save("state.json", state)
@@ -170,10 +192,17 @@ async function poppyRequest(state, company, method, url, { accessToken, body, si
     iat: now(),
     jti: randomId(),
   }
-  if (accessToken) claims.ath = await sha256(accessToken)
+  if (value) claims.ath = await sha256(value)
   const jwt = await signJwt({ typ: "poppy-session+jwt", alg: "ES256", kid: key.kid, poppy_dlg: key.delegation }, claims, key.key)
   const headers = { "Poppy-Session": jwt, "Poppy-Version": VERSION, accept: "application/json" }
-  if (accessToken) headers.authorization = `Bearer ${accessToken}`
+  // Send the token as its token_type names (spec 4.5). A DPoP-bound token also needs a proof
+  // from its key, whose ath covers the token like the Session JWT's does.
+  if (token?.token_type?.toLowerCase() === "dpop") {
+    headers.authorization = `DPoP ${value}`
+    headers.DPoP = await dpopProof(token.dpop_key, method, url, value)
+  } else if (value) {
+    headers.authorization = `Bearer ${value}`
+  }
   if (body) headers["content-type"] = "application/json"
   const res = await fetch(url, { method, headers, body: body && JSON.stringify(body), redirect: "manual" })
   const text = await res.text()
@@ -240,25 +269,29 @@ async function signIn(companyUrl) {
   if (query.get("state") !== oauthState) throw new Error("State mismatch.")
   if (query.get("error")) throw new Error(`Sign-in ended: ${query.get("error")}`)
 
-  const tokens = await tokenRequest(state, company, {
-    grant_type: "authorization_code",
-    code: query.get("code"),
-    redirect_uri: redirectUri,
-    code_verifier: verifier,
-  })
-  state.tokens[company.issuer] = { ...tokens, obtained_at: now() }
+  // A new sign-in gets a new DPoP key (spec 4.4).
+  const dpopKey = offersDpop(company) ? await newDpopKey() : undefined
+  const tokens = await tokenRequest(
+    state,
+    company,
+    { grant_type: "authorization_code", code: query.get("code"), redirect_uri: redirectUri, code_verifier: verifier },
+    dpopKey,
+  )
+  state.tokens[company.issuer] = { ...tokens, dpop_key: dpopKey, obtained_at: now() }
   save("state.json", state)
-  console.log(`Signed in to ${company.domain} with scopes: ${tokens.scope}`)
+  console.log(`Signed in to ${company.domain} with scopes: ${tokens.scope} (${tokens.token_type} token)`)
 }
 
+// The saved token, refreshed when it is about to expire. Refresh uses the DPoP key the refresh
+// token was issued with, if any (spec 4.4).
 async function accessToken(state, company, { force = false } = {}) {
   const saved = state.tokens[company.issuer]
   if (!saved) throw new Error("Not signed in. Run sign-in first.")
-  if (!force && saved.obtained_at + saved.expires_in - 30 > now()) return saved.access_token
-  const refreshed = await tokenRequest(state, company, { grant_type: "refresh_token", refresh_token: saved.refresh_token })
+  if (!force && saved.obtained_at + saved.expires_in - 30 > now()) return saved
+  const refreshed = await tokenRequest(state, company, { grant_type: "refresh_token", refresh_token: saved.refresh_token }, saved.dpop_key)
   state.tokens[company.issuer] = { ...saved, ...refreshed, obtained_at: now() }
   save("state.json", state)
-  return refreshed.access_token
+  return state.tokens[company.issuer]
 }
 
 function apiBase(company) {
@@ -291,9 +324,9 @@ async function main() {
         thread_anchor: { granularity: "line", line_number_hint: Number(flags.line) },
       }
       const sid = randomId()
-      let res = await poppyRequest(state, company, "POST", url, { accessToken: await accessToken(state, company), body, sid })
+      let res = await poppyRequest(state, company, "POST", url, { token: await accessToken(state, company), body, sid })
       if (res.status === 401 && /invalid_token/.test(res.challenge || "")) {
-        res = await poppyRequest(state, company, "POST", url, { accessToken: await accessToken(state, company, { force: true }), body, sid })
+        res = await poppyRequest(state, company, "POST", url, { token: await accessToken(state, company, { force: true }), body, sid })
       }
       return console.log(res.status, JSON.stringify(res.json, null, 2))
     }

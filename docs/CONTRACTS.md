@@ -196,7 +196,9 @@ Personal Agents use Poppy 1.0 instead of bearer API tokens. Each request carries
 `GET /api/v1/reviews/:slug`. `POST /api/poppy/v1/reviews/:slug/comments` takes the same body and
 response as the CLI endpoint and needs the `comments:write` scope. Session errors are HTTP 400 with
 `{"error": "invalid_session" | "session_ended" | "version_unsupported"}`. Token errors are 401 or 403
-in `WWW-Authenticate`. Bearer API tokens are refused on these routes, and Poppy tokens are refused
+in `WWW-Authenticate`, with a `Bearer` and a `DPoP` challenge. A token issued with
+`token_type: "DPoP"` is sent as `Authorization: DPoP <token>` with a `DPoP` proof (RFC 9449). A
+missing or invalid proof is 401 `invalid_dpop_proof`. Bearer API tokens are refused on these routes, and Poppy tokens are refused
 on `/api/v1`. See `docs/POPPY.md`.
 
 Comments posted this way store `attribution` (a map of what was verified) and `identity_link_id`.

@@ -39,6 +39,8 @@ still stabilizing.
   page and chooses which agent identity it acts as. Its comments show a "Verified agent" label with
   details that separate what was verified from what the agent says about itself. Owners can
   disconnect an agent in Settings. The CLI and its API tokens are unchanged. See `docs/POPPY.md`.
+- Poppy Personal Agents that send DPoP proofs get tokens bound to their key, so a copied access or
+  refresh token is useless without it. Agents without DPoP keep getting Bearer tokens.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed

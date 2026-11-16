@@ -194,4 +194,121 @@ defmodule Reviews.Poppy.TokensTest do
       assert {:error, :invalid_client_metadata} = verify(Agent.session_jwt(agent, "GET", @url))
     end
   end
+
+  describe "verify_dpop_proof/3" do
+    @token_url "https://reviews.test/oauth/token"
+    @client_id "https://agent.example/agent.json"
+
+    setup do
+      %{key: Agent.ec_key(nil)}
+    end
+
+    defp verify_proof(proofs, opts \\ []) do
+      request = %{
+        method: Keyword.get(opts, :method, "POST"),
+        url: Keyword.get(opts, :url, @token_url),
+        access_token: opts[:access_token],
+        client_id: @client_id
+      }
+
+      Tokens.verify_dpop_proof(List.wrap(proofs), request, Keyword.take(opts, [:now]))
+    end
+
+    test "accepts the RFC 9449 example proofs once, with the RFC's key thumbprint" do
+      v = "test/support/fixtures/poppy/rfc9449_vectors.json" |> File.read!() |> JSON.decode!()
+      t = v["token_request"]
+      r = v["resource_request"]
+      token_opts = [method: t["method"], url: t["url"], now: t["now"]]
+      resource_opts = [method: r["method"], url: r["url"], now: r["now"]]
+
+      assert {:ok, v["jkt"]} == verify_proof(t["proof"], token_opts)
+      assert {:error, :replayed} = verify_proof(t["proof"], token_opts)
+
+      assert {:error, :ath_mismatch} =
+               verify_proof(r["proof"], [access_token: "another-token"] ++ resource_opts)
+
+      assert {:ok, v["jkt"]} ==
+               verify_proof(r["proof"], [access_token: r["access_token"]] ++ resource_opts)
+    end
+
+    test "returns the proof key's thumbprint and refuses a replay", %{key: key} do
+      proof = Agent.dpop_proof(key, "POST", @token_url)
+
+      assert {:ok, Agent.thumbprint(key.public)} == verify_proof(proof)
+      assert {:error, :replayed} = verify_proof(proof)
+    end
+
+    test "matches htm and htu, ignoring the query", %{key: key} do
+      assert {:error, :wrong_method} =
+               verify_proof(Agent.dpop_proof(key, "GET", @token_url))
+
+      for htu <- ["https://reviews.test/oauth/revoke", "https://other.example/oauth/token"] do
+        assert {:error, :wrong_url} = verify_proof(Agent.dpop_proof(key, "POST", htu))
+      end
+
+      assert {:ok, _} = verify_proof(Agent.dpop_proof(key, "POST", @token_url <> "?x=1"))
+    end
+
+    test "accepts iat within 60 seconds plus 30 of skew, and nothing outside", %{key: key} do
+      now = Agent.now()
+
+      at = fn iat ->
+        verify_proof(Agent.dpop_proof(key, "POST", @token_url, iat: iat), now: now)
+      end
+
+      assert {:ok, _} = at.(now - 90)
+      assert {:error, :expired} = at.(now - 91)
+      assert {:ok, _} = at.(now + 30)
+      assert {:error, :issued_in_future} = at.(now + 31)
+    end
+
+    test "covers the access token with ath at a protected resource", %{key: key} do
+      opts = [method: "GET", url: @url, access_token: "ppa_token"]
+
+      assert {:error, :ath_mismatch} = verify_proof(Agent.dpop_proof(key, "GET", @url), opts)
+
+      assert {:error, :ath_mismatch} =
+               verify_proof(Agent.dpop_proof(key, "GET", @url, access_token: "ppa_other"), opts)
+
+      assert {:ok, _} =
+               verify_proof(Agent.dpop_proof(key, "GET", @url, access_token: "ppa_token"), opts)
+    end
+
+    test "refuses proofs that aren't one well-formed DPoP JWT from the key in jwk", %{key: key} do
+      other = Agent.ec_key(nil)
+      rsa = Agent.rsa_key(nil)
+      claims = %{"jti" => Agent.random_id(), "htm" => "POST", "htu" => @token_url}
+      claims = Map.put(claims, "iat", Agent.now())
+
+      assert {:error, :missing_dpop_proof} = verify_proof([])
+
+      assert {:error, :multiple_dpop_proofs} =
+               verify_proof([
+                 Agent.dpop_proof(key, "POST", @token_url),
+                 Agent.dpop_proof(key, "POST", @token_url)
+               ])
+
+      assert {:error, :invalid_dpop_proof} = verify_proof("not-a-jwt")
+
+      assert {:error, :invalid_dpop_proof} =
+               verify_proof(Agent.dpop_proof(key, "POST", @token_url, typ: "JWT"))
+
+      assert {:error, :bad_signature} =
+               verify_proof(Agent.dpop_proof(key, "POST", @token_url, jwk: other.public))
+
+      private_jwk = Map.put(key.public, "d", Base.url_encode64(key.private, padding: false))
+
+      assert {:error, :bad_dpop_key} =
+               verify_proof(Agent.dpop_proof(key, "POST", @token_url, jwk: private_jwk))
+
+      assert {:error, :bad_alg} =
+               verify_proof(
+                 Agent.sign(
+                   %{"typ" => "dpop+jwt", "alg" => "PS384", "jwk" => rsa.public},
+                   claims,
+                   rsa
+                 )
+               )
+    end
+  end
 end

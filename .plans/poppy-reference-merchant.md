@@ -21,6 +21,7 @@ Checked 2026-11-16 against:
 | Errors: 400 `invalid_session`, `session_ended`, `version_unsupported`; 401 `invalid_token` in `WWW-Authenticate` | 3.4, 5.3, 7 | Validator: pass |
 | OpenAPI channel | 7 | Validator `openapi.*`: pass |
 | Direct Sign-In: PKCE S256, exact redirect URI (loopback port excepted), `iss` on every redirect, consent page always shown | 4.2, 10.8 | Exercised live with `examples/poppy-agent` and covered by tests. The validator doesn't check sign-in. |
+| DPoP (optional for the Company): `dpop_signing_alg_values_supported` in issuer and resource metadata, tokens and refresh token bound to the proof key, `invalid_grant` for a bound refresh without that key, proofs checked on the API (RFC 9449 §4.3, §7), `dpop_jkt` code binding | 4.4, 4.5, 5.2 | Covered by tests, including the RFC 9449 Figure 2 and 13 proofs as vectors, and exercised live with `examples/poppy-agent`. The validator has no DPoP checks; its README says to check DPoP by hand. |
 
 Validator result against a live dev deployment over HTTPS: Foundation **58 passed, 0 failed,
 0 warnings, 7 skipped**. Every skip is a feature Reviews doesn't offer: Device Sign-In, extensions,
@@ -44,7 +45,7 @@ other versions or domains, and conversation, feedback, or browser endpoints.
    cache expires, 5 minutes by default. Link revocation takes effect immediately.
 5. **Draft status.** The 1.0 text can still change incompatibly. The verifier is ours, not a
    library's, so a spec change means a code change.
-6. **Not implemented:** DPoP-bound tokens (optional), PAR, Device Sign-In, refresh token rotation,
+6. **Not implemented:** DPoP nonces (RFC 9449 §8, §9), PAR, Device Sign-In, refresh token rotation,
    Web Bot Auth operator signatures (optional for the Company), 429 rate limits, rejecting a
    delegated key reused across User IDs (MAY), conversations, tasks, feedback, and browser join.
 7. **Local testing.** Personal Agents must refuse private addresses. Testing behind a tunnel or

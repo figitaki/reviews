@@ -101,6 +101,36 @@ defmodule ReviewsWeb.PoppyTest do
     json_response(exchange(agent, code, verifier), 200)
   end
 
+  # A token endpoint request carrying each of `proofs` as a DPoP header.
+  defp token_post(params, proofs) do
+    Enum.reduce(proofs, build_conn(), &prepend_req_headers(&2, [{"dpop", &1}]))
+    |> post(~p"/oauth/token", params)
+  end
+
+  defp token_proof(key, opts \\ []),
+    do: Agent.dpop_proof(key, "POST", @issuer <> "/oauth/token", opts)
+
+  defp code_params(agent, code, verifier) do
+    Map.merge(Agent.client_auth(agent), %{
+      "grant_type" => "authorization_code",
+      "code" => code,
+      "redirect_uri" => agent.redirect_uri,
+      "code_verifier" => verifier
+    })
+  end
+
+  defp refresh_params(agent, refresh_token) do
+    Map.merge(Agent.client_auth(agent), %{
+      "grant_type" => "refresh_token",
+      "refresh_token" => refresh_token
+    })
+  end
+
+  defp dpop_sign_in(ctx, key) do
+    {%{"code" => code}, verifier} = get_code(ctx.agent, ctx.owner, ctx.identity)
+    json_response(token_post(code_params(ctx.agent, code, verifier), [token_proof(key)]), 200)
+  end
+
   defp comment_path(review), do: "/api/poppy/v1/reviews/#{review.slug}/comments"
 
   defp comment_body(extra) do
@@ -157,6 +187,10 @@ defmodule ReviewsWeb.PoppyTest do
                ["ES256", "PS384"],
                &(&1 in issuer["token_endpoint_auth_signing_alg_values_supported"])
              )
+
+      assert issuer["dpop_signing_alg_values_supported"] == ["ES256"]
+      assert resource["dpop_signing_alg_values_supported"] == ["ES256"]
+      assert resource["dpop_bound_access_tokens_required"] == false
 
       openapi = build_conn() |> get("/api/poppy/openapi.json") |> json_response(200)
       assert openapi["servers"] == [%{"url" => @issuer <> "/api/poppy/v1"}]
@@ -305,7 +339,11 @@ defmodule ReviewsWeb.PoppyTest do
       conn = post_comment(ctx.agent, ctx.review)
 
       assert json_response(conn, 401)
-      assert get_resp_header(conn, "www-authenticate") == [~s(Bearer scope="comments:write")]
+
+      assert get_resp_header(conn, "www-authenticate") == [
+               ~s(Bearer scope="comments:write", DPoP scope="comments:write", algs="ES256")
+             ]
+
       assert comment_count() == 0
     end
 
@@ -438,7 +476,10 @@ defmodule ReviewsWeb.PoppyTest do
 
       conn = post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"])
       assert %{"error" => "invalid_token"} = json_response(conn, 401)
-      assert get_resp_header(conn, "www-authenticate") == [~s(Bearer error="invalid_token")]
+
+      assert get_resp_header(conn, "www-authenticate") == [
+               ~s(Bearer error="invalid_token", DPoP algs="ES256")
+             ]
     end
 
     test "an expired code is invalid_grant", ctx do
@@ -591,6 +632,26 @@ defmodule ReviewsWeb.PoppyTest do
       conn = post_comment(ctx.agent, ctx.review, access_token: raw)
       assert %{"error" => "invalid_token"} = json_response(conn, 401)
 
+      # Nor with the DPoP scheme and a proof, in either direction.
+      key = Agent.ec_key(nil)
+      conn = post_comment(ctx.agent, ctx.review, access_token: raw, dpop_key: key)
+      assert %{"error" => "invalid_token"} = json_response(conn, 401)
+
+      dpop_tokens = dpop_sign_in(ctx, key)
+
+      conn =
+        build_conn()
+        |> put_req_header("authorization", "DPoP " <> dpop_tokens["access_token"])
+        |> put_req_header(
+          "dpop",
+          Agent.dpop_proof(key, "GET", @issuer <> "/api/v1/me",
+            access_token: dpop_tokens["access_token"]
+          )
+        )
+        |> get(~p"/api/v1/me")
+
+      assert json_response(conn, 401)
+
       # The CLI path itself still works.
       conn =
         build_conn() |> put_req_header("authorization", "Bearer " <> raw) |> get(~p"/api/v1/me")
@@ -678,6 +739,204 @@ defmodule ReviewsWeb.PoppyTest do
                  post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"]),
                  400
                )
+    end
+  end
+
+  describe "DPoP" do
+    setup do
+      %{key: Agent.ec_key(nil)}
+    end
+
+    test "a proof at sign-in binds the tokens, and the comment needs a proof from that key",
+         ctx do
+      tokens = dpop_sign_in(ctx, ctx.key)
+      assert tokens["token_type"] == "DPoP"
+      assert "ppr_" <> _ = tokens["refresh_token"]
+
+      conn =
+        post_comment(ctx.agent, ctx.review,
+          access_token: tokens["access_token"],
+          dpop_key: ctx.key
+        )
+
+      comment = Repo.get!(Comment, json_response(conn, 201)["comment_id"])
+
+      jkt = Agent.thumbprint(ctx.key.public)
+      assert comment.author_id == ctx.identity.id
+      assert comment.attribution["access_token_dpop_key"] == jkt
+      assert Repo.one!(from l in IdentityLink, select: l.dpop_jkt) == jkt
+    end
+
+    test "a DPoP-bound token sent as a bearer token is refused", ctx do
+      tokens = dpop_sign_in(ctx, ctx.key)
+
+      for opts <- [[], [dpop_key: ctx.key, scheme: "Bearer"]] do
+        conn = post_comment(ctx.agent, ctx.review, [access_token: tokens["access_token"]] ++ opts)
+
+        assert %{"error" => "invalid_token"} = json_response(conn, 401)
+
+        assert get_resp_header(conn, "www-authenticate") == [
+                 ~s(Bearer error="invalid_token", DPoP algs="ES256")
+               ]
+      end
+
+      assert comment_count() == 0
+    end
+
+    test "a missing, replayed, or mismatched proof is invalid_dpop_proof", ctx do
+      tokens = dpop_sign_in(ctx, ctx.key)
+      token = tokens["access_token"]
+      path = comment_path(ctx.review)
+
+      missing = post_comment(ctx.agent, ctx.review, access_token: token, scheme: "DPoP")
+      assert %{"error" => "invalid_dpop_proof"} = json_response(missing, 401)
+
+      assert get_resp_header(missing, "www-authenticate") == [
+               ~s(Bearer, DPoP error="invalid_dpop_proof", algs="ES256")
+             ]
+
+      for proof_opts <- [
+            [htm: "GET"],
+            [htu: @issuer <> "/api/poppy/v1/reviews/other/comments"],
+            [iat: Agent.now() - 300],
+            [ath: Reviews.OAuth.JOSE.digest("another-token")]
+          ] do
+        conn =
+          post_comment(ctx.agent, ctx.review,
+            access_token: token,
+            dpop_key: ctx.key,
+            dpop: proof_opts
+          )
+
+        assert %{"error" => "invalid_dpop_proof"} = json_response(conn, 401), inspect(proof_opts)
+      end
+
+      # A replayed proof fails even with a fresh Session JWT.
+      headers = Agent.headers(ctx.agent, "POST", path, access_token: token, dpop_key: ctx.key)
+      assert json_response(post_comment(ctx.agent, ctx.review, headers: headers), 201)
+
+      replay =
+        Agent.headers(ctx.agent, "POST", path, access_token: token, scheme: "DPoP") ++
+          [List.keyfind(headers, "dpop", 0)]
+
+      assert %{"error" => "invalid_dpop_proof"} =
+               json_response(post_comment(ctx.agent, ctx.review, headers: replay), 401)
+
+      assert comment_count() == 1
+    end
+
+    test "a valid proof from another key is invalid_token", ctx do
+      tokens = dpop_sign_in(ctx, ctx.key)
+
+      conn =
+        post_comment(ctx.agent, ctx.review,
+          access_token: tokens["access_token"],
+          dpop_key: Agent.ec_key(nil)
+        )
+
+      assert %{"error" => "invalid_token"} = json_response(conn, 401)
+
+      assert get_resp_header(conn, "www-authenticate") == [
+               ~s(Bearer, DPoP error="invalid_token", algs="ES256")
+             ]
+
+      assert comment_count() == 0
+    end
+
+    test "a bound refresh token needs a fresh proof from the same key", ctx do
+      tokens = dpop_sign_in(ctx, ctx.key)
+      params = fn -> refresh_params(ctx.agent, tokens["refresh_token"]) end
+
+      assert %{"error" => "invalid_grant"} = json_response(token_post(params.(), []), 400)
+
+      assert %{"error" => "invalid_grant"} =
+               json_response(token_post(params.(), [token_proof(Agent.ec_key(nil))]), 400)
+
+      proof = token_proof(ctx.key)
+      refreshed = json_response(token_post(params.(), [proof]), 200)
+      assert refreshed["token_type"] == "DPoP"
+
+      assert %{"error" => "invalid_dpop_proof"} =
+               json_response(token_post(params.(), [proof]), 400)
+
+      conn =
+        post_comment(ctx.agent, ctx.review,
+          access_token: refreshed["access_token"],
+          dpop_key: ctx.key
+        )
+
+      assert json_response(conn, 201)
+    end
+
+    test "a bad proof at the token endpoint is invalid_dpop_proof and doesn't use the code",
+         ctx do
+      {%{"code" => code}, verifier} = get_code(ctx.agent, ctx.owner, ctx.identity)
+
+      for proofs <- [
+            [token_proof(ctx.key, htu: @issuer <> "/oauth/revoke")],
+            [token_proof(ctx.key, htm: "GET")],
+            [token_proof(ctx.key, iat: Agent.now() - 300)],
+            [token_proof(ctx.key), token_proof(ctx.key)]
+          ] do
+        conn = token_post(code_params(ctx.agent, code, verifier), proofs)
+        assert %{"error" => "invalid_dpop_proof"} = json_response(conn, 400)
+      end
+
+      conn = token_post(code_params(ctx.agent, code, verifier), [token_proof(ctx.key)])
+      assert json_response(conn, 200)["token_type"] == "DPoP"
+    end
+
+    test "a code bound with dpop_jkt needs a proof from that key", ctx do
+      jkt = %{"dpop_jkt" => Agent.thumbprint(ctx.key.public)}
+
+      for proofs <- [[], [token_proof(Agent.ec_key(nil))]] do
+        {%{"code" => code}, verifier} = get_code(ctx.agent, ctx.owner, ctx.identity, jkt)
+        conn = token_post(code_params(ctx.agent, code, verifier), proofs)
+        assert %{"error" => "invalid_grant"} = json_response(conn, 400)
+      end
+
+      {%{"code" => code}, verifier} = get_code(ctx.agent, ctx.owner, ctx.identity, jkt)
+      conn = token_post(code_params(ctx.agent, code, verifier), [token_proof(ctx.key)])
+      assert json_response(conn, 200)["token_type"] == "DPoP"
+
+      {query, _} = get_code(ctx.agent, ctx.owner, ctx.identity, %{"dpop_jkt" => "short"})
+      assert query["error"] == "invalid_request"
+    end
+
+    test "without a proof at sign-in, tokens stay Bearer and can't be sent as DPoP", ctx do
+      tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
+      assert tokens["token_type"] == "Bearer"
+
+      conn =
+        post_comment(ctx.agent, ctx.review,
+          access_token: tokens["access_token"],
+          dpop_key: ctx.key
+        )
+
+      assert %{"error" => "invalid_token"} = json_response(conn, 401)
+
+      # A proof at refresh binds only the new access token; the refresh token
+      # stays unbound (RFC 9449 §5).
+      bound =
+        json_response(
+          token_post(refresh_params(ctx.agent, tokens["refresh_token"]), [token_proof(ctx.key)]),
+          200
+        )
+
+      assert bound["token_type"] == "DPoP"
+
+      assert json_response(
+               post_comment(ctx.agent, ctx.review,
+                 access_token: bound["access_token"],
+                 dpop_key: ctx.key
+               ),
+               201
+             )
+
+      unbound =
+        json_response(token_post(refresh_params(ctx.agent, tokens["refresh_token"]), []), 200)
+
+      assert unbound["token_type"] == "Bearer"
     end
   end
 

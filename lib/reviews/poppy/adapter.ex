@@ -4,8 +4,11 @@ defmodule Reviews.Poppy.Adapter do
   `Poppy-Version`, and, when signed in, an access token from Direct Sign-In.
 
   Order of checks (spec 3.4, 5.3): version, Session JWT and delegation, the
-  access token and its link, that the token was issued to the JWT's `iss`, then
-  the Session record.
+  access token and its link, that the token was issued to the JWT's `iss`, the
+  token's DPoP binding (spec 4.5, RFC 9449 §7), then the Session record.
+
+  `headers` holds the first value of each header, except `"dpop"`, which is
+  the list of every `DPoP` header value.
   """
   @behaviour Reviews.ExternalIdentity
 
@@ -13,8 +16,8 @@ defmodule Reviews.Poppy.Adapter do
   alias Reviews.Poppy.Tokens
 
   @impl true
-  def authenticate(%{method: method, url: url, headers: headers}, opts \\ []) do
-    token = bearer(headers["authorization"])
+  def authenticate(%{method: method, url: url, headers: headers} = request, opts \\ []) do
+    {scheme, token} = credentials(headers["authorization"])
 
     with :ok <- check_version(headers["poppy-version"]),
          {:ok, jwt} <- session_header(headers["poppy-session"]),
@@ -22,10 +25,32 @@ defmodule Reviews.Poppy.Adapter do
            Tokens.verify_session(jwt, %{method: method, url: url, access_token: token}, opts),
          {:ok, grant} <- access(token),
          :ok <- same_client(grant, claims),
+         :ok <- check_binding(scheme, grant, token, request, claims.client, opts),
          {:ok, session} <- Poppy.touch_session(claims, grant && grant.link.identity_id) do
       {:ok, result(claims, grant, session)}
     end
   end
+
+  @doc """
+  The scheme and token of an `Authorization` header: `{:bearer, token}`,
+  `{:dpop, token}`, or `{nil, nil}`. Schemes are compared ignoring case
+  (RFC 9110 §11.1).
+  """
+  def credentials(authorization) when is_binary(authorization) do
+    case String.split(authorization, " ", parts: 2) do
+      [scheme, token] when token != "" ->
+        case String.downcase(scheme) do
+          "bearer" -> {:bearer, token}
+          "dpop" -> {:dpop, token}
+          _ -> {nil, nil}
+        end
+
+      _ ->
+        {nil, nil}
+    end
+  end
+
+  def credentials(_), do: {nil, nil}
 
   # Compatible versions share the major version (spec 3.4).
   defp check_version("1." <> minor) do
@@ -37,9 +62,6 @@ defmodule Reviews.Poppy.Adapter do
   defp session_header(jwt) when is_binary(jwt) and jwt != "", do: {:ok, jwt}
   defp session_header(_), do: {:error, :missing_session}
 
-  defp bearer("Bearer " <> token) when token != "", do: token
-  defp bearer(_), do: nil
-
   defp access(nil), do: {:ok, nil}
   defp access(token), do: Poppy.authenticate_access_token(token)
 
@@ -49,6 +71,32 @@ defmodule Reviews.Poppy.Adapter do
   defp same_client(%{link: link}, %{client: client}) do
     if link.subject == client.client_id, do: :ok, else: {:error, :token_client_mismatch}
   end
+
+  # A Bearer token comes with the Bearer scheme. A DPoP-bound token comes with
+  # the DPoP scheme and a proof from its key; as a bearer token it is refused,
+  # so it can't be downgraded (RFC 9449 §7.2). A wrong key is invalid_token
+  # (RFC 9449 §7.1, Figure 16); any other proof problem is invalid_dpop_proof.
+  defp check_binding(_scheme, nil, _token, _request, _client, _opts), do: :ok
+  defp check_binding(:bearer, %{dpop_jkt: nil}, _token, _request, _client, _opts), do: :ok
+
+  defp check_binding(:dpop, %{dpop_jkt: jkt}, token, request, client, opts)
+       when is_binary(jkt) do
+    proof_request = %{
+      method: request.method,
+      url: request.url,
+      access_token: token,
+      client_id: client.client_id
+    }
+
+    case Tokens.verify_dpop_proof(request.headers["dpop"] || [], proof_request, opts) do
+      {:ok, ^jkt} -> :ok
+      {:ok, _other_key} -> {:error, :invalid_token}
+      {:error, _reason} -> {:error, :invalid_dpop_proof}
+    end
+  end
+
+  defp check_binding(_scheme, _grant, _token, _request, _client, _opts),
+    do: {:error, :invalid_token}
 
   defp result(claims, nil, session) do
     %{
@@ -60,13 +108,18 @@ defmodule Reviews.Poppy.Adapter do
     }
   end
 
-  defp result(claims, %{link: link, scopes: scopes}, session) do
+  defp result(claims, %{link: link, scopes: scopes, dpop_jkt: dpop_jkt}, session) do
+    attribution =
+      claims
+      |> attribution(link, session)
+      |> Map.put("access_token_dpop_key", dpop_jkt)
+
     %{
       identity: link.identity,
       owner: link.approved_by_user,
       link: link,
       scopes: scopes,
-      attribution: attribution(claims, link, session)
+      attribution: attribution
     }
   end
 

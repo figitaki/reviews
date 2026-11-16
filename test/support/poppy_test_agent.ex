@@ -121,6 +121,29 @@ defmodule Reviews.PoppyTestAgent do
     end
   end
 
+  @doc """
+  A DPoP proof (RFC 9449 §4.2) signed with `key`, an `ec_key/1`, for `method`
+  and `url`. `:access_token` adds its `ath`.
+  """
+  def dpop_proof(key, method, url, opts \\ []) do
+    header = %{
+      "typ" => Keyword.get(opts, :typ, "dpop+jwt"),
+      "alg" => "ES256",
+      "jwk" => Keyword.get(opts, :jwk, key.public)
+    }
+
+    claims =
+      %{
+        "jti" => Keyword.get(opts, :jti, random_id()),
+        "htm" => Keyword.get(opts, :htm, method),
+        "htu" => Keyword.get(opts, :htu, url),
+        "iat" => Keyword.get(opts, :iat, now())
+      }
+      |> put_unless_nil("ath", ath(opts))
+
+    sign(header, claims, key)
+  end
+
   @doc "A private_key_jwt client assertion for the token endpoint (spec 4.1)."
   def client_assertion(agent, opts \\ []) do
     now = now()
@@ -150,12 +173,25 @@ defmodule Reviews.PoppyTestAgent do
     }
   end
 
-  @doc "Poppy request headers for `method` and `path` on the test issuer."
+  @doc """
+  Poppy request headers for `method` and `path` on the test issuer. With
+  `:dpop_key`, the token is sent with the DPoP scheme and a proof from that key;
+  `:dpop` holds options for the proof and `:scheme` overrides the scheme.
+  """
   def headers(agent, method, path, opts \\ []) do
     jwt = session_jwt(agent, method, @issuer <> path, opts)
+    token = opts[:access_token]
+    dpop_key = opts[:dpop_key]
+    scheme = Keyword.get(opts, :scheme, if(dpop_key, do: "DPoP", else: "Bearer"))
 
     [{"poppy-session", jwt}, {"poppy-version", Keyword.get(opts, :version, "1.0")}] ++
-      if token = opts[:access_token], do: [{"authorization", "Bearer " <> token}], else: []
+      if(token, do: [{"authorization", scheme <> " " <> token}], else: []) ++
+      if dpop_key do
+        proof_opts = Keyword.merge([access_token: token], Keyword.get(opts, :dpop, []))
+        [{"dpop", dpop_proof(dpop_key, method, @issuer <> path, proof_opts)}]
+      else
+        []
+      end
   end
 
   ## Keys and signing
