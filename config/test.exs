@@ -31,6 +31,11 @@ config :reviews, ReviewsWeb.Endpoint,
   secret_key_base: "PksNuEADSq2cFj3rPjGzuMlw2ulffcTg5IHJLaFhVcq8wWgjFfUr/EhTVD4cpvRl",
   server: false
 
+config :reviews, :mcp,
+  enabled: true,
+  writes_enabled: true,
+  allowed_hosts: ["localhost", "www.example.com"]
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

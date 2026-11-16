@@ -22,6 +22,10 @@ config :reviews, ReviewsWeb.Endpoint,
   pubsub_server: Reviews.PubSub,
   live_view: [signing_salt: "RllUbgpY"]
 
+# Hosted MCP endpoint (docs/MCP.md). Off unless enabled; dev and test enable
+# it, and prod reads MCP_ENABLED / MCP_WRITES_ENABLED in runtime.exs.
+config :reviews, :mcp, enabled: false, writes_enabled: false, allowed_hosts: :localhost
+
 # Configure esbuild (the version is required)
 # The JSX loaders are left over from the old React diff island. No source uses JSX now.
 config :esbuild,

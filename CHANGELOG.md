@@ -27,6 +27,11 @@ still stabilizing.
   every packet problem with `file:line`, flags an empty review title or
   `--update` slug, and exits 1 if there are any problems. A real push now
   also lists every packet problem at once.
+
+- Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with
+  an existing API token and can read reviews, packet sections, diffs and
+  threads, and post comments, resolve threads, and push reviews and revisions
+  for reviews their account owns. See `docs/MCP.md`.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed

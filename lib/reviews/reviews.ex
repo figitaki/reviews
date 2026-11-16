@@ -25,6 +25,20 @@ defmodule Reviews.Reviews do
   end
 
   @doc """
+  True when `actor` belongs to the account that owns the review: the author's
+  human identity or any agent identity of the same user.
+  """
+  def owned_by?(%Review{author_id: author_id}, %Identity{owner_user_id: owner_id})
+      when not is_nil(owner_id) do
+    Repo.exists?(
+      from i in Identity,
+        where: i.id == ^author_id and i.owner_user_id == ^owner_id
+    )
+  end
+
+  def owned_by?(%Review{}, _actor), do: false
+
+  @doc """
   Creates a review along with its initial patchset (#1) in a single transaction.
 
   Returns `{:ok, %{review: review, patchset: patchset, files: files}}` or
@@ -79,15 +93,8 @@ defmodule Reviews.Reviews do
 
   Returns `{:error, :forbidden}` without writing when the actor is not an owner.
   """
-  def append_patchset(%Review{} = review, %Identity{owner_user_id: owner_id}, attrs)
-      when not is_nil(owner_id) and is_map(attrs) do
-    owner? =
-      Repo.exists?(
-        from i in Identity,
-          where: i.id == ^review.author_id and i.owner_user_id == ^owner_id
-      )
-
-    if owner?, do: append_patchset(review, attrs), else: {:error, :forbidden}
+  def append_patchset(%Review{} = review, %Identity{} = actor, attrs) when is_map(attrs) do
+    if owned_by?(review, actor), do: append_patchset(review, attrs), else: {:error, :forbidden}
   end
 
   def append_patchset(%Review{}, _actor, attrs) when is_map(attrs),
