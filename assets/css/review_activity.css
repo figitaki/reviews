@@ -133,9 +133,13 @@
     --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
     --review-quick-right: calc(16px + env(safe-area-inset-right));
 
+    /* The viewport's bottom edge drops by 100dvh - 100svh when Safari's
+       toolbars collapse. Adding that keeps the buttons and the open list
+       where they were with the toolbars shown, instead of jumping as the
+       reader scrolls. */
     position: fixed;
     right: var(--review-quick-right);
-    bottom: var(--review-quick-bottom);
+    bottom: calc(var(--review-quick-bottom) + 100dvh - 100svh);
     z-index: 9;
     display: flex;
     flex-direction: column;
@@ -234,7 +238,8 @@
     box-shadow: 0 8px 28px rgb(0 0 0 / 0.22);
   }
   .review-activity-panel[open] .review-activity-body {
-    max-height: calc(60dvh - var(--review-quick-bottom));
+    max-height: calc(60svh - var(--review-quick-bottom));
+    overscroll-behavior: contain;
   }
 }
 

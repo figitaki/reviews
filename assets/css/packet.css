@@ -1458,9 +1458,13 @@ details[open] > summary .review-collapse-icon,
     padding-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
+  /* Kept above the small viewport's bottom edge, like the Sections and
+     Comments buttons (review_activity.css), so it stays put while Safari's
+     toolbars collapse and expand. */
   .review-packet-shell.has-outline .review-section-decision {
     position: fixed;
     right: calc(16px + env(safe-area-inset-right));
+    bottom: calc(16px + env(safe-area-inset-bottom) + 100dvh - 100svh);
     margin: 0;
   }
 

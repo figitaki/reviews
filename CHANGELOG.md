@@ -161,6 +161,12 @@ still stabilizing.
   and mobile page height uses the stable small viewport.
 - Diff file headers toggle across the whole row with a rotating chevron.
   Viewed state uses one independent toggle.
+- On phones, the Sections, Comments and decision buttons and the open comments
+  list stay in place while Safari's toolbars collapse and expand, instead of
+  jumping with them.
+- On phones, lockfiles such as `mix.lock` and `package-lock.json` scroll
+  sideways instead of wrapping, so each entry stays one row. Opening a thread
+  in one keeps the start of each line in view.
 
 ## [0.0.1-alpha.2] - 2026-05-21
 
