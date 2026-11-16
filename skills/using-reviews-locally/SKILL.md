@@ -89,6 +89,8 @@ cli/target/release/reviews push --dry-run --update <slug> --packet /path/to/pack
 
 It prints the target server, the review or slug, the diff files, the packet sections, and every packet problem with `file:line`. It exits 1 if the packet has problems or the review title or slug is empty. It does not need the server to be running, so it cannot check that the slug exists or that the token works.
 
+When the server has code storage on, `reviews push` also uploads the base and head commits. Add `--no-code-storage` to push the diff only; a server that requires code storage rejects that flag. Local servers have code storage off unless `CODE_STORAGE_*` is set.
+
 If the sandbox blocks localhost networking, rerun the CLI with escalation. If the token is rejected, mint a token in the same local database as the running server.
 
 ## Inspect and Resolve Threads
