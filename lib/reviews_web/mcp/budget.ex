@@ -18,6 +18,9 @@ defmodule ReviewsWeb.MCP.Budget do
     byte_size(encoded) + byte_size(JSON.encode!(encoded))
   end
 
+  @doc "A lower bound on `cost/1` of a string, without encoding it."
+  def min_cost(text), do: 2 * byte_size(text) + 6
+
   @doc """
   Renders items in order while they fit in `left`. Returns
   `{rendered, left, count}`; `count` is how many items were taken.
@@ -56,9 +59,12 @@ defmodule ReviewsWeb.MCP.Budget do
   def fit_text(text, offset, budget) do
     rest = binary_part(text, offset, byte_size(text) - offset)
 
-    if cost(rest) <= budget,
+    # Encoding never shrinks text, so each copy takes at least its bytes plus
+    # quotes. Encode the remainder only when that bound could fit, so small
+    # pages over a large file stay linear.
+    if min_cost(rest) <= budget and cost(rest) <= budget,
       do: {rest, nil},
-      else: shrink(rest, offset, budget, div(budget, 2))
+      else: shrink(rest, offset, budget, min(div(budget, 2), byte_size(rest)))
   end
 
   defp shrink(_rest, offset, _budget, max) when max <= 0, do: {"", offset}

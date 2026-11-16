@@ -291,10 +291,13 @@ defmodule ReviewsWeb.MCPTest do
       body = rows |> Enum.filter(&(&1["row"] == 0)) |> Enum.map_join(& &1["body"])
       assert body == prose
 
-      assert [%{"diff" => d1, "complete" => true}] = Enum.filter(rows, &(&1["row"] == 1))
-      assert d1 =~ "+  def a, do: :new"
-      assert [%{"diff" => d2}] = Enum.filter(rows, &(&1["row"] == 2))
-      assert d2 =~ "+# added"
+      diff_of = fn row ->
+        rows |> Enum.filter(&(&1["row"] == row)) |> Enum.map_join(& &1["diff"])
+      end
+
+      assert diff_of.(1) =~ "-  def a, do: :old\n+  def a, do: :new\n end"
+      assert diff_of.(2) =~ "+# added"
+      assert rows |> Enum.filter(&(&1["row"] == 2)) |> List.last() |> Map.get("complete")
     end
 
     test "page files, threads, and the comments of one thread", ctx do
@@ -309,6 +312,10 @@ defmodule ReviewsWeb.MCPTest do
         page_all(ctx.owner_token, "reviews_list_files", %{"review" => review.slug}, "files")
 
       assert length(listed) == 40
+
+      assert %{file_count: 40} =
+               call!(ctx.owner_token, "reviews_list_files", %{"review" => review.slug})
+
       assert listed |> Enum.map(& &1["path"]) |> Enum.uniq() |> length() == 40
 
       for n <- 1..6 do
@@ -349,6 +356,77 @@ defmodule ReviewsWeb.MCPTest do
                String.trim(String.duplicate("Long note ✓ ", 150))
 
       assert length(comments) > 1
+    end
+
+    test "budget every row, including empty and missing ones", ctx do
+      rows =
+        for n <- 1..300 do
+          if rem(n, 10) == 0,
+            do: %{"kind" => "hunk", "path" => "nope.ex", "hunk_index" => n},
+            else: %{"kind" => "markdown", "body" => ""}
+        end
+
+      packet = %{"title" => "Empty rows", "sections" => [%{"title" => "S", "rows" => rows}]}
+      slug = review_fixture(ctx.owner, @diff_v1, packet).slug
+
+      listed =
+        page_all(
+          ctx.owner_token,
+          "reviews_get_packet_section",
+          %{"review" => slug, "section_index" => 0},
+          "rows"
+        )
+
+      assert Enum.map(listed, & &1["row"]) == Enum.to_list(0..299)
+      assert listed |> Enum.filter(& &1["missing"]) |> length() == 30
+    end
+
+    test "return long paths whole, so they still select the file", ctx do
+      # 253 characters and 1,003 bytes: within the column, past any short cap.
+      path = String.duplicate("𝄞", 250) <> ".md"
+      raw = "diff --git a/#{path} b/#{path}\n--- a/#{path}\n+++ b/#{path}\n@@ -1 +1 @@\n-a\n+b\n"
+      slug = review_fixture(ctx.owner, raw).slug
+
+      assert %{files: [%{path: ^path}], file_count: 1} =
+               call!(ctx.owner_token, "reviews_list_files", %{"review" => slug})
+
+      assert %{diff: diff} =
+               call!(ctx.owner_token, "reviews_get_file_diff", %{"review" => slug, "path" => path})
+
+      assert diff =~ "+b"
+    end
+
+    test "refuse a page whose header alone is over max_bytes", ctx do
+      path = String.duplicate("✓", 255)
+      raw = "diff --git a/#{path} b/#{path}\n--- a/#{path}\n+++ b/#{path}\n@@ -1 +1 @@\n-a\n+b\n"
+      review = review_fixture(ctx.owner, raw)
+
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, ctx.owner, %{
+          "file_path" => path,
+          "side" => "new",
+          "body" => "Short",
+          "thread_anchor" => %{
+            "granularity" => "line",
+            "line_number_hint" => 1,
+            "line_text" => String.duplicate("✓", 600)
+          }
+        })
+
+      small =
+        call(ctx.owner_token, "reviews_get_thread", %{
+          "review" => review.slug,
+          "thread_id" => thread.id,
+          "max_bytes" => 2_000
+        })
+
+      assert error_text(small) =~ "max_bytes is too small"
+
+      assert %{comments: [%{body: "Short"}]} =
+               call!(ctx.owner_token, "reviews_get_thread", %{
+                 "review" => review.slug,
+                 "thread_id" => thread.id
+               })
     end
 
     test "list threads projected onto the requested revision", ctx do
@@ -408,6 +486,28 @@ defmodule ReviewsWeb.MCPTest do
       assert text =~ "## Thread"
       assert text =~ "`lib/a.ex:2`"
       assert text =~ "Rename this."
+
+      # A thread with more comments than the resource shows says so.
+      [thread] = Threads.list_published_threads(ctx.review.id)
+
+      for n <- 1..21 do
+        {:ok, _} =
+          Threads.publish_comment(ctx.review, ctx.owner, %{
+            "thread_id" => thread.id,
+            "body" => "Reply #{n}",
+            "file_path" => "(reply)",
+            "side" => "new",
+            "thread_anchor" => %{"granularity" => "line"}
+          })
+      end
+
+      %FastestMCP.Resources.Result{contents: [%{content: longer}]} =
+        FastestMCP.read_resource!(Server, "reviews://#{ctx.review.slug}/feedback",
+          auth_input: bearer(ctx.agent_token)
+        )
+
+      assert longer =~ "reviews_get_thread (thread_id #{thread.id})"
+      refute longer =~ "Reply 21"
 
       assert {:error, %{code: :not_found}} =
                FastestMCP.read_resource(Server, "reviews://#{ctx.review.slug}/feedback",

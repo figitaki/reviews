@@ -28,7 +28,6 @@ defmodule ReviewsWeb.MCP.Handlers do
   @default_thread_limit 25
   @thread_limit 100
   @title_cap 500
-  @path_cap 1_000
   @line_text_cap 500
   @listed_comments 3
   @listed_comment_cap 1_000
@@ -36,6 +35,7 @@ defmodule ReviewsWeb.MCP.Handlers do
   @feedback_limit 60_000
   @feedback_threads 50
   @feedback_comment_cap 2_000
+  @feedback_comments 20
   @slug_pattern ~r/\A[A-Za-z0-9_-]{1,64}\z/
   @bad_cursor "Invalid cursor. Pass next_cursor from the previous page unchanged."
   @too_small "max_bytes is too small for the next item. Call again with a larger max_bytes."
@@ -94,7 +94,7 @@ defmodule ReviewsWeb.MCP.Handlers do
           revisions: Enum.reverse(revisions)
         }
 
-        left = Budget.available(max_bytes(args), header)
+        left = room!(args, header)
         {body, next} = review_page(cursor, data, left, %{})
 
         if next && next == encode_review_cursor(cursor) do
@@ -131,7 +131,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         }
 
         start = cursor || {0, 0}
-        left = Budget.available(max_bytes(args), header)
+        left = room!(args, header)
 
         {rows, next} =
           stream_items(
@@ -141,7 +141,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             fn {row, index} -> {index, section_row(row, index, hunks_by_path)} end
           )
 
-        if next == start do
+        if rows == [] and next != nil do
           error_result(@too_small)
         else
           next_cursor = encode_pair(next)
@@ -170,12 +170,12 @@ defmodule ReviewsWeb.MCP.Handlers do
         {files, _left, count} =
           Budget.fill(
             Enum.take(fetched, @page_fetch),
-            Budget.available(max_bytes(args), header),
+            room!(args, header),
             fn file ->
               %{
                 file
-                | path: Budget.cap(file.path, @path_cap),
-                  old_path: Budget.cap(file.old_path, @path_cap)
+                | path: file.path,
+                  old_path: file.old_path
               }
               |> Map.put(:open_threads, Map.get(open, file.path, 0))
             end
@@ -207,13 +207,13 @@ defmodule ReviewsWeb.MCP.Handlers do
         header = %{
           slug: review.slug,
           revision: selected.number,
-          path: Budget.cap(args["path"], @path_cap),
+          path: args["path"],
           offset: offset,
           total_bytes: byte_size(raw),
           next_offset: byte_size(raw)
         }
 
-        case Budget.fit_text(raw, offset, Budget.available(max_bytes(args), header)) do
+        case Budget.fit_text(raw, offset, room!(args, header)) do
           {"", ^offset} when offset < byte_size(raw) ->
             error_result(@too_small)
 
@@ -252,7 +252,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         }
 
         {threads, count} =
-          fill_threads(projected, comment_counts, Budget.available(max_bytes(args), header))
+          fill_threads(projected, comment_counts, room!(args, header))
 
         cond do
           count == 0 and page != [] ->
@@ -288,7 +288,7 @@ defmodule ReviewsWeb.MCP.Handlers do
           stream_items(
             Enum.map(comments, &{&1, &1.id}),
             start,
-            Budget.available(max_bytes(args), header),
+            room!(args, header),
             fn {comment, id} -> {id, comment_parts(comment)} end
           )
 
@@ -298,7 +298,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             do: {List.last(comments).id + 1, 0},
             else: next
 
-        if next == start do
+        if page == [] and comments != [] do
           error_result(@too_small)
         else
           next_cursor = encode_pair(next)
@@ -437,8 +437,15 @@ defmodule ReviewsWeb.MCP.Handlers do
     identity = current_identity!(ctx)
 
     case owned_review(args["review"], identity) do
-      {:ok, review} -> fun.(review, identity) |> unwrap()
-      {:error, :not_found} -> error_result(not_found_message(args["review"]))
+      {:ok, review} ->
+        try do
+          fun.(review, identity) |> unwrap()
+        catch
+          :too_small -> error_result(@too_small)
+        end
+
+      {:error, :not_found} ->
+        error_result(not_found_message(args["review"]))
     end
   end
 
@@ -550,6 +557,13 @@ defmodule ReviewsWeb.MCP.Handlers do
   end
 
   defp max_bytes(args), do: args["max_bytes"] || @default_max_bytes
+
+  # Bytes left after the page header, or a "too small" error when the header
+  # alone does not fit, such as a thread with a long path and anchor.
+  defp room!(args, header) do
+    left = Budget.available(max_bytes(args), header)
+    if left < 0, do: throw(:too_small), else: left
+  end
 
   ## Cursors
 
@@ -664,20 +678,11 @@ defmodule ReviewsWeb.MCP.Handlers do
     |> Enum.drop_while(fn {key, _} -> key < start_key end)
     |> Enum.reduce_while({[], left}, fn {key, {meta, text_key, text}}, {acc, left} ->
       from = if key == start_key, do: start_offset, else: 0
-      left = left - Budget.cost(meta) - 40
-      {chunk, next} = Budget.fit_text(text, from, max(left, 0))
 
-      cond do
-        chunk == "" and from < byte_size(text) ->
-          {:halt, {Enum.reverse(acc), {key, from}}}
-
-        next ->
-          entry = Map.merge(meta, %{text_key => chunk, :offset => from, :complete => false})
-          {:halt, {Enum.reverse([entry | acc]), {key, next}}}
-
-        true ->
-          entry = Map.merge(meta, %{text_key => chunk, :offset => from, :complete => true})
-          {:cont, {[entry | acc], left - Budget.cost(chunk)}}
+      case fit_entry(meta, text_key, text, from, left, 0) do
+        nil -> {:halt, {Enum.reverse(acc), {key, from}}}
+        {entry, nil, cost} -> {:cont, {[entry | acc], left - cost}}
+        {entry, next, _cost} -> {:halt, {Enum.reverse([entry | acc]), {key, next}}}
       end
     end)
     |> case do
@@ -685,6 +690,33 @@ defmodule ReviewsWeb.MCP.Handlers do
       {entries, _left} -> {Enum.reverse(entries), nil}
     end
   end
+
+  # The largest entry for this item, metadata and text included, whose
+  # complete cost fits `left`; nil when not even its metadata and one
+  # character fit. `slack` shrinks the text after an estimate came out high.
+  defp fit_entry(meta, text_key, text, from, left, slack) do
+    base_cost = Budget.cost(entry(meta, text_key, "", from, false)) + 4
+    text_budget = left - base_cost - slack
+
+    {chunk, next} =
+      if text_budget >= 0, do: Budget.fit_text(text, from, text_budget), else: {"", from}
+
+    cond do
+      text_budget < 0 or (chunk == "" and from < byte_size(text)) ->
+        nil
+
+      true ->
+        entry = entry(meta, text_key, chunk, from, is_nil(next))
+        cost = Budget.cost(entry) + 4
+
+        if cost <= left,
+          do: {entry, next, cost},
+          else: fit_entry(meta, text_key, text, from, left, slack + cost - left)
+    end
+  end
+
+  defp entry(meta, text_key, chunk, from, complete?),
+    do: Map.merge(meta, %{text_key => chunk, :offset => from, :complete => complete?})
 
   ## Payloads
 
@@ -696,7 +728,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         meta = %{
           row: index,
           kind: "hunk",
-          path: Budget.cap(ReviewPacket.text(row, "path"), @path_cap),
+          path: ReviewPacket.text(row, "path"),
           hunk_index: ReviewPacket.int(row, "hunk_index"),
           line_start: hunk && hunk.line_start,
           line_end: hunk && hunk.line_end,
@@ -723,7 +755,7 @@ defmodule ReviewsWeb.MCP.Handlers do
   defp thread_summary(thread, comment_count) do
     %{
       id: thread.id,
-      path: Budget.cap(thread.file_path, @path_cap),
+      path: thread.file_path,
       side: thread.side,
       line: thread.anchor && thread.anchor["line_number_hint"],
       line_text: Budget.cap(thread.original_anchor["line_text"], @line_text_cap),
@@ -832,21 +864,36 @@ defmodule ReviewsWeb.MCP.Handlers do
     location =
       case thread.anchor do
         %{"line_number_hint" => line} ->
-          "#{Budget.cap(thread.file_path, @path_cap)}:#{line}"
+          "#{thread.file_path}:#{line}"
 
         _ ->
-          "#{Budget.cap(thread.file_path, @path_cap)} (outdated, from revision #{thread.originating_patchset_number})"
+          "#{thread.file_path} (outdated, from revision #{thread.originating_patchset_number})"
       end
 
+    page = Threads.list_comment_page(thread.id, 0, @feedback_comments + 1)
+    shown = Enum.take(page, @feedback_comments)
+
     comments =
-      thread.id
-      |> Threads.list_comment_page(0, 20)
-      |> Enum.map_join("\n", fn comment ->
+      Enum.map_join(shown, "\n", fn comment ->
         author = comment.author && comment.author.handle
-        "- **#{author}**: #{Budget.cap(comment.body, @feedback_comment_cap)}"
+        body = comment.body || ""
+        cut = byte_size(body) > @feedback_comment_cap
+
+        "- **#{author}**: #{Budget.cap(body, @feedback_comment_cap)}#{if cut, do: " _(cut short)_"}"
       end)
 
-    "## Thread #{thread.id} at `#{location}` (#{thread.side})\n\n#{comments}\n"
+    incomplete? =
+      length(page) > @feedback_comments or
+        Enum.any?(shown, &(byte_size(&1.body || "") > @feedback_comment_cap))
+
+    note =
+      if incomplete?,
+        do:
+          "\n_Some comments on this thread are cut short or not shown. Read them all with " <>
+            "reviews_get_thread (thread_id #{thread.id})._\n",
+        else: ""
+
+    "## Thread #{thread.id} at `#{location}` (#{thread.side})\n\n#{comments}\n#{note}"
   end
 
   ## Write helpers

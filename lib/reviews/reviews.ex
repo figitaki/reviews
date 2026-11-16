@@ -170,6 +170,9 @@ defmodule Reviews.Reviews do
   def list_patchset_summaries(%Review{id: review_id}) do
     stats =
       from f in File,
+        join: p in Patchset,
+        on: p.id == f.patchset_id,
+        where: p.review_id == ^review_id,
         group_by: f.patchset_id,
         select: %{
           patchset_id: f.patchset_id,
