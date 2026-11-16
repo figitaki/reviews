@@ -31,7 +31,7 @@ Run `mix hex.audit` locally. The audit fails for known vulnerabilities in
 The weekly run checks for newly published advisories even without code changes.
 Resolve affected dependencies in a reviewed update PR.
 
-## Initial triage (Sobelow 0.19.0)
+## Initial triage (Sobelow 0.18.1)
 
 Keep the seeded demo backend. The two `Traversal.FileModule` findings in
 `Reviews.DemoReview.seed!/0` are false positives for request-controlled path
