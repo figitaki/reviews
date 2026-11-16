@@ -28,17 +28,22 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     --diffs-font-features: "liga" 0, "calt" 0;
   }
   /* Pierre's comment button is one line tall. Widen its touch area without
-     covering the neighbouring rows' line numbers. */
+     covering the neighbouring rows' gutter. */
   @media (pointer: coarse) {
     [data-utility-button]::before,
     .reviews-thread-marker::before { inset: -6px -12px; }
+  }
+  /* Phones hide line numbers. The gutter keeps the change bar and is just
+     wide enough for Pierre's comment button (at left: 6px) and our badge. */
+  [data-disable-line-numbers] :is([data-column-number], [data-gutter-buffer]) {
+    min-width: calc(1lh + 14px);
   }
   /* Phones: lines with threads get a button shaped like Pierre's comment
      button, in the same spot, with a count badge. */
   .reviews-thread-marker {
     position: absolute;
     top: 0;
-    right: calc(-1lh + 1ch);
+    left: 6px;
     z-index: 5;
     display: flex;
     align-items: center;
@@ -573,6 +578,8 @@ export class VanillaDiffRenderer {
       diffStyle: this.diffStyle,
       overflow: this.diffStyle === "unified" ? "wrap" : "scroll",
       collapsed: this.collapsed(),
+      // Phones drop line numbers; the gutter holds only the comment buttons.
+      disableLineNumbers: this.compact(),
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
