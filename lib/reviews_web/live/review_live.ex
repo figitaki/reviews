@@ -121,7 +121,7 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   def handle_event("restore_packet_location", %{"thread" => id}, socket) do
-    {:noreply, reveal_activity_thread(socket, id)}
+    {:noreply, reveal_activity_thread(socket, id, &reveal_packet_overview/1)}
   end
 
   @impl true
@@ -235,12 +235,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("select_packet_overview", _params, socket) do
-    socket =
-      socket
-      |> assign(:active_outline_section_index, nil)
-      |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
-
-    {:noreply, socket}
+    {:noreply, reveal_packet_overview(socket)}
   end
 
   @impl true
@@ -700,7 +695,13 @@ defmodule ReviewsWeb.ReviewLive do
     """
   end
 
-  defp reveal_activity_thread(socket, id) do
+  defp reveal_packet_overview(socket) do
+    socket
+    |> assign(:active_outline_section_index, nil)
+    |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
+  end
+
+  defp reveal_activity_thread(socket, id, on_missing \\ &Function.identity/1) do
     with thread when not is_nil(thread) <-
            Enum.find(socket.assigns.published_threads, &(to_string(&1.id) == id)),
          true <- is_map(thread.anchor),
@@ -737,7 +738,7 @@ defmodule ReviewsWeb.ReviewLive do
           )
       end
     else
-      _ -> socket
+      _ -> on_missing.(socket)
     end
   end
 

@@ -1415,8 +1415,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
         hunk_id: "packet-section-1-row-0--hunk-example-ex-2"
       })
 
-      render_hook(direct, "restore_packet_location", %{"thread" => nil})
-      refute has_element?(direct, "#packet-section-1")
+      for missing_thread <- [nil, "", "invalid", "999999999"] do
+        render_hook(direct, "reveal_packet_fragment", %{"id" => "packet-section-0-row-0"})
+        assert has_element?(direct, "#packet-section-0")
+        render_hook(direct, "restore_packet_location", %{"thread" => missing_thread})
+        assert has_element?(direct, "#review-split-inline-overview")
+        refute has_element?(direct, "#packet-section-0")
+      end
     end
 
     test "hunk viewed state is shared between packet and changes views", %{
