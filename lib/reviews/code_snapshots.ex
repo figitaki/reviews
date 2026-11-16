@@ -48,12 +48,40 @@ defmodule Reviews.CodeSnapshots do
   """
   def reserve(%Identity{} = identity, attrs) do
     with :ok <- validate_reserve_attrs(attrs),
-         {:ok, repository} <- find_or_create_repository(identity, attrs),
-         :ok <- check_repository_object_format(repository, attrs[:object_format]),
-         {:ok, snapshot} <- insert_reserved_snapshot(identity, repository, attrs),
-         {:ok, upload} <- CodeStorage.adapter().upload_instructions(repository, snapshot) do
-      {:ok, %{snapshot: snapshot, repository: repository, upload: upload}}
+         {:ok, repository} <- find_or_create_repository(identity, attrs) do
+      reserve_in_repository(identity, repository, attrs)
     end
+  end
+
+  defp reserve_in_repository(identity, repository, attrs) do
+    # The staging row is committed before taking this lock, so a crashed or
+    # timed-out creator leaves a cleanup record. Keep ownership through the
+    # provider call and snapshot insertion: SKIP LOCKED sweepers cannot delete
+    # a namespace while it is being created, even if its deadline passes.
+    {:ok, result} =
+      Repo.transaction(
+        fn ->
+          case Repo.one(
+                 from r in CodeRepository, where: r.id == ^repository.id, lock: "FOR UPDATE"
+               ) do
+            %CodeRepository{status: status} = current when status in ["staging", "ready"] ->
+              with :ok <- check_repository_object_format(current, attrs[:object_format]),
+                   {:ok, current} <- ensure_provider_repository(current),
+                   {:ok, snapshot} <- insert_reserved_snapshot(identity, current, attrs),
+                   {:ok, upload} <- CodeStorage.adapter().upload_instructions(current, snapshot) do
+                {:ok, %{snapshot: snapshot, repository: current, upload: upload}}
+              end
+
+            _ ->
+              # A sweeper may have won ownership before this transaction began.
+              # In that case never start a provider create for the deleted row.
+              {:error, :upload_expired}
+          end
+        end,
+        timeout: 60_000
+      )
+
+    result
   end
 
   @doc """
@@ -208,6 +236,12 @@ defmodule Reviews.CodeSnapshots do
       })
       |> Repo.insert!()
 
+    {:ok, repository}
+  end
+
+  defp ensure_provider_repository(
+         %CodeRepository{status: "staging", provider_repo_id: nil} = repository
+       ) do
     case CodeStorage.adapter().create_repository(repository) do
       {:ok, %{provider_repo_id: provider_repo_id}} ->
         {:ok,
@@ -226,6 +260,8 @@ defmodule Reviews.CodeSnapshots do
         {:error, :upload_failed}
     end
   end
+
+  defp ensure_provider_repository(repository), do: {:ok, repository}
 
   defp insert_reserved_snapshot(identity, repository, attrs) do
     public_id = Ecto.UUID.generate()
@@ -392,16 +428,25 @@ defmodule Reviews.CodeSnapshots do
   @doc """
   Unclaimed, expired repositories eligible for provider deletion. This covers
   `staging` repositories nobody claimed and `failed` ones whose provider-side
-  creation errored. Locks the rows with `SKIP LOCKED` so concurrent sweepers
-  do not double-work.
+  creation errored. A repository is not stale while any snapshot still has a
+  live deadline or a claim. Locks the rows with `SKIP LOCKED`, coordinating
+  with reservation creation and other sweepers. Must run in a transaction.
   """
   def stale_staging_repositories(now \\ DateTime.utc_now(), limit \\ 20) do
     Repo.all(
       from r in CodeRepository,
+        as: :repository,
         where:
           r.status in ["staging", "failed"] and
             is_nil(r.review_id) and
-            r.expires_at < ^now,
+            r.expires_at <= ^now,
+        where:
+          not exists(
+            from s in CodeSnapshot,
+              where: s.code_repository_id == parent_as(:repository).id,
+              where: not is_nil(s.patchset_id) or is_nil(s.expires_at) or s.expires_at > ^now,
+              select: 1
+          ),
         limit: ^limit,
         lock: "FOR UPDATE SKIP LOCKED"
     )

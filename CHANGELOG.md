@@ -7,6 +7,11 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep staging code repositories while a snapshot reservation is live or
+  provider creation is in flight; recover abandoned creations for cleanup.
+
 ### Added
 
 - Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with

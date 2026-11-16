@@ -50,6 +50,28 @@ defmodule Reviews.CodeStorage.SweeperTest do
     assert Repo.get(CodeRepository, fresh_repo.id)
   end
 
+  test "keeps an expired staging repository while its snapshot reservation is live", %{
+    identity: identity
+  } do
+    past = DateTime.add(DateTime.utc_now(:second), -60)
+    repository = code_repository_fixture(identity, %{expires_at: past})
+    snapshot = code_snapshot_fixture(identity, repository, %{status: "reserved"})
+    owner = self()
+
+    Application.put_env(:reviews, Reviews.CodeStorage.Stub,
+      delete_repository: fn ->
+        send(owner, :provider_deleted)
+        :ok
+      end
+    )
+
+    Sweeper.sweep()
+
+    assert Repo.get(CodeRepository, repository.id)
+    assert Repo.get!(CodeSnapshot, snapshot.id).status == "reserved"
+    refute_received :provider_deleted
+  end
+
   test "records a redacted error and keeps the row when provider deletion fails", %{
     identity: identity
   } do

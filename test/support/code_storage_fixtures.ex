@@ -13,6 +13,21 @@ defmodule Reviews.CodeStorageFixtures do
   def base_oid, do: @base_oid
   def head_oid, do: @head_oid
 
+  def code_storage_identity_fixture do
+    unique = System.unique_integer([:positive])
+
+    {:ok, user} =
+      Reviews.Accounts.upsert_from_github(%{
+        github_id: 8_800_000 + unique,
+        username: "storage-#{unique}",
+        email: "storage-#{unique}@example.invalid",
+        avatar_url: nil
+      })
+
+    {:ok, identity} = Reviews.Accounts.ensure_human_identity(user)
+    %{user: user, identity: identity}
+  end
+
   def code_repository_fixture(identity, attrs \\ %{}) do
     public_id = Ecto.UUID.generate()
 
