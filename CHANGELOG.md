@@ -18,9 +18,7 @@ later fixes continue toward 0.0.2.
   Issuer metadata adds `response_modes_supported`, and resource metadata adds
   `bearer_methods_supported`.
   Revoking an access token at `/oauth/revoke` now revokes only that token, not
-  its grant; revoking the refresh token still ends the grant. A valid DPoP
-  proof from a key the token isn't bound to now gets `invalid_dpop_proof`
-  instead of `invalid_token` until figitaki/gatekeep#4 lands. The old OAuth
+  its grant; revoking the refresh token still ends the grant. The old OAuth
   tables stay for one release.
 
 ### Added

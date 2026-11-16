@@ -108,8 +108,7 @@ DPoP.
   whose `htm`/`htu` match the request, with `iat` within the same window as Session JWTs (60
   seconds, plus 30 of skew), an unseen `jti`, and `ath` equal to the token's hash. A missing,
   replayed, or invalid proof gets `invalid_dpop_proof`. A valid proof from another key gets
-  `invalid_dpop_proof` too, for now: RFC 9449 Figure 16 makes it `invalid_token`, as Reviews answered
-  before gatekeep, and figitaki/gatekeep#4 restores that. A DPoP-bound token sent as `Bearer` is refused
+  `invalid_token` (RFC 9449 Figure 16). A DPoP-bound token sent as `Bearer` is refused
   (`invalid_token`) so it can't be downgraded, and a Bearer token sent as `DPoP` is refused too.
 - **Two signatures.** A signed-in DPoP request carries both the Session JWT and the DPoP proof
   (spec 5.2). The Session JWT is signed with the delegated key and names the Session and User. The

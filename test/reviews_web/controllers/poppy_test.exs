@@ -875,11 +875,7 @@ defmodule ReviewsWeb.PoppyTest do
       assert comment_count() == 1
     end
 
-    # RFC 9449 §7.1 (Figure 16) makes this invalid_token, as Reviews answered
-    # before gatekeep. Gatekeep at cbf1799 answers invalid_dpop_proof; the fix
-    # is figitaki/gatekeep#4. Expect invalid_token again once the pin moves
-    # past it.
-    test "a valid proof from another key is refused", ctx do
+    test "a valid proof from another key is invalid_token", ctx do
       tokens = dpop_sign_in(ctx, ctx.key)
 
       conn =
@@ -888,10 +884,10 @@ defmodule ReviewsWeb.PoppyTest do
           dpop_key: Agent.ec_key(nil)
         )
 
-      assert %{"error" => "invalid_dpop_proof"} = json_response(conn, 401)
+      assert %{"error" => "invalid_token"} = json_response(conn, 401)
 
       assert get_resp_header(conn, "www-authenticate") == [
-               ~s(Bearer, DPoP error="invalid_dpop_proof", algs="ES256")
+               ~s(Bearer, DPoP error="invalid_token", algs="ES256")
              ]
 
       assert comment_count() == 0

@@ -83,8 +83,8 @@ defmodule Reviews.MixProject do
       {:ueberauth_github, "~> 0.8"},
       {:fastest_mcp, "~> 1.0.1"},
       # The OAuth issuer (Reviews.OAuth). Not on Hex yet; pinned to the merge
-      # of figitaki/gatekeep#1.
-      {:gatekeep, github: "figitaki/gatekeep", ref: "cbf179924604ad111cdf165adadf7169f81b9a24"}
+      # of figitaki/gatekeep#4.
+      {:gatekeep, github: "figitaki/gatekeep", ref: "6fb43186d199eaae59c25f66c4c42ae7ff6cd2b8"}
     ]
   end
 
