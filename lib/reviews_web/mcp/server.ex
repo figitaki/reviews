@@ -2,11 +2,17 @@ defmodule ReviewsWeb.MCP.Server do
   @moduledoc """
   Hosted MCP server (Streamable HTTP at `/mcp`), built on FastestMCP.
 
-  Callers authenticate with an existing Reviews API token as a bearer token,
-  the same token the CLI uses. The token's identity is the actor for every
-  call, so agent identities keep their attribution. Tokens have no scope model
-  yet, so every valid token holds all scopes below; the server-wide writes flag
-  is the only way to make the endpoint read-only.
+  Callers authenticate with a bearer token of one of two kinds:
+
+    * a Reviews API token, the same token the CLI uses. API tokens have no
+      scope model yet, so each holds every scope below.
+    * an OAuth access token the Reviews issuer minted for this endpoint
+      (`Reviews.MCPAuth`), which holds the scopes its owner approved. Claude
+      and ChatGPT connectors get these by signing in.
+
+  The token's identity is the actor for every call, so agent identities keep
+  their attribution. A 401 names the endpoint's protected resource metadata
+  (RFC 9728), which leads clients to the issuer.
 
   The endpoint and its write tools are off unless configured:
 
@@ -17,7 +23,7 @@ defmodule ReviewsWeb.MCP.Server do
   use FastestMCP.ServerModule, otp_app: :reviews
 
   alias FastestMCP.Authorization
-  alias Reviews.Accounts
+  alias Reviews.{Accounts, MCPAuth, OAuth}
   alias ReviewsWeb.MCP.Handlers
 
   @scopes ["reviews:read", "reviews:write", "threads:write"]
@@ -37,19 +43,61 @@ defmodule ReviewsWeb.MCP.Server do
 
   @doc """
   Resolves the bearer token on every request, including later requests of a
-  session, so a revoked token stops working on its next call.
+  session, so a revoked token or link stops working on its next call. OAuth
+  tokens issued for another API are refused.
   """
   def authenticate(input, _ctx) do
     with "Bearer " <> token <- input["authorization"] || "",
-         {:ok, %{user: user, identity: identity}} <- Accounts.authenticate_token(token) do
-      {:ok,
-       %{
-         principal: %{"identity_id" => identity.id, "user_id" => user.id},
-         scopes: @scopes
-       }}
+         {:ok, principal, scopes} <- authenticate_bearer(token) do
+      {:ok, %{principal: principal, scopes: scopes}}
     else
       _ -> {:error, :unauthorized}
     end
+  end
+
+  defp authenticate_bearer(token) do
+    case Accounts.authenticate_token(token) do
+      {:ok, %{user: user, identity: identity}} ->
+        {:ok, %{"identity_id" => identity.id, "user_id" => user.id}, @scopes}
+
+      {:error, _} ->
+        case OAuth.authenticate_access_token(token, MCPAuth.provider()) do
+          {:ok, %{link: link, scopes: scopes}} ->
+            {:ok,
+             %{
+               "identity_id" => link.identity_id,
+               "user_id" => link.identity.owner_user_id,
+               "client_id" => link.subject
+             }, scopes}
+
+          {:error, _} ->
+            :error
+        end
+    end
+  end
+
+  @doc """
+  The `WWW-Authenticate` value for a 401 or 403 from `/mcp`: FastestMCP's
+  Bearer challenge (`existing`, or nil), with the protected resource metadata
+  URL (RFC 9728 §5.1) first and, unless it names the missing scopes, every
+  scope the endpoint offers.
+  """
+  def challenge(existing) do
+    params =
+      case existing do
+        "Bearer" <> rest -> rest |> String.trim() |> String.trim_leading(",") |> String.trim()
+        _ -> ""
+      end
+
+    scope =
+      if params =~ ~r/(^|[\s,])scope=/,
+        do: [],
+        else: [~s(scope="#{Enum.join(MCPAuth.scope_names(), " ")}")]
+
+    ([~s(resource_metadata="#{MCPAuth.resource_metadata_url()}")] ++
+       scope ++ if(params == "", do: [], else: [params]))
+    |> Enum.join(", ")
+    |> then(&("Bearer " <> &1))
   end
 
   @impl true
@@ -92,13 +140,76 @@ defmodule ReviewsWeb.MCP.Server do
     )
   end
 
+  # ChatGPT reads `securitySchemes` to know a tool needs sign-in (OpenAI's
+  # plugin reference: "_meta" mirror).
+  defp security(scope), do: %{"securitySchemes" => [%{"type" => "oauth2", "scopes" => [scope]}]}
+
   defp add_read_tools(server) do
     read = [
-      annotations: %{readOnlyHint: true, openWorldHint: false},
+      annotations: %{readOnlyHint: true, destructiveHint: false, openWorldHint: false},
+      meta: security("reviews:read"),
       authorization: Authorization.require_scopes("reviews:read")
     ]
 
     server
+    |> FastestMCP.add_tool(
+      "search",
+      &Handlers.search/2,
+      [
+        title: "Search reviews",
+        description:
+          "Searches the reviews this account owns by title, description, or slug. Returns " <>
+            "results with id, title, and url; pass an id to fetch. A blank query lists the " <>
+            "newest reviews.",
+        input_schema: object(%{"query" => %{"type" => "string", "maxLength" => 500}}, ["query"]),
+        output_schema: %{
+          "type" => "object",
+          "properties" => %{
+            "results" => %{
+              "type" => "array",
+              "items" => %{
+                "type" => "object",
+                "properties" => %{
+                  "id" => %{"type" => "string"},
+                  "title" => %{"type" => "string"},
+                  "url" => %{"type" => "string"}
+                },
+                "required" => ["id", "title", "url"]
+              }
+            }
+          },
+          "required" => ["results"]
+        }
+      ] ++ read
+    )
+    |> FastestMCP.add_tool(
+      "fetch",
+      &Handlers.fetch/2,
+      [
+        title: "Fetch review",
+        description:
+          "Returns one review by the id search returned (its slug): title, url, " <>
+            "description, and open feedback threads as Markdown.",
+        input_schema:
+          object(
+            %{
+              "id" => %{"type" => "string", "maxLength" => 2048, "description" => "Review slug."}
+            },
+            ["id"]
+          ),
+        output_schema: %{
+          "type" => "object",
+          "properties" => %{
+            "id" => %{"type" => "string"},
+            "title" => %{"type" => "string"},
+            "text" => %{"type" => "string"},
+            "url" => %{"type" => "string"},
+            "metadata" => %{"type" => "object"}
+          },
+          "required" => ["id", "title", "text", "url"]
+        }
+      ] ++ read
+    )
     |> FastestMCP.add_tool(
       "reviews_whoami",
       &Handlers.whoami/2,
@@ -244,6 +355,7 @@ defmodule ReviewsWeb.MCP.Server do
     write = fn scope, idempotent? ->
       [
         enabled: writes?,
+        meta: security(scope),
         annotations: %{
           readOnlyHint: false,
           destructiveHint: false,

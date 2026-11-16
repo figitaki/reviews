@@ -230,6 +230,9 @@ defmodule ReviewsWeb.OAuthTest do
       end)
 
       Application.put_env(:reviews, Reviews.OAuthTestResource, enabled: false)
+      mcp = Application.get_env(:reviews, :mcp)
+      on_exit(fn -> Application.put_env(:reviews, :mcp, mcp) end)
+      Application.put_env(:reviews, :mcp, Keyword.put(mcp, :enabled, false))
 
       issuer =
         build_conn() |> get("/.well-known/oauth-authorization-server") |> json_response(200)

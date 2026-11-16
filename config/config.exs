@@ -76,8 +76,13 @@ config :phoenix, :filter_parameters, [
 ]
 
 # The OAuth issuer (Reviews.OAuth). Each API that accepts its tokens is a
-# Reviews.OAuth.Resource listed here; none is listed yet.
-config :reviews, Reviews.OAuth, resources: []
+# Reviews.OAuth.Resource listed here. ChatGPT addresses its client
+# assertions to the token endpoint instead of the issuer, so its CIMD client
+# ID may.
+config :reviews, Reviews.OAuth,
+  resources: [Reviews.MCPAuth],
+  token_endpoint_audience_clients: ["https://chatgpt.com/oauth/client.json"]
+
 config :postgrex, :json_library, JSON
 
 # Import environment specific config. This must remain at the bottom

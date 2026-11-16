@@ -39,6 +39,30 @@ defmodule Reviews.Reviews do
   def owned_by?(%Review{}, _actor), do: false
 
   @doc """
+  Reviews the actor's account owns whose title, description, or slug contains
+  `query` (any case), newest first, at most `limit`. A blank query lists the
+  newest.
+  """
+  def search_owned_reviews(%Identity{owner_user_id: owner_id}, query, limit)
+      when is_binary(query) and is_integer(limit) do
+    pattern = "%" <> String.replace(String.trim(query), ~r/[\\%_]/, "\\\\\\0") <> "%"
+
+    Repo.all(
+      from r in Review,
+        join: i in Identity,
+        on: i.id == r.author_id,
+        where: i.owner_user_id == ^owner_id,
+        where:
+          ilike(r.title, ^pattern) or ilike(coalesce(r.description, ""), ^pattern) or
+            ilike(r.slug, ^pattern),
+        order_by: [desc: r.updated_at, desc: r.id],
+        limit: ^limit,
+        # Descriptions have no length limit; the results need only these.
+        select: struct(r, [:id, :slug, :title, :updated_at])
+    )
+  end
+
+  @doc """
   Creates a review along with its initial patchset (#1) in a single transaction.
 
   Returns `{:ok, %{review: review, patchset: patchset, files: files}}` or

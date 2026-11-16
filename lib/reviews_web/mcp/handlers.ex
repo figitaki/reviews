@@ -393,6 +393,64 @@ defmodule ReviewsWeb.MCP.Handlers do
     end)
   end
 
+  ## search and fetch, in the shape ChatGPT's connectors and deep research use
+
+  @search_limit 20
+  @fetch_description_cap 20_000
+
+  @doc """
+  Reviews the caller's account owns that match `query`. Each result's `id` is
+  the slug `fetch` takes.
+  """
+  def search(args, ctx) do
+    identity = current_identity!(ctx)
+
+    results =
+      identity
+      |> ReviewsContext.search_owned_reviews(args["query"] || "", @search_limit)
+      |> Enum.map(fn review ->
+        %{id: review.slug, title: Budget.cap(review.title, @title_cap), url: review_url(review)}
+      end)
+
+    %{results: results}
+  end
+
+  @doc """
+  One review as a document: its description, then its open feedback as
+  Markdown, the same text as the `reviews://{slug}/feedback` resource.
+  """
+  def fetch(%{"id" => id}, ctx) do
+    identity = current_identity!(ctx)
+
+    with {:ok, review} <- owned_review(id, identity),
+         {:ok, revisions, latest} <- select_revision(review, %{}) do
+      title = Budget.cap(review.title, @title_cap)
+
+      description =
+        case review.description do
+          text when is_binary(text) and text != "" ->
+            Budget.cap(text, @fetch_description_cap) <> "\n\n"
+
+          _ ->
+            ""
+        end
+
+      %{
+        id: review.slug,
+        title: title,
+        text: "# #{title}\n\n" <> description <> render_feedback(review, revisions, latest),
+        url: review_url(review),
+        metadata: %{
+          revision: latest.number,
+          open_threads:
+            Threads.count_threads(review, max_origin_number: latest.number, status: "open")
+        }
+      }
+    else
+      _ -> error_result(not_found_message(id))
+    end
+  end
+
   ## Resources and prompts
 
   def feedback_markdown(%{"slug" => slug}, ctx) do

@@ -5,10 +5,10 @@ endpoint at `/mcp` from the Phoenix app, using
 [FastestMCP](https://hex.pm/packages/fastest_mcp) over Streamable HTTP. It
 supports MCP protocol revisions `2026-07-28` and `2025-11-25`.
 
-This is the first slice of #95 (#108, #111 and #112 in part). It reuses the
-existing API tokens. OAuth discovery, consent and client credentials (#109,
-#110) are not built yet, so clients that only connect through OAuth, such as
-Claude.ai custom connectors, cannot use it.
+This is the first slice of #95 (#108, #111 and #112 in part, and #109).
+Clients connect either with an existing API token or by signing in with OAuth,
+which is how Claude custom connectors and ChatGPT connect. Client credentials
+for unattended agents (#110) are not built yet.
 
 ## Turning it on
 
@@ -31,6 +31,56 @@ JSON decoding. The CLI's 50 MB REST limit is unchanged.
 
 ## Authentication and access
 
+There are two kinds of bearer token: an OAuth access token from signing in, or
+a Reviews API token.
+
+### OAuth (Claude, ChatGPT, MCP Inspector)
+
+A request without a valid token gets 401 with:
+
+```
+WWW-Authenticate: Bearer resource_metadata="https://HOST/.well-known/oauth-protected-resource/mcp",
+  scope="reviews:read reviews:write threads:write"
+```
+
+That document (RFC 9728) names `https://HOST/mcp` as the resource and the
+Reviews issuer, `https://HOST`, as its authorization server. The issuer's
+metadata is at `/.well-known/oauth-authorization-server` (RFC 8414). It is the
+Reviews OAuth issuer (`Reviews.OAuth`), shared with any other API that takes
+its tokens; the `resource` parameter (RFC 8707) picks the API, and a token for
+one API is refused by every other.
+
+The issuer supports:
+
+| Need | How |
+|---|---|
+| Authorization code with PKCE | `S256` only. `iss` is on every redirect back (RFC 9207), errors included. |
+| Client ID metadata documents | An HTTPS `client_id` is fetched (HTTPS only, no redirects, no private addresses, 100 KB, 5 s, cached 5 minutes). Redirect URIs must be on the `client_id` host or loopback. Claude's is `https://claude.ai/oauth/mcp-oauth-client-metadata`; ChatGPT's is `https://chatgpt.com/oauth/client.json`. |
+| Dynamic client registration | `POST /oauth/register` (RFC 7591) registers a public client: HTTPS, loopback, or app-scheme redirect URIs, `token_endpoint_auth_method` `none`. The MCP Inspector and Codex use this. |
+| Client authentication | `none` (public clients, PKCE alone) or `private_key_jwt` (ES256, PS384, RS256) for clients whose metadata has a `jwks_uri`. The assertion's `aud` is the issuer; ChatGPT's client ID may also use the token endpoint, as ChatGPT does. |
+| Refresh | Access tokens last an hour. Refresh tokens rotate on every use, and presenting a replaced one revokes the grant. A grant lasts 90 days. |
+| Revocation | `POST /oauth/revoke` (RFC 7009), or Disconnect in Settings. Either stops the grant's tokens on their next request. |
+
+Scopes:
+
+| Scope | Allows |
+|---|---|
+| `reviews:read` | Every read tool, `search`, `fetch`, the feedback resource and the prompt. |
+| `reviews:write` | `reviews_create_review`, `reviews_append_revision`. |
+| `threads:write` | `reviews_post_comment`, `reviews_update_thread_status`. |
+
+Tools a token lacks the scope for are not listed. Calling one gets 403 with an
+`insufficient_scope` challenge naming the scope, so a client can ask for it.
+
+Signing in sends the owner to `/oauth/authorize`. After GitHub sign-in, the
+consent page shows the client's verified domain (or says it has none, for a
+registered client), the host it returns to, a warning for loopback redirects,
+and the scopes. The owner picks which identity the client acts as: one of
+their agents (listed first) or themselves. A scope permission never widens
+access: OAuth tokens, like API tokens, reach only the account's own reviews.
+
+### API tokens
+
 Send a Reviews API token as a bearer token, the same token the CLI uses:
 
 ```
@@ -41,11 +91,12 @@ Mint one in Settings. Mint it for an agent identity so the agent's comments
 and pushes are attributed to it. The token is checked on every request, so a
 revoked token stops working on its next call.
 
-Tokens have no scope model yet. Every valid token holds `reviews:read`,
-`reviews:write` and `threads:write`. The tools already check those scopes, so
-OAuth tokens can narrow them later.
+API tokens have no scope model yet. Every valid API token holds
+`reviews:read`, `reviews:write` and `threads:write`.
 
-A token can read and write only the reviews its account owns: reviews pushed by
+### Access
+
+A token of either kind can read and write only the reviews its account owns: reviews pushed by
 the account's human identity or any of its agent identities. Reviews owned by
 other accounts get the same "not found" result as unknown slugs, even though
 the web link is public. This follows #107 ("a slug is not a grant"). It means a
@@ -68,7 +119,9 @@ the whole review.
 
 | Tool | Does |
 |---|---|
-| `reviews_whoami` | The token's identity (human or agent) and whether writes are on. |
+| `search` | Reviews this account owns whose title, description or slug contains `query`, as `{results: [{id, title, url}]}`, the shape ChatGPT connectors and deep research use. A blank query lists the newest. |
+| `fetch` | One review by the `id` from `search` (its slug): `{id, title, text, url, metadata}`, where `text` is the description and the open feedback as Markdown. |
+| `reviews_whoami` | The token's identity (human or agent), its scopes, and whether writes are on. |
 | `reviews_get_review` | Title, URL, thread counts, description and packet summary, packet outline, then revisions with stats, newest first. |
 | `reviews_get_packet_section` | One section's rows in reading order: Markdown prose and hunk diffs. A row with `complete: false` continues on the next page. |
 | `reviews_list_files` | Files in a revision, in path order, with status, line counts, size and open threads. |
@@ -87,12 +140,35 @@ says how many threads it left out; read those with `reviews_list_threads`.
 Prompt: `address_feedback`, which walks an agent through reading, fixing,
 replying to and resolving open threads.
 
+Every tool sets `readOnlyHint`, `destructiveHint` and `openWorldHint`
+explicitly, as ChatGPT's app review asks. Writes add to a review and never
+delete, so none is destructive. Each tool's `_meta.securitySchemes` names the
+OAuth scope it needs.
+
 Writes publish immediately and are not idempotent. Clients should not retry a
 write after a timeout without reading first (#151 tracks durable
 deduplication). `reviews_post_comment` binds a new thread to the revision it
 names, but does not check atomically against a concurrent push (#150).
 
 ## Connecting a client
+
+### Claude (custom connector)
+
+In Claude, Settings → Connectors → Add custom connector, enter
+`https://HOST/mcp` and leave the OAuth client settings empty. Claude uses its
+client metadata document and returns to `https://claude.ai/api/mcp/auth_callback`.
+Sign in with GitHub on the Reviews page it opens, pick an identity and scopes,
+and Allow. Claude's traffic comes from `160.79.104.0/21`.
+
+### ChatGPT (developer mode connector or app)
+
+In ChatGPT, with developer mode on, create a connector with
+`https://HOST/mcp` and OAuth. ChatGPT uses `https://chatgpt.com/oauth/client.json`
+with `private_key_jwt` and returns to
+`https://chatgpt.com/connector_platform_oauth_redirect`. Its `search` and
+`fetch` tools work for deep research. Choosing DCR in ChatGPT works too.
+
+### Bearer-token clients
 
 Replace `HOST` with the server, such as `reviews-pr-<N>.fly.dev` for a preview,
 and `TOKEN` with an API token for that server. On previews, use the
@@ -133,7 +209,10 @@ url = "https://HOST/mcp"
 bearer_token_env_var = "REVIEWS_MCP_TOKEN"
 ```
 
-MCP Inspector, to check the connection:
+MCP Inspector, to check the connection. The web UI
+(`npx @modelcontextprotocol/inspector`) signs in with OAuth through dynamic
+registration when you add `https://HOST/mcp` as a streamable-http server. The
+CLI takes a token:
 
 ```sh
 npx @modelcontextprotocol/inspector --cli https://HOST/mcp --transport http \
@@ -153,6 +232,9 @@ npx @modelcontextprotocol/inspector --cli https://HOST/mcp --transport http \
 
 ## Not in this slice
 
-OAuth and client credentials (#109, #110), section decisions, account-wide
-review listing, per-request audit logs beyond FastestMCP telemetry, and the
-local `reviews mcp` stdio server (#94).
+Client credentials (#110), section decisions, per-request audit logs beyond
+FastestMCP telemetry (the OAuth client ID is on each request's principal but
+not logged), an Apps SDK / MCP Apps widget, labels on comments posted through
+OAuth naming the client, and the local `reviews mcp` stdio server (#94).
+Registered clients are never deleted, and registration has no rate limit of
+its own.
