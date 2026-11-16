@@ -63,6 +63,22 @@ config :logger, :default_formatter,
 
 # Use Elixir's built-in JSON module for Phoenix, Postgrex (jsonb columns) and Ueberauth.
 config :phoenix, :json_library, JSON
+
+# Keep OAuth secrets out of request logs. Phoenix already filters "password";
+# the rest are sign-in values (Reviews.OAuth).
+config :phoenix, :filter_parameters, [
+  "password",
+  "client_assertion",
+  "code",
+  "code_verifier",
+  "refresh_token",
+  "token"
+]
+
+# The OAuth issuer (Reviews.OAuth). Each API that accepts its tokens is a
+# Reviews.OAuth.Resource listed here. A request without `resource` or a scope
+# it recognizes goes to the default.
+config :reviews, Reviews.OAuth, resources: [Reviews.Poppy], default_resource: Reviews.Poppy
 config :postgrex, :json_library, JSON
 
 # Import environment specific config. This must remain at the bottom

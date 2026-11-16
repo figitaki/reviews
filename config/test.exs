@@ -53,6 +53,14 @@ config :phoenix_live_view,
 config :phoenix,
   sort_verified_routes_query_params: true
 
+# OAuth: a fixed HTTPS issuer, client metadata served from memory, and a
+# test resource.
+config :reviews, Reviews.OAuth,
+  issuer: "https://reviews.test",
+  fetcher: Reviews.OAuthTestClient.Fetcher,
+  resources: [Reviews.Poppy, Reviews.OAuthTestResource.KeysOnly, Reviews.OAuthTestResource],
+  default_resource: Reviews.Poppy
+
 # Raise on LiveView test-time template problems instead of warning.
 config :phoenix_live_view, :test_warnings,
   duplicate_id: :raise,

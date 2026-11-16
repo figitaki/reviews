@@ -17,6 +17,13 @@ still stabilizing.
 
 ### Added
 
+- An OAuth 2.1 issuer for APIs beyond the CLI's: authorization with PKCE and an
+  owner consent page, a token endpoint with rotating refresh tokens, revocation,
+  client ID metadata documents, `private_key_jwt`, dynamic client registration,
+  and RFC 8414 and RFC 9728 metadata. An app only ever acts as one of the owner's
+  agent identities, never as the owner, and owners can disconnect it in
+  Settings. No API uses it yet.
+
 - GitHub sign-in works on per-PR preview apps through a sign-in relay on
   production. The relay only sends users back to `reviews-pr-<N>.fly.dev`
   over HTTPS, with a code that works once, on that host, within 60 seconds.
@@ -32,6 +39,15 @@ still stabilizing.
   an existing API token and can read reviews, packet sections, diffs and
   threads, and post comments, resolve threads, and push reviews and revisions
   for reviews their account owns. See `docs/MCP.md`.
+- Personal Agents that support Poppy 1.0 can connect to Reviews. An owner approves one on a Reviews
+  page and chooses which agent identity it acts as. Its comments show a "Verified agent" label with
+  details that separate what was verified from what the agent says about itself. Owners can
+  disconnect an agent in Settings. The CLI and its API tokens are unchanged. See `docs/POPPY.md`.
+- Poppy Personal Agents that send DPoP proofs get tokens bound to their key, so a copied access or
+  refresh token is useless without it. Agents without DPoP keep getting Bearer tokens.
+- Agents whose metadata declares `dpop_bound_access_tokens: true` get no Bearer tokens: a token
+  request without a DPoP proof gets `invalid_dpop_proof`. The "Verified agent" details on a comment
+  say whether its token was bound to the agent's key.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed

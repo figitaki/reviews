@@ -126,4 +126,34 @@ defmodule ReviewsWeb.SettingsLiveTest do
 
     refute render(view) =~ "token_hash"
   end
+
+  test "lists connected agents and disconnects one", %{conn: conn} do
+    user = user!()
+
+    {:ok, agent} =
+      Accounts.create_agent_identity(user, %{display_name: "Claude", handle: "claude"})
+
+    link =
+      Reviews.Repo.insert!(%Reviews.Accounts.IdentityLink{
+        identity_id: agent.id,
+        approved_by_user_id: user.id,
+        provider: "test",
+        subject: "https://agent.example/client.json",
+        subject_name: "Claude",
+        scopes: ["test:read"]
+      })
+
+    conn = Plug.Test.init_test_session(conn, %{current_user_id: user.id})
+    {:ok, view, _html} = live(conn, ~p"/settings")
+
+    assert has_element?(view, "#agent-link-#{link.id}", "agent.example")
+    assert has_element?(view, "#agent-link-#{link.id}", "(not verified)")
+    assert has_element?(view, "#agent-link-#{link.id}", "Claude (@claude)")
+
+    view |> element("#revoke-agent-link-#{link.id}") |> render_click()
+
+    assert has_element?(view, "#agent-link-#{link.id}", "Disconnected")
+    refute has_element?(view, "#revoke-agent-link-#{link.id}")
+    assert Reviews.Repo.reload!(link).revoked_at
+  end
 end

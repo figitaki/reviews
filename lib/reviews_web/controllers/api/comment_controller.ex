@@ -24,7 +24,12 @@ defmodule ReviewsWeb.Api.CommentController do
         |> json(%{errors: %{detail: "Review not found"}})
 
       review ->
-        case ThreadsContext.publish_comment(review, author, normalize(params)) do
+        case ThreadsContext.publish_comment(
+               review,
+               author,
+               normalize(params),
+               conn.assigns[:attribution]
+             ) do
           {:ok, %{thread: thread, comment: comment}} ->
             conn
             |> put_status(:created)
