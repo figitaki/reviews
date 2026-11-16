@@ -7,6 +7,15 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Added
+
+- Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with
+  an existing API token and can read reviews, packet sections, diffs and
+  threads, and post comments, resolve threads, and push reviews and revisions
+  for reviews their account owns. See `docs/MCP.md`.
+
+## [0.0.1] - 2026-11-16
+
 ### Security
 
 - Restrict browser scripts to same-origin assets, disable embedded objects, and
@@ -35,10 +44,6 @@ still stabilizing.
   `--update` slug, and exits 1 if there are any problems. A real push now
   also lists every packet problem at once.
 
-- Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with
-  an existing API token and can read reviews, packet sections, diffs and
-  threads, and post comments, resolve threads, and push reviews and revisions
-  for reviews their account owns. See `docs/MCP.md`.
 - Personal Agents that support Poppy 1.0 can connect to Reviews. An owner approves one on a Reviews
   page and chooses which agent identity it acts as. Its comments show a "Verified agent" label with
   details that separate what was verified from what the agent says about itself. Owners can
