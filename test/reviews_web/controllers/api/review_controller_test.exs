@@ -5,6 +5,8 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
 
+  import Phoenix.LiveViewTest
+
   describe "POST /api/v1/reviews" do
     setup do
       {:ok, user} =
@@ -24,6 +26,53 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
         Accounts.mint_token(user, %{name: "agent", identity_id: agent.id})
 
       %{user: user, raw_token: raw, agent: agent, agent_raw_token: agent_raw}
+    end
+
+    test "quoted UTF-8 paths survive upload and packet rendering", %{conn: conn, raw_token: raw} do
+      diff = ~S"""
+      diff --git "a/caf\303\251.txt" "b/caf\303\251.txt"
+      --- "a/caf\303\251.txt"
+      +++ "b/caf\303\251.txt"
+      @@ -1 +1 @@
+      -old
+      +new
+      """
+
+      packet = %{
+        "title" => "Quoted paths",
+        "sections" => [
+          %{
+            "title" => "Text",
+            "rows" => [%{"kind" => "hunk", "path" => "café.txt", "hunk_index" => 1}]
+          }
+        ]
+      }
+
+      response =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews", %{
+          "title" => "Quoted paths",
+          "raw_diff" => diff,
+          "packet" => packet
+        })
+
+      %{"slug" => slug} = json_response(response, 201)
+      review = ReviewsContext.get_review_by_slug(slug)
+      {:ok, snapshot} = Reviews.ReviewView.snapshot(review, nil, [])
+      assert [%{path: "café.txt"}] = snapshot.file_diffs
+      assert [%{hunk_index: 1}] = snapshot.hunks_by_path["café.txt"]
+      assert ReviewsContext.raw_diff_for_file(snapshot.selected_patchset, "café.txt") == diff
+      assert ReviewsContext.raw_diff_for_file(snapshot.selected_patchset, "café") == nil
+
+      {:ok, view, _html} = live(build_conn(), ~p"/r/#{slug}")
+      render_click(view, "select_guide_section", %{"section_index" => "0"})
+
+      assert has_element?(
+               view,
+               ~s|#review-packet [phx-hook="DiffRenderer"][data-file-path="café.txt"]|
+             )
     end
 
     test "creates a review + patchset with a valid token", %{conn: conn, raw_token: raw} do

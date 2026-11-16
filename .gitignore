@@ -34,6 +34,8 @@ reviews-*.tar
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
+# Bun owns the asset dependency graph; do not retain a second, stale lockfile.
+/assets/package-lock.json
 
 # Local secrets / dev environment.
 .env

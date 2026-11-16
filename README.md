@@ -155,6 +155,20 @@ reviews push --update <slug> --packet /path/to/packet.md
 
 Use `--range HEAD` when pushing current uncommitted work.
 
+Check a push before you send it:
+
+```sh
+reviews push --dry-run --packet /path/to/packet.md
+reviews push --dry-run --update <slug> --packet /path/to/packet.md
+```
+
+`--dry-run` (alias `--validate`) runs the same packet checks as a real push,
+but it does not contact the server and does not write files. It prints the
+server, the review title or target slug, the diff files and hunks, and the
+packet sections. It lists every packet problem with `file:line`, flags an
+empty review title or `--update` slug, and exits with status 1 if there are
+any problems. It cannot check that the slug exists or that your token works.
+
 ## Layout
 
 - `lib/reviews/` — domain contexts and schemas.
@@ -174,3 +188,17 @@ mix format --check-formatted
 mix compile --warnings-as-errors
 mix test
 ```
+
+### Browser security
+
+Browser pages restrict scripts to same-origin assets and disable embedded objects.
+The small `theme.js` bundle loads synchronously before content so saved themes
+apply before first paint; keep it in the esbuild entrypoints and release assets.
+Style, image and connection restrictions are deliberately not added yet, to avoid
+breaking diff-renderer styles, avatars or LiveView.
+
+Development sockets accept only `http://localhost:$PORT` and
+`http://127.0.0.1:$PORT` (port 4000 by default). When using a local tunnel or
+custom development host, deliberately configure its exact origin in
+`config/dev.exs`; do not disable origin checking. Production keeps its existing
+canonical and legacy Fly host allowlist.

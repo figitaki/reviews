@@ -289,8 +289,7 @@ defmodule ReviewsWeb.ReviewLive do
 
         {:noreply,
          push_patch(socket,
-           to:
-             ~p"/r/#{socket.assigns.review.slug}/changes?#{[patchset: number, thread: thread.id]}"
+           to: ~p"/r/#{socket.assigns.review.slug}?#{[patchset: number, thread: thread.id]}"
          )}
     end
   end
@@ -614,6 +613,7 @@ defmodule ReviewsWeb.ReviewLive do
               review={@review}
               threads={@published_threads}
               current_identity={@current_identity}
+              patchset_number={@selected_patchset.number}
             />
           </div>
         </div>
@@ -672,9 +672,36 @@ defmodule ReviewsWeb.ReviewLive do
          true <- is_map(thread.anchor),
          file when not is_nil(file) <-
            Enum.find(socket.assigns.file_diffs, &(&1.path == thread.file_path)) do
-      socket
-      |> update(:expanded_hunk_ids, &MapSet.put(&1, "file-diff-#{file.id}"))
-      |> push_event("open_review_thread", %{thread_id: thread.id, file_path: thread.file_path})
+      target =
+        PacketComponents.thread_target(
+          socket.assigns.selected_patchset.packet || %{},
+          socket.assigns.hunks_by_path,
+          thread
+        )
+
+      cond do
+        socket.assigns.live_action == :changes ->
+          socket
+          |> update(:expanded_hunk_ids, &MapSet.put(&1, "file-diff-#{file.id}"))
+          |> push_event("open_review_thread", %{thread_id: thread.id, file_path: thread.file_path})
+
+        target ->
+          socket
+          |> assign(:active_outline_section_index, target.section_index)
+          |> update(:expanded_section_ids, &MapSet.put(&1, target.section_index))
+          |> update(:expanded_hunk_ids, &MapSet.put(&1, target.hunk_id))
+          |> push_event("open_review_thread", %{
+            thread_id: thread.id,
+            file_path: thread.file_path,
+            hunk_id: target.hunk_id
+          })
+
+        true ->
+          push_patch(socket,
+            to:
+              ~p"/r/#{socket.assigns.review.slug}/changes?#{[patchset: socket.assigns.selected_patchset.number, thread: thread.id]}"
+          )
+      end
     else
       _ -> socket
     end

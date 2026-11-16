@@ -1,4 +1,5 @@
 import { button as baseButton, el } from "./dom.js"
+import { renderMarkdown } from "../lib/markdown.js"
 
 // Pierre owns the diff body theme. Annotation UI is rendered by Reviews through
 // `renderAnnotation`, so it uses Reviews design tokens and inline styles that
@@ -147,7 +148,7 @@ const threadCommentStyle = {
 const threadCommentBodyStyle = {
   flex: "1 1 180px",
   minWidth: "0",
-  whiteSpace: "pre-wrap",
+  whiteSpace: "normal",
   overflowWrap: "anywhere",
 }
 const threadCommentTimeStyle = {
@@ -439,6 +440,15 @@ function commentTime(iso, prefix = "") {
   )
 }
 
+function commentBody(body, condensed = false) {
+  const node = el("div", {
+    className: "review-rich-markdown review-comment-markdown",
+    style: { ...threadCommentBodyStyle, ...(condensed ? { margin: "4px 0", maxHeight: "4.8em", overflow: "auto" } : {}) },
+  })
+  node.innerHTML = renderMarkdown(body)
+  return node
+}
+
 export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
   const runs = groupCommentsByAuthor(thread.comments)
   const commentRows = []
@@ -446,7 +456,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
   for (const run of runs) {
     const comments = run.comments.map((comment) =>
       el("li", { style: threadCommentStyle }, [
-        el("div", { style: threadCommentBodyStyle }, comment.body),
+        commentBody(comment.body),
         commentTime(comment.inserted_at),
       ])
     )
@@ -496,7 +506,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
         el("div", { style: composerActionsStyle }, [
           `${thread.comments?.length || 0} comments`, history,
         ]),
-        !ui.expanded && last ? el("p", { style: { ...threadCommentBodyStyle, margin: "4px 0", maxHeight: "4.8em", overflow: "auto" } }, last.body) : null,
+        !ui.expanded && last ? commentBody(last.body, true) : null,
       ]))
     }
     if (!expanded) return

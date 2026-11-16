@@ -7,8 +7,21 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Security
+
+- Restrict browser scripts to same-origin assets, disable embedded objects, and
+  restrict development WebSocket origins to the configured loopback port.
+
+- Update Ecto to 3.14.3 to fix unbounded query cache growth from interpolated
+  JSON paths and splice lists (CVE-2026-118391).
+
 ### Added
 
+- `reviews push --dry-run` (alias `--validate`) checks the diff and packet
+  and prints what would be sent, without contacting the server. It lists
+  every packet problem with `file:line`, flags an empty review title or
+  `--update` slug, and exits 1 if there are any problems. A real push now
+  also lists every packet problem at once.
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed
@@ -20,6 +33,9 @@ still stabilizing.
 
 ### Changed
 
+- Comments render safe Markdown. The collapsible comment sidebar lists only
+  unread thread locations, without message previews; links prefer the first
+  covering hunk in the Guide and fall back to Diff when needed.
 - Preview deployments can provision and delete per-PR databases through
   Fly Managed Postgres v2, without granting SQL database-owner privileges.
 - Selecting diff text offers a row-end comment button instead of opening a
@@ -78,6 +94,9 @@ still stabilizing.
   fails the release command instead of being ignored.
 
 ### Fixed
+
+- Decode Git-quoted filenames consistently in CLI validation, uploaded file
+  metadata, and review hunk lookup, including non-ASCII paths.
 
 - Rail height and section jumps account for both headers, including wrapped
   mobile controls.

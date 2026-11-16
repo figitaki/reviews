@@ -63,6 +63,7 @@ defmodule Reviews.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.12"},
       {:lazy_html, ">= 0.1.13", only: :test},
+      {:sobelow, "== 0.18.1", only: [:dev, :test], runtime: false},
       {:phoenix_live_dashboard, "~> 0.9.1"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},
