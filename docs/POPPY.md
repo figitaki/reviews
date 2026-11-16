@@ -43,6 +43,11 @@ The issuer is `config :reviews, Reviews.OAuth, issuer:` (`Reviews.OAuth`, shared
 APIs), which defaults to the endpoint URL. In development set `OAUTH_ISSUER` to an HTTPS origin
 that reaches the server.
 
+**Which agents can sign in.** Any Personal Agent with an HTTPS `client_id` whose metadata passes
+the checks below can sign in, once an owner approves it on the consent page. There is no allowlist.
+To refuse an agent, add its `client_id` to `config :reviews, Reviews.OAuth, blocked_clients: [...]`
+(see "Revocation"). This is the decided policy for production.
+
 ## What each request must pass
 
 `ReviewsWeb.Plugs.PoppyAuth` calls `Reviews.Poppy.Adapter`, which checks these in order:
