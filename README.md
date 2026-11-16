@@ -174,3 +174,17 @@ mix format --check-formatted
 mix compile --warnings-as-errors
 mix test
 ```
+
+### Browser security
+
+Browser pages restrict scripts to same-origin assets and disable embedded objects.
+The small `theme.js` bundle loads synchronously before content so saved themes
+apply before first paint; keep it in the esbuild entrypoints and release assets.
+Style, image and connection restrictions are deliberately not added yet, to avoid
+breaking diff-renderer styles, avatars or LiveView.
+
+Development sockets accept only `http://localhost:$PORT` and
+`http://127.0.0.1:$PORT` (port 4000 by default). When using a local tunnel or
+custom development host, deliberately configure its exact origin in
+`config/dev.exs`; do not disable origin checking. Production keeps its existing
+canonical and legacy Fly host allowlist.
