@@ -28,6 +28,16 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     --diffs-line-height: var(--font-code-leading);
     --diffs-font-features: "liga" 0, "calt" 0;
   }
+  /* Phones: "N unmodified lines" separators span the card edge to edge and
+     drop their rounded corners, matching the card (packet.css, 768px). */
+  @media (max-width: 768px) {
+    [data-separator="line-info"] [data-separator-wrapper] {
+      padding-inline: 0;
+    }
+    [data-separator="line-info"] :is([data-separator-wrapper], [data-separator-content], [data-expand-button]) {
+      border-radius: 0;
+    }
+  }
 `
 
 // The prefix slot holds a native disclosure button stretched across Pierre's
