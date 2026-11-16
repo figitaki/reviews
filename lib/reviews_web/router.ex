@@ -48,8 +48,6 @@ defmodule ReviewsWeb.Router do
 
     get "/", AuthRelayController, :confirm
     post "/", AuthRelayController, :start
-    get "/github", AuthRelayController, :request
-    get "/github/callback", AuthRelayController, :callback
     get "/accept", AuthRelayController, :accept
   end
 

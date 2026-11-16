@@ -8,10 +8,13 @@ defmodule ReviewsWeb.AuthRelayController do
       confirm the preview they are signing in to. Any host other than
       `reviews-pr-<digits>.fly.dev` gets a 400 and no redirect.
     * `POST /auth/relay`: keeps the host and state in the session and starts
-      GitHub sign-in with production's GitHub OAuth app.
-    * `GET /auth/relay/github/callback`: GitHub returns here. Sends the user to
-      `https://<host>/auth/relay/accept?code=<code>`. It does not sign the
-      user in to the relay.
+      production's own GitHub sign-in with `/auth/github?relay=1`. That binds
+      the target to the OAuth state of this sign-in.
+    * GitHub returns to production's one callback, `/auth/github/callback`.
+      When the OAuth state is the one bound to the relay target,
+      `ReviewsWeb.AuthController.callback/2` calls `finish/2`, which sends the
+      user to `https://<host>/auth/relay/accept?code=<code>` and does not sign
+      anyone in to production.
 
   On a preview (when `Reviews.AuthRelay.client?/0` and its host is a preview
   host):
@@ -28,10 +31,8 @@ defmodule ReviewsWeb.AuthRelayController do
   alias Reviews.AuthRelay
   alias ReviewsWeb.AuthController
 
-  plug :require_relay when action in [:confirm, :start, :request, :callback]
-  plug :require_target when action in [:request]
+  plug :require_relay when action in [:confirm, :start]
   plug :require_preview when action in [:accept]
-  plug Ueberauth, providers: [:github_relay]
 
   def confirm(conn, params) do
     with {:ok, host, state} <- target_params(params) do
@@ -45,31 +46,27 @@ defmodule ReviewsWeb.AuthRelayController do
     with {:ok, host, state} <- target_params(params) do
       conn
       |> put_session(:auth_relay_target, %{host: host, state: state})
-      |> redirect(to: ~p"/auth/relay/github")
+      |> redirect(to: ~p"/auth/github?relay=1")
     else
       :error -> bad_target(conn)
     end
   end
 
-  # Ueberauth handles GET /auth/relay/github and redirects to GitHub, so this
-  # action only runs if it could not.
-  def request(conn, _params), do: bad_target(conn)
-
-  def callback(conn, _params) do
-    target = get_session(conn, :auth_relay_target)
-    conn = delete_session(conn, :auth_relay_target)
-
-    case {target, conn.assigns} do
-      {%{host: host, state: state}, %{ueberauth_auth: auth}} ->
+  @doc """
+  Finishes a relay sign-in in production's GitHub callback, once the callback
+  has matched the OAuth state to `target`. Sends the user back to the preview
+  with a code, or with `error=github`. Never touches the production session's
+  sign-in.
+  """
+  def finish(conn, %{host: host, state: state}) do
+    case conn.assigns do
+      %{ueberauth_auth: auth} ->
         code = AuthRelay.issue_code(host, state, AuthController.github_attrs(auth))
         redirect(conn, external: accept_url(host, code: code))
 
-      {%{host: host}, %{ueberauth_failure: failure}} ->
+      %{ueberauth_failure: failure} ->
         Logger.warning("GitHub OAuth for preview relay failed: #{inspect(failure.errors)}")
         redirect(conn, external: accept_url(host, error: "github"))
-
-      _ ->
-        bad_target(conn)
     end
   end
 
@@ -107,14 +104,6 @@ defmodule ReviewsWeb.AuthRelayController do
     conn
     |> put_status(:bad_request)
     |> text("This sign-in link is not valid. Start again from the preview's Sign in button.")
-  end
-
-  # GitHub sign-in starts only after the confirm step stored a target.
-  defp require_target(conn, _opts) do
-    case get_session(conn, :auth_relay_target) do
-      %{host: _, state: _} -> conn
-      _ -> conn |> bad_target() |> halt()
-    end
   end
 
   defp require_relay(conn, _opts) do

@@ -169,7 +169,8 @@ on `fly.dev` would not be safe: anyone can create a `*.fly.dev` app.
 
 Previews sign in through a **relay** on production instead
 (`Reviews.AuthRelay`, `ReviewsWeb.AuthRelayController`), using production's
-GitHub OAuth app:
+GitHub OAuth app and its existing callback,
+`https://reviews.figitaki.dev/auth/github/callback`:
 
 1. **Sign in** on a preview goes to
    `https://reviews.figitaki.dev/auth/relay?host=reviews-pr-42.fly.dev&state=…`.
@@ -177,45 +178,47 @@ GitHub OAuth app:
    own session.
 2. The relay accepts only hosts matching `reviews-pr-<digits>.fly.dev`.
    Anything else gets a 400 and no redirect. It asks the user to confirm
-   the host, then starts GitHub sign-in with production's OAuth app and the
-   callback `https://reviews.figitaki.dev/auth/relay/github/callback`.
-3. The relay sends the user to
+   the host, then starts production's normal GitHub sign-in
+   (`/auth/github?relay=1`). That binds the preview host to this sign-in's
+   OAuth state, in production's signed session.
+3. GitHub returns to `/auth/github/callback`. If the OAuth state is the one
+   bound to the relay sign-in, the callback does not sign anyone in to
+   production. Instead it mints a code and sends the user on. If a relay
+   sign-in is in the session but the state does not match, the callback
+   refuses. Without a relay sign-in, the callback works exactly as before.
+4. The relay sends the user to
    `https://reviews-pr-42.fly.dev/auth/relay/accept?code=…`. The code is
    encrypted and signed with `AUTH_RELAY_SECRET`. It names the host and
    the state, expires after 60 seconds, and works once: each preview
    records used codes in its `auth_relay_codes` table.
-4. The preview checks the code and signs the user in, then returns them
+5. The preview checks the code and signs the user in, then returns them
    to the page they started from.
 
-The relay has its own callback path, so it never runs production's sign-in
-callback and never signs anyone in to production. Production's own sign-in
-(`/auth/github`) does not change. Production never accepts relay codes,
-because its host is not a preview host.
+Production's own sign-in does not change: any sign-in without
+`relay=1` and a confirmed relay target drops leftover relay state. Ueberauth
+still checks the OAuth state against its cookie first, so a forged state
+fails before the relay branch. Production never accepts relay codes, because
+its host is not a preview host.
 
 The relay is on when production has `AUTH_RELAY_SECRET` (plus its existing
 `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`) and no `AUTH_RELAY_URL`. A
 preview uses it when it has `AUTH_RELAY_SECRET` and `AUTH_RELAY_URL`, which
 `fly.preview.toml` sets. Previews get no GitHub OAuth credentials.
 
-To set it up:
+No GitHub OAuth app change is needed: the relay uses the callback
+production already has. To set it up:
 
-1. In production's GitHub OAuth app, keep the callback URL
-   `https://reviews.figitaki.dev/auth/github/callback` and add a second one,
-   `https://reviews.figitaki.dev/auth/relay/github/callback`. Turn wildcard
-   matching off on both. (The existing callback does not cover the relay
-   path even with wildcard matching on, because `/auth/relay/...` is not
-   below `/auth/github/callback`.)
-2. Generate a relay secret with `mix phx.gen.secret`. Use it in the next
+1. Generate a relay secret with `mix phx.gen.secret`. Use it in the next
    two steps, and nowhere else.
-3. Set it on production:
+2. Set it on production:
 
    ```sh
    fly secrets set --app reviews-dev AUTH_RELAY_SECRET=<relay secret>
    ```
 
-4. Add `PREVIEW_AUTH_RELAY_SECRET` (the same relay secret) to the `preview`
+3. Add `PREVIEW_AUTH_RELAY_SECRET` (the same relay secret) to the `preview`
    GitHub Environment's secrets. Previews pick it up on their next deploy.
-5. Delete `PREVIEW_GITHUB_CLIENT_ID` and `PREVIEW_GITHUB_CLIENT_SECRET` from
+4. Delete `PREVIEW_GITHUB_CLIENT_ID` and `PREVIEW_GITHUB_CLIENT_SECRET` from
    the `preview` Environment, and delete the old preview OAuth app. Nothing
    uses them: previews never could finish sign-in with that app, and older
    PR branches that still stage the secrets get empty values.

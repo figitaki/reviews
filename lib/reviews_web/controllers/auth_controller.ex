@@ -15,6 +15,12 @@ defmodule ReviewsWeb.AuthController do
 
   On a preview app configured as a relay client (`Reviews.AuthRelay.client?/0`),
   `GET /auth/github` sends the user to the sign-in relay instead of GitHub.
+
+  On the relay (production), `GET /auth/github?relay=1` after
+  `POST /auth/relay` is a relay sign-in: the relay target in the signed
+  session is bound to this sign-in's OAuth state. The callback then hands the
+  sign-in to `ReviewsWeb.AuthRelayController.finish/2` and signs no one in to
+  production. Every other sign-in drops any relay target and works as before.
   See `ReviewsWeb.AuthRelayController`.
   """
   use ReviewsWeb, :controller
@@ -22,6 +28,7 @@ defmodule ReviewsWeb.AuthController do
   plug :store_return_to when action in [:request]
   plug :redirect_to_relay when action in [:request]
   plug :require_oauth_configured when action in [:request]
+  plug :bind_relay_target when action in [:request]
   plug Ueberauth, providers: [:github]
 
   require Logger
@@ -40,6 +47,45 @@ defmodule ReviewsWeb.AuthController do
       |> halt()
     else
       conn
+    end
+  end
+
+  # Ueberauth picks the OAuth state while it builds the GitHub redirect, so
+  # the binding is written just before the response goes out.
+  defp bind_relay_target(conn, _opts) do
+    case {conn.params["relay"], get_session(conn, :auth_relay_target)} do
+      {"1", %{host: _, state: _} = target} when not is_map_key(target, :oauth_state) ->
+        if AuthRelay.relay?() do
+          register_before_send(conn, fn conn ->
+            oauth_state = conn.private[:ueberauth_state_param]
+            put_session(conn, :auth_relay_target, Map.put(target, :oauth_state, oauth_state))
+          end)
+        else
+          delete_session(conn, :auth_relay_target)
+        end
+
+      _ ->
+        delete_session(conn, :auth_relay_target)
+    end
+  end
+
+  # :none for a normal sign-in, {:ok, target} for a relay sign-in, :refuse
+  # when a relay target is in the session but not for this OAuth state.
+  defp relay_sign_in(conn, params) do
+    case get_session(conn, :auth_relay_target) do
+      nil ->
+        :none
+
+      %{oauth_state: oauth_state} = target when is_binary(oauth_state) ->
+        state = params["state"]
+
+        if AuthRelay.relay?() and is_binary(state) and
+             Plug.Crypto.secure_compare(oauth_state, state),
+           do: {:ok, target},
+           else: :refuse
+
+      _ ->
+        :refuse
     end
   end
 
@@ -98,7 +144,27 @@ defmodule ReviewsWeb.AuthController do
     |> redirect(to: ~p"/")
   end
 
-  def callback(%{assigns: %{ueberauth_failure: failure}} = conn, _params) do
+  def callback(conn, params) do
+    relay = relay_sign_in(conn, params)
+    conn = delete_session(conn, :auth_relay_target)
+
+    case relay do
+      :none ->
+        github_callback(conn)
+
+      {:ok, target} ->
+        ReviewsWeb.AuthRelayController.finish(conn, target)
+
+      :refuse ->
+        Logger.warning("Refused a GitHub callback whose state does not match the relay sign-in")
+
+        conn
+        |> put_flash(:error, "GitHub authentication failed.")
+        |> redirect(to: ~p"/")
+    end
+  end
+
+  defp github_callback(%{assigns: %{ueberauth_failure: failure}} = conn) do
     Logger.warning("GitHub OAuth failed: #{inspect(failure.errors)}")
 
     conn
@@ -106,7 +172,7 @@ defmodule ReviewsWeb.AuthController do
     |> redirect_back()
   end
 
-  def callback(%{assigns: %{ueberauth_auth: auth}} = conn, _params) do
+  defp github_callback(%{assigns: %{ueberauth_auth: auth}} = conn) do
     sign_in(conn, github_attrs(auth))
   end
 

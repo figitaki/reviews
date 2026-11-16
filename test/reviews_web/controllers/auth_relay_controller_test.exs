@@ -2,7 +2,7 @@ defmodule ReviewsWeb.AuthRelayControllerTest do
   use ReviewsWeb.ConnCase
 
   alias Reviews.AuthRelay
-  alias ReviewsWeb.AuthRelayController
+  alias ReviewsWeb.AuthController
 
   @moduletag :capture_log
 
@@ -33,14 +33,25 @@ defmodule ReviewsWeb.AuthRelayControllerTest do
 
   defp on_host(conn, host), do: %{conn | host: host}
 
-  defp relay_callback(session, auth_assign) do
-    build_conn()
-    |> init_test_session(session)
-    |> bypass_through(ReviewsWeb.Router, [:browser])
-    |> get(~p"/auth/relay/github/callback")
-    |> assign(elem(auth_assign, 0), elem(auth_assign, 1))
-    |> AuthRelayController.callback(%{})
+  @oauth_state "relay-oauth-state-0123456789"
+
+  # Production's GitHub callback with `session`, as if GitHub returned with
+  # `params` and Ueberauth produced `result` ({:ueberauth_auth, auth} or
+  # {:ueberauth_failure, failure}).
+  defp github_callback(session, params, {key, value}) do
+    conn =
+      build_conn()
+      |> init_test_session(session)
+      |> bypass_through(ReviewsWeb.Router, [:browser])
+      |> get(~p"/auth/github/callback?#{params}")
+
+    conn |> assign(key, value) |> AuthController.callback(conn.params)
   end
+
+  defp bound_target(state), do: %{host: @preview, state: state, oauth_state: @oauth_state}
+
+  defp github_user_exists?,
+    do: Reviews.Repo.get_by(Reviews.Accounts.User, github_id: 77_001) != nil
 
   defp github_auth do
     %Ueberauth.Auth{
@@ -104,34 +115,52 @@ defmodule ReviewsWeb.AuthRelayControllerTest do
       end
     end
 
-    test "confirming starts GitHub sign-in with production's OAuth app", %{
+    test "confirming starts production's GitHub sign-in, bound to its OAuth state", %{
       conn: conn,
       state: state
     } do
       conn = post(conn, ~p"/auth/relay", host: @preview, state: state)
 
-      assert redirected_to(conn) == ~p"/auth/relay/github"
+      assert redirected_to(conn) == "/auth/github?relay=1"
       assert get_session(conn, :auth_relay_target) == %{host: @preview, state: state}
 
-      github = conn |> recycle() |> get(~p"/auth/relay/github") |> redirected_to()
-      %URI{host: "github.com", path: "/login/oauth/authorize", query: query} = URI.parse(github)
+      conn = conn |> recycle() |> get(~p"/auth/github?relay=1")
+
+      %URI{host: "github.com", path: "/login/oauth/authorize", query: query} =
+        URI.parse(redirected_to(conn))
+
       query = URI.decode_query(query)
-
       assert query["client_id"] == "prod-client-id"
-      assert query["redirect_uri"] =~ ~r|/auth/relay/github/callback\z|
+      assert query["redirect_uri"] =~ ~r|/auth/github/callback\z|
+
+      assert get_session(conn, :auth_relay_target) ==
+               %{host: @preview, state: state, oauth_state: query["state"]}
     end
 
-    test "does not start GitHub sign-in without the confirm step", %{conn: conn} do
-      conn = get(conn, ~p"/auth/relay/github")
+    # GitHub returns without a code, which Ueberauth reports as a failure
+    # after its own state check passed.
+    test "the real callback sends a bound sign-in back to the preview", %{
+      conn: conn,
+      state: state
+    } do
+      conn = post(conn, ~p"/auth/relay", host: @preview, state: state)
+      conn = conn |> recycle() |> get(~p"/auth/github?relay=1")
+      oauth_state = URI.decode_query(URI.parse(redirected_to(conn)).query)["state"]
 
-      assert response(conn, 400)
-      assert get_resp_header(conn, "location") == []
+      conn = conn |> recycle() |> get(~p"/auth/github/callback?#{[state: oauth_state]}")
+
+      assert redirected_to(conn) == "https://#{@preview}/auth/relay/accept?error=github"
+      refute get_session(conn, :current_user_id)
+      refute get_session(conn, :auth_relay_target)
     end
 
-    test "sends the user back to the preview over https with a code", %{state: state} do
+    test "a relay sign-in mints a code and never creates a production session", %{
+      state: state
+    } do
       conn =
-        relay_callback(
-          %{auth_relay_target: %{host: @preview, state: state}},
+        github_callback(
+          %{auth_relay_target: bound_target(state), return_to: "/settings"},
+          [state: @oauth_state],
           {:ueberauth_auth, github_auth()}
         )
 
@@ -141,9 +170,10 @@ defmodule ReviewsWeb.AuthRelayControllerTest do
       assert {:ok, %{github_id: 77_001, username: "octo"}} =
                AuthRelay.redeem_code(URI.decode_query(query)["code"], @preview, state)
 
-      # The relay itself stays signed out, and the target is used up.
       refute get_session(conn, :current_user_id)
       refute get_session(conn, :auth_relay_target)
+      refute Phoenix.Flash.get(conn.assigns.flash, :info)
+      refute github_user_exists?()
     end
 
     test "reports a GitHub failure to the preview", %{state: state} do
@@ -152,19 +182,85 @@ defmodule ReviewsWeb.AuthRelayControllerTest do
       }
 
       conn =
-        relay_callback(
-          %{auth_relay_target: %{host: @preview, state: state}},
+        github_callback(
+          %{auth_relay_target: bound_target(state)},
+          [state: @oauth_state],
           {:ueberauth_failure, failure}
         )
 
       assert redirected_to(conn) == "https://#{@preview}/auth/relay/accept?error=github"
     end
 
-    test "a callback without a confirmed target goes nowhere" do
-      conn = relay_callback(%{}, {:ueberauth_auth, github_auth()})
+    test "a state that does not match the relay sign-in is refused", %{state: state} do
+      for params <- [[state: "another-oauth-state-0123456"], [state: ""], []],
+          target <- [bound_target(state), %{host: @preview, state: state}] do
+        conn =
+          github_callback(%{auth_relay_target: target}, params, {:ueberauth_auth, github_auth()})
 
-      assert response(conn, 400)
-      assert get_resp_header(conn, "location") == []
+        assert redirected_to(conn) == "/"
+        assert Phoenix.Flash.get(conn.assigns.flash, :error) == "GitHub authentication failed."
+        refute get_session(conn, :current_user_id)
+        refute get_session(conn, :auth_relay_target)
+      end
+
+      refute github_user_exists?()
+    end
+
+    test "a relay sign-in is refused once the relay is off", %{state: state} do
+      Application.put_env(:reviews, :auth_relay, [])
+
+      conn =
+        github_callback(
+          %{auth_relay_target: bound_target(state)},
+          [state: @oauth_state],
+          {:ueberauth_auth, github_auth()}
+        )
+
+      assert redirected_to(conn) == "/"
+      refute get_session(conn, :current_user_id)
+      refute github_user_exists?()
+    end
+
+    test "a forged state is refused by the real callback", %{conn: conn, state: state} do
+      # With a relay sign-in in progress.
+      conn = post(conn, ~p"/auth/relay", host: @preview, state: state)
+      conn = conn |> recycle() |> get(~p"/auth/github?relay=1")
+      conn = conn |> recycle() |> get(~p"/auth/github/callback?#{[state: "forged", code: "x"]}")
+
+      assert redirected_to(conn) == "/"
+      refute get_session(conn, :current_user_id)
+
+      # And with a normal sign-in in progress.
+      conn = build_conn() |> get(~p"/auth/github")
+      conn = conn |> recycle() |> get(~p"/auth/github/callback?#{[state: "forged", code: "x"]}")
+
+      assert redirected_to(conn) == "/"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "GitHub authentication failed."
+      refute get_session(conn, :current_user_id)
+    end
+
+    test "a normal sign-in drops a leftover relay target", %{conn: conn, state: state} do
+      conn = post(conn, ~p"/auth/relay", host: @preview, state: state)
+      conn = conn |> recycle() |> get(~p"/auth/github?relay=1")
+      assert get_session(conn, :auth_relay_target)
+
+      conn = conn |> recycle() |> get(~p"/auth/github?#{[return_to: "/settings"]}")
+      assert redirected_to(conn) =~ "https://github.com/login/oauth/authorize"
+      refute get_session(conn, :auth_relay_target)
+
+      # relay=1 alone, without the confirm step, is a normal sign-in too.
+      conn = build_conn() |> get(~p"/auth/github?relay=1")
+      assert redirected_to(conn) =~ "https://github.com/login/oauth/authorize"
+      refute get_session(conn, :auth_relay_target)
+    end
+
+    test "a normal sign-in still signs in to production" do
+      conn =
+        github_callback(%{return_to: "/settings"}, [state: "x"], {:ueberauth_auth, github_auth()})
+
+      assert redirected_to(conn) == "/settings"
+      assert get_session(conn, :current_user_id)
+      assert github_user_exists?()
     end
 
     test "is off without the secret or GitHub OAuth, and on previews", %{state: state} do
