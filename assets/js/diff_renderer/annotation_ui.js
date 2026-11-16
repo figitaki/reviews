@@ -1,4 +1,5 @@
 import { button as baseButton, el } from "./dom.js"
+import { renderMarkdown } from "../lib/markdown.js"
 
 // Pierre owns the diff body theme. Annotation UI is rendered by Reviews through
 // `renderAnnotation`, so it uses Reviews design tokens and inline styles that
@@ -12,9 +13,13 @@ const colors = {
   line: "var(--ds-line, #242426)",
   lineStrong: "var(--ds-line-strong, #3a3a3d)",
   add: "var(--ds-add, #25d0a0)",
+  blue: "var(--ds-blue)",
 }
 
 const fontStack = "var(--font-sans, system-ui, sans-serif)"
+// Touch keeps 44px targets, 16px inputs (smaller text makes iOS zoom on
+// focus) and no keyboard hints.
+const touch = () => Boolean(window.matchMedia?.("(pointer: coarse)").matches)
 const monoStack = "var(--font-mono, ui-monospace, monospace)"
 
 const bubbleBaseStyle = {
@@ -29,7 +34,7 @@ const bubbleBaseStyle = {
   boxSizing: "border-box",
 }
 
-const composerStyle = { ...bubbleBaseStyle, padding: "10px" }
+const composerStyle = { ...bubbleBaseStyle, padding: "10px 12px", marginBottom: "0" }
 
 const buttonStyle = {
   display: "inline-flex",
@@ -38,9 +43,9 @@ const buttonStyle = {
   gap: "6px",
   minHeight: "30px",
   cursor: "pointer",
-  border: `1px solid ${colors.lineStrong}`,
+  border: "1px solid transparent",
   borderRadius: "6px",
-  background: "transparent",
+  background: colors.raised,
   color: colors.text,
   font: "inherit",
   fontFamily: fontStack,
@@ -57,16 +62,18 @@ const primaryButtonStyle = {
 }
 
 const textareaStyle = {
-  minHeight: "72px",
+  minHeight: "56px",
   width: "100%",
+  display: "block",
   resize: "vertical",
-  border: `1px solid ${colors.lineStrong}`,
-  borderRadius: "6px",
-  background: colors.panel,
+  border: "none",
+  outline: "none",
+  background: "transparent",
   color: "inherit",
   font: "inherit",
   fontFamily: fontStack,
-  padding: "8px 10px",
+  lineHeight: "1.6",
+  padding: "0",
   boxSizing: "border-box",
 }
 
@@ -91,51 +98,59 @@ const anchorPinpointStyle = {
 }
 
 const statusPillBaseStyle = {
-  marginLeft: "6px",
-  padding: "1px 6px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "4px",
+  flexShrink: "0",
+  padding: "2px 7px",
   borderRadius: "999px",
-  fontSize: "10px",
-  fontWeight: "700",
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  fontSize: "11px",
+  lineHeight: "14px",
+  fontWeight: "500",
   border: `1px solid ${colors.lineStrong}`,
   background: colors.raised,
   color: colors.muted,
 }
 
 const statusPillStyle = {
-  open: statusPillBaseStyle,
+  open: {
+    ...statusPillBaseStyle,
+    color: colors.blue,
+    background: `color-mix(in srgb, ${colors.blue} 10%, ${colors.panel})`,
+    borderColor: `color-mix(in srgb, ${colors.blue} 30%, ${colors.line})`,
+  },
   resolved: {
     ...statusPillBaseStyle,
     color: colors.add,
-    borderColor: `color-mix(in srgb, ${colors.add} 50%, transparent)`,
+    background: `color-mix(in srgb, ${colors.add} 10%, ${colors.panel})`,
+    borderColor: `color-mix(in srgb, ${colors.add} 30%, ${colors.line})`,
   },
   outdated: { ...statusPillBaseStyle, color: colors.faint },
 }
 
-const threadRunStyle = { marginTop: "8px" }
 const threadRunHeaderStyle = {
   display: "flex",
   alignItems: "center",
   gap: "6px",
-  marginTop: "4px",
   fontWeight: "600",
 }
 const threadRunCommentsStyle = {
-  margin: "4px 0 0 0",
+  margin: "0",
   padding: "0 0 0 26px",
   listStyle: "none",
 }
 const threadCommentStyle = {
   display: "flex",
   alignItems: "baseline",
-  gap: "12px",
+  flexWrap: "wrap",
+  gap: "2px 12px",
   padding: "2px 0",
 }
 const threadCommentBodyStyle = {
-  flex: "1 1 auto",
+  flex: "1 1 180px",
   minWidth: "0",
-  whiteSpace: "pre-wrap",
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
 }
 const threadCommentTimeStyle = {
   flex: "0 0 auto",
@@ -149,8 +164,9 @@ const threadFooterStyle = {
 }
 const composerActionsStyle = {
   display: "flex",
+  flexWrap: "wrap",
   gap: "8px",
-  marginTop: "8px",
+  alignItems: "center",
 }
 
 function button(label, onClick, attrs = {}) {
@@ -255,6 +271,30 @@ function avatar(user, size = 20) {
   )
 }
 
+export function threadStatusBadge(status) {
+  const label = { open: "Open", resolved: "Resolved", outdated: "Outdated" }[status] || status
+  const badge = el("span", { style: statusPillStyle[status] || statusPillBaseStyle }, [])
+  if (status === "open" || status === "resolved") {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    for (const [key, value] of Object.entries({
+      viewBox: "0 0 24 24", width: "14", height: "14", fill: "none",
+      stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round",
+      "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false",
+    })) svg.setAttribute(key, value)
+    svg.style.flexShrink = "0"
+    // Match the glyphs' optical center, which sits below the font's line-box center.
+    svg.style.transform = "translateY(0.5px)"
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path")
+    path.setAttribute("d", status === "resolved"
+      ? "M9 12l2 2 4-4 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"
+      : "M8 10h8M8 14h5M21 12a9 9 0 0 1-9 9H3l1.5-4A9 9 0 1 1 21 12Z")
+    svg.append(path)
+    badge.append(svg)
+  }
+  badge.append(label)
+  return badge
+}
+
 function bubbleAnchorLink({ anchor, side, status, commentCount }) {
   const label = commentCount > 1 ? "Comments" : "Comment"
   const text = el("span", {}, [
@@ -262,9 +302,7 @@ function bubbleAnchorLink({ anchor, side, status, commentCount }) {
     el("span", { style: anchorPinpointStyle }, anchorPinpoint(anchor, side)),
   ])
   const children = [text]
-  if (status && status !== "open") {
-    children.push(el("span", { style: statusPillStyle[status] || statusPillBaseStyle }, status))
-  }
+  if (status) children.push(threadStatusBadge(status))
   return el(
     "button",
     {
@@ -281,12 +319,17 @@ export function commentComposer({
   onSave,
   onCancel,
   saveLabel = "Comment",
-  placeholder = "Leave a comment... (Cmd+Enter to post, Esc to cancel)",
+  placeholder = "Leave a comment…",
+  embedded = false,
+  onChange,
+  autoFocus = true,
+  focusSelection,
 }) {
   const textarea = el("textarea", {
-    style: textareaStyle,
-    rows: 3,
+    style: touch() ? { ...textareaStyle, fontSize: "16px" } : textareaStyle,
+    rows: 2,
     placeholder,
+    "aria-label": saveLabel === "Reply" ? "Reply to thread" : "Comment",
   })
   textarea.value = initialValue
 
@@ -294,38 +337,72 @@ export function commentComposer({
   const submit = () => {
     if (submitted) return
     const trimmed = textarea.value.trim()
-    if (!trimmed) {
-      submitted = true
-      onCancel?.()
-      return
-    }
+    if (!trimmed) return
     submitted = true
+    saveButton.disabled = true
     onSave?.(trimmed)
   }
 
   textarea.addEventListener("keydown", (event) => {
+    if (event.isComposing) return
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault()
       submit()
     } else if (event.key === "Escape") {
       event.preventDefault()
+      event.stopPropagation()
       submitted = true
       onCancel?.()
     }
   })
 
-  const node = el("div", { style: composerStyle }, [
+  const saveButton = button(saveLabel, submit, { primary: true })
+  const updateSave = () => {
+    saveButton.disabled = submitted || !textarea.value.trim()
+    saveButton.style.opacity = saveButton.disabled ? "0.45" : "1"
+    saveButton.style.cursor = saveButton.disabled ? "default" : "pointer"
+  }
+  textarea.addEventListener("input", () => {
+    updateSave()
+    onChange?.(textarea.value)
+  })
+  updateSave()
+
+  const shortcut = navigator.platform.includes("Mac") ? "⌘ Enter" : "Ctrl Enter"
+  const node = el("div", {
+    style: embedded ? { ...composerStyle, border: "none", borderRadius: "0" } : composerStyle,
+    role: "group", "aria-label": "Comment composer",
+  }, [
     textarea,
-    el("div", { style: composerActionsStyle }, [
-      button(saveLabel, submit, { primary: true }),
-      button("Cancel", () => {
-        submitted = true
-        onCancel?.()
-      }),
+    el("div", { style: { ...composerActionsStyle, marginTop: "8px", justifyContent: "space-between" } }, [
+      touch() ? null : el("span", { style: { color: colors.muted, fontSize: "11px" } }, `${shortcut} to post · Esc to cancel`),
+      el("div", { style: { ...composerActionsStyle, marginLeft: "auto" } }, [
+        button("Cancel", () => {
+          submitted = true
+          onCancel?.()
+        }),
+        saveButton,
+      ]),
     ]),
   ])
 
-  window.requestAnimationFrame(() => textarea.focus())
+  // Emphasize the existing edge instead of nesting the browser's focus ring
+  // inside another border. Inline styles also work in Pierre's shadow DOM.
+  textarea.addEventListener("focus", () => {
+    if (embedded) textarea.style.boxShadow = `0 1px 0 ${colors.lineStrong}`
+    else node.style.borderColor = "var(--ds-focus, #fff)"
+  })
+  textarea.addEventListener("blur", () => {
+    textarea.style.boxShadow = "none"
+    node.style.borderColor = colors.line
+  })
+
+  if (autoFocus) window.requestAnimationFrame(() => {
+    if (textarea.isConnected) {
+      textarea.focus({ preventScroll: true })
+      if (focusSelection) textarea.setSelectionRange(...focusSelection)
+    }
+  })
   return node
 }
 
@@ -364,20 +441,29 @@ function commentTime(iso, prefix = "") {
   )
 }
 
-export function threadBubble({ thread, onReply }) {
+function commentBody(body, condensed = false) {
+  const node = el("div", {
+    className: "review-rich-markdown review-comment-markdown",
+    style: { ...threadCommentBodyStyle, ...(condensed ? { margin: "4px 0", maxHeight: "4.8em", overflow: "auto" } : {}) },
+  })
+  node.innerHTML = renderMarkdown(body)
+  return node
+}
+
+export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
   const runs = groupCommentsByAuthor(thread.comments)
   const commentRows = []
 
-  for (const run of runs) {
+  for (const [index, run] of runs.entries()) {
     const comments = run.comments.map((comment) =>
       el("li", { style: threadCommentStyle }, [
-        el("div", { style: threadCommentBodyStyle }, comment.body),
+        commentBody(comment.body),
         commentTime(comment.inserted_at),
       ])
     )
 
     commentRows.push(
-      el("li", { style: threadRunStyle }, [
+      el("li", { style: { marginTop: index ? "8px" : "0" } }, [
         el("header", { style: threadRunHeaderStyle }, [
           avatar(run.author),
           el("span", {}, run.author?.username || "reviewer"),
@@ -387,56 +473,87 @@ export function threadBubble({ thread, onReply }) {
     )
   }
 
-  let replyOpen = false
-  const footer = el("footer", { style: threadFooterStyle })
-  const renderFooter = () => {
-    footer.replaceChildren()
-    if (replyOpen) {
+  let replyButton
+  const root = el("div", {
+    style: { ...bubbleBaseStyle, padding: "0", overflow: "hidden" },
+    role: "group",
+    "aria-label": `Thread by ${thread.author?.username || "reviewer"}`,
+    dataset: { threadId: thread.id },
+  })
+  const render = () => {
+    const resolved = thread.status === "resolved"
+    const expanded = !resolved || ui.expanded
+    const where = anchorPinpoint(thread.anchor, thread.side)
+    const header = el("header", {
+      style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", minHeight: "36px", padding: "3px 4px 3px 12px", borderBottom: `1px solid ${colors.line}` },
+    }, [bubbleAnchorLink({ anchor: thread.anchor, side: thread.side, status: thread.status, commentCount: thread.comments?.length || 0 })])
+    if (onUpdateStatus && ["open", "resolved"].includes(thread.status)) {
+      const status = button(resolved ? "Reopen" : "Resolve", () => {
+        ui.expanded = false
+        onUpdateStatus(thread, resolved ? "open" : "resolved")
+      }, { ariaLabel: `${resolved ? "Reopen" : "Resolve"} thread on line ${where}` })
+      Object.assign(status.style, { marginLeft: "auto", background: "transparent", minHeight: touch() ? "44px" : "28px" })
+      header.append(status)
+    }
+    root.replaceChildren(header)
+    if (resolved) {
+      const history = button(ui.expanded ? "Hide thread" : "View thread", () => {
+        ui.expanded = !ui.expanded
+        render()
+        root.querySelector("[data-history]")?.focus()
+      })
+      history.dataset.history = "true"
+      history.setAttribute("aria-expanded", String(Boolean(ui.expanded)))
+      const last = thread.comments?.at(-1)
+      root.append(el("div", { style: { padding: "8px 12px", color: colors.muted } }, [
+        el("div", { style: composerActionsStyle }, [
+          `${thread.comments?.length || 0} comments`, history,
+        ]),
+        !ui.expanded && last ? commentBody(last.body, true) : null,
+      ]))
+    }
+    if (!expanded) return
+    root.append(el("ul", { style: { listStyle: "none", margin: "0", padding: "8px 12px" } }, commentRows))
+    if (!onReply) return
+    const footer = el("footer", { style: { ...threadFooterStyle, marginTop: "0", paddingTop: "0" } })
+    root.append(footer)
+    if (ui.replyOpen) {
       footer.append(
         commentComposer({
           saveLabel: "Reply",
-          placeholder: "Reply... (Cmd+Enter to post, Esc to cancel)",
+          placeholder: "Write a reply…",
+          initialValue: ui.draft || "",
+          embedded: true,
+          autoFocus: Boolean(ui.focusReply),
+          focusSelection: ui.replySelection,
+          onChange: (value) => { ui.draft = value },
           onSave: (body) => {
+            ui.replyOpen = false
+            ui.draft = ""
             onReply?.(thread, body)
-            replyOpen = false
-            renderFooter()
+            render()
+            replyButton?.focus({ preventScroll: true })
           },
           onCancel: () => {
-            replyOpen = false
-            renderFooter()
+            ui.replyOpen = false
+            ui.draft = ""
+            render()
+            replyButton?.focus({ preventScroll: true })
           },
         })
       )
-    } else if (onReply) {
-      footer.append(
-        button("Reply", () => {
-          replyOpen = true
-          renderFooter()
-        })
-      )
+      ui.focusReply = false
+      ui.replySelection = null
+    } else {
+      replyButton = button("Reply to this thread…", () => {
+        ui.replyOpen = true
+        ui.focusReply = true
+        render()
+      }, { ariaLabel: `Reply to thread on line ${where}` })
+      Object.assign(replyButton.style, { width: "100%", justifyContent: "flex-start", minHeight: touch() ? "44px" : "34px", padding: "0 12px", background: "transparent", color: colors.muted, borderRadius: "0" })
+      footer.append(replyButton)
     }
   }
-  renderFooter()
-
-  return el(
-    "div",
-    {
-      style: bubbleBaseStyle,
-      role: "group",
-      "aria-label": `Thread by ${thread.author?.username || "reviewer"}`,
-      dataset: { threadId: thread.id },
-    },
-    [
-      el("header", { style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" } }, [
-        bubbleAnchorLink({
-          anchor: thread.anchor,
-          side: thread.side,
-          status: thread.status,
-          commentCount: thread.comments?.length || 0,
-        }),
-      ]),
-      el("ul", { style: { listStyle: "none", margin: "0", padding: "0" } }, commentRows),
-      footer,
-    ]
-  )
+  render()
+  return root
 }

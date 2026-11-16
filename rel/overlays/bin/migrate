@@ -1,5 +1,7 @@
 #!/bin/sh
+set -e
 cd -P -- "$(dirname -- "$0")"
+./reviews eval Reviews.Release.ensure_database
 ./reviews eval Reviews.Release.migrate
 ./reviews eval Reviews.Release.seed_demo_review
 exec ./reviews eval Reviews.Release.seed_preview_user

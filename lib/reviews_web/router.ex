@@ -7,7 +7,12 @@ defmodule ReviewsWeb.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {ReviewsWeb.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
+
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" =>
+        "base-uri 'self'; frame-ancestors 'self'; script-src 'self'; object-src 'none';"
+    }
+
     plug ReviewsWeb.Plugs.FetchCurrentUser
   end
 
@@ -57,6 +62,7 @@ defmodule ReviewsWeb.Router do
     post "/reviews", ReviewController, :create
     post "/reviews/:slug/patchsets", PatchsetController, :create
     post "/reviews/:slug/comments", CommentController, :create
+    patch "/reviews/:slug/threads/:thread_id", ThreadController, :update
     post "/reviews/:slug/sections/:section_index/decision", SectionDecisionController, :create
     get "/me", MeController, :show
   end

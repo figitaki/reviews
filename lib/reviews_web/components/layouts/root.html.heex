@@ -8,38 +8,10 @@
     <meta name="theme-color" content="#fafafa" />
     <meta name="theme-color" content="#19232f" media="(prefers-color-scheme: dark)" />
     <.live_title default="Reviews" suffix=" · Phoenix Framework" phx-no-format>{assigns[:page_title]}</.live_title>
+    <script phx-track-static src={~p"/assets/js/theme.js"}>
+    </script>
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
-    </script>
-    <script>
-      (() => {
-        const syncPressed = (theme) => {
-          document.querySelectorAll("[data-phx-theme]").forEach((btn) => {
-            btn.setAttribute("aria-pressed", btn.dataset.phxTheme === theme ? "true" : "false");
-          });
-        };
-        const currentTheme = () =>
-          localStorage.getItem("phx:theme") || "system";
-        const setTheme = (theme) => {
-          if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.removeAttribute("data-theme");
-          } else {
-            localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme", theme);
-          }
-          syncPressed(theme);
-        };
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(currentTheme());
-        } else {
-          syncPressed(currentTheme());
-        }
-        document.addEventListener("DOMContentLoaded", () => syncPressed(currentTheme()));
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
-      })();
     </script>
   </head>
   <body>

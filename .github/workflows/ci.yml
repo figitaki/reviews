@@ -4,12 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 env:
   MIX_ENV: test
-  ELIXIR_VERSION: "1.20.2"
-  OTP_VERSION: "28.5"
+  ELIXIR_VERSION: "1.20.4"
+  OTP_VERSION: "28.5.0.7"
   BUN_VERSION: "1.2.13"
 
 permissions:
@@ -76,6 +75,13 @@ jobs:
       - run: mix format --check-formatted
 
       - run: mix compile --warnings-as-errors
+
+      - name: Preview cleanup integration tests
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
 
       - name: Build assets (catches esbuild / JS bundle breaks)
         run: mix assets.build

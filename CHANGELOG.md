@@ -7,8 +7,59 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Security
+
+- Restrict browser scripts to same-origin assets, disable embedded objects, and
+  restrict development WebSocket origins to the configured loopback port.
+
+- Update Ecto to 3.14.3 to fix unbounded query cache growth from interpolated
+  JSON paths and splice lists (CVE-2026-118391).
+
+### Added
+
+- `reviews push --dry-run` (alias `--validate`) checks the diff and packet
+  and prints what would be sent, without contacting the server. It lists
+  every packet problem with `file:line`, flags an empty review title or
+  `--update` slug, and exits 1 if there are any problems. A real push now
+  also lists every packet problem at once.
+- Recent comment activity with unread counts, thread links, and read state saved
+  per reviewer in the current browser.
+- Comments follow matching code across revisions. Discussions whose code changed
+  stay available on their original revision rather than drifting onto other lines.
+
+- Markdown files in a diff open in a rendered Preview with Before and After
+  excerpts. Source shows the exact lines and comments. Raw HTML, scripts and
+  unsafe links stay escaped.
+
 ### Changed
 
+- Migrate packet navigation to @pierre/trees 1.0.0. This release was published
+  November 10, 2026 at 18:31:06.937 UTC; hold merge until November 17 at
+  18:31:06.937 UTC under the seven-day dependency rule.
+
+- Comments render safe Markdown. The collapsible comment sidebar lists only
+  unread thread locations, without message previews; links prefer the first
+  covering hunk in the Guide and fall back to Diff when needed.
+- Preview deployments can provision and delete per-PR databases through
+  Fly Managed Postgres v2, without granting SQL database-owner privileges.
+- Selecting diff text offers a row-end comment button instead of opening a
+  composer. File controls stay visible while scrolling on desktop and mobile;
+  marking viewed collapses the diff and leaves a compact green check.
+- Unified diffs wrap long lines; split diffs retain horizontal scrolling.
+- Comments start from Pierre Diffs' gutter button beside the line number,
+  replacing the row-end comment button. Selected text within the line still
+  becomes the comment's anchor. Threads are more compact, with Resolve at the
+  right of the header. The collapsed comments rail is an icon with the comment
+  count and a blue outline while comments are unread. On phones, the composer
+  and threads stay inline under their line instead of a floating panel, inputs
+  use 16px text so focusing them does not zoom the page, and keyboard hints are
+  hidden. Opening a composer in a large virtualized file keeps your place.
+- Inline conversations share one shelf with an expandable reply entry and
+  compact resolved history. On mobile, conversations float above the review
+  without shifting code, preserve reply text when dismissed, and follow the
+  visible viewport. Empty comments cannot be submitted.
+- Reseeding keeps the real demo review and its comments unless its bundled
+  fixture changes.
 - Section decisions keep a floating island on desktop and use a compact
   floating action button on phones, including before sign-in. After voting,
   only the selected outcome stays labeled; alternatives reveal their labels
@@ -33,10 +84,13 @@ still stabilizing.
 - Mobile review navigation uses one compact sticky row; the brand/account row
   scrolls away, Guide/Diff use icons, and multiple revisions use a native
   selector. Anonymous sign-in prompts stay in the section flow on phones.
-- Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
-  now requires Elixir `~> 1.20`.
-- Phoenix 1.8.13, LiveView 1.2.11, Phoenix LiveDashboard 0.9.1, Bandit 1.12.5,
-  Ecto SQL 3.14, Tailwind CLI 4.3.0 and other dependency updates.
+- Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI). `mix.exs`
+  now requires Elixir `~> 1.20`. Elixir 1.20.4 includes the fix for
+  CVE-2026-75758.
+- Phoenix 1.8.15, LiveView 1.2.12, Phoenix LiveDashboard 0.9.1, Ecto SQL 3.14,
+  Tailwind CLI 4.3.3, esbuild 0.28.2, @pierre/diffs 1.6.4 and other dependency
+  updates. Security patches already on main (Bandit 1.14.1, Plug Crypto 2.2.1,
+  Thousand Island 1.6.0, Zod 4.6.7, Phoenix HTML 4.4.0) are kept.
 - JSON encoding uses Elixir's built-in `JSON` module instead of Jason for
   Phoenix, Postgrex (`jsonb` columns) and Ueberauth. The `jason` package stays
   only as a transitive dependency.
@@ -46,8 +100,21 @@ still stabilizing.
   The install snippet's CSS is colocated too via the new
   `ReviewsWeb.ColocatedCSS` module.
 - LiveView test warnings for duplicate DOM ids and forms without ids now raise.
+- Each preview app `reviews-pr-<N>` uses its own database, `reviews_pr_<N>`,
+  created on deploy and dropped when the PR closes. Previews deploy with
+  `fly.preview.toml`: one machine, a pool of 2 connections, and auto-stop
+  when idle. See `docs/PREVIEW_ENVS.md`.
+- Preview cleanup destroys the app before dropping its database through
+  a private proxy. It works without a healthy preview release and reports
+  database cleanup failures as failed jobs. Preview database credentials
+  must belong to a dedicated preview cluster, not production.
+- `bin/migrate` stops at the first failed step, so a failed migration now
+  fails the release command instead of being ignored.
 
 ### Fixed
+
+- Decode Git-quoted filenames consistently in CLI validation, uploaded file
+  metadata, and review hunk lookup, including non-ASCII paths.
 
 - Rail height and section jumps account for both headers, including wrapped
   mobile controls.

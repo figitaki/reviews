@@ -1,9 +1,12 @@
 import * as Diffs from "@pierre/diffs"
+import { isMarkdown, markdownPatchExcerpts } from "../lib/markdown.js"
+import { markdownPreview, previewNotice } from "./markdown_preview.js"
 
 import {
   commentComposer,
   signInPrompt,
   threadBubble,
+  threadStatusBadge,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
@@ -23,13 +26,20 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     --diffs-line-height: var(--font-code-leading);
     --diffs-font-features: "liga" 0, "calt" 0;
   }
+  /* Pierre's comment button is one line tall. Widen its touch area without
+     covering the neighbouring rows' line numbers. */
+  @media (pointer: coarse) {
+    [data-utility-button]::before { inset: -6px -12px; }
+  }
 `
 
 // The prefix slot holds a native disclosure button stretched across Pierre's
 // header. Metadata controls sit above it as siblings, not nested buttons.
 const REVIEWS_DIFF_HEADER_CSS = `
   [data-diffs-header] {
-    position: relative;
+    position: sticky;
+    top: var(--review-main-nav-h, 0px);
+    z-index: 10;
     min-height: 44px;
     padding-inline: 12px;
     transition: background-color 140ms ease;
@@ -43,7 +53,7 @@ const REVIEWS_DIFF_HEADER_CSS = `
   [data-metadata] {
     pointer-events: none;
   }
-  ::slotted(.reviews-diff-header-metadata) {
+  ::slotted([slot="header-metadata"]) {
     position: relative;
     z-index: 2;
     pointer-events: none;
@@ -59,10 +69,10 @@ function currentPierreTheme() {
     : "pierre-light"
 }
 
-function parsePatch(rawDiff, filePath) {
+export function parsePatch(rawDiff, filePath) {
   if (!rawDiff || typeof Diffs.parsePatchFiles !== "function") return null
   try {
-    const parsed = Diffs.parsePatchFiles(rawDiff, filePath || "patch")
+    const parsed = Diffs.parsePatchFiles(rawDiff, { cacheKeyPrefix: filePath || "patch" })
     const files = Array.isArray(parsed)
       ? parsed.flatMap((patch) => patch?.files || [])
       : []
@@ -94,8 +104,21 @@ function shouldVirtualize({ rawDiff, fileDiff, diffStyle }) {
   )
 }
 
-function lineTextFromEvent(props) {
-  return (props?.lineElement && props.lineElement.textContent) || ""
+// A line anchor, or a token anchor when the reader selected text within the
+// line before pressing the gutter button (Pierre keeps the selection intact).
+function lineAnchor(lineElement, side, lineNumber) {
+  const anchor = { kind: "line", side, lineNumber, lineText: lineElement?.textContent || "" }
+  const selection = lineElement?.getRootNode().getSelection?.() || document.getSelection()
+  if (!lineElement || !selection?.rangeCount || selection.isCollapsed) return anchor
+  const range = selection.getRangeAt(0)
+  const tokenText = range.toString()
+  if (!lineElement.contains(range.startContainer) || !lineElement.contains(range.endContainer) ||
+      !tokenText.trim()) return anchor
+  const before = range.cloneRange()
+  before.selectNodeContents(lineElement)
+  before.setEnd(range.startContainer, range.startOffset)
+  const lineCharStart = before.toString().length
+  return { ...anchor, kind: "token", tokenText, lineCharStart, lineCharEnd: lineCharStart + tokenText.length }
 }
 
 export function hunkViewLabel(hunkUI) {
@@ -115,6 +138,7 @@ export class VanillaDiffRenderer {
     diffStyle,
     hunkUI,
     onCreateComment,
+    onUpdateThreadStatus,
     onToggleHunk,
     onSetHunkViewed,
   }) {
@@ -126,12 +150,23 @@ export class VanillaDiffRenderer {
     this.diffStyle = diffStyle
     this.hunkUI = hunkUI || null
     this.onCreateComment = onCreateComment
+    this.onUpdateThreadStatus = onUpdateThreadStatus
     this.onToggleHunk = onToggleHunk
     this.onSetHunkViewed = onSetHunkViewed
     this.composerAt = null
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
+    this.headerInstance = null
     this.virtualizer = null
+    this.threadUI = new Map()
+    this.composerDraft = ""
+    // For touch, Pierre reveals its button in its own pointerdown handler,
+    // which runs before this one.
+    this.onPointerDown = () => this.labelGutterUtility()
+    container.addEventListener("pointerdown", this.onPointerDown)
+    // Markdown files open rendered; Source shows the exact lines and comments.
+    this.preview = true
+    this.hasMarkdownPreview = isMarkdown(filePath) && markdownPatchExcerpts(rawDiff).length > 0
   }
 
   update({ threads }) {
@@ -179,7 +214,38 @@ export class VanillaDiffRenderer {
 
   setComposerAt(composerAt) {
     this.composerAt = composerAt
+    this.composerDraft = ""
     this.render()
+  }
+
+  // Pierre's gutter "+" is the only way to start a comment, so selecting text
+  // stays native. A drag reports a range, but comments anchor to one line:
+  // the line where the gesture ended.
+  commentFromGutter(range) {
+    const side = range.endSide || range.side
+    const anchor = lineAnchor(this.renderedLine(side, range.end), side, range.end)
+    this.setComposerAt(this.signedIn ? anchor : { ...anchor, kind: "signin" })
+  }
+
+  renderedLine(side, lineNumber) {
+    const root = this.sourceContainer?.querySelector("diffs-container")?.shadowRoot
+    const unifiedSide = side === "deletions"
+      ? '[data-line-type="change-deletion"]'
+      : ':not([data-line-type="change-deletion"])'
+    return root?.querySelector(
+      `[data-${side}] [data-line="${lineNumber}"], [data-unified] [data-line="${lineNumber}"]${unifiedSide}`
+    )
+  }
+
+  // Pierre shows its button on hover, or on pointerdown on a line number for
+  // touch, but gives it no accessible name. Name it for the row it is on.
+  labelGutterUtility() {
+    const line = this.instance?.getHoveredLine?.()
+    const root = this.sourceContainer?.querySelector("diffs-container")?.shadowRoot
+    const button = root?.querySelector("[data-utility-button]")
+    if (!line || !button) return
+    button.setAttribute("aria-label", `Comment on line ${line.lineNumber}`)
+    button.title = button.getAttribute("aria-label")
   }
 
   annotations() {
@@ -228,12 +294,23 @@ export class VanillaDiffRenderer {
     })
   }
 
+  updateThreadStatus(thread, status) {
+    if (!this.signedIn) return
+    this.onUpdateThreadStatus?.({
+      file_path: thread.file_path,
+      thread_id: thread.id,
+      status,
+    })
+  }
+
   renderAnnotation(annotation) {
     const meta = annotation.metadata || {}
     if (meta.kind === "composer") {
       return meta.composerKind === "signin"
         ? signInPrompt(() => this.setComposerAt(null))
         : commentComposer({
+            initialValue: this.composerDraft,
+            onChange: (value) => { this.composerDraft = value },
             onSave: (body) => this.createNewComment(body),
             onCancel: () => this.setComposerAt(null),
           })
@@ -241,55 +318,40 @@ export class VanillaDiffRenderer {
 
     const threadList = meta.threads || []
 
-    return el("div", {}, [
-      ...threadList.map((thread) =>
-        threadBubble({
-          thread,
-          onReply: this.signedIn ? (t, body) => this.replyToThread(t, body) : null,
-        })
-      ),
-    ])
+    return el("div", {}, threadList.map((thread) => this.renderThread(thread)))
   }
 
-  handleLineNumberClick(props) {
-    const side = props?.annotationSide || props?.side
-    const lineNumber = props?.lineNumber
-    if (!side || !lineNumber) return
-
-    if (!this.signedIn) {
-      this.setComposerAt({ kind: "signin", side, lineNumber })
-      return
-    }
-
-    this.setComposerAt({
-      kind: "line",
-      side,
-      lineNumber,
-      lineText: lineTextFromEvent(props),
+  renderThread(thread) {
+    if (!this.threadUI.has(thread.id)) this.threadUI.set(thread.id, {})
+    return threadBubble({
+      thread,
+      ui: this.threadUI.get(thread.id),
+      onReply: this.signedIn ? (t, body) => this.replyToThread(t, body) : null,
+      onUpdateStatus: this.signedIn ? (t, status) => this.updateThreadStatus(t, status) : null,
     })
   }
 
-  handleTokenClick(props) {
-    const side = props?.side
-    const lineNumber = props?.lineNumber
-    const tokenText = props?.tokenText || ""
-    if (!side || !lineNumber || tokenText.trim().length === 0) return
+  openThread(id) {
+    const thread = this.threads.find(thread => String(thread.id) === String(id))
+    if (!thread) return
+    this.preview = false
+    this.threadUI.set(thread.id, { ...this.threadUI.get(thread.id), expanded: true })
+    this.focusedThreadId = thread.id
+    this.pendingThreadFocus = thread.id
+    this.render()
+  }
 
-    if (!this.signedIn) {
-      this.setComposerAt({ kind: "signin", side, lineNumber })
-      return
-    }
-
-    const lineEl =
-      (props?.tokenElement && props.tokenElement.closest("[data-line]")) || null
-    this.setComposerAt({
-      kind: "token",
-      side,
-      lineNumber,
-      lineText: (lineEl && lineEl.textContent) || "",
-      lineCharStart: props.lineCharStart,
-      lineCharEnd: props.lineCharEnd,
-      tokenText,
+  focusPendingThread() {
+    if (!this.pendingThreadFocus) return
+    requestAnimationFrame(() => {
+      if (!this.pendingThreadFocus) return
+      const target = this.container.querySelector(`[data-thread-id="${this.pendingThreadFocus}"]`)
+      if (!target) return
+      this.pendingThreadFocus = null
+      target.style.scrollMarginTop = "calc(var(--review-main-nav-h) + 60px)"
+      target.scrollIntoView({ block: "start", behavior: "instant" })
+      target.tabIndex = -1
+      target.focus({ preventScroll: true })
     })
   }
 
@@ -355,6 +417,12 @@ export class VanillaDiffRenderer {
 
     if (this.hunkUI.signedIn) {
       const viewed = this.hunkUI.hunkViewed
+      const check = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+      check.setAttribute("viewBox", "0 0 24 24")
+      check.setAttribute("aria-hidden", "true")
+      const checkPath = document.createElementNS("http://www.w3.org/2000/svg", "path")
+      checkPath.setAttribute("d", "m8 12 3 3 5-6 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0")
+      check.append(checkPath)
       children.push(
         el(
           "button",
@@ -362,11 +430,12 @@ export class VanillaDiffRenderer {
             className: "reviews-diff-header-viewed",
             type: "button",
             "aria-pressed": viewed ? "true" : "false",
+            title: viewed ? "Viewed · mark unviewed" : "Mark viewed and collapse",
             "aria-label": `${viewed ? "Mark unviewed" : "Mark viewed"}: ${this.filePath}${this.hunkUI.hunkLabel ? ` · ${this.hunkUI.hunkLabel}` : ""}`,
             onclick: (event) =>
               stopHeaderEvent(event, () => this.onSetHunkViewed?.(!viewed)),
           },
-          viewed ? "Viewed" : viewLabel || "Mark viewed"
+          viewed ? [check] : viewLabel || "Mark viewed"
         )
       )
     }
@@ -378,19 +447,22 @@ export class VanillaDiffRenderer {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
+      overflow: this.diffStyle === "unified" ? "wrap" : "scroll",
       collapsed: this.collapsed(),
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
-      onLineNumberClick: (props) => this.handleLineNumberClick(props),
-      onTokenClick: (props) => this.handleTokenClick(props),
+      onPostRender: () => this.focusPendingThread(),
+      enableGutterUtility: true,
+      onGutterUtilityClick: (range) => this.commentFromGutter(range),
+      onLineEnter: () => this.labelGutterUtility(),
     }
   }
 
   renderArgs() {
     const args = {
-      containerWrapper: this.container,
+      containerWrapper: this.sourceContainer || this.container,
       lineAnnotations: this.annotations(),
     }
     if (this.fileDiff) args.fileDiff = this.fileDiff
@@ -399,15 +471,68 @@ export class VanillaDiffRenderer {
   }
 
   render() {
+    // An incoming update replaces annotation DOM. Preserve only the active
+    // desktop reply editor, not every draft that happens to be open.
+    const active = document.activeElement
+    const threadId = active?.closest?.("[data-thread-id]")?.dataset.threadId
+    if (active?.tagName === "TEXTAREA" &&
+        this.container.contains(active) && threadId) {
+      const thread = this.threads.find(thread => String(thread.id) === threadId)
+      const ui = thread && this.threadUI.get(thread.id)
+      if (ui) {
+        ui.focusReply = true
+        ui.replySelection = [active.selectionStart, active.selectionEnd, active.selectionDirection]
+      }
+    }
+    // Rebuilding empties the file for a moment. Hold its height until the new
+    // diff has laid out, or the page clamps the scroll position and the reader
+    // loses their line (virtualized files measure rows after render).
+    this.container.style.minHeight = `${this.container.offsetHeight}px`
+    requestAnimationFrame(() => requestAnimationFrame(() => { this.container.style.minHeight = "" }))
     this.cleanUp(false)
     this.container.replaceChildren()
     this.container.dataset.virtualized = "false"
 
-    const options = this.options()
+    this.sourceContainer = this.container
+    if (this.hasMarkdownPreview) {
+      const headerContainer = el("div", { className: "reviews-markdown-sticky-header" })
+      this.container.append(headerContainer)
+      const toolbar = el("div", { className: "review-markdown-toolbar", role: "group", "aria-label": "Markdown view" })
+      for (const [label, preview] of [["Source", false], ["Preview", true]]) {
+        toolbar.append(el("button", {
+          type: "button", className: "review-button review-button-ghost",
+          "aria-pressed": String(this.preview === preview),
+          onclick: () => {
+            this.preview = preview
+            this.render()
+            this.container.querySelector(`.review-markdown-toolbar [aria-pressed="true"]`)?.focus()
+          },
+        }, label))
+      }
+      toolbar.append(el("p", { className: "review-markdown-notice" }, previewNotice(this.threads, this.fileDiff?.hunks)))
+      this.sourceContainer = el("div")
+      if (!this.collapsed()) {
+        this.container.append(toolbar, this.sourceContainer)
+        if (this.preview) {
+          this.sourceContainer.append(markdownPreview(this.rawDiff, this.diffStyle))
+        } else {
+          this.renderSource({ ...this.options(), disableFileHeader: true })
+        }
+      }
+      // One shared Pierre header stays above the notice in both modes.
+      this.headerInstance = new Diffs.FileDiff({ ...this.options(), collapsed: true })
+      this.headerInstance.render({ ...this.renderArgs(), containerWrapper: headerContainer, lineAnnotations: [] })
+      return
+    }
+
+    this.renderSource(this.options())
+  }
+
+  renderSource(options) {
     const renderArgs = this.renderArgs()
 
     if (
-      !this.collapsed() &&
+      !this.collapsed() && !this.focusedThreadId &&
       shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
     ) {
       if (this.tryRenderVirtualized(options, renderArgs)) return
@@ -422,7 +547,7 @@ export class VanillaDiffRenderer {
 
     try {
       const contentWrapper = el("div", { className: "review-virtualized-diff-content" })
-      this.container.append(contentWrapper)
+      this.sourceContainer.append(contentWrapper)
       this.virtualizer = new Diffs.Virtualizer({
         overscrollSize: 800,
         intersectionObserverMargin: 800,
@@ -432,10 +557,13 @@ export class VanillaDiffRenderer {
       this.instance = new Diffs.VirtualizedFileDiff(
         options,
         this.virtualizer,
+        // Partial<VirtualFileMetrics>: Pierre fills in the rest from
+        // DEFAULT_VIRTUAL_FILE_METRICS. There is no annotation estimate:
+        // rows taller than lineHeight (annotations, wrapped lines) are
+        // measured after render.
         {
           lineHeight: 20,
-          fileHeaderHeight: 44,
-          annotationEstimateHeight: 96,
+          diffHeaderHeight: 44,
         }
       )
       this.instance.render({ ...renderArgs, containerWrapper: contentWrapper })
@@ -445,12 +573,18 @@ export class VanillaDiffRenderer {
       // eslint-disable-next-line no-console
       console.warn("[DiffRenderer] virtualized render unavailable; falling back to FileDiff:", err)
       this.cleanUp(false)
-      this.container.replaceChildren()
+      this.sourceContainer.replaceChildren()
       return false
     }
   }
 
   cleanUp(clear = true) {
+    if (clear) {
+      this.container.removeEventListener("pointerdown", this.onPointerDown)
+      this.threadUI.clear()
+    }
+    this.headerInstance?.cleanUp?.()
+    this.headerInstance = null
     try {
       this.instance?.cleanUp?.()
     } finally {

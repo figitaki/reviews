@@ -95,11 +95,14 @@ defmodule ReviewsWeb.Api.ReviewController do
 
   defp render_thread(thread) do
     %{
+      id: thread.id,
       file_path: thread.file_path,
       side: thread.side,
       line_hint: get_in(thread.anchor || %{}, ["line_number_hint"]),
       status: thread.status,
       author: render_identity(thread.author),
+      resolved_by: render_identity(thread.resolved_by),
+      resolved_at: thread.resolved_at,
       comments:
         Enum.map(thread.comments || [], fn c ->
           %{

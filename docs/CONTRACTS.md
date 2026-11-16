@@ -86,6 +86,11 @@ Public (no token). Returns a JSON snapshot of the review: `slug`, `title`,
 `threads`. The latest patchset is selected by default. Use `?patchset=N` to
 select another one.
 
+Threads are projected onto the selected patchset, not the latest one. Threads
+originating in later patchsets are omitted. `line_hint` is null when the code
+cannot be located unambiguously in the selected diff; the thread and comments
+remain visible and its open/resolved status is unchanged.
+
 Unknown slug or patchset number → `404`.
 
 ### `POST /api/v1/reviews/:slug/comments`
@@ -216,7 +221,13 @@ every mounted renderer.
 | Event                             | Payload                      | Meaning                                         |
 | --------------------------------- | ---------------------------- | ----------------------------------------------- |
 | `threads_updated:<file_path>`     | `{ threads: [...] }`         | Published threads in this file changed. Re-render with the new list. |
+| `open_review_thread` | `{ thread_id, file_path, hunk_id? }` | Open and focus a discussion. When `hunk_id` is present, only that Guide renderer handles the event. |
 | `diff_style_updated:<file_path>`  | `{ style: "split" \| "unified" }` | The viewer switched the diff layout.     |
+
+Activity links use `/r/:slug?patchset=N&thread=ID`. They select and expand the
+first Guide hunk containing the thread's anchored line on its diff side. If no
+Guide hunk covers it, navigation falls back to `/r/:slug/changes` with the same
+query. Outdated discussions link to their originating revision.
 
 The patchset-pushed banner is rendered by LiveView itself (no hook event).
 When LiveView receives `{:patchset_pushed, n}` on the `"review:<slug>"`
@@ -234,7 +245,30 @@ PubSub topic, it assigns a banner message that the HEEx template displays.
 }
 ```
 
-`granularity: "token_range"` adds `selection_text` and `selection_offset`.
-The UI and the comments API can write it, but `Reviews.Anchoring.relocate/3`
-returns `{:error, :not_implemented}` for it, so token-range threads do not
-move across patchsets yet.
+`granularity: "token_range"` adds `selection_text` and `selection_offset`
+(a zero-based UTF-16 code-unit offset, matching browser strings).
+
+`Reviews.Anchoring.relocate(thread, origin_patchset, target_patchset)` matches
+exact whole-line content on the thread's `file_path` and `side`. Duplicate
+lines require unique exact `context_before`/`context_after` matches. Token
+ranges additionally require the selected text at the stored offset; legacy
+ranges without offsets require a unique substring on that line. Changed whole
+lines, missing files, ambiguous matches, and lines outside the target diff's
+known changed/context lines return `{:error, :outdated}`. No fuzzy match, line
+number fallback, cross-file/side match, or unseen-file reconstruction is used.
+
+`ReviewView.snapshot/3` leaves persisted threads untouched and exposes projected
+thread maps in `published_threads`, including `original_anchor`,
+`originating_patchset_id`, `originating_patchset_number`, and `anchor_status`
+(`"current"` or `"outdated"`). `anchor` is the selected-patchset anchor, or nil
+when outdated. Resolution status, actor, timestamps and comments are preserved.
+On the originating patchset the original anchor is used unchanged. Future-origin
+threads are omitted. `ReviewView.thread_payloads_for_file/2` excludes outdated
+threads so renderers cannot place them on stale lines. Activity navigation must
+use the originating patchset number and original anchor for outdated threads.
+
+`Threads.publish_comment/3` accepts optional `originating_patchset_id` (string
+or atom key) for new threads. It must identify a patchset of this review or the
+call returns `{:error, :patchset_not_found}` without writing. Omission defaults
+to the latest patchset. Callers creating comments on an older selected revision
+must pass its ID server-side. Replies keep their original thread's origin.

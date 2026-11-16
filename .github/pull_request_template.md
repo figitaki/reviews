@@ -4,7 +4,7 @@
 
 ## Reviews Packet
 
-- Packet: <!-- Add a https://reviews-dev.fly.dev/r/<slug> link when available. If the work depends on unreleased packet features, use the relevant preview host and note it here. -->
+- Packet: <!-- Required for every PR, including drafts: link the up-to-date packet at https://reviews-dev.fly.dev/r/<slug> so reviewers can review it. Use a reviewer-accessible preview host when needed and name it here. Refresh the packet for every PR revision; see AGENTS.md. -->
 
 ## Validation
 

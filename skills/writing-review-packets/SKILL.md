@@ -1,6 +1,6 @@
 ---
 name: writing-review-packets
-description: Create or revise Reviews packets that explain a code diff with rich Markdown, reviewer guidance, and interwoven hunk references. Covers section strategy, rendering limits, validation, and packet revisions with the Reviews CLI. Use when asked to write a review packet, organize a diff for review, add narrative context, or update a packet for a new patchset.
+description: Create or revise Reviews packets that explain a code diff with rich Markdown, reviewer guidance, and interwoven hunk references. Covers section strategy, rendering limits, validation, and packet revisions with the Reviews CLI. Use when asked to write a review packet, organize a diff for review, add narrative context or inline author notes, or update a packet for a new patchset.
 ---
 
 # Writing Review Packets
@@ -121,26 +121,45 @@ Settings is becoming the account control surface. Keep signed-out, human identit
 
 When several adjacent hunks in the same file are mechanical or serve the same purpose, write one lead-in before the run of hunk refs instead of repeating a line before every hunk.
 
+## Author Notes Beside Code
+
+Use author notes for a local explanation that a reviewer needs while reading the code: an invariant, a non-obvious choice, or a deliberately unchanged behavior. Put the note in the packet, not in a discussion thread. Questions, bugs, and requested changes belong in review comments instead.
+
+Place a short paragraph beginning with **Author note.** immediately after the relevant `@hunk` reference. Name the symbol or condition being explained so the association is clear. Use one or two sentences, and omit the note when the diff or existing lead-in already explains the point. Keep broader reasoning in the section overview.
+
+```markdown
+@hunk lib/deliveries/worker.ex#1
+
+**Author note.** Retrying delivery reuses `operation_id`; a timeout must not turn another delivery attempt into a new operation.
+```
+
+This is a writing convention using existing Markdown rows, not a new annotation type. Notes appear between code hunks in the packet reading flow; they are not bubbles attached to individual lines inside the diff. They have no open/resolved state and do not create conversation threads. Do not post comments and resolve them to simulate notes.
+
+Keep full hunks by default. If an explanation must sit between two parts of one large hunk, use non-overlapping slices such as `@hunk lib/deliveries/worker.ex#1:L1-L6`, then the note, then `@hunk lib/deliveries/worker.ex#1:L7-L12`. Slice numbers are one-based rows within the hunk, including context, additions, and deletions—not source-file line numbers. Derive the boundaries from the actual diff and cover every changed row exactly once. Slices render as separate code blocks, not a callout embedded in one continuous diff; use a full hunk and name the relevant symbol when splitting would interrupt the reading flow.
+
+When updating a packet, recheck each note against the new diff and remove or rewrite explanations that no longer apply. Notes are packet content revised with `reviews push --update`, not independently anchored comments.
+
 ## Hunk Selection
 
-- Cover every changed line exactly once unless intentionally grouping duplicate ref coverage is acceptable for the current tool.
+- Cover every changed line exactly once.
 - Use full hunk refs for small cohesive changes.
-- If one large hunk contains multiple review topics, split the surrounding prose instead of using sliced hunk refs.
+- Explain multiple review topics in the surrounding prose. Use slices only when an author note needs to appear between code excerpts, following Author Notes Beside Code.
 - Keep generated files, lockfiles, or purely mechanical output out of the packet unless they need review.
 - If the packet is only for local review, put it in `/private/tmp` or another temporary path to avoid accidentally committing it.
 
 ## Pre-Push Packet Review
 
 Before pushing, audit the packet:
-1. Confirm every changed line is covered by exactly one intended hunk ref.
-2. Count hunks, files, and changed-line weight per section.
-3. Split any section whose approval would bless multiple unrelated concerns.
-4. Move glue files into the section that owns their risk.
-5. Give packet/tooling/docs-only changes their own tiny section, or omit them when review would not be useful.
-6. Trim lead-ins that repeat paths, section titles, or visible code without adding reasoning.
-7. Check that Overview explains the outcome and reading order, and that formatting and links help the reviewer make decisions rather than add decoration.
-8. Check the installed `reviews push --help` before choosing validation flags. This checkout's CLI validates packet structure and coverage before uploading but has no `--dry-run`; do not upload just to validate without permission. After an authorized upload, inspect Overview and a representative section on the target server; verify lists, links, and any code or diagrams. Structure validation does not check browser rendering. If a preview is unavailable, report that limitation.
-9. If the sectioning choice still feels uncertain, ask the user for their preferred organization before pushing.
+1. Run `reviews push --dry-run --packet /path/to/packet.md` (add `--update <slug>` for a new patchset). It checks the packet against the diff without contacting the server and lists every problem as `file:line: message`. Fix them all and run it again until it says the packet is valid.
+2. Confirm every changed line is covered by exactly one intended hunk ref.
+3. Count hunks, files, and changed-line weight per section.
+4. Split any section whose approval would bless multiple unrelated concerns.
+5. Move glue files into the section that owns their risk.
+6. Give packet/tooling/docs-only changes their own tiny section, or omit them when review would not be useful.
+7. Trim lead-ins that repeat paths, section titles, or visible code without adding reasoning.
+8. Check that Overview explains the outcome and reading order, and that formatting and links help the reviewer make decisions rather than add decoration.
+9. After an authorized upload, inspect Overview and a representative section on the target server; verify lists, links, and any code or diagrams. Structure validation does not check browser rendering. If a preview is unavailable, report that limitation.
+10. If the sectioning choice still feels uncertain, ask the user for their preferred organization before pushing.
 
 ## Approval Inheritance
 
@@ -168,5 +187,6 @@ reviews push --update <slug> --range HEAD --packet /path/to/packet.md
 Notes:
 - `--range HEAD` captures current working-tree changes.
 - Default capture is usually `HEAD~1..HEAD`; use an explicit range when needed.
+- `--dry-run` (alias `--validate`) runs the same checks as a real push and sends nothing. Use it when the user wants to read the packet before it is published.
 - If validation fails with an uncovered changed line, add or adjust hunk refs until the packet covers the diff.
 - Do not commit local packet files unless the user explicitly wants them tracked.

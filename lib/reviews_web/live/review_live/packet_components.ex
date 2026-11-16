@@ -1350,7 +1350,28 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     |> String.starts_with?("### ")
   end
 
-  defp annotation_markdown?(_body), do: false
+  def thread_target(packet, hunks_by_path, %{anchor: anchor} = thread) when is_map(anchor) do
+    packet
+    |> ReviewPacket.sections()
+    |> Enum.find_value(fn section ->
+      section
+      |> packet_units(hunks_by_path)
+      |> Enum.find_value(fn
+        %{kind: :hunk_group, hunk: hunk} ->
+          lines = Reviews.Anchoring.index(%{raw_diff: hunk.display_raw_diff})
+          side_lines = Map.get(lines, {thread.file_path, thread.side}, %{})
+
+          if Map.has_key?(side_lines, anchor["line_number_hint"]) do
+            %{section_index: section.index, hunk_id: hunk.id}
+          end
+
+        _ ->
+          nil
+      end)
+    end)
+  end
+
+  def thread_target(_packet, _hunks_by_path, _thread), do: nil
 
   def packet_hunk_id(row_id, hunk) do
     "#{row_id}--#{hunk.id}"
