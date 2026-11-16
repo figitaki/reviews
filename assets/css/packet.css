@@ -623,6 +623,12 @@
   grid-template-columns: var(--guide-rail-w) minmax(0, 1fr);
 }
 
+/* Split diffs only run on wide screens, so split guide prose gets a
+   character-based measure instead of the 52rem default. */
+.review-packet-shell.is-guide-split {
+  --guide-measure: 72ch;
+}
+
 .review-packet-shell.is-outline-hidden {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -1013,14 +1019,6 @@ details[open] > summary .review-collapse-icon,
   font-size: 13px;
 }
 
-.review-guide-section-state {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 18px;
-}
-
 .review-section-state-icon {
   width: 15px;
   height: 15px;
@@ -1230,6 +1228,13 @@ details[open] > summary .review-collapse-icon,
   overflow: visible;
   border-bottom: 1px solid transparent;
   padding: 8px;
+}
+
+/* Context prose belongs to the hunk after it: sit close to that card and
+   leave the wider gap above, so ownership reads at a glance. */
+.review-packet-row.is-markdown:has(+ .review-packet-row.is-hunk) {
+  margin-bottom: -8px;
+  padding-bottom: 0;
 }
 
 .review-packet-row.is-markdown .review-packet-markdown {
@@ -2974,8 +2979,7 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-guide-panel {
-    max-height: none;
-    overflow: visible;
+    display: none;
   }
 
   .review-guide-panel-inner {
@@ -3046,6 +3050,33 @@ details[open] > summary .review-collapse-icon,
   }
 }
 
+/* Phone section header: the section heading leads, then its meta and
+   state. Eyebrow → title → meta → state, instead of the meta row sitting
+   between the eyebrow and the heading. The review title stays in the
+   compact toolbar at its toolbar size. */
+@media (max-width: 480px) {
+  .review-section-header-eyebrow {
+    display: contents;
+  }
+
+  .review-section-header .review-guide-eyebrow {
+    order: 0;
+  }
+
+  .review-section-header-title {
+    order: 1;
+    font-size: clamp(22px, 6.4vw, 26px);
+    line-height: 1.2;
+  }
+
+  .review-section-header-meta {
+    order: 2;
+  }
+
+  .review-section-header-state {
+    order: 3;
+  }
+}
 /* Markdown document previews share the active Reviews theme. */
 .review-markdown-toolbar { display: flex; align-items: center; gap: .25rem; padding: .5rem .75rem; border-bottom: 1px solid var(--ds-line); }
 .review-markdown-toolbar button { flex-shrink: 0; }
