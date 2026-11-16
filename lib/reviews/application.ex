@@ -12,8 +12,7 @@ defmodule Reviews.Application do
       Reviews.Repo,
       {DNSCluster, query: Application.get_env(:reviews, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Reviews.PubSub},
-      # Start a worker by calling: Reviews.Worker.start_link(arg)
-      # {Reviews.Worker, arg},
+      Reviews.OAuth.Clients,
       # Start to serve requests, typically the last entry
       ReviewsWeb.Endpoint
     ]
