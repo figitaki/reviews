@@ -34,6 +34,8 @@ defmodule Reviews.Reviews.File do
     file
     |> cast(attrs, @required ++ @optional)
     |> validate_required(@required)
+    |> validate_length(:path, max: 255)
+    |> validate_length(:old_path, max: 255)
     |> validate_inclusion(:status, @statuses)
     |> validate_number(:additions, greater_than_or_equal_to: 0)
     |> validate_number(:deletions, greater_than_or_equal_to: 0)

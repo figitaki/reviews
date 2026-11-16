@@ -101,6 +101,22 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
       assert url =~ slug
     end
 
+    test "rejects a title over 255 characters with a validation error",
+         %{conn: conn, raw_token: raw} do
+      conn =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews", %{
+          "title" => String.duplicate("t", 256),
+          "raw_diff" => "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+        })
+
+      assert json_response(conn, 422) == %{
+               "errors" => %{"title" => ["should be at most 255 character(s)"]}
+             }
+    end
+
     test "stores the token identity as review author", %{
       conn: conn,
       agent: agent,

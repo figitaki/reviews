@@ -208,6 +208,22 @@ defmodule ReviewsWeb.PoppyTest do
   end
 
   describe "Direct Sign-In and a signed-in comment" do
+    test "a file_path over 255 characters is a clean validation error", ctx do
+      tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
+
+      conn =
+        post_comment(ctx.agent, ctx.review,
+          access_token: tokens["access_token"],
+          body: %{"file_path" => String.duplicate("a", 256)}
+        )
+
+      assert json_response(conn, 422) == %{
+               "errors" => %{"detail" => "file_path should be at most 255 character(s)"}
+             }
+
+      assert comment_count() == 0
+    end
+
     test "the comment is attributed to the owner-approved Reviews agent", ctx do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
       assert tokens["token_type"] == "Bearer"

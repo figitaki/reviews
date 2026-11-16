@@ -7,6 +7,16 @@ still stabilizing.
 
 ## [Unreleased]
 
+### Fixed
+
+- The REST and Poppy comment endpoints no longer return database error text.
+  A `file_path` over 255 characters is now a `422` validation error.
+
+- A review title, `base_sha`, `branch_name` or diff file path over 255
+  characters is now a `422` validation error instead of a server error.
+
+- `reviews whoami` works for GitHub accounts without a public email.
+
 ## [0.0.1] - 2026-11-16
 
 ### Security

@@ -22,7 +22,8 @@ pub struct ApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Me {
     pub username: String,
-    pub email: String,
+    /// Null when the GitHub account has no public email.
+    pub email: Option<String>,
     pub identity: Option<Identity>,
 }
 
@@ -294,7 +295,7 @@ mod tests {
         let client = ApiClient::new(server.url(), "tok").unwrap();
         let me = client.me().unwrap();
         assert_eq!(me.username, "careyjanecka");
-        assert_eq!(me.email, "carey@example.com");
+        assert_eq!(me.email.as_deref(), Some("carey@example.com"));
         assert_eq!(me.identity.unwrap().handle, "codex");
         mock.assert();
     }

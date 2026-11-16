@@ -1,19 +1,52 @@
 use anyhow::Result;
 
-use crate::api::ApiClient;
+use crate::api::{ApiClient, Me};
 use crate::config::Config;
 
 pub fn run() -> Result<()> {
     let cfg = Config::load()?;
     let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
-    let me = client.me()?;
-    if let Some(identity) = me.identity {
-        println!(
-            "{} <{}> acting as {} (@{})",
-            me.username, me.email, identity.display_name, identity.handle
-        );
-    } else {
-        println!("{} <{}>", me.username, me.email);
-    }
+    println!("{}", describe(&client.me()?));
     Ok(())
+}
+
+fn describe(me: &Me) -> String {
+    let account = match &me.email {
+        Some(email) => format!("{} <{}>", me.username, email),
+        None => me.username.clone(),
+    };
+    match &me.identity {
+        Some(identity) => format!(
+            "{account} acting as {} (@{})",
+            identity.display_name, identity.handle
+        ),
+        None => account,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn describes_an_account_without_a_public_email() {
+        let me: Me = serde_json::from_str(
+            r#"{"username":"carey","email":null,"identity":{"id":1,"kind":"agent","handle":"codex","display_name":"Codex","avatar_url":null}}"#,
+        )
+        .unwrap();
+        assert_eq!(describe(&me), "carey acting as Codex (@codex)");
+
+        let me: Me =
+            serde_json::from_str(r#"{"username":"carey","email":null,"identity":null}"#).unwrap();
+        assert_eq!(describe(&me), "carey");
+    }
+
+    #[test]
+    fn describes_an_account_with_an_email() {
+        let me: Me = serde_json::from_str(
+            r#"{"username":"carey","email":"carey@example.com","identity":null}"#,
+        )
+        .unwrap();
+        assert_eq!(describe(&me), "carey <carey@example.com>");
+    }
 }

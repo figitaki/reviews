@@ -152,6 +152,26 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
       assert detail =~ "granularity"
     end
 
+    test "rejects a file_path over 255 characters without leaking database errors",
+         %{conn: conn, raw_token: raw, review: review} do
+      conn =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
+          "file_path" => String.duplicate("a", 256),
+          "side" => "new",
+          "body" => "x",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      assert json_response(conn, 422) == %{
+               "errors" => %{"detail" => "file_path should be at most 255 character(s)"}
+             }
+
+      assert ThreadsContext.list_published_threads(review.id) == []
+    end
+
     test "returns 404 for an unknown slug", %{conn: conn, raw_token: raw} do
       conn =
         conn

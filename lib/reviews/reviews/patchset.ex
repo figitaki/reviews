@@ -34,6 +34,8 @@ defmodule Reviews.Reviews.Patchset do
     patchset
     |> cast(attrs, @required ++ @optional)
     |> validate_required(@required)
+    |> validate_length(:base_sha, max: 255)
+    |> validate_length(:branch_name, max: 255)
     |> unique_constraint([:review_id, :number])
   end
 end

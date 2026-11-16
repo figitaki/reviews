@@ -9,6 +9,8 @@ defmodule Reviews.Threads do
   """
   import Ecto.Query, warn: false
 
+  require Logger
+
   alias Reviews.Accounts
   alias Reviews.Accounts.{Identity, User}
   alias Reviews.Repo
@@ -114,7 +116,10 @@ defmodule Reviews.Threads do
         end
     end
   rescue
-    error in [Ecto.InvalidChangesetError, Postgrex.Error] -> {:error, error}
+    # Never pass database error text to callers; it can leak schema details.
+    error in Postgrex.Error ->
+      Logger.error("publish_comment failed: " <> Exception.message(error))
+      {:error, :could_not_publish}
   end
 
   def publish_comment(%Review{} = review, %User{} = user, params, attribution)
@@ -148,7 +153,7 @@ defmodule Reviews.Threads do
             identity_link_id: attribution && attribution["link_id"],
             attribution: attribution
           })
-          |> Repo.insert!()
+          |> insert_or_rollback()
 
         %{thread: thread, comment: comment}
       end)
@@ -303,6 +308,13 @@ defmodule Reviews.Threads do
       anchor: anchor,
       status: "open"
     })
-    |> Repo.insert!()
+    |> insert_or_rollback()
+  end
+
+  defp insert_or_rollback(changeset) do
+    case Repo.insert(changeset) do
+      {:ok, record} -> record
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
   end
 end
