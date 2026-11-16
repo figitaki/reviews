@@ -95,6 +95,8 @@ still stabilizing.
 - Decode Git-quoted filenames consistently in CLI validation, uploaded file
   metadata, and review hunk lookup, including non-ASCII paths.
 
+- Packet hunk links reveal their section and expand the target card on direct
+  load, repeated clicks, and browser history navigation.
 - Rail height and section jumps account for both headers, including wrapped
   mobile controls.
 - Section jumps use native scrolling instead of a frame-by-frame animation,

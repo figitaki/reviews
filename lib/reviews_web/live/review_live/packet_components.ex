@@ -1303,6 +1303,34 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     "#{row_id}--#{hunk.id}"
   end
 
+  @doc "Resolves a fragment only against hunk cards in this packet and patchset."
+  def fragment_target(packet, hunks_by_path, id) when is_binary(id) do
+    packet
+    |> ReviewPacket.sections()
+    |> Enum.find_value(fn section ->
+      section
+      |> packet_units(hunks_by_path)
+      |> Enum.find_value(fn
+        %{kind: :hunk_group, hunk: hunk, row_id: row_id, row_ids: row_ids} ->
+          cond do
+            id in row_ids ->
+              %{section_index: section.index, hunk_id: hunk.id, id: row_id}
+
+            id in [hunk.id, "#{hunk.id}-summary", "#{hunk.id}-diff"] ->
+              %{section_index: section.index, hunk_id: hunk.id, id: "#{hunk.id}-summary"}
+
+            true ->
+              nil
+          end
+
+        _ ->
+          nil
+      end)
+    end)
+  end
+
+  def fragment_target(_packet, _hunks_by_path, _id), do: nil
+
   def packet_units(section, hunks_by_path) do
     section.rows
     |> Enum.with_index()

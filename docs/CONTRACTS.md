@@ -272,3 +272,21 @@ or atom key) for new threads. It must identify a patchset of this review or the
 call returns `{:error, :patchset_not_found}` without writing. Omission defaults
 to the latest patchset. Callers creating comments on an older selected revision
 must pass its ID server-side. Replies keep their original thread's origin.
+
+### Packet hunk fragments
+
+Guide URLs accept packet hunk fragments, including rendered `-summary` and
+`-diff` IDs and packet row IDs (`#packet-section-N-row-M`). Rows grouped into
+one card resolve to that card. Include `?patchset=N` to link to a historical
+revision; targets are always resolved against the selected revision, never a
+different patchset. Unknown targets leave the current section unchanged.
+
+The `PacketFragments` hook sends `reveal_packet_fragment` with `{id}` after
+connection, hash changes, repeated same-fragment clicks, and revision changes.
+The server validates the ID against rendered packet units, reveals the section,
+expands its card, and replies with `{id: canonical_dom_id}` (or `{id: null}` for
+an unknown target). The client focuses and scrolls after the patch is applied.
+Native anchor navigation owns URL/history; returning to an empty fragment
+restores Overview. Modified clicks, external links, and different URLs retain
+native browser behavior. This does not enable packet fragments on the raw
+`/changes` view or make hunk IDs stable across changed packet contents.

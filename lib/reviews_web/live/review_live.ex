@@ -96,6 +96,26 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("reveal_packet_fragment", %{"id" => id}, socket) do
+    packet = socket.assigns.selected_patchset.packet
+
+    case PacketComponents.fragment_target(packet, socket.assigns.hunks_by_path, id) do
+      %{section_index: index, hunk_id: hunk_id, id: target_id}
+      when socket.assigns.live_action != :changes ->
+        socket =
+          socket
+          |> assign(:active_outline_section_index, index)
+          |> update(:expanded_section_ids, &MapSet.put(&1, index))
+          |> update(:expanded_hunk_ids, &MapSet.put(&1, hunk_id))
+
+        {:reply, %{id: target_id}, socket}
+
+      _ ->
+        {:reply, %{id: nil}, socket}
+    end
+  end
+
+  @impl true
   def handle_event("select_patchset", %{"number" => number}, socket) do
     case Integer.parse(to_string(number)) do
       {n, _} ->
@@ -483,7 +503,12 @@ defmodule ReviewsWeb.ReviewLive do
   def render(assigns) do
     ~H"""
     <Layouts.flash_group flash={@flash} />
-    <div class="review-page min-h-screen">
+    <div
+      id="review-page"
+      class="review-page min-h-screen"
+      phx-hook="PacketFragments"
+      data-patchset={@selected_patchset.id}
+    >
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
           <.user_menu current_user={@current_user} />

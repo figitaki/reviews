@@ -320,6 +320,23 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       assert has_element?(view, "#review-packet .review-hunk-card")
+
+      [target] =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#review-packet [phx-hook=DiffRenderer]")
+        |> LazyHTML.attribute("id")
+
+      render_click(view, "select_packet_overview")
+      refute has_element?(view, "##{target}")
+      render_hook(view, "reveal_packet_fragment", %{"id" => target})
+      assert has_element?(view, "##{target}[data-hunk-expanded=true]")
+      render_click(view, "select_packet_overview")
+      render_hook(view, "reveal_packet_fragment", %{"id" => "packet-section-999-row-0"})
+      refute has_element?(view, "##{target}")
+      render_hook(view, "reveal_packet_fragment", %{"id" => target})
+      assert has_element?(view, "##{target}")
       refute has_element?(view, "#review-packet .review-hunk-summary")
 
       assert has_element?(
@@ -460,6 +477,28 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       refute has_element?(view, "#packet-section-0-row-1 .review-hunk-card")
+
+      for target <- [
+            "packet-section-0-row-1",
+            "packet-section-0-row-0--hunk-lib-packet-ex-1-through-2-summary",
+            "packet-section-0-row-0--hunk-lib-packet-ex-1-through-2-diff"
+          ] do
+        render_click(view, "select_packet_overview")
+        render_hook(view, "reveal_packet_fragment", %{"id" => target})
+        assert has_element?(view, "#packet-section-0-row-0 [data-hunk-expanded=true]")
+      end
+
+      {:ok, _} =
+        ReviewsCtx.append_patchset(packet_review, %{
+          raw_diff: snapshot!(packet_review).selected_patchset.raw_diff
+        })
+
+      render_patch(view, ~p"/r/#{packet_review.slug}?patchset=2")
+      render_hook(view, "reveal_packet_fragment", %{"id" => "packet-section-0-row-1"})
+      refute has_element?(view, "#packet-section-0-row-0")
+      render_patch(view, ~p"/r/#{packet_review.slug}?patchset=1")
+      render_hook(view, "reveal_packet_fragment", %{"id" => "packet-section-0-row-1"})
+      assert has_element?(view, "#packet-section-0-row-0 [data-hunk-expanded=true]")
 
       refute has_element?(
                view,
