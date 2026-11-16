@@ -32,12 +32,15 @@ import ReviewActivity from "./hooks/review_activity"
 // LiveView saves window.scrollY into history.state 100 ms after every scroll
 // so back and forward can restore it. Brave on iOS (Chromium's ios/web)
 // treats each replaceState as a navigation and expands its toolbars, so the
-// bars came back whenever a scroll stopped. Keep that scroll-only write in memory
-// and store it only when it is needed: before a new history entry is pushed,
-// with any other replaceState, and when the page is hidden.
+// bars came back whenever a scroll stopped. Keep those scroll-only writes in
+// memory, keyed by the entry's LiveView history position, and store them only
+// when needed: before a new entry is pushed, with any other replaceState, and
+// when the page is hidden. Back and forward within the page skip history.state
+// and hand the held position to LiveView's popstate handler instead.
 const deferScrollHistoryWrites = () => {
   const {pushState, replaceState} = History.prototype
-  let pendingScroll = null
+  const pendingScroll = new Map()
+  const entryKey = state => state?.position ?? null
 
   const isScrollOnly = (state, current, url) => {
     if (!state || typeof state.scroll !== "number") return false
@@ -51,21 +54,22 @@ const deferScrollHistoryWrites = () => {
   // A state copied from history.state carries the old scroll; one that sets
   // its own scroll (LiveView does for redirects) keeps it.
   const withPendingScroll = (state, current) => {
-    if (pendingScroll === null || !state || typeof state !== "object") return state
-    const scroll = state.scroll === current?.scroll ? pendingScroll : state.scroll
-    pendingScroll = null
+    const key = entryKey(current)
+    if (!pendingScroll.has(key) || !state || typeof state !== "object") return state
+    const scroll = state.scroll === current?.scroll ? pendingScroll.get(key) : state.scroll
+    pendingScroll.delete(key)
     return {...state, scroll}
   }
 
   const flush = () => {
-    if (pendingScroll === null) return
     const current = history.state || {}
+    if (!pendingScroll.has(entryKey(current))) return
     replaceState.call(history, withPendingScroll({...current}, current), "", window.location.href)
   }
 
   History.prototype.replaceState = function (state, title, url) {
     if (isScrollOnly(state, this.state, url)) {
-      pendingScroll = state.scroll
+      pendingScroll.set(entryKey(this.state), state.scroll)
       return
     }
     return replaceState.call(this, withPendingScroll(state, this.state), title, url)
@@ -73,8 +77,17 @@ const deferScrollHistoryWrites = () => {
 
   History.prototype.pushState = function (...args) {
     flush()
+    // A new entry can reuse the position of a forward entry it replaces.
+    pendingScroll.delete(entryKey(args[0]))
     return pushState.apply(this, args)
   }
+
+  // Registered before LiveSocket binds its own popstate listener, so it runs
+  // first and LiveView restores the held position.
+  window.addEventListener("popstate", event => {
+    const key = entryKey(event.state)
+    if (event.state && pendingScroll.has(key)) event.state.scroll = pendingScroll.get(key)
+  })
 
   window.addEventListener("pagehide", flush)
 }
