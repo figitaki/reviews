@@ -417,7 +417,10 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   @doc """
   One review as a document: its description, then its open feedback as
-  Markdown, the same text as the `reviews://{slug}/feedback` resource.
+  Markdown, the same text as the `reviews://{slug}/feedback` resource. The
+  whole result fits in the largest `max_bytes`; a longer document is cut
+  short with a note naming the tools that read the rest, and
+  `metadata.complete` is false.
   """
   def fetch(%{"id" => id}, ctx) do
     identity = current_identity!(ctx)
@@ -435,17 +438,35 @@ defmodule ReviewsWeb.MCP.Handlers do
             ""
         end
 
-      %{
+      text = "# #{title}\n\n" <> description <> render_feedback(review, revisions, latest)
+
+      doc = %{
         id: review.slug,
         title: title,
-        text: "# #{title}\n\n" <> description <> render_feedback(review, revisions, latest),
+        text: "",
         url: review_url(review),
         metadata: %{
           revision: latest.number,
           open_threads:
-            Threads.count_threads(review, max_origin_number: latest.number, status: "open")
+            Threads.count_threads(review, max_origin_number: latest.number, status: "open"),
+          complete: false
         }
       }
+
+      left = Budget.available(@max_bytes_limit, doc)
+
+      case Budget.fit_text(text, 0, left) do
+        {all, nil} ->
+          %{doc | text: all} |> put_in([:metadata, :complete], true)
+
+        _too_long ->
+          note =
+            "\n\n_Cut short to fit. Read the rest with reviews_get_review and " <>
+              "reviews_list_threads (review #{review.slug})._"
+
+          {chunk, _next} = Budget.fit_text(text, 0, left - Budget.cost(note))
+          %{doc | text: chunk <> note}
+      end
     else
       _ -> error_result(not_found_message(id))
     end

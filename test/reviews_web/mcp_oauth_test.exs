@@ -366,7 +366,39 @@ defmodule ReviewsWeb.MCPOAuthTest do
       assert %{"id" => _, "title" => "Connector review", "url" => ^url} = doc
       assert doc["text"] =~ "Adds OAuth"
       assert doc["text"] =~ "Open threads: 0"
-      assert doc["metadata"] == %{"revision" => 1, "open_threads" => 0}
+      assert doc["metadata"] == %{"revision" => 1, "open_threads" => 0, "complete" => true}
+    end
+
+    test "fetch cuts a long review short to fit one result", ctx do
+      # Multi-byte text, so the cut must fall between characters.
+      long = String.duplicate("Ünïcödé — a long description line ✓\n", 4_000)
+
+      {:ok, %{review: review}} =
+        ReviewsContext.create_review_with_initial_patchset(ctx.owner, %{
+          title: "Long",
+          description: long,
+          raw_diff: @diff
+        })
+
+      # And about 60 KB of open feedback, as much as the feedback text holds.
+      for _ <- 1..40 do
+        {:ok, _} =
+          Reviews.Threads.publish_comment(review, ctx.owner, %{
+            "file_path" => "foo",
+            "side" => "new",
+            "body" => String.duplicate("Please rename this ✓ ", 90),
+            "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+          })
+      end
+
+      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent, ["reviews:read"])
+      conn = call_tool(tokens["access_token"], "fetch", %{"id" => review.slug})
+
+      assert byte_size(conn.resp_body) <= 120_000
+      doc = conn |> json_response(200) |> get_in(["result", "structuredContent"])
+      assert doc["metadata"]["complete"] == false
+      assert String.valid?(doc["text"])
+      assert doc["text"] =~ "Cut short to fit"
     end
 
     test "every tool declares readOnlyHint, destructiveHint, and openWorldHint", ctx do
