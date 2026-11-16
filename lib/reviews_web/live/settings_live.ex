@@ -98,7 +98,7 @@ defmodule ReviewsWeb.SettingsLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <main id="settings-page" class="l-page design-page">
-        <Layouts.landing_topbar current_user={@current_user} />
+        <Layouts.landing_topbar current_user={@current_user} return_to={~p"/settings"} />
 
         <div class="design-main is-settings">
           <.ds_page_header
@@ -108,7 +108,11 @@ defmodule ReviewsWeb.SettingsLive do
             class="is-compact"
           >
             <:actions>
-              <.link :if={!@current_user} href={~p"/auth/github"} class="ds-button is-primary">
+              <.link
+                :if={!@current_user}
+                href={~p"/auth/github?return_to=/settings"}
+                class="ds-button is-primary"
+              >
                 Sign in with GitHub
               </.link>
             </:actions>
@@ -312,7 +316,7 @@ defmodule ReviewsWeb.SettingsLive do
                 body="Settings are tied to your GitHub account so identities and credentials can be managed safely."
               >
                 <:actions>
-                  <.link href={~p"/auth/github"} class="ds-button is-primary">
+                  <.link href={~p"/auth/github?return_to=/settings"} class="ds-button is-primary">
                     Sign in with GitHub
                   </.link>
                 </:actions>

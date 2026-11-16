@@ -16,6 +16,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
   attr :current_user, :any, required: true
+  attr :return_to, :string, default: "/"
   attr :diff_style, :string, required: true
   attr :expanded_hunk_ids, :any, required: true
   attr :show_packet_outline, :boolean, default: true
@@ -118,6 +119,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               <.packet_section_decision
                 section={section}
                 current_user={@current_user}
+                return_to={@return_to}
                 next_section={@packet_outline_sections_by_index[section.index + 1]}
                 show_nav={@show_packet_outline}
               />
@@ -500,6 +502,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   attr :section, :map, required: true
   attr :current_user, :any, default: nil
+  attr :return_to, :string, default: "/"
   attr :next_section, :map, default: nil
   attr :show_nav, :boolean, default: false
 
@@ -537,7 +540,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             <span class="review-section-action-label">{section_status_label(status)}</span>
           </button>
         <% else %>
-          <.link href={~p"/auth/github"} class="review-packet-section-signin">
+          <.link
+            href={~p"/auth/github?#{[return_to: @return_to]}"}
+            class="review-packet-section-signin"
+          >
             Sign in to record a section decision
           </.link>
         <% end %>

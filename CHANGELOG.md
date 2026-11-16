@@ -97,6 +97,10 @@ still stabilizing.
 
 ### Fixed
 
+- GitHub sign-in now returns you to the page you started from, such as a
+  review, instead of the home page. Only local paths are accepted; anything
+  else goes home.
+
 - Decode Git-quoted filenames consistently in CLI validation, uploaded file
   metadata, and review hunk lookup, including non-ASCII paths.
 
