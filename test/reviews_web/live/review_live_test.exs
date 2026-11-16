@@ -313,11 +313,15 @@ defmodule ReviewsWeb.ReviewLiveTest do
                "#packet-section-0 .review-packet-row-list + #packet-section-0-decision"
              )
 
+      sign_in_href = ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}"]}"
+
       assert has_element?(
                view,
-               "#packet-section-0-decision .review-packet-section-signin",
+               ~s|#packet-section-0-decision .review-packet-section-signin[href="#{sign_in_href}"]|,
                "Sign in to record a section decision"
              )
+
+      assert has_element?(view, ~s|.review-button[href="#{sign_in_href}"]|, "Sign in")
 
       assert has_element?(view, "#review-packet .review-hunk-card")
       refute has_element?(view, "#review-packet .review-hunk-summary")

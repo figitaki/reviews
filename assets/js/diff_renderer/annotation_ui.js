@@ -405,6 +405,11 @@ export function commentComposer({
   return node
 }
 
+function signInHref() {
+  const returnTo = window.location.pathname + window.location.search
+  return `/auth/github?return_to=${encodeURIComponent(returnTo)}`
+}
+
 export function signInPrompt(onCancel) {
   return el("div", { style: composerStyle }, [
     el(
@@ -420,7 +425,7 @@ export function signInPrompt(onCancel) {
       "Sign in with GitHub to leave a comment."
     ),
     el("div", { style: composerActionsStyle }, [
-      el("a", { href: "/auth/github", style: primaryButtonStyle }, "Sign in with GitHub"),
+      el("a", { href: signInHref(), style: primaryButtonStyle }, "Sign in with GitHub"),
       button("Cancel", onCancel),
     ]),
   ])

@@ -8,10 +8,15 @@ defmodule ReviewsWeb.AuthController do
 
   Anonymous viewing is allowed throughout the app; only commenting requires
   a session, enforced higher up.
+
+  Sign-in links pass `?return_to=<local path>`; the request phase keeps it in
+  the session and the callback redirects there. Anything other than a local
+  path falls back to `/`.
   """
   use ReviewsWeb, :controller
 
   plug :require_oauth_configured when action in [:request]
+  plug :store_return_to when action in [:request]
   plug Ueberauth
 
   require Logger
@@ -34,6 +39,36 @@ defmodule ReviewsWeb.AuthController do
     end
   end
 
+  defp store_return_to(conn, _opts) do
+    case safe_return_to(conn.params["return_to"]) do
+      nil -> delete_session(conn, :return_to)
+      path -> put_session(conn, :return_to, path)
+    end
+  end
+
+  # Only same-site paths: "/..." but not "//host" (scheme-relative), no
+  # backslashes ("/\host" is scheme-relative to browsers) and no control
+  # characters, which browsers strip ("/\t/host" becomes "//host"). This is
+  # also everything `redirect(to:)` refuses, so the callback cannot crash.
+  defp safe_return_to("/" <> _ = path) do
+    if String.starts_with?(path, "//") or String.contains?(path, ["\\", "/%09"]) or
+         String.match?(path, ~r/[\x00-\x1f\x7f]/) do
+      nil
+    else
+      path
+    end
+  end
+
+  defp safe_return_to(_), do: nil
+
+  defp redirect_back(conn) do
+    to = get_session(conn, :return_to) || ~p"/"
+
+    conn
+    |> delete_session(:return_to)
+    |> redirect(to: to)
+  end
+
   def request(conn, _params) do
     # Ueberauth handles the redirect; if we ever land here it means the
     # request couldn't be built (e.g. missing client_id).
@@ -47,7 +82,7 @@ defmodule ReviewsWeb.AuthController do
 
     conn
     |> put_flash(:error, "GitHub authentication failed.")
-    |> redirect(to: ~p"/")
+    |> redirect_back()
   end
 
   def callback(%{assigns: %{ueberauth_auth: auth}} = conn, _params) do
@@ -64,12 +99,12 @@ defmodule ReviewsWeb.AuthController do
         |> put_session(:current_user_id, user.id)
         |> configure_session(renew: true)
         |> put_flash(:info, "Signed in as #{user.username}.")
-        |> redirect(to: ~p"/")
+        |> redirect_back()
 
       {:error, _changeset} ->
         conn
         |> put_flash(:error, "Could not create user from GitHub profile.")
-        |> redirect(to: ~p"/")
+        |> redirect_back()
     end
   end
 

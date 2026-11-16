@@ -22,6 +22,14 @@ defmodule ReviewsWeb.SettingsLiveTest do
 
     assert has_element?(view, "#settings-page", "Account settings")
     assert has_element?(view, ".ds-empty-state", "Sign in to manage account settings")
+
+    assert has_element?(
+             view,
+             ~s|.ds-empty-state a[href="/auth/github?return_to=/settings"]|,
+             "Sign in with GitHub"
+           )
+
+    assert has_element?(view, ~s|.l-nav-signin[href="/auth/github?return_to=%2Fsettings"]|)
     refute has_element?(view, "#mint-token-form")
   end
 
