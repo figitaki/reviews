@@ -24,6 +24,20 @@ endpoint — tokens are user-initiated through the browser.
 
 Missing/invalid token → `401` with body `{ "errors": { "detail": "Unauthorized" } }`.
 
+### `GET /api/v1/analytics/snapshot`
+
+Dedicated aggregate-only authentication, disabled unless an expiring `rva_` credential
+is configured. Normal account tokens are rejected; this credential cannot authorize
+any other route. No parameters or request body are accepted. Responses are no-store.
+
+The fixed version-1 payload has `version`, `source`, `collected_at`, and `windows`.
+Exactly two windows (7 and 30 days) each contain `days`, `start`, `end`,
+`active_accounts`, `reviews`, `revisions`, `comments`, and `decisions`.
+Active accounts count distinct identity owners, deduplicating human and agent
+identities belonging to the same account. All counts are computed in PostgreSQL;
+no identity IDs or content leave the database. See [aggregate export](AGGREGATE_EXPORT.md)
+for boundaries, credential expiry/revocation, per-instance limits, and error statuses.
+
 ### `POST /api/v1/reviews`
 
 Creates a new review and its first patchset.

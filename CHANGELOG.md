@@ -17,6 +17,9 @@ still stabilizing.
 
 ### Added
 
+- Disabled-by-default private aggregate export with dedicated expiring authentication,
+  fixed 7/30-day windows, and active accounts deduplicated across owned identities.
+
 - Recent comment activity with unread counts, thread links, and read state saved
   per reviewer in the current browser.
 - Comments follow matching code across revisions. Discussions whose code changed

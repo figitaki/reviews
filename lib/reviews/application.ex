@@ -10,6 +10,7 @@ defmodule Reviews.Application do
     children = [
       ReviewsWeb.Telemetry,
       Reviews.Repo,
+      Reviews.Analytics.Cache,
       {DNSCluster, query: Application.get_env(:reviews, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Reviews.PubSub},
       # Start a worker by calling: Reviews.Worker.start_link(arg)
