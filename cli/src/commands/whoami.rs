@@ -11,16 +11,16 @@ pub fn run() -> Result<()> {
 }
 
 fn describe(me: &Me) -> String {
-    let account = match &me.email {
+    let owner = match &me.email {
         Some(email) => format!("{} <{}>", me.username, email),
         None => me.username.clone(),
     };
     match &me.identity {
         Some(identity) => format!(
-            "{account} acting as {} (@{})",
+            "{owner} acting as {} (@{})",
             identity.display_name, identity.handle
         ),
-        None => account,
+        None => owner,
     }
 }
 
