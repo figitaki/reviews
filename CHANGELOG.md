@@ -17,6 +17,11 @@ still stabilizing.
 
 ### Added
 
+- GitHub sign-in works on per-PR preview apps through a sign-in relay on
+  production. The relay only sends users back to `reviews-pr-<N>.fly.dev`
+  over HTTPS, with a code that works once, on that host, within 60 seconds.
+  Production sign-in is unchanged. Setup is in `docs/PREVIEW_ENVS.md`.
+
 - `reviews push --dry-run` (alias `--validate`) checks the diff and packet
   and prints what would be sent, without contacting the server. It lists
   every packet problem with `file:line`, flags an empty review title or

@@ -42,6 +42,17 @@ defmodule ReviewsWeb.Router do
     live "/r/:slug/changes", ReviewLive, :changes
   end
 
+  # Preview sign-in relay. Before /auth/:provider, which would match /auth/relay.
+  scope "/auth/relay", ReviewsWeb do
+    pipe_through :browser
+
+    get "/", AuthRelayController, :confirm
+    post "/", AuthRelayController, :start
+    get "/github", AuthRelayController, :request
+    get "/github/callback", AuthRelayController, :callback
+    get "/accept", AuthRelayController, :accept
+  end
+
   scope "/auth", ReviewsWeb do
     pipe_through :browser
 

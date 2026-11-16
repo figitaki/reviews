@@ -12,16 +12,36 @@ defmodule ReviewsWeb.AuthController do
   Sign-in links pass `?return_to=<local path>`; the request phase keeps it in
   the session and the callback redirects there. Anything other than a local
   path falls back to `/`.
+
+  On a preview app configured as a relay client (`Reviews.AuthRelay.client?/0`),
+  `GET /auth/github` sends the user to the sign-in relay instead of GitHub.
+  See `ReviewsWeb.AuthRelayController`.
   """
   use ReviewsWeb, :controller
 
-  plug :require_oauth_configured when action in [:request]
   plug :store_return_to when action in [:request]
-  plug Ueberauth
+  plug :redirect_to_relay when action in [:request]
+  plug :require_oauth_configured when action in [:request]
+  plug Ueberauth, providers: [:github]
 
   require Logger
 
   alias Reviews.Accounts
+  alias Reviews.AuthRelay
+
+  defp redirect_to_relay(conn, _opts) do
+    if AuthRelay.client?() do
+      state = AuthRelay.new_state()
+      query = URI.encode_query(host: conn.host, state: state)
+
+      conn
+      |> put_session(:auth_relay_state, state)
+      |> redirect(external: AuthRelay.relay_url() <> "/auth/relay?" <> query)
+      |> halt()
+    else
+      conn
+    end
+  end
 
   defp require_oauth_configured(conn, _opts) do
     client_id = Application.get_env(:ueberauth, Ueberauth.Strategy.Github.OAuth)[:client_id]
@@ -61,7 +81,8 @@ defmodule ReviewsWeb.AuthController do
 
   defp safe_return_to(_), do: nil
 
-  defp redirect_back(conn) do
+  @doc false
+  def redirect_back(conn) do
     to = get_session(conn, :return_to) || ~p"/"
 
     conn
@@ -86,13 +107,23 @@ defmodule ReviewsWeb.AuthController do
   end
 
   def callback(%{assigns: %{ueberauth_auth: auth}} = conn, _params) do
-    attrs = %{
+    sign_in(conn, github_attrs(auth))
+  end
+
+  # The helpers below are shared with ReviewsWeb.AuthRelayController.
+
+  @doc false
+  def github_attrs(%Ueberauth.Auth{} = auth) do
+    %{
       github_id: auth.uid |> to_integer(),
       username: auth.info.nickname || auth.info.name,
       avatar_url: auth.info.image,
       email: auth.info.email
     }
+  end
 
+  @doc false
+  def sign_in(conn, attrs) do
     case Accounts.upsert_from_github(attrs) do
       {:ok, user} ->
         conn
