@@ -24,7 +24,7 @@ defmodule ReviewsWeb.Api.PatchsetController do
           packet: params["packet"]
         }
 
-        case Reviews.append_patchset(review, conn.assigns.current_identity, attrs) do
+        case Reviews.append_patchset(review, conn.assigns.current_principal, attrs) do
           {:ok, patchset} ->
             conn
             |> put_status(:created)

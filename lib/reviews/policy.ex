@@ -4,8 +4,9 @@ defmodule Reviews.Policy do
   rules from the context functions that call this module, so adapters only
   turn `{:error, :forbidden}` into their own error format.
 
-    * Comment: any signed-in identity with the review link. Context functions
-      require an identity, so there is no separate check.
+    * Read: anyone with the review link, signed in or not.
+    * Comment: any signed-in identity with the review link. A delegated
+      principal also needs the `comments:write` scope.
     * Push a patchset: the review owner.
     * Resolve or reopen a thread: the review owner or the thread's author.
     * Decide a packet section: the review owner.
@@ -13,26 +14,59 @@ defmodule Reviews.Policy do
   "Owner" and "author" mean the account, not one identity: an account's human
   identity and its agent identities share its permissions.
 
-  MCP still limits every tool to reviews the account owns, which is stricter
-  than these rules, until it moves to them (#176, plan step 1).
+  The actor is a `Reviews.Principal`, or a bare `Identity` (treated as a
+  principal with every scope), or nil for a signed-out reader.
   """
   alias Reviews.Accounts.Identity
+  alias Reviews.Principal
   alias Reviews.Repo
   alias Reviews.Reviews.Review
 
-  @type action :: :push | :decide_section | {:update_thread_status, thread :: map()}
+  @type action ::
+          :read
+          | :comment
+          | :push
+          | :decide_section
+          | {:update_thread_status, thread :: map()}
 
-  @spec can?(Identity.t() | nil, action(), Review.t()) :: boolean()
-  def can?(%Identity{} = actor, :push, %Review{} = review), do: owner?(actor, review)
+  # The scope a delegated principal needs for each write. API tokens and web
+  # sessions hold every scope.
+  @scopes %{comment: "comments:write"}
 
-  # Explicitly added reviewers will also be allowed here once that feature exists.
-  def can?(%Identity{} = actor, :decide_section, %Review{} = review), do: owner?(actor, review)
+  @spec can?(Principal.t() | Identity.t() | nil, action(), Review.t()) :: boolean()
+  def can?(_actor, :read, %Review{}), do: true
 
-  def can?(%Identity{} = actor, {:update_thread_status, thread}, %Review{} = review) do
-    owner?(actor, review) or same_account?(actor, author(thread))
+  def can?(actor, action, %Review{} = review) do
+    case Principal.from(actor) do
+      %Principal{} = principal ->
+        scoped?(principal, action) and allowed?(principal, action, review)
+
+      nil ->
+        false
+    end
   end
 
   def can?(_actor, _action, _review), do: false
+
+  defp scoped?(principal, action) do
+    case Map.fetch(@scopes, action) do
+      {:ok, scope} -> Principal.scope?(principal, scope)
+      # Writes without a scope of their own are not delegated to OAuth clients.
+      :error -> principal.scopes == :all
+    end
+  end
+
+  defp allowed?(_principal, :comment, _review), do: true
+  defp allowed?(%{identity: actor}, :push, review), do: owner?(actor, review)
+
+  # Explicitly added reviewers will also be allowed here once that feature exists.
+  defp allowed?(%{identity: actor}, :decide_section, review), do: owner?(actor, review)
+
+  defp allowed?(%{identity: actor}, {:update_thread_status, thread}, review) do
+    owner?(actor, review) or same_account?(actor, author(thread))
+  end
+
+  defp allowed?(_principal, _action, _review), do: false
 
   # Uses the preloaded author when there is one, so checking every thread of a
   # review does not cost a query each; otherwise asks `owned_by?/2`.

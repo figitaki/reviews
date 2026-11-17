@@ -96,7 +96,7 @@ defmodule Reviews.Reviews do
   """
   def append_patchset(%Review{} = review, actor, attrs) when is_map(attrs) do
     if Policy.can?(actor, :push, review),
-      do: append_patchset(review, attrs),
+      do: append_patchset_unchecked(review, attrs),
       else: {:error, :forbidden}
   end
 
@@ -105,10 +105,10 @@ defmodule Reviews.Reviews do
   Also populates the per-file rows for the new patchset so the sidebar
   renders without a re-parse.
 
-  Trusted internal setup path without authorization. User-facing callers must
-  use `append_patchset/3` with the authenticated identity instead.
+  Trusted setup path (seeds, demos, tests) that skips `Reviews.Policy`. Every
+  surface must use `append_patchset/3` with the authenticated principal.
   """
-  def append_patchset(%Review{} = review, attrs) when is_map(attrs) do
+  def append_patchset_unchecked(%Review{} = review, attrs) when is_map(attrs) do
     next_number = next_patchset_number(review.id)
     raw_diff = attrs[:raw_diff] || attrs["raw_diff"]
 
@@ -151,6 +151,28 @@ defmodule Reviews.Reviews do
 
   def get_patchset_by_number(%Review{id: review_id}, number) when is_integer(number) do
     Repo.get_by(Patchset, review_id: review_id, number: number)
+  end
+
+  @doc "Select one revision's identity without loading its diff, packet or file totals."
+  def get_patchset_metadata(%Review{id: review_id}, number) do
+    query =
+      from p in Patchset,
+        where: p.review_id == ^review_id,
+        order_by: [desc: p.number],
+        limit: 1,
+        select: %{id: p.id, number: p.number}
+
+    query = if is_nil(number), do: query, else: from(p in query, where: p.number == ^number)
+    Repo.one(query)
+  end
+
+  @doc "Revision identities for a page's thread origins, scoped to their review."
+  def list_patchset_metadata(%Review{id: review_id}, ids) when is_list(ids) do
+    Repo.all(
+      from p in Patchset,
+        where: p.review_id == ^review_id and p.id in ^ids,
+        select: %{id: p.id, number: p.number}
+    )
   end
 
   @doc "The packet of one patchset, without loading its diff."

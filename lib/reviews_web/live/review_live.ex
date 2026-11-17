@@ -1160,15 +1160,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp file_diff_id(file), do: "file-diff-#{file.id}"
 
-  defp put_section_status(socket, patchset, user, section, status) do
-    PacketSectionDecisions.put_section_status(
-      socket.assigns.review,
-      patchset,
-      user,
-      section,
-      socket.assigns.packet_section_decisions,
-      socket.assigns.patchsets,
-      status
-    )
+  defp put_section_status(socket, patchset, identity, section, status) do
+    PacketSectionDecisions.toggle(socket.assigns.review, patchset, identity, section, status)
   end
 end
