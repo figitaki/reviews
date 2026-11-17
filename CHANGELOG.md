@@ -21,6 +21,13 @@ later fixes continue toward 0.0.2.
   link can comment. The rules live in `Reviews.Policy` and apply to every
   surface.
 
+### Changed
+
+- One error vocabulary, `Reviews.Errors`, gives every surface the same
+  codes, statuses and safe default details. MCP error results use it as
+  REST and Poppy do; unknown reasons become `write_failed`. It adds
+  `invalid_pagination` and `invalid_packet`.
+
 ### Added
 
 - Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with

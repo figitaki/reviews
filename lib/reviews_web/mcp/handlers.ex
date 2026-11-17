@@ -1133,13 +1133,16 @@ defmodule ReviewsWeb.MCP.Handlers do
       Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
       |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
 
-    error_result("Invalid input: #{errors}", :validation_failed)
+    error_result("Invalid input: #{errors}", changeset)
   end
 
-  defp error_result(message, code \\ :invalid_request),
+  # Codes come from the shared vocabulary (`Reviews.Errors`), as on REST.
+  defp error_result(message, reason \\ :invalid_request),
     do:
       Result.new(message,
         is_error: true,
-        structured_content: %{error: %{code: to_string(code), detail: message}}
+        structured_content: %{
+          error: %{code: to_string(Reviews.Errors.code(reason)), detail: message}
+        }
       )
 end
