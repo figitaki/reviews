@@ -54,7 +54,8 @@ reviews login
 ```
 
 It prints a code and a link. Open the link on any device, sign in with GitHub,
-and enter the code; the CLI then signs in as you and keeps itself signed in.
+enter the code, and choose who the CLI acts as: you, or one of your agent
+identities. The CLI then keeps itself signed in.
 This works over SSH too. Use `--server <url>` for another server (the default
 is `https://reviews.figitaki.dev`), or `reviews login --token` to paste an API
 token from `/settings` instead.

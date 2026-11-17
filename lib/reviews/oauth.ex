@@ -19,9 +19,9 @@ defmodule Reviews.OAuth do
       A token issued for one resource is refused by every other.
     * The one exception is the Reviews CLI (`Reviews.OAuth.CLI`): its own
       client signs in with the device authorization grant, the person
-      approves it at `/device` (`approve_device/3`), and its tokens act as
-      the person's human identity, as API tokens do. Only the CLI resource
-      accepts them.
+      approves it at `/device` (`approve_device/3`), choosing which of their
+      identities it acts as: their human identity, as API tokens do, or one
+      of their agents. Only the CLI resource accepts a human subject.
 
   `config/0` builds the gatekeep config from `config :reviews, Reviews.OAuth`
   on every call, because the issuer defaults to the endpoint's public URL and
@@ -125,18 +125,28 @@ defmodule Reviews.OAuth do
   end
 
   @doc """
-  `user` approves the CLI sign-in with `user_code`. Its tokens act as the
-  user's human identity, and the user owns the grant.
+  `user` approves the CLI sign-in with `user_code`, acting as `identity_id`:
+  the user's human identity or one of their agents. Any other ID is
+  `:invalid_identity`. The user owns the grant.
   """
-  @spec approve_device(User.t(), term()) ::
-          :ok | {:error, :invalid_user_code | :expired_user_code}
-  def approve_device(%User{} = user, user_code) do
+  @spec approve_device(User.t(), term(), term()) ::
+          :ok | {:error, :invalid_user_code | :expired_user_code | :invalid_identity}
+  def approve_device(%User{} = user, user_code, identity_id) do
     with {:ok, _request} <- lookup_device(user_code),
-         {:ok, identity} <- Accounts.ensure_human_identity(user) do
+         {:ok, identity} <- owned_identity(user, identity_id) do
       case DeviceAuthorization.approve(config(), user_code, subject: identity.id, owner: user.id) do
         {:error, :invalid_scopes} -> {:error, :invalid_user_code}
         result -> result
       end
+    end
+  end
+
+  defp owned_identity(user, identity_id) do
+    with {:ok, id} when is_integer(id) <- Ecto.Type.cast(:id, identity_id),
+         %Identity{} = identity <- Accounts.get_owned_identity(user, id) do
+      {:ok, identity}
+    else
+      _ -> {:error, :invalid_identity}
     end
   end
 
@@ -149,9 +159,9 @@ defmodule Reviews.OAuth do
   end
 
   @doc """
-  Authenticates a CLI access token at `/api/v1`. Returns the person and
-  their human identity, as `Reviews.Accounts.authenticate_token/1` does for
-  API tokens.
+  Authenticates a CLI access token at `/api/v1`. Returns the person and the
+  identity they chose at `/device`, as `Reviews.Accounts.authenticate_token/1`
+  does for API tokens.
   """
   @spec authenticate_cli_token(Token.request()) ::
           {:ok, %{user: User.t(), identity: Identity.t()}} | {:error, atom()}
@@ -171,8 +181,8 @@ defmodule Reviews.OAuth do
   `:dpop` header value, the `:method`, and the `:path`.
 
   Returns the grant, with the identity it acts as and the person who
-  approved it, and the token. The identity belongs to that person, and is
-  their human identity at the CLI resource and one of their agents
+  approved it, and the token. The identity belongs to that person; it may be
+  their human identity only at the CLI resource, and is one of their agents
   everywhere else.
   """
   @spec authenticate_access_token(String.t(), Token.request()) ::
@@ -180,13 +190,14 @@ defmodule Reviews.OAuth do
           | {:error, :missing_token | :invalid_token | :invalid_dpop_proof}
   def authenticate_access_token(resource_id, request) do
     with {:ok, token} <- Token.authenticate(config(), resource_id, request) do
-      kind = if Gatekeep.Util.same_url?(token.resource, CLI.id()), do: "human", else: "agent"
+      human_ok? = Gatekeep.Util.same_url?(token.resource, CLI.id())
 
       case token.grant_id && Repo.get(Grant, token.grant_id) |> with_people() do
         %Grant{
-          identity: %Identity{kind: ^kind, owner_user_id: user_id},
+          identity: %Identity{kind: kind, owner_user_id: user_id},
           approved_by_user: %User{id: user_id}
-        } = grant ->
+        } = grant
+        when kind == "agent" or (kind == "human" and human_ok?) ->
           {:ok, %{grant: grant, token: token}}
 
         _ ->

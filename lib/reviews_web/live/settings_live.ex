@@ -255,7 +255,7 @@ defmodule ReviewsWeb.SettingsLive do
                 id="cli-sign-ins"
                 eyebrow="Reviews CLI"
                 title="CLI sign-ins"
-                description="Each reviews login that signed in as you. Signing one out stops its tokens at once."
+                description="Each reviews login you approved, and the identity it acts as. Signing one out stops its tokens at once."
               >
                 <div class="design-section-body">
                   <.ds_card class="ds-settings-card">
@@ -273,6 +273,9 @@ defmodule ReviewsWeb.SettingsLive do
                         class="ds-token-row"
                       >
                         <span class="ds-token-row-name">Reviews CLI</span>
+                        <span :if={session.identity}>
+                          Acts as {identity_label(session.identity)}.
+                        </span>
                         <span>
                           Signed in {format_date(session.inserted_at)}. {last_used_label(
                             session.last_used_at

@@ -62,7 +62,7 @@ defmodule ReviewsWeb.DeviceLoginTest do
 
   defp error(conn), do: {conn.status, json_response(conn, conn.status)["error"]}
 
-  test "the CLI signs in as the person's human identity", %{user: user, human: human} do
+  test "the CLI signs in, as the human identity by default", %{user: user, human: human} do
     %{"device_code" => device_code, "user_code" => user_code} = body = start!()
     assert body["verification_uri"] == "https://reviews.test/device"
     assert body["interval"] == 5
@@ -86,11 +86,17 @@ defmodule ReviewsWeb.DeviceLoginTest do
     typed = user_code |> String.downcase() |> String.replace("-", "")
     html = user |> signed_in() |> post(~p"/device", %{"user_code" => typed}) |> html_response(200)
     assert html =~ ~s(id="device-confirm-form")
+    # The picker offers the human identity first, chosen by default.
+    assert html =~ ~r/<input[^>]*checked[^>]*id="device-identity-#{human.id}"/
 
     html =
       user
       |> signed_in()
-      |> post(~p"/device/decide", %{"user_code" => user_code, "decision" => "approve"})
+      |> post(~p"/device/decide", %{
+        "user_code" => user_code,
+        "decision" => "approve",
+        "identity_id" => to_string(human.id)
+      })
       |> html_response(200)
 
     assert html =~ ~s(id="device-approved")
@@ -233,26 +239,93 @@ defmodule ReviewsWeb.DeviceLoginTest do
       user |> signed_in() |> post(~p"/device", %{"user_code" => user_code}) |> html_response(400)
 
     assert html =~ "That code isn&#39;t valid"
-    assert OAuth.approve_device(user, user_code) == {:error, :invalid_user_code}
+
+    assert OAuth.approve_device(user, user_code, to_string(user.id)) ==
+             {:error, :invalid_user_code}
   end
 
-  test "tokens act as a human only at the CLI API, and as an agent only elsewhere",
-       %{user: user, human: human} do
+  test "the person can choose one of their agents at /device", %{user: user, human: human} do
     {:ok, agent} = Accounts.create_agent_identity(user, %{display_name: "Bot", handle: "bot"})
-
-    # A CLI grant whose subject is an agent is refused at /api/v1.
     %{"device_code" => device_code, "user_code" => user_code} = start!()
 
+    html =
+      user |> signed_in() |> post(~p"/device", %{"user_code" => user_code}) |> html_response(200)
+
+    assert html =~ ~s(id="device-identity-#{human.id}")
+    assert html =~ ~s(id="device-identity-#{agent.id}")
+
+    html =
+      user
+      |> signed_in()
+      |> post(~p"/device/decide", %{
+        "user_code" => user_code,
+        "decision" => "approve",
+        "identity_id" => to_string(agent.id)
+      })
+      |> html_response(200)
+
+    assert html =~ ~s(id="device-approved")
+
+    me = poll(device_code) |> json_response(200) |> Map.fetch!("access_token") |> me()
+    me = json_response(me, 200)
+    assert me["username"] == user.username
+    assert me["identity"]["id"] == agent.id
+    assert me["identity"]["kind"] == "agent"
+  end
+
+  test "someone else's identity can't be chosen, and doesn't use up the code", %{user: user} do
+    {:ok, other_user} =
+      Accounts.upsert_from_github(%{
+        github_id: System.unique_integer([:positive]),
+        username: "mallory"
+      })
+
+    {:ok, theirs} =
+      Accounts.create_agent_identity(other_user, %{display_name: "Theirs", handle: "theirs"})
+
+    {:ok, their_human} = Accounts.ensure_human_identity(other_user)
+    %{"device_code" => device_code, "user_code" => user_code} = start!()
+
+    for id <- [theirs.id, their_human.id, "nope", nil] do
+      html =
+        user
+        |> signed_in()
+        |> post(~p"/device/decide", %{
+          "user_code" => user_code,
+          "decision" => "approve",
+          "identity_id" => id
+        })
+        |> html_response(200)
+
+      assert html =~ "Choose one of your identities."
+      assert html =~ ~s(id="device-confirm-form")
+    end
+
+    assert OAuth.approve_device(user, user_code, theirs.id) == {:error, :invalid_identity}
+    wait()
+    assert error(poll(device_code)) == {400, "authorization_pending"}
+    assert DeviceAttempts.allowed?(user.id)
+  end
+
+  test "a grant for an identity its approver doesn't own is refused at /api/v1", %{user: user} do
+    {:ok, other_user} =
+      Accounts.upsert_from_github(%{
+        github_id: System.unique_integer([:positive]),
+        username: "eve"
+      })
+
+    {:ok, theirs} = Accounts.create_agent_identity(other_user, %{display_name: "E", handle: "e"})
+    %{"device_code" => device_code, "user_code" => user_code} = start!()
+
+    # Bypasses the page's ownership check, as a bug elsewhere might.
     :ok =
-      DeviceAuthorization.approve(OAuth.config(), user_code,
-        subject: agent.id,
-        owner: user.id
-      )
+      DeviceAuthorization.approve(OAuth.config(), user_code, subject: theirs.id, owner: user.id)
 
     %{"access_token" => access} = poll(device_code) |> json_response(200)
     assert me(access).status == 401
+  end
 
-    # A grant at an agent API whose subject is the human is refused there.
+  test "a human identity is refused at every API but the CLI's", %{user: user, human: human} do
     other = "https://agent-tv2.example/client.json"
     Fetcher.setup()
 
@@ -279,14 +352,15 @@ defmodule ReviewsWeb.DeviceLoginTest do
            }) == {:error, :invalid_token}
   end
 
-  test "Settings lists CLI sign-ins apart from connected agents", %{user: user} do
+  test "Settings lists CLI sign-ins apart from connected agents", %{user: user, human: human} do
     %{"device_code" => device_code, "user_code" => user_code} = start!()
-    :ok = OAuth.approve_device(user, user_code)
+    :ok = OAuth.approve_device(user, user_code, human.id)
     poll(device_code) |> json_response(200)
     [grant] = OAuth.list_grants_for(user)
 
     {:ok, view, _html} = live(signed_in(user), ~p"/settings")
     assert has_element?(view, "#cli-session-#{grant.id}", "Reviews CLI")
+    assert has_element?(view, "#cli-session-#{grant.id}", "Acts as #{human.display_name}")
     refute has_element?(view, "#agent-link-#{grant.id}")
 
     view

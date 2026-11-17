@@ -9,12 +9,12 @@ defmodule Reviews.OAuth.CLI do
   `reviews-cli`, may get these tokens (`allowed_clients`), and it may use no
   other grant, so no other app can ask for them.
 
-  Unlike every other resource, these tokens act as the person's **human**
-  identity, as the API tokens minted in Settings do: the CLI is the person
-  at their terminal, not an agent acting for them. That is why the tokens
-  are limited to this one client and this one resource, and why other
-  resources refuse grants whose subject is a human identity
-  (`Reviews.OAuth.authenticate_access_token/2`).
+  On `/device` the person chooses which of their identities the CLI acts
+  as: their **human** identity, as the API tokens minted in Settings do, or
+  one of their agents, like the consent page's picker. Only this resource
+  accepts a human subject; every other resource refuses one
+  (`Reviews.OAuth.authenticate_access_token/2`). That is why the tokens are
+  limited to this one client and this one resource.
 
   Refresh tokens rotate; each `reviews login` is one grant, which Settings
   lists under "CLI sign-ins" and can revoke.
@@ -48,7 +48,8 @@ defmodule Reviews.OAuth.CLI do
       id: id(),
       name: "Reviews CLI API",
       scopes: [
-        {@scope, "Push reviews, comment, reply, resolve threads, and decide sections as you."}
+        {@scope,
+         "Push reviews, comment, reply, resolve threads, and decide sections as the identity you choose."}
       ],
       client_auth_methods: ["none"],
       allowed_clients: [@client_id]

@@ -26,7 +26,8 @@ later fixes continue toward 0.0.2.
 - `reviews login` signs in from the browser on any device with the OAuth
   device authorization grant (RFC 8628): it shows a code, you enter it at
   `/device`, and the CLI stores tokens that refresh themselves. It works over
-  SSH and in containers. The tokens act as you, like API tokens, and
+  SSH and in containers. On `/device` you choose who the tokens act as:
+  you, like API tokens, or one of your agent identities.
   Settings → CLI sign-ins signs them out. `reviews login --token` keeps the
   old way, an API token pasted from Settings, and `--server` picks the server.
 

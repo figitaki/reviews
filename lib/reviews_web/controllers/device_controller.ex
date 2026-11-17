@@ -2,12 +2,14 @@ defmodule ReviewsWeb.DeviceController do
   @moduledoc """
   The CLI sign-in page (RFC 8628 §3.3): `reviews login` shows a code and
   this URL; the person signs in with GitHub, enters the code, checks it
-  matches their terminal, and allows or denies it.
+  matches their terminal, chooses which of their identities the CLI acts as
+  (their human identity, preselected, or one of their agents), and allows or
+  denies it.
 
     * `GET /device` - the code form, or, with `?user_code=`, the confirmation
       for that code. A link never approves anything by itself.
     * `POST /device` - looks up an entered code.
-    * `POST /device/decide` - allow or deny (`Reviews.OAuth.approve_device/2`).
+    * `POST /device/decide` - allow or deny (`Reviews.OAuth.approve_device/3`).
 
   Each wrong or expired code counts against the person
   (`Reviews.OAuth.DeviceAttempts`); past the limit, the page refuses codes
@@ -15,6 +17,7 @@ defmodule ReviewsWeb.DeviceController do
   """
   use ReviewsWeb, :controller
 
+  alias Reviews.Accounts
   alias Reviews.OAuth
   alias Reviews.OAuth.DeviceAttempts
 
@@ -33,7 +36,8 @@ defmodule ReviewsWeb.DeviceController do
     end
   end
 
-  def decide(conn, %{"user_code" => code, "decision" => decision}) when is_binary(code) do
+  def decide(conn, %{"user_code" => code, "decision" => decision} = params)
+      when is_binary(code) do
     user = conn.assigns.current_user
 
     # Guessing here would sign someone else's CLI in as the guesser, so a
@@ -42,7 +46,7 @@ defmodule ReviewsWeb.DeviceController do
       cond do
         is_nil(user) -> :signed_out
         not DeviceAttempts.allowed?(user.id) -> {:error, :too_many_attempts}
-        decision == "approve" -> OAuth.approve_device(user, code)
+        decision == "approve" -> OAuth.approve_device(user, code, params["identity_id"])
         true -> with :ok <- OAuth.deny_device(code), do: :denied
       end
 
@@ -59,6 +63,12 @@ defmodule ReviewsWeb.DeviceController do
       {:error, :too_many_attempts} ->
         render_entry(conn, :too_many_attempts)
 
+      # The code was fine; only the choice was not one of theirs.
+      {:error, :invalid_identity} ->
+        conn
+        |> put_flash(:error, "Choose one of your identities.")
+        |> check(code)
+
       {:error, reason} ->
         DeviceAttempts.record_failure(user.id)
         render_entry(conn, reason)
@@ -73,7 +83,14 @@ defmodule ReviewsWeb.DeviceController do
     if DeviceAttempts.allowed?(user.id) do
       case OAuth.lookup_device(code) do
         {:ok, request} ->
-          render(conn, :confirm, request: request, page_title: "Sign in to the Reviews CLI")
+          {:ok, _human} = Accounts.ensure_human_identity(user)
+
+          render(conn, :confirm,
+            request: request,
+            # Human first, so it is the default, then agents by name.
+            identities: Accounts.list_identities_for(user),
+            page_title: "Sign in to the Reviews CLI"
+          )
 
         {:error, reason} ->
           DeviceAttempts.record_failure(user.id)

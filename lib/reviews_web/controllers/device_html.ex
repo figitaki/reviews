@@ -41,7 +41,7 @@ defmodule ReviewsWeb.DeviceHTML do
           <.ds_page_header
             eyebrow="Reviews CLI"
             title="Enter the code from your terminal"
-            description="reviews login shows an 8-letter code in your terminal. Enter it here to sign the CLI in as you."
+            description="reviews login shows an 8-letter code in your terminal. Enter it here, then choose who the CLI acts as."
             class="is-compact"
           />
 
@@ -87,7 +87,7 @@ defmodule ReviewsWeb.DeviceHTML do
           <.ds_page_header
             eyebrow="Reviews CLI"
             title="Sign in to the Reviews CLI?"
-            description="The CLI will act as you: push reviews, comment, reply, resolve threads, and decide sections under your name."
+            description="The CLI will push reviews, comment, reply, resolve threads, and decide sections as the identity you choose."
             class="is-compact"
           />
 
@@ -99,10 +99,6 @@ defmodule ReviewsWeb.DeviceHTML do
                   <strong><code>{@request.user_code}</code></strong>
                 </dd>
               </div>
-              <div>
-                <dt>Acts as</dt>
-                <dd>{@current_user.username} (you)</dd>
-              </div>
             </dl>
 
             <p id="device-confirm-warning" class="poppy-consent-note">
@@ -111,9 +107,30 @@ defmodule ReviewsWeb.DeviceHTML do
               yourself, just now. If someone sent you this link, deny it.
             </p>
 
-            <form id="device-confirm-form" action={~p"/device/decide"} method="post">
+            <form
+              id="device-confirm-form"
+              action={~p"/device/decide"}
+              method="post"
+              class="poppy-consent-form"
+            >
               <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
               <input type="hidden" name="user_code" value={@request.user_code} />
+
+              <fieldset id="device-identity">
+                <legend>Act as</legend>
+                <label :for={{identity, index} <- Enum.with_index(@identities)} :key={identity.id}>
+                  <input
+                    type="radio"
+                    name="identity_id"
+                    value={identity.id}
+                    checked={index == 0}
+                    id={"device-identity-#{identity.id}"}
+                  />
+                  {identity.display_name} <span translate="no">(@{identity.handle})</span>
+                  <span :if={identity.kind == "human"} class="ds-badge">You</span>
+                  <span :if={identity.kind == "agent"} class="ds-badge">Agent</span>
+                </label>
+              </fieldset>
               <div class="poppy-consent-actions">
                 <button
                   id="device-approve"

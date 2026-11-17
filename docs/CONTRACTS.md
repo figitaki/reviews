@@ -21,7 +21,8 @@ Authorization: Bearer <raw_token>
 The token is one of:
 
 - an access token from `reviews login` (the device authorization grant below),
-  which acts as the person's **human** identity and lasts an hour; the CLI
+  which acts as the identity the person chose at `/device` (their human
+  identity or one of their agents) and lasts an hour; the CLI
   refreshes it with its rotating refresh token;
 - an API token minted in the web UI at `/settings` (`reviews login --token`).
   The raw token is shown once, then only its SHA-256 hash is stored. There is
@@ -199,7 +200,10 @@ APIs other than `/api/v1` accept OAuth access tokens from the Reviews issuer
   `expired_token`, or the tokens. A device code is redeemed once; presenting
   it again revokes the sign-in.
 - `GET|POST /device`, `POST /device/decide`: the signed-in person enters the
-  code, checks it, and allows or denies. A link with `?user_code=` only
+  code, checks it, picks an identity (`identity_id`: their human identity,
+  the default, or one of their agents; any other ID is refused and leaves the
+  code pending), and allows or denies. `/api/v1` is the only resource that
+  accepts a human subject. A link with `?user_code=` only
   fills the code; approval is always a POST. Ten wrong codes in 15 minutes
   lock the person out of the page for the rest of the window.
 - `POST /oauth/revoke`: RFC 7009.
