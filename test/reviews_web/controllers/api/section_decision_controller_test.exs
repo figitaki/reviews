@@ -63,8 +63,16 @@ defmodule ReviewsWeb.Api.SectionDecisionControllerTest do
         "status" => "approved"
       })
 
-    assert %{"section_index" => 0, "status" => nil} = json_response(conn, 200)
-    assert [] = PacketSectionDecisions.list_for_review(review, agent)
+    # A retried request keeps the decision instead of toggling it off.
+    assert %{"section_index" => 0, "status" => "approved"} = json_response(conn, 200)
+    assert [%{status: "approved"}] = PacketSectionDecisions.list_for_review(review, agent)
+
+    conn =
+      authenticated_json_conn(raw)
+      |> post(~p"/api/v1/reviews/#{review.slug}/sections/0/decision", %{"status" => "pending"})
+
+    assert %{"status" => "pending"} = json_response(conn, 200)
+    assert [%{status: "pending"}] = PacketSectionDecisions.list_for_review(review, agent)
   end
 
   test "rejects an invalid status", %{conn: conn, raw_token: raw, review: review} do

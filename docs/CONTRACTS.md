@@ -26,13 +26,15 @@ Missing/invalid token → `401` with body `{ "errors": { "detail": "Unauthorized
 
 ### Permissions
 
-The same rules hold on every surface (web, REST/CLI, Poppy) and are enforced
-by `Reviews.Policy` in the domain layer:
+The same rules hold on every surface (web, REST/CLI, Poppy, MCP) and are
+enforced by `Reviews.Policy` in the domain layer. Each surface authenticates
+its caller as a `Reviews.Principal` (identity, account, scopes, attribution)
+and passes it to the context functions:
 
 | Action | Who may do it |
 | --- | --- |
 | Read a review | Anyone with the link. |
-| Comment or reply | Any signed-in identity with the link. |
+| Comment or reply | Any signed-in identity with the link. A Poppy grant also needs the `comments:write` scope. |
 | Push a patchset | The review owner. |
 | Resolve or reopen a thread | The review owner or the thread's author. |
 | Decide a packet section | The review owner. Explicitly added reviewers will join once that feature exists. |
@@ -41,8 +43,10 @@ by `Reviews.Policy` in the domain layer:
 its agent identities share its permissions. Anyone else gets `403` with
 `{ "errors": { "detail": "..." } }`, and nothing is written.
 
-MCP (`docs/MCP.md`) still limits every tool to reviews the account owns,
-which is stricter than these rules, until it moves to them.
+API tokens hold every scope. An OAuth grant (Poppy) holds only the scopes it
+was approved for, so it can comment but cannot push, resolve, reopen or decide,
+even for an identity that could do so with an API token. A refused comment is
+`403`.
 
 ### `POST /api/v1/reviews`
 
@@ -175,8 +179,10 @@ packet-section decisions authored through the token use that identity.
 
 ### `POST /api/v1/reviews/:slug/sections/:section_index/decision`
 
-Sets or toggles the current token identity's decision for one packet section on
-the latest patchset. `section_index` is zero-based.
+Sets the token account's decision for one packet section on the latest
+patchset. `section_index` is zero-based. Decisions belong to the account (a
+person and their agent identities share one decision per section); the stored
+decision records which identity set it.
 
 Request body:
 
@@ -184,7 +190,8 @@ Request body:
 { "status": "approved" }
 ```
 
-`status` must be one of `"approved"`, `"denied"`, or `"ignored"`.
+`status` must be one of `"approved"`, `"denied"`, `"ignored"`, or `"pending"`
+(undecided, overriding a decision carried from an earlier patchset).
 
 Response `200`:
 
@@ -197,8 +204,11 @@ Response `200`:
 }
 ```
 
-Posting the same status again clears that identity's current decision. In that
-case, `status` is `null`, meaning the section is pending.
+The status is set, not toggled: posting the status the section already has
+changes nothing, so a retried request is safe. Before this change, posting the
+same status again cleared the decision and returned `"status": null`; the CLI
+still accepts that reply from older servers. Writes for one patchset are
+serialized, so concurrent requests never act on stale state.
 
 Only the review owner's identities may decide sections; any other token →
 `403` with `{ "errors": { "detail": "Only the review owner can decide sections" } }`.
@@ -265,8 +275,8 @@ go through.
 Streamable HTTP MCP endpoint for agents, off unless `MCP_ENABLED` is set (see
 `docs/MCP.md` for tools, flags, and client setup). It authenticates with the
 same `Authorization: Bearer <raw_token>` as the REST API and acts as the token's
-identity. Tools read and write only reviews owned by the token's account;
-foreign and unknown slugs get the same not-found result. Request bodies are
+identity. Tools find reviews by link and follow the permission rules above;
+unknown slugs get a not-found result. Request bodies are
 capped at 4 MB before decoding; the REST limit above does not apply.
 
 ---

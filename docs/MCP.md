@@ -45,11 +45,11 @@ Tokens have no scope model yet. Every valid token holds `reviews:read`,
 `reviews:write` and `threads:write`. The tools already check those scopes, so
 OAuth tokens can narrow them later.
 
-A token can read and write only the reviews its account owns: reviews pushed by
-the account's human identity or any of its agent identities. Reviews owned by
-other accounts get the same "not found" result as unknown slugs, even though
-the web link is public. This follows #107 ("a slug is not a grant"). It means a
-reviewer's agent cannot read a review that someone else shared with them yet.
+MCP follows the same permission rules as the web page, REST and Poppy
+(`Reviews.Policy`, listed in `docs/CONTRACTS.md`). A token can read any review
+whose slug or URL it has, and comment on it. Only the review owner's account can
+push revisions, and only the owner or a thread's author can resolve or reopen a
+thread. Anyone else gets an error result, and nothing is written.
 
 ## Tools
 
@@ -80,7 +80,7 @@ the whole review.
 | `reviews_list_threads` | Threads projected onto a revision, with their first comments. `line` is null when the code changed (`anchor_status: "outdated"`). `comments_complete: false` means more comments or longer bodies than shown. |
 | `reviews_get_thread` | One thread with all of its comments, in pieces when long. |
 | `reviews_create_review` | Publish a review from a unified diff and optional packet JSON. Hunk rows and `line_start`/`line_end` slices are checked against the diff, as the CLI does. |
-| `reviews_append_revision` | Upload a new revision of an owned review, with the same checks. |
+| `reviews_append_revision` | Upload a new revision of a review your account owns, with the same checks. |
 | `reviews_post_comment` | Reply with `thread_id`, or start a thread at `path` + `line` of a revision's diff. The line must be in that revision's diff. |
 | `reviews_update_thread_status` | Resolve or reopen a thread. |
 

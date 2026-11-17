@@ -96,7 +96,7 @@ defmodule Reviews.Reviews do
   """
   def append_patchset(%Review{} = review, actor, attrs) when is_map(attrs) do
     if Policy.can?(actor, :push, review),
-      do: append_patchset(review, attrs),
+      do: append_patchset_unchecked(review, attrs),
       else: {:error, :forbidden}
   end
 
@@ -105,10 +105,10 @@ defmodule Reviews.Reviews do
   Also populates the per-file rows for the new patchset so the sidebar
   renders without a re-parse.
 
-  Trusted internal setup path without authorization. User-facing callers must
-  use `append_patchset/3` with the authenticated identity instead.
+  Trusted setup path (seeds, demos, tests) that skips `Reviews.Policy`. Every
+  surface must use `append_patchset/3` with the authenticated principal.
   """
-  def append_patchset(%Review{} = review, attrs) when is_map(attrs) do
+  def append_patchset_unchecked(%Review{} = review, attrs) when is_map(attrs) do
     next_number = next_patchset_number(review.id)
     raw_diff = attrs[:raw_diff] || attrs["raw_diff"]
 
