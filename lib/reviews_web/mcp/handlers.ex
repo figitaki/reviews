@@ -1013,7 +1013,9 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   defp changeset_result(changeset) do
     errors =
-      Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
+      Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+        Keyword.get(opts, :detail, message)
+      end)
       |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
 
     error_result("Invalid input: #{errors}")

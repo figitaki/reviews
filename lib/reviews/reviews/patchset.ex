@@ -32,7 +32,8 @@ defmodule Reviews.Reviews.Patchset do
 
   def changeset(patchset, attrs) do
     patchset
-    |> cast(attrs, @required ++ @optional)
+    |> cast(attrs, @required ++ (@optional -- [:packet]))
+    |> cast(attrs, [:packet], empty_values: [])
     |> validate_required(@required)
     |> validate_length(:base_sha, max: 255, count: :codepoints)
     |> validate_length(:branch_name, max: 255, count: :codepoints)
@@ -52,7 +53,7 @@ defmodule Reviews.Reviews.Patchset do
 
       {:error, problems} ->
         Enum.reduce(problems, changeset, fn problem, acc ->
-          add_error(acc, :packet, problem.detail, code: problem.code)
+          add_error(acc, :packet, "%{detail}", detail: problem.detail, code: problem.code)
         end)
     end
   end

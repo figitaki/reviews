@@ -176,6 +176,48 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
       assert get_in(json_response(conn, 200), ["selected_patchset", "packet"]) == packet
     end
 
+    test "rejects empty packet strings and preserves literal placeholder text", %{
+      raw_token: raw,
+      user: user
+    } do
+      diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"
+
+      {:ok, %{review: review}} =
+        ReviewsContext.create_review_with_initial_patchset(user, %{title: "T", raw_diff: diff})
+
+      invalid = %{
+        "title" => "T",
+        "sections" => [
+          %{
+            "title" => "T",
+            "rows" => [
+              %{
+                "kind" => "hunk",
+                "path" => "%{unregistered_packet_placeholder}",
+                "hunk_index" => 1
+              }
+            ]
+          }
+        ]
+      }
+
+      for packet <- ["", invalid],
+          path <- ["/api/v1/reviews", "/api/v1/reviews/#{review.slug}/patchsets"] do
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> post(path, %{title: "T", raw_diff: diff, packet: packet})
+
+        assert %{"errors" => %{"packet" => errors}} = json_response(conn, 422)
+
+        if is_map(packet),
+          do:
+            assert(Enum.any?(errors, &String.contains?(&1, "%{unregistered_packet_placeholder}")))
+      end
+
+      assert length(ReviewsContext.list_patchsets(review)) == 1
+    end
+
     test "rejects uncovered packets on both upload endpoints", %{raw_token: raw, user: user} do
       diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"
       packet = %{"title" => "T", "sections" => []}

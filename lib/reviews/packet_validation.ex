@@ -57,6 +57,12 @@ defmodule Reviews.PacketValidation do
   defp nonblank?(_), do: false
 
   defp check_coverage(packet, hunks_by_path) do
+    row_counts =
+      for {path, hunks} <- hunks_by_path,
+          hunk <- hunks,
+          into: %{},
+          do: {{path, hunk.hunk_index}, length(ReviewHunks.rows(hunk))}
+
     expected =
       for {path, hunks} <- hunks_by_path,
           hunk <- hunks,
@@ -70,7 +76,7 @@ defmodule Reviews.PacketValidation do
       |> Enum.flat_map(& &1["rows"])
       |> Enum.filter(&(&1["kind"] == "hunk"))
       |> Enum.reduce({[], %{}}, fn row, {problems, covered} ->
-        case reference(row, hunks_by_path) do
+        case reference(row, row_counts) do
           {:ok, first, last} ->
             keys =
               for n <- first..last//1,
@@ -110,12 +116,12 @@ defmodule Reviews.PacketValidation do
     end
   end
 
-  defp reference(row, hunks) do
+  defp reference(row, row_counts) do
     ref = "#{row["path"]}##{row["hunk_index"]}"
 
-    case ReviewHunks.find(hunks, row["path"], row["hunk_index"]) do
-      nil -> {:error, problem("unknown_hunk", "#{ref} is not a hunk in raw_diff")}
-      hunk -> slice(row, length(ReviewHunks.rows(hunk)), ref)
+    case Map.fetch(row_counts, {row["path"], row["hunk_index"]}) do
+      :error -> {:error, problem("unknown_hunk", "#{ref} is not a hunk in raw_diff")}
+      {:ok, count} -> slice(row, count, ref)
     end
   end
 
