@@ -113,7 +113,10 @@ defmodule Reviews.PacketValidationTest do
       })
 
     assert {:error, changeset} =
-             ReviewsContext.append_patchset(review, %{raw_diff: @diff, packet: packet([])})
+             ReviewsContext.append_patchset_unchecked(review, %{
+               raw_diff: @diff,
+               packet: packet([])
+             })
 
     assert changeset.errors[:packet]
     assert Repo.aggregate(Patchset, :count) == 1
