@@ -529,13 +529,20 @@ defmodule ReviewsWeb.MCP.Handlers do
     cond do
       not ReviewPacket.present?(packet) ->
         {:error,
-         "Revision #{selected.number} has no packet. Use reviews_list_files and reviews_get_file_diff."}
+         error_result(
+           "Revision #{selected.number} has no packet. Use reviews_list_files and reviews_get_file_diff.",
+           :section_not_found
+         )}
 
       section = Enum.find(sections, &(&1.index == index)) ->
         {:ok, section, length(sections)}
 
       true ->
-        {:error, "No packet section #{index}. Section indexes start at 0."}
+        {:error,
+         error_result(
+           "No packet section #{index}. Section indexes start at 0.",
+           :section_not_found
+         )}
     end
   end
 
@@ -548,8 +555,11 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   defp review_thread(review, thread_id) do
     case Threads.get_review_thread(review, thread_id) do
-      {:ok, thread} -> {:ok, thread}
-      {:error, :not_found} -> {:error, "No thread #{thread_id} on this review."}
+      {:ok, thread} ->
+        {:ok, thread}
+
+      {:error, :not_found} ->
+        {:error, error_result("No thread #{thread_id} on this review.", :thread_not_found)}
     end
   end
 
@@ -1104,6 +1114,9 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   defp write_error({:error, :forbidden}),
     do: error_result("Only the review's owner can do that.", :forbidden)
+
+  defp write_error({:error, :invalid_file_path}),
+    do: error_result("file_path is required", :invalid_file_path)
 
   defp write_error({:error, :empty_body}), do: error_result("body cannot be empty.", :empty_body)
 

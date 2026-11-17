@@ -35,11 +35,12 @@ defmodule ReviewsWeb.Api.ThreadController do
           {:error, :forbidden} ->
             conn
             |> put_status(:forbidden)
-            |> json(%{
-              errors: %{
-                detail: "Only the review owner or the thread's author can resolve or reopen it"
-              }
-            })
+            |> json(
+              ReviewsWeb.ApiErrors.detail(
+                :forbidden,
+                "Only the review owner or the thread's author can resolve or reopen it"
+              )
+            )
 
           {:error, :invalid_status} ->
             conn

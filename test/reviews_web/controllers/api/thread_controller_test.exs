@@ -146,7 +146,12 @@ defmodule ReviewsWeb.Api.ThreadControllerTest do
       for raw <- [stranger_raw, agent_raw], status <- ["resolved", "open"] do
         conn = patch_status(raw, review, thread, status)
 
-        assert %{"errors" => %{"detail" => detail}} = json_response(conn, 403)
+        assert %{
+                 "error_code" => "forbidden",
+                 "error_detail" => detail,
+                 "errors" => %{"detail" => detail}
+               } = json_response(conn, 403)
+
         assert detail =~ "review owner or the thread's author"
       end
 
