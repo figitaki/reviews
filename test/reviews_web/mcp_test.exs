@@ -92,6 +92,127 @@ defmodule ReviewsWeb.MCPTest do
     }
   end
 
+  test "REST and MCP expose the same public comment and identity metadata", ctx do
+    attribution = %{
+      "provider" => "poppy",
+      "client_id" => "https://agent.example/client.json",
+      "owner_username" => "owner",
+      "agent_id_claimed" => "private-agent",
+      "access_token_dpop_key" => "private-key-thumbprint",
+      "subject" => "private-subject"
+    }
+
+    {:ok, %{thread: thread, comment: comment}} =
+      Threads.publish_comment(ctx.review, ctx.owner, %{
+        "file_path" => "lib/a.ex",
+        "side" => "new",
+        "body" => "Check this",
+        "thread_anchor" => %{
+          "granularity" => "line",
+          "line_number_hint" => 2,
+          "line_text" => "  def a, do: :new"
+        }
+      })
+
+    comment |> Ecto.Changeset.change(attribution: attribution) |> Reviews.Repo.update!()
+    rest = get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    [rest_thread] = rest["threads"]
+    [rest_comment] = rest_thread["comments"]
+    assert rest_comment["id"] == comment.id
+    assert rest_comment["attribution"]["token_binding"] == "dpop"
+    assert rest_comment["attribution"]["agent_id_claimed"] == true
+    refute JSON.encode!(rest) =~ "private-"
+    assert rest_thread["path"] == rest_thread["file_path"]
+    assert rest_thread["line"] == rest_thread["line_hint"]
+    assert rest_thread["anchor_status"] == "current"
+    assert rest_thread["originating_revision"] == 1
+
+    {_bytes, result} =
+      http_call(ctx.owner_token, "reviews_get_thread", %{
+        "review" => ctx.review.slug,
+        "thread_id" => thread.id
+      })
+
+    [mcp_comment] = result["comments"]
+    assert mcp_comment["id"] == rest_comment["id"]
+    assert mcp_comment["attribution"] == rest_comment["attribution"]
+
+    assert mcp_comment["author"] ==
+             Map.take(rest_comment["author"], ["id", "kind", "handle", "display_name"])
+
+    {:ok, _} = ReviewsContext.append_patchset(ctx.review, %{raw_diff: @diff_v2})
+    latest = get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    [outdated] = latest["threads"]
+    assert outdated["anchor_status"] == "outdated"
+    assert outdated["line_hint"] == nil
+    assert outdated["originating_revision"] == 1
+    assert outdated["line_text"] == "  def a, do: :new"
+  end
+
+  test "oversized verified metadata permits progress through body chunks and later comments",
+       ctx do
+    body = String.duplicate("readable ✓ ", 15_000)
+
+    {:ok, %{thread: thread, comment: comment}} =
+      Threads.publish_comment(ctx.review, ctx.owner, %{
+        "file_path" => "lib/a.ex",
+        "side" => "new",
+        "body" => body,
+        "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
+      })
+
+    client_id = "https://agent.example/" <> String.duplicate("x", 61_000)
+
+    comment
+    |> Ecto.Changeset.change(attribution: %{"provider" => "poppy", "client_id" => client_id})
+    |> Reviews.Repo.update!()
+
+    {:ok, %{comment: reply}} =
+      Threads.publish_comment(ctx.review, ctx.owner, %{
+        "thread_id" => thread.id,
+        "file_path" => "lib/a.ex",
+        "side" => "new",
+        "body" => "later comment",
+        "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
+      })
+
+    {chunks, nil, cursors} =
+      Enum.reduce_while(1..20, {[], nil, MapSet.new()}, fn _, {chunks, cursor, seen} ->
+        args = %{
+          "review" => ctx.review.slug,
+          "thread_id" => thread.id,
+          "revision" => 1,
+          "max_bytes" => 120_000
+        }
+
+        args = if cursor, do: Map.put(args, "cursor", cursor), else: args
+        {bytes, result} = http_call(ctx.owner_token, "reviews_get_thread", args)
+        assert bytes <= 120_000
+        refute result["isError"]
+        assert [_ | _] = result["comments"]
+        next = result["next_cursor"]
+        refute next && MapSet.member?(seen, next)
+        state = {chunks ++ result["comments"], next, MapSet.put(seen, next)}
+        if next, do: {:cont, state}, else: {:halt, state}
+      end)
+
+    assert MapSet.size(cursors) > 1
+    first_chunks = Enum.filter(chunks, &(&1["id"] == comment.id))
+    assert length(first_chunks) > 1
+    assert Enum.map_join(first_chunks, & &1["body"]) == String.trim(body)
+    assert List.last(first_chunks)["complete"]
+
+    assert Enum.all?(first_chunks, fn chunk ->
+             chunk["metadata_truncated"] && byte_size(chunk["attribution"]["client_id"]) <= 512
+           end)
+
+    assert [%{"body" => "later comment", "complete" => true}] =
+             Enum.filter(chunks, &(&1["id"] == reply.id))
+
+    snapshot = get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    assert hd(hd(snapshot["threads"])["comments"])["attribution"]["client_id"] == client_id
+  end
+
   describe "HTTP endpoint" do
     test "rejects requests without a valid token", %{conn: conn} do
       conn = mcp_request(conn, "tools/list")

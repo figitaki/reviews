@@ -7,6 +7,8 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Expose comment IDs, safe verification attribution and projected anchor state consistently across API readers.
+
 ### Security
 
 - Only the review owner or a thread's author can resolve or reopen a thread,
