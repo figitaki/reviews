@@ -10,10 +10,8 @@ defmodule ReviewsWeb.PoppyTest do
   import Ecto.Query
 
   alias Reviews.Accounts
-  alias Reviews.Accounts.IdentityLink
   alias Reviews.OAuth
-  alias Reviews.OAuth.AccessToken
-  alias Reviews.Poppy
+  alias Reviews.OAuth.Grant
   alias Reviews.PoppyTestAgent, as: Agent
   alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsContext
@@ -230,7 +228,7 @@ defmodule ReviewsWeb.PoppyTest do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
       assert tokens["token_type"] == "Bearer"
       assert tokens["scope"] == "comments:write"
-      assert "ppr_" <> _ = tokens["refresh_token"]
+      assert "gkr_" <> _ = tokens["refresh_token"]
 
       conn =
         post_comment(ctx.agent, ctx.review,
@@ -242,7 +240,7 @@ defmodule ReviewsWeb.PoppyTest do
 
       comment = Repo.get!(Comment, comment_id)
       assert comment.author_id == ctx.identity.id
-      assert comment.identity_link_id
+      assert comment.oauth_grant_id
 
       assert %{
                "provider" => "poppy",
@@ -278,8 +276,8 @@ defmodule ReviewsWeb.PoppyTest do
                token_binding: "bearer"
              }
 
-      [link] = OAuth.list_links_for(ctx.owner)
-      :ok = OAuth.revoke_link(ctx.owner, link.id)
+      [link] = OAuth.list_grants_for(ctx.owner)
+      :ok = OAuth.revoke_grant(ctx.owner, link.id)
       {:ok, snapshot} = Reviews.ReviewView.snapshot(ctx.review, nil)
 
       [%{comments: [%{attribution: payload}]}] =
@@ -297,7 +295,7 @@ defmodule ReviewsWeb.PoppyTest do
       {query, _verifier} = get_code(ctx.agent, ctx.owner, ctx.identity)
       assert query["iss"] == @issuer
       assert query["state"] == "st_123"
-      assert "ppc_" <> _ = query["code"]
+      assert "gkc_code_" <> _ = query["code"]
     end
 
     test "deny returns access_denied with the issuer", ctx do
@@ -651,7 +649,10 @@ defmodule ReviewsWeb.PoppyTest do
 
     test "an expired access token is invalid_token", ctx do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
-      Repo.update_all(AccessToken, set: [expires_at: DateTime.add(DateTime.utc_now(), -1)])
+
+      Repo.update_all("gatekeep_access_tokens",
+        set: [expires_at: DateTime.add(DateTime.utc_now(), -1)]
+      )
 
       conn = post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"])
       assert %{"error" => "invalid_token"} = json_response(conn, 401)
@@ -664,7 +665,7 @@ defmodule ReviewsWeb.PoppyTest do
     test "an expired code is invalid_grant", ctx do
       {%{"code" => code}, verifier} = get_code(ctx.agent, ctx.owner, ctx.identity)
 
-      Repo.update_all(OAuth.AuthorizationCode,
+      Repo.update_all("gatekeep_codes",
         set: [expires_at: DateTime.add(DateTime.utc_now(), -1)]
       )
 
@@ -773,7 +774,7 @@ defmodule ReviewsWeb.PoppyTest do
         )
 
       assert html_response(conn, 200) =~ "Choose one of your agent identities"
-      assert Repo.aggregate(OAuth.AuthorizationCode, :count) == 0
+      assert Repo.aggregate("gatekeep_codes", :count) == 0
     end
 
     test "another client can't redeem a code or use a refresh token", ctx do
@@ -877,10 +878,10 @@ defmodule ReviewsWeb.PoppyTest do
   describe "revocation" do
     test "the owner revoking the link stops the access and refresh tokens at once", ctx do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
-      assert [link] = OAuth.list_links_for(ctx.owner)
+      assert [link] = OAuth.list_grants_for(ctx.owner)
 
-      assert {:error, :not_found} = OAuth.revoke_link(user_fixture("other"), link.id)
-      assert :ok = OAuth.revoke_link(ctx.owner, link.id)
+      assert {:error, :not_found} = OAuth.revoke_grant(user_fixture("other"), link.id)
+      assert :ok = OAuth.revoke_grant(ctx.owner, link.id)
 
       assert %{"error" => "invalid_token"} =
                json_response(
@@ -915,7 +916,7 @@ defmodule ReviewsWeb.PoppyTest do
         )
 
       assert response(conn, 200) == ""
-      assert Repo.one!(from l in IdentityLink, select: l.revoked_at)
+      assert Repo.one!(from g in Grant, select: g.revoked_at)
 
       assert %{"error" => "invalid_token"} =
                json_response(
@@ -946,7 +947,7 @@ defmodule ReviewsWeb.PoppyTest do
     test "a Personal Agent key removed from its key set can't sign in or act", ctx do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
       Agent.publish(ctx.agent, %{}, [])
-      Reviews.OAuth.Clients.forget(ctx.agent.client_id)
+      Gatekeep.Clients.forget(OAuth.config(), ctx.agent.client_id)
 
       assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
                json_response(
@@ -965,7 +966,7 @@ defmodule ReviewsWeb.PoppyTest do
          ctx do
       tokens = dpop_sign_in(ctx, ctx.key)
       assert tokens["token_type"] == "DPoP"
-      assert "ppr_" <> _ = tokens["refresh_token"]
+      assert "gkr_" <> _ = tokens["refresh_token"]
 
       conn =
         post_comment(ctx.agent, ctx.review,
@@ -978,7 +979,7 @@ defmodule ReviewsWeb.PoppyTest do
       jkt = Agent.thumbprint(ctx.key.public)
       assert comment.author_id == ctx.identity.id
       assert comment.attribution["access_token_dpop_key"] == jkt
-      assert Repo.one!(from l in IdentityLink, select: l.dpop_jkt) == jkt
+      assert Repo.one!(from g in Grant, select: g.dpop_jkt) == jkt
 
       assert binding_shown(ctx.review) == "dpop"
 
@@ -1009,7 +1010,7 @@ defmodule ReviewsWeb.PoppyTest do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
       assert tokens["token_type"] == "Bearer"
       Agent.publish(ctx.agent, %{"dpop_bound_access_tokens" => true})
-      Reviews.OAuth.Clients.forget(ctx.agent.client_id)
+      Gatekeep.Clients.forget(OAuth.config(), ctx.agent.client_id)
       params = fn -> refresh_params(ctx.agent, tokens["refresh_token"]) end
 
       assert %{"error" => "invalid_dpop_proof"} = json_response(token_post(params.(), []), 400)
@@ -1050,7 +1051,7 @@ defmodule ReviewsWeb.PoppyTest do
             [htm: "GET"],
             [htu: @issuer <> "/api/poppy/v1/reviews/other/comments"],
             [iat: Agent.now() - 300],
-            [ath: Reviews.OAuth.JOSE.digest("another-token")]
+            [ath: Gatekeep.JOSE.digest("another-token")]
           ] do
         conn =
           post_comment(ctx.agent, ctx.review,

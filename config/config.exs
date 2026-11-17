@@ -74,10 +74,19 @@ config :phoenix, :filter_parameters, [
   "token"
 ]
 
-# The OAuth issuer (Reviews.OAuth). Each API that accepts its tokens is a
-# Reviews.OAuth.Resource listed here. A request without `resource` or a scope
-# it recognizes goes to the default.
-config :reviews, Reviews.OAuth, resources: [Reviews.Poppy], default_resource: Reviews.Poppy
+# The OAuth issuer (Reviews.OAuth, on gatekeep). Each API that accepts its
+# tokens is a Reviews.OAuth.Resource listed here. A request without `resource`
+# or a scope it recognizes goes to the default. The other keys are
+# Gatekeep.Config options. Registered clients keep the `rvc_` IDs Reviews
+# handed out before gatekeep, and DPoP proofs use ES256, as Session JWTs do.
+config :reviews, Reviews.OAuth,
+  resources: [Reviews.Poppy],
+  default_resource: Reviews.Poppy,
+  storage: {Gatekeep.Storage.Ecto, repo: Reviews.Repo},
+  consent: ReviewsWeb.OAuthController,
+  registered_client_prefix: "rvc_",
+  dpop_signing_algs: ["ES256"]
+
 config :postgrex, :json_library, JSON
 
 # Import environment specific config. This must remain at the bottom

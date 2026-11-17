@@ -255,7 +255,8 @@ in `WWW-Authenticate`, with a `Bearer` and a `DPoP` challenge. A token issued wi
 missing or invalid proof is 401 `invalid_dpop_proof`. Bearer API tokens are refused on these routes, and Poppy tokens are refused
 on `/api/v1`. See `docs/POPPY.md`.
 
-Comments posted this way store `attribution` (a map of what was verified) and `identity_link_id`.
+Comments posted this way store `attribution` (a map of what was verified) and `oauth_grant_id`, the
+grant they were posted under (`attribution["link_id"]` holds the same ID).
 Thread payloads sent to the diff renderer include `comments[].attribution`, which is `null` for
 comments made in the browser or through the CLI. It contains only `provider`, `verified_at`,
 `client_id`, `client_domain`, `client_name_claimed`, `agent_id_claimed` (a boolean), `owner_username`,

@@ -133,14 +133,15 @@ defmodule ReviewsWeb.SettingsLiveTest do
     {:ok, agent} =
       Accounts.create_agent_identity(user, %{display_name: "Claude", handle: "claude"})
 
-    link =
-      Reviews.Repo.insert!(%Reviews.Accounts.IdentityLink{
-        identity_id: agent.id,
-        approved_by_user_id: user.id,
-        provider: "test",
-        subject: "https://agent.example/client.json",
-        subject_name: "Claude",
-        scopes: ["test:read"]
+    {:ok, link} =
+      Gatekeep.Storage.Ecto.insert_grant([repo: Reviews.Repo], %{
+        client_id: "https://agent.example/client.json",
+        client_name: "Claude",
+        subject: to_string(agent.id),
+        owner: to_string(user.id),
+        resource: "https://reviews.test/api/test",
+        scopes: ["test:read"],
+        grant_type: "authorization_code"
       })
 
     conn = Plug.Test.init_test_session(conn, %{current_user_id: user.id})
@@ -154,6 +155,6 @@ defmodule ReviewsWeb.SettingsLiveTest do
 
     assert has_element?(view, "#agent-link-#{link.id}", "Disconnected")
     refute has_element?(view, "#revoke-agent-link-#{link.id}")
-    assert Reviews.Repo.reload!(link).revoked_at
+    assert Reviews.Repo.get!(Reviews.OAuth.Grant, link.id).revoked_at
   end
 end
