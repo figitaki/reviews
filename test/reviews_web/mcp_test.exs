@@ -149,37 +149,68 @@ defmodule ReviewsWeb.MCPTest do
     assert outdated["line_text"] == "  def a, do: :new"
   end
 
-  test "oversized verified metadata cannot block comment pagination at maximum budget", ctx do
+  test "oversized verified metadata permits progress through body chunks and later comments",
+       ctx do
+    body = String.duplicate("readable ✓ ", 15_000)
+
     {:ok, %{thread: thread, comment: comment}} =
       Threads.publish_comment(ctx.review, ctx.owner, %{
         "file_path" => "lib/a.ex",
         "side" => "new",
-        "body" => "still readable",
+        "body" => body,
         "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
       })
 
+    client_id = "https://agent.example/" <> String.duplicate("x", 61_000)
+
     comment
-    |> Ecto.Changeset.change(
-      attribution: %{
-        "provider" => "poppy",
-        "client_id" => "https://agent.example/" <> String.duplicate("x", 130_000)
-      }
-    )
+    |> Ecto.Changeset.change(attribution: %{"provider" => "poppy", "client_id" => client_id})
     |> Reviews.Repo.update!()
 
-    {bytes, result} =
-      http_call(ctx.owner_token, "reviews_get_thread", %{
-        "review" => ctx.review.slug,
+    {:ok, %{comment: reply}} =
+      Threads.publish_comment(ctx.review, ctx.owner, %{
         "thread_id" => thread.id,
-        "max_bytes" => 120_000
+        "file_path" => "lib/a.ex",
+        "side" => "new",
+        "body" => "later comment",
+        "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
       })
 
-    assert bytes <= 120_000
+    {chunks, nil, cursors} =
+      Enum.reduce_while(1..20, {[], nil, MapSet.new()}, fn _, {chunks, cursor, seen} ->
+        args = %{
+          "review" => ctx.review.slug,
+          "thread_id" => thread.id,
+          "revision" => 1,
+          "max_bytes" => 120_000
+        }
 
-    assert [%{"body" => "still readable", "metadata_truncated" => true, "complete" => true}] =
-             result["comments"]
+        args = if cursor, do: Map.put(args, "cursor", cursor), else: args
+        {bytes, result} = http_call(ctx.owner_token, "reviews_get_thread", args)
+        assert bytes <= 120_000
+        refute result["isError"]
+        assert [_ | _] = result["comments"]
+        next = result["next_cursor"]
+        refute next && MapSet.member?(seen, next)
+        state = {chunks ++ result["comments"], next, MapSet.put(seen, next)}
+        if next, do: {:cont, state}, else: {:halt, state}
+      end)
 
-    assert result["next_cursor"] == nil
+    assert MapSet.size(cursors) > 1
+    first_chunks = Enum.filter(chunks, &(&1["id"] == comment.id))
+    assert length(first_chunks) > 1
+    assert Enum.map_join(first_chunks, & &1["body"]) == String.trim(body)
+    assert List.last(first_chunks)["complete"]
+
+    assert Enum.all?(first_chunks, fn chunk ->
+             chunk["metadata_truncated"] && byte_size(chunk["attribution"]["client_id"]) <= 512
+           end)
+
+    assert [%{"body" => "later comment", "complete" => true}] =
+             Enum.filter(chunks, &(&1["id"] == reply.id))
+
+    snapshot = get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    assert hd(hd(snapshot["threads"])["comments"])["attribution"]["client_id"] == client_id
   end
 
   describe "HTTP endpoint" do
