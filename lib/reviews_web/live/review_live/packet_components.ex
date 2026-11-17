@@ -612,6 +612,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       export default {
         mounted() {
           this.editing = this.el.dataset.editing
+          // PHONE in assets/js/lib/breakpoints.js; colocated hooks cannot import it.
           this.mobile = window.matchMedia("(max-width: 640px)")
           this.el.addEventListener("keydown", event => {
             if (event.key === "Escape" && this.el.dataset.editing === "true" &&

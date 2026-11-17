@@ -1472,7 +1472,7 @@ details[open] > summary .review-collapse-icon,
     --review-decision-action-padding: 0 8px;
 
     padding: 12px;
-    border-radius: 16px;
+    border-radius: var(--radius-lg);
     gap: 12px;
   }
 
@@ -1500,11 +1500,11 @@ details[open] > summary .review-collapse-icon,
     width: 56px;
     height: 56px;
     border: 1px solid var(--review-line-strong);
-    border-radius: 16px;
+    border-radius: var(--radius-lg);
     background: var(--review-panel-raised);
     color: var(--decision-accent);
     cursor: pointer;
-    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
+    box-shadow: var(--shadow-float);
   }
 
   .review-section-decision-toggle:hover {
