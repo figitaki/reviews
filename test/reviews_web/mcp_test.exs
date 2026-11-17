@@ -92,6 +92,52 @@ defmodule ReviewsWeb.MCPTest do
     }
   end
 
+  test "tool errors include stable structured codes without removing prose", ctx do
+    conn =
+      build_conn()
+      |> auth(ctx.owner_token)
+      |> mcp_request("tools/call", %{
+        "name" => "reviews_get_review",
+        "arguments" => %{"review" => "missing-review"}
+      })
+
+    result = json_response(conn, 200)["result"]
+    assert result["isError"]
+    assert result["structuredContent"]["error"]["code"] == "review_not_found"
+    assert [%{"text" => text}] = result["content"]
+    assert result["structuredContent"]["error"]["detail"] == text
+  end
+
+  test "missing thread and section reads have resource codes", ctx do
+    for {tool, args, code} <- [
+          {"reviews_get_thread", %{"thread_id" => 999_999_999}, "thread_not_found"},
+          {"reviews_get_packet_section", %{"section_index" => 999}, "section_not_found"}
+        ] do
+      conn =
+        build_conn()
+        |> auth(ctx.owner_token)
+        |> mcp_request("tools/call", %{
+          "name" => tool,
+          "arguments" => Map.put(args, "review", ctx.review.slug)
+        })
+
+      assert json_response(conn, 200)["result"]["structuredContent"]["error"]["code"] == code
+    end
+  end
+
+  test "blank comment paths are validation errors rather than write failures", ctx do
+    conn =
+      build_conn()
+      |> auth(ctx.owner_token)
+      |> mcp_request("tools/call", %{
+        "name" => "reviews_post_comment",
+        "arguments" => %{"review" => ctx.review.slug, "path" => "", "line" => 1, "body" => "test"}
+      })
+
+    assert json_response(conn, 200)["result"]["structuredContent"]["error"]["code"] ==
+             "invalid_file_path"
+  end
+
   test "REST and MCP expose the same public comment and identity metadata", ctx do
     attribution = %{
       "provider" => "poppy",

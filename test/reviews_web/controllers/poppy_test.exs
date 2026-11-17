@@ -218,6 +218,8 @@ defmodule ReviewsWeb.PoppyTest do
         )
 
       assert json_response(conn, 422) == %{
+               "error_code" => "validation_failed",
+               "error_detail" => "file_path should be at most 255 character(s)",
                "errors" => %{"detail" => "file_path should be at most 255 character(s)"}
              }
 
@@ -482,7 +484,7 @@ defmodule ReviewsWeb.PoppyTest do
     test "a missing Session header or Poppy-Version is refused", ctx do
       path = "/api/poppy/v1/reviews/#{ctx.review.slug}"
 
-      assert %{"error" => "invalid_session"} =
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
                build_conn()
                |> put_req_header("poppy-version", "1.0")
                |> get(path)
@@ -586,7 +588,7 @@ defmodule ReviewsWeb.PoppyTest do
 
       assert json_response(post_comment(ctx.agent, ctx.review, headers: headers), 201)
 
-      assert %{"error" => "invalid_session"} =
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
                json_response(post_comment(ctx.agent, ctx.review, headers: headers), 400)
 
       assert comment_count() == 1
@@ -628,7 +630,8 @@ defmodule ReviewsWeb.PoppyTest do
           iat: Agent.now() - 300
         )
 
-      assert %{"error" => "invalid_session"} = json_response(conn, 400)
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+               json_response(conn, 400)
     end
 
     test "an expired delegation is refused", ctx do
@@ -642,7 +645,8 @@ defmodule ReviewsWeb.PoppyTest do
           delegation: delegation
         )
 
-      assert %{"error" => "invalid_session"} = json_response(conn, 400)
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+               json_response(conn, 400)
     end
 
     test "an expired access token is invalid_token", ctx do
@@ -683,7 +687,9 @@ defmodule ReviewsWeb.PoppyTest do
 
       for aud <- ["https://other.example", @issuer <> "/"] do
         conn = post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"], aud: aud)
-        assert %{"error" => "invalid_session"} = json_response(conn, 400)
+
+        assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+                 json_response(conn, 400)
       end
 
       assert comment_count() == 0
@@ -694,7 +700,9 @@ defmodule ReviewsWeb.PoppyTest do
 
       for opts <- [[htu: @issuer <> "/api/poppy/v1/reviews/other/comments"], [htm: "GET"]] do
         conn = post_comment(ctx.agent, ctx.review, [access_token: tokens["access_token"]] ++ opts)
-        assert %{"error" => "invalid_session"} = json_response(conn, 400)
+
+        assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+                 json_response(conn, 400)
       end
     end
 
@@ -740,7 +748,10 @@ defmodule ReviewsWeb.PoppyTest do
       other = Agent.new()
 
       conn = post_comment(other, ctx.review, access_token: tokens["access_token"])
-      assert %{"error" => "invalid_session"} = json_response(conn, 400)
+
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+               json_response(conn, 400)
+
       assert comment_count() == 0
     end
 
@@ -937,7 +948,7 @@ defmodule ReviewsWeb.PoppyTest do
       Agent.publish(ctx.agent, %{}, [])
       Reviews.OAuth.Clients.forget(ctx.agent.client_id)
 
-      assert %{"error" => "invalid_session"} =
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
                json_response(
                  post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"]),
                  400

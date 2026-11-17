@@ -412,6 +412,14 @@ New threads require a line present on the selected file and side of that revisio
 
 Replies require only `{thread_id, body}` and preserve the thread's file, side, anchor and originating revision. Extra location/revision fields do not redirect a reply. A missing or foreign thread returns 404. Poppy attribution is retained. The CLI posts replies directly without downloading the review snapshot.
 
+### Stable application error codes
+
+REST and Poppy application errors add `error_code` and `error_detail` alongside the existing `errors` fields. Poppy authentication retains the protocol-required string `error` and challenge headers and adds the same code/detail fields. Clients should branch on the code, not the prose; field-validation messages remain in `errors`. This is additive rather than replacing the published v1 envelope.
+
+Codes include `review_not_found`, `thread_not_found`, `patchset_not_found`, `section_not_found`, `forbidden`, `unauthorized`, `invalid_request`, `invalid_status`, `invalid_section_index`, `invalid_anchor`, `invalid_side`, `invalid_file_path`, `empty_body`, `unknown_granularity`, `validation_failed` and `write_failed`. Poppy authentication uses its existing protocol codes (`invalid_session`, `session_ended`, `version_unsupported`, `invalid_token`, `invalid_dpop_proof`, `insufficient_scope`). Both thread and section-decision requests with missing status return 422. Malformed section indices retain their existing 400 response.
+
+MCP tool errors retain `isError` and human-readable content and add `structuredContent.error.{code,detail}`. Unclassified tool parameter errors use `invalid_request`; known missing resources, permissions, invalid anchors and failed writes have specific codes. Transport/framework errors remain owned by FastestMCP. The CLI consumes stable codes when available and falls back to existing HTTP-status hints for older servers. The invalid-anchor response is checked by both Elixir and Rust against `test/vectors/api/invalid-anchor.json`.
+
 ### Packet hunk row numbering
 
 Packet `line_start` and `line_end` are one-based rows after the hunk's `@@` header. Context, added, deleted and empty rows each count once. A `\ No newline at end of file` marker does not count and stays with the preceding row when sliced. A final newline terminates the last row rather than adding a row. CLI validation, MCP coverage checks and the packet renderer use this convention.

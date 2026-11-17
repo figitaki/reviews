@@ -5,6 +5,9 @@
 //!   POST /api/v1/reviews
 //!   POST /api/v1/reviews/:slug/patchsets
 //!   GET  /api/v1/reviews/:slug
+//!   POST /api/v1/reviews/:slug/comments (new thread or reply)
+//!   PATCH /api/v1/reviews/:slug/threads/:thread_id
+//!   POST /api/v1/reviews/:slug/sections/:section_index/decision
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::blocking::{Client, RequestBuilder, Response};
@@ -271,7 +274,15 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
         return Ok(resp);
     }
     let body = resp.text().unwrap_or_default();
-    let hint = match status {
+    let parsed = serde_json::from_str::<Value>(&body).ok();
+    let code = parsed
+        .as_ref()
+        .and_then(|v| v.get("error_code"))
+        .and_then(Value::as_str);
+    let hint = match code {
+        Some("invalid_anchor") => " — choose a line or token selection in the selected revision.",
+        Some("patchset_not_found") => " — select a revision that belongs to this review.",
+        _ => match status {
         StatusCode::UNAUTHORIZED => {
             " — your API token was rejected. Mint a new one in /settings and run `reviews login`."
         }
@@ -281,13 +292,32 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",
         _ => "",
+    },
     };
-    Err(anyhow!("{what} failed: HTTP {status}{hint}\nbody: {body}"))
+    let code_label = code.map(|c| format!(" [{c}]")).unwrap_or_default();
+    Err(anyhow!(
+        "{what} failed: HTTP {status}{code_label}{hint}\nbody: {body}"
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_stable_error_code_from_server_fixture() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("GET", "/api/v1/me")
+            .with_status(422)
+            .with_body(include_str!("../../test/vectors/api/invalid-anchor.json"))
+            .create();
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let error = format!("{}", client.me().unwrap_err());
+        assert!(error.contains("[invalid_anchor]"));
+        assert!(error.contains("choose a line or token selection"));
+        mock.assert();
+    }
 
     #[test]
     fn me_happy_path() {

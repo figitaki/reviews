@@ -21,7 +21,7 @@ defmodule ReviewsWeb.Api.CommentController do
       nil ->
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "Review not found"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
 
       review ->
         case ThreadsContext.publish_comment(review, principal, normalize(params)) do
@@ -45,12 +45,17 @@ defmodule ReviewsWeb.Api.CommentController do
           {:error, :thread_not_found} ->
             conn
             |> put_status(:not_found)
-            |> json(%{errors: %{detail: "Thread not found"}})
+            |> json(ReviewsWeb.ApiErrors.detail(:thread_not_found, "Thread not found"))
 
           {:error, reason} ->
             conn
             |> put_status(:unprocessable_entity)
-            |> json(%{errors: %{detail: error_message(reason)}})
+            |> json(
+              ReviewsWeb.ApiErrors.detail(
+                ReviewsWeb.ApiErrors.code(reason),
+                error_message(reason)
+              )
+            )
         end
     end
   end

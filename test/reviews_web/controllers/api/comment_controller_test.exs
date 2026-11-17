@@ -329,10 +329,34 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
         })
 
       assert json_response(conn, 422) == %{
+               "error_code" => "validation_failed",
+               "error_detail" => "file_path should be at most 255 character(s)",
                "errors" => %{"detail" => "file_path should be at most 255 character(s)"}
              }
 
       assert ThreadsContext.list_published_threads(review.id) == []
+    end
+
+    test "invalid anchors match the error fixture consumed by the CLI", %{
+      conn: conn,
+      review: review,
+      raw_token: raw
+    } do
+      conn =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> post("/api/v1/reviews/#{review.slug}/comments", %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "check",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 999}
+        })
+
+      expected =
+        File.read!(Path.expand("../../../vectors/api/invalid-anchor.json", __DIR__))
+        |> JSON.decode!()
+
+      assert json_response(conn, 422) == expected
     end
 
     test "returns 404 for an unknown slug", %{conn: conn, raw_token: raw} do
@@ -505,7 +529,12 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
       })
       |> json_response(404)
 
-    assert resp == %{"errors" => %{"detail" => "Thread not found"}}
+    assert resp == %{
+             "error_code" => "thread_not_found",
+             "error_detail" => "Thread not found",
+             "errors" => %{"detail" => "Thread not found"}
+           }
+
     assert ThreadsContext.list_published_threads(review.id) == []
   end
 end

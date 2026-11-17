@@ -32,7 +32,12 @@ defmodule ReviewsWeb.PoppyDiscoveryController do
 
     error = %{
       "type" => "object",
-      "properties" => %{"error" => %{"type" => "string"}}
+      "properties" => %{
+        "error" => %{"type" => "string"},
+        "error_code" => %{"type" => "string"},
+        "error_detail" => %{"type" => "string"},
+        "errors" => %{"type" => "object"}
+      }
     }
 
     session_params = [
@@ -95,7 +100,7 @@ defmodule ReviewsWeb.PoppyDiscoveryController do
             "responses" => %{
               "200" => %{"description" => "The review"},
               "400" => %{"description" => "Session error", "content" => json_schema(error)},
-              "404" => %{"description" => "No such review"}
+              "404" => %{"description" => "No such review", "content" => json_schema(error)}
             }
           }
         },
@@ -160,8 +165,11 @@ defmodule ReviewsWeb.PoppyDiscoveryController do
               "400" => %{"description" => "Session error", "content" => json_schema(error)},
               "401" => %{"description" => "Sign-in needed, or the access token is invalid"},
               "403" => %{"description" => "insufficient_scope"},
-              "404" => %{"description" => "No such review or thread"},
-              "422" => %{"description" => "Invalid comment"}
+              "404" => %{
+                "description" => "No such review or thread",
+                "content" => json_schema(error)
+              },
+              "422" => %{"description" => "Invalid comment", "content" => json_schema(error)}
             }
           }
         }
