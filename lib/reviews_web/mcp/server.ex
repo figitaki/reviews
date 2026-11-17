@@ -17,7 +17,7 @@ defmodule ReviewsWeb.MCP.Server do
   use FastestMCP.ServerModule, otp_app: :reviews
 
   alias FastestMCP.Authorization
-  alias Reviews.Accounts
+  alias Reviews.{Accounts, Paging}
   alias ReviewsWeb.MCP.Handlers
 
   @scopes ["reviews:read", "reviews:write", "threads:write"]
@@ -210,7 +210,7 @@ defmodule ReviewsWeb.MCP.Server do
             "limit" => %{
               "type" => "integer",
               "minimum" => 1,
-              "maximum" => Handlers.thread_limit()
+              "maximum" => Paging.max_limit()
             },
             "cursor" => cursor_prop(),
             "max_bytes" => max_bytes_prop()
@@ -380,10 +380,10 @@ defmodule ReviewsWeb.MCP.Server do
   defp max_bytes_prop do
     %{
       "type" => "integer",
-      "minimum" => Handlers.min_max_bytes(),
-      "maximum" => Handlers.max_bytes_limit(),
+      "minimum" => Paging.min_max_bytes(),
+      "maximum" => Paging.max_bytes_limit(),
       "description" =>
-        "Most bytes this result may take, metadata included. Default #{Handlers.default_max_bytes()}."
+        "Most bytes this result may take, metadata included. Default #{Paging.default_max_bytes()}."
     }
   end
 

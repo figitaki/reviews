@@ -15,18 +15,13 @@ defmodule ReviewsWeb.MCP.Handlers do
   """
 
   alias FastestMCP.Tools.Result
-  alias Reviews.{Accounts, Anchoring, ReviewHunks, ReviewPacket, ReviewView}
+  alias Reviews.{Accounts, Anchoring, Paging, ReviewHunks, ReviewPacket, ReviewView}
   alias Reviews.Accounts.Identity
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
   alias Reviews.Threads
   alias ReviewsWeb.MCP.Budget
 
-  @default_max_bytes 40_000
-  @min_max_bytes 2_000
-  @max_bytes_limit 120_000
-  @default_thread_limit 25
-  @thread_limit 100
   @title_cap 500
   @line_text_cap 500
   @listed_comments 3
@@ -39,11 +34,6 @@ defmodule ReviewsWeb.MCP.Handlers do
   @slug_pattern ~r/\A[A-Za-z0-9_-]{1,64}\z/
   @bad_cursor "Invalid cursor. Pass next_cursor from the previous page unchanged."
   @too_small "max_bytes is too small for the next item. Call again with a larger max_bytes."
-
-  def default_max_bytes, do: @default_max_bytes
-  def min_max_bytes, do: @min_max_bytes
-  def max_bytes_limit, do: @max_bytes_limit
-  def thread_limit, do: @thread_limit
 
   ## Reads
 
@@ -61,9 +51,10 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def get_review(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      with {:ok, cursor} <- parse_review_cursor(args["cursor"]),
-           :ok <- require_pinned_revision(args, args["cursor"]),
-           {:ok, revisions, selected} <- select_revision(review, args) do
+      with :ok <- require_pinned_revision(args, args["cursor"]),
+           {:ok, revisions, selected} <- select_revision(review, args),
+           {:ok, cursor} <- decode_cursor(args, {:review, review.id, selected.number}) do
+        cursor = review_position(cursor)
         packet = ReviewsContext.get_packet(selected)
         counts = Threads.count_by_status(review)
 
@@ -97,9 +88,10 @@ defmodule ReviewsWeb.MCP.Handlers do
         left = room!(args, header)
         {body, next} = review_page(cursor, data, left, %{})
 
-        if next && next == encode_review_cursor(cursor) do
+        if next && next == cursor do
           error_result(@too_small)
         else
+          next = Paging.encode({:review, review.id, selected.number}, next)
           header |> Map.merge(body) |> Map.put(:next_cursor, next) |> with_hint(next)
         end
       end
@@ -108,10 +100,12 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def get_packet_section(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      with {:ok, cursor} <- parse_pair_cursor(args["cursor"]),
-           :ok <- require_pinned_revision(args, args["cursor"]),
+      scope = &{:section, review.id, &1.number, args["section_index"]}
+
+      with :ok <- require_pinned_revision(args, args["cursor"]),
            {:ok, _revisions, selected} <- select_revision(review, args),
-           {:ok, section, count} <- fetch_section(selected, args["section_index"]) do
+           {:ok, section, count} <- fetch_section(selected, args["section_index"]),
+           {:ok, cursor} <- decode_cursor(args, scope.(selected)) do
         paths =
           for row <- section.rows,
               ReviewPacket.text(row, "kind") == "hunk",
@@ -130,7 +124,7 @@ defmodule ReviewsWeb.MCP.Handlers do
           next_cursor: nil
         }
 
-        start = cursor || {0, 0}
+        start = pair(cursor)
         left = room!(args, header)
 
         {rows, next} =
@@ -145,7 +139,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         if rows == [] and next != nil do
           error_result(@too_small)
         else
-          next_cursor = encode_pair(next)
+          next_cursor = encode_pair(scope.(selected), next)
           %{header | next_cursor: next_cursor} |> Map.put(:rows, rows) |> with_hint(next_cursor)
         end
       end
@@ -154,10 +148,10 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def list_files(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      with {:ok, offset} <- parse_int_cursor(args["cursor"]),
-           :ok <- require_pinned_revision(args, args["cursor"]),
-           {:ok, _revisions, selected} <- select_revision(review, args) do
-        offset = offset || 0
+      with :ok <- require_pinned_revision(args, args["cursor"]),
+           {:ok, _revisions, selected} <- select_revision(review, args),
+           {:ok, cursor} <- decode_cursor(args, {:files, review.id, selected.number}) do
+        {offset, _} = pair(cursor)
         fetched = ReviewsContext.list_file_summaries(selected, offset, @page_fetch + 1)
         open = Threads.open_counts_by_path(review, Enum.map(fetched, & &1.path))
 
@@ -187,7 +181,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             error_result(@too_small)
 
           count < length(fetched) ->
-            next = encode_int(offset + count)
+            next = encode_pair({:files, review.id, selected.number}, {offset + count, 0})
             %{header | next_cursor: next} |> Map.put(:files, files) |> with_hint(next)
 
           true ->
@@ -227,19 +221,22 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def list_threads(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      limit = args["limit"] || @default_thread_limit
       status = args["status"] || "open"
+      scope = &{:threads, review.id, &1.number, status, args["path"]}
 
-      with {:ok, after_id} <- parse_int_cursor(args["cursor"]),
+      with {:ok, limit} <- page_limit(args["limit"]),
            :ok <- require_pinned_revision(args, args["cursor"]),
-           {:ok, revisions, selected} <- select_revision(review, args) do
+           {:ok, revisions, selected} <- select_revision(review, args),
+           {:ok, cursor} <- decode_cursor(args, scope.(selected)) do
+        {after_id, _} = pair(cursor)
+
         filters = [
           max_origin_number: selected.number,
           status: if(status != "all", do: status),
           path: args["path"]
         ]
 
-        page = Threads.list_thread_page(review, filters, after_id || 0, limit + 1)
+        page = Threads.list_thread_page(review, filters, after_id, limit + 1)
         shown = Enum.take(page, limit)
         projected = ReviewView.project_threads(review, revisions, selected, shown)
         comment_counts = Threads.comment_counts(Enum.map(shown, & &1.id))
@@ -260,7 +257,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             error_result(@too_small)
 
           count < length(page) ->
-            next = encode_int(Enum.at(projected, count - 1).id)
+            next = encode_pair(scope.(selected), {Enum.at(projected, count - 1).id, 0})
             %{header | next_cursor: next} |> Map.put(:threads, threads) |> with_hint(next)
 
           true ->
@@ -272,12 +269,13 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def get_thread(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      with {:ok, cursor} <- parse_pair_cursor(args["cursor"]),
-           :ok <- require_pinned_revision(args, args["cursor"]),
+      with :ok <- require_pinned_revision(args, args["cursor"]),
            {:ok, revisions, selected} <- select_revision(review, args),
            {:ok, thread} <- review_thread(review, args["thread_id"]),
-           [projected] <- ReviewView.project_threads(review, revisions, selected, [thread]) do
-        {start_id, _offset} = start = cursor || {0, 0}
+           [projected] <- ReviewView.project_threads(review, revisions, selected, [thread]),
+           {:ok, cursor} <-
+             decode_cursor(args, {:thread, review.id, selected.number, thread.id}) do
+        {start_id, _offset} = start = pair(cursor)
         comments = Threads.list_comment_page(thread.id, start_id - 1, @page_fetch)
 
         header =
@@ -303,7 +301,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         if page == [] and comments != [] do
           error_result(@too_small)
         else
-          next_cursor = encode_pair(next)
+          next_cursor = encode_pair({:thread, review.id, selected.number, thread.id}, next)
 
           %{header | next_cursor: next_cursor}
           |> Map.put(:comments, page)
@@ -444,6 +442,7 @@ defmodule ReviewsWeb.MCP.Handlers do
           fun.(review, identity) |> unwrap()
         catch
           :too_small -> error_result(@too_small)
+          :bad_cursor -> error_result(@bad_cursor)
         end
 
       {:error, :not_found} ->
@@ -558,7 +557,20 @@ defmodule ReviewsWeb.MCP.Handlers do
     end
   end
 
-  defp max_bytes(args), do: args["max_bytes"] || @default_max_bytes
+  # The tool schemas already bound max_bytes and limit; Paging owns the bounds.
+  defp max_bytes(args) do
+    case Paging.max_bytes(args["max_bytes"]) do
+      {:ok, max_bytes} -> max_bytes
+      {:error, _} -> throw(:too_small)
+    end
+  end
+
+  defp page_limit(limit) do
+    case Paging.limit(limit) do
+      {:ok, limit} -> {:ok, limit}
+      {:error, _} -> {:error, "limit must be between 1 and #{Paging.max_limit()}."}
+    end
+  end
 
   # Bytes left after the page header, or a "too small" error when the header
   # alone does not fit, such as a thread with a long path and anchor.
@@ -569,50 +581,27 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   ## Cursors
 
-  # Every cursor starts with a letter, so no client can read one as a number
-  # (the MCP Inspector CLI turns "12" or "0.8892" into JSON numbers).
+  # Cursor grammar and query binding live in `Reviews.Paging`.
 
-  defp parse_int_cursor(nil), do: {:ok, nil}
-
-  defp parse_int_cursor(cursor) when is_binary(cursor) do
-    case Regex.run(~r/\Ac(\d{1,18})\z/, cursor) do
-      [_, n] -> {:ok, String.to_integer(n)}
-      _ -> {:error, @bad_cursor}
+  defp decode_cursor(args, scope) do
+    case Paging.decode(args["cursor"], scope) do
+      {:ok, position} -> {:ok, position}
+      {:error, :invalid_cursor} -> {:error, @bad_cursor}
     end
   end
 
-  defp parse_int_cursor(_), do: {:error, @bad_cursor}
+  # A plain list position as `{a, b}`, starting at `{0, 0}`.
+  defp pair(nil), do: {0, 0}
+  defp pair({:position, a, b}), do: {a, b}
+  defp pair(_other), do: throw(:bad_cursor)
 
-  defp encode_int(n), do: "c#{n}"
+  defp encode_pair(_scope, nil), do: nil
+  defp encode_pair(scope, {a, b}), do: Paging.encode(scope, {:position, a, b})
 
-  defp parse_pair_cursor(nil), do: {:ok, nil}
-
-  defp parse_pair_cursor(cursor) when is_binary(cursor) do
-    case Regex.run(~r/\Ac(\d{1,18})\.(\d{1,18})\z/, cursor) do
-      [_, a, b] -> {:ok, {String.to_integer(a), String.to_integer(b)}}
-      _ -> {:error, @bad_cursor}
-    end
-  end
-
-  defp parse_pair_cursor(_), do: {:error, @bad_cursor}
-
-  defp encode_pair(nil), do: nil
-  defp encode_pair({a, b}), do: "c#{a}.#{b}"
-
-  defp parse_review_cursor(nil), do: {:ok, {:fields, 0, 0}}
-
-  defp parse_review_cursor(cursor) when is_binary(cursor) do
-    case Regex.run(~r/\A([fsr])(\d{1,18})(?:\.(\d{1,18}))?\z/, cursor) do
-      [_, "f", i, o] -> {:ok, {:fields, String.to_integer(i), String.to_integer(o)}}
-      [_, "s", i] -> {:ok, {:sections, String.to_integer(i)}}
-      [_, "r", i] -> {:ok, {:revisions, String.to_integer(i)}}
-      _ -> {:error, @bad_cursor}
-    end
-  end
-
-  defp encode_review_cursor({:fields, i, o}), do: "f#{i}.#{o}"
-  defp encode_review_cursor({:sections, i}), do: "s#{i}"
-  defp encode_review_cursor({:revisions, i}), do: "r#{i}"
+  # get_review pages through phases; a plain position is not one of them.
+  defp review_position(nil), do: {:fields, 0, 0}
+  defp review_position({:position, _a, _b}), do: throw(:bad_cursor)
+  defp review_position(position), do: position
 
   defp with_hint(payload, nil), do: payload
 
@@ -625,12 +614,12 @@ defmodule ReviewsWeb.MCP.Handlers do
   # then the revisions, newest first.
   defp review_page({:fields, index, offset}, data, left, acc) do
     case stream_fields(data.fields, index, offset, left) do
-      {out, left, nil} -> review_page({:sections, 0}, data, left, Map.merge(acc, out))
-      {out, _left, next} -> {Map.merge(acc, out), encode_review_cursor(next)}
+      {out, left, nil} -> review_page({:sections, 0, 0}, data, left, Map.merge(acc, out))
+      {out, _left, next} -> {Map.merge(acc, out), next}
     end
   end
 
-  defp review_page({:sections, index}, data, left, acc) do
+  defp review_page({:sections, index, _}, data, left, acc) do
     rest = Enum.drop(data.sections, index)
 
     {sections, left, count} =
@@ -645,11 +634,11 @@ defmodule ReviewsWeb.MCP.Handlers do
     acc = Map.put(acc, :sections, sections)
 
     if count < length(rest),
-      do: {acc, encode_review_cursor({:sections, index + count})},
-      else: review_page({:revisions, 0}, data, left, acc)
+      do: {acc, {:sections, index + count, 0}},
+      else: review_page({:revisions, 0, 0}, data, left, acc)
   end
 
-  defp review_page({:revisions, index}, data, left, acc) do
+  defp review_page({:revisions, index, _}, data, left, acc) do
     rest = Enum.drop(data.revisions, index)
 
     {revisions, _left, count} =
@@ -660,7 +649,7 @@ defmodule ReviewsWeb.MCP.Handlers do
       end)
 
     acc = Map.put(acc, :revisions, revisions)
-    {acc, if(count < length(rest), do: encode_review_cursor({:revisions, index + count}))}
+    {acc, if(count < length(rest), do: {:revisions, index + count, 0})}
   end
 
   defp stream_fields(fields, start, offset, left) do
