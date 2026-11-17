@@ -1,4 +1,5 @@
 import { ReviewActivityReadState } from "../lib/review_activity_read_state.js"
+import { WIDE } from "../lib/breakpoints.js"
 
 function storage() {
   try { return window.localStorage } catch { return null }
@@ -43,7 +44,7 @@ export const ReviewActivity = {
     this.openKey = "reviews:activity-open"
     let savedOpen = null
     try { savedOpen = window.localStorage.getItem(this.openKey) } catch { /* optional */ }
-    this.details.open = savedOpen === null ? window.matchMedia("(min-width: 1200px)").matches : savedOpen === "true"
+    this.details.open = savedOpen === null ? window.matchMedia(WIDE).matches : savedOpen === "true"
     this.details.addEventListener("toggle", () => {
       try { window.localStorage.setItem(this.openKey, String(this.details.open)) } catch { /* optional */ }
       if (this.details.open) this.scrollLogToEnd()
