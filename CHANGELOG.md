@@ -39,6 +39,10 @@ later fixes continue toward 0.0.2.
 - Phoenix 1.8.15, LiveView 1.2.12, Tailwind CLI 4.3.3, esbuild 0.28.2 and
   other dependency updates. Diff rendering moves to @pierre/diffs 1.6.4 and
   packet navigation to @pierre/trees 1.0.0.
+- One error vocabulary, `Reviews.Errors`, gives every surface the same
+  codes, statuses and safe default details. MCP error results use it as
+  REST and Poppy do; unknown reasons become `write_failed`. It adds
+  `invalid_pagination` and `invalid_packet`.
 - Section decisions belong to the account, not one identity: a person and
   their agent identities share one decision per section, and each decision
   records which identity made it. A migration merges existing decisions,
