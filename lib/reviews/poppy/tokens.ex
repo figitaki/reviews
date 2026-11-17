@@ -1,16 +1,19 @@
 defmodule Reviews.Poppy.Tokens do
   @moduledoc """
   Verifies the Session JWTs a Personal Agent signs, with their delegations
-  (spec 5.2, 5.3), and DPoP proofs (RFC 9449). Client assertions are the issuer's
-  (`Reviews.OAuth.Tokens`), and so is the replay cache both use.
+  (spec 5.2, 5.3). The Personal Agent is a client of the issuer, fetched with
+  `Gatekeep.Clients`; client assertions and DPoP proofs are gatekeep's
+  (`Gatekeep.ClientAuth`, `Gatekeep.DPoP`). Session JWTs keep their own replay
+  cache, `oauth_seen_jtis`.
 
   Every failure returns `{:error, reason}` with a specific atom so tests and
   logs can tell cases apart. The HTTP layer maps them to the spec's errors,
   which don't reveal the reason.
   """
-  alias Reviews.OAuth
-  alias Reviews.OAuth.{Clients, JOSE}
-  alias Reviews.Poppy
+  import Ecto.Query, only: [from: 2]
+
+  alias Gatekeep.{Client, Clients, JOSE}
+  alias Reviews.{OAuth, Poppy, Repo}
 
   @max_delegation_lifetime 24 * 60 * 60
   @id_format ~r/\A[A-Za-z0-9_-]{1,256}\z/
@@ -18,7 +21,7 @@ defmodule Reviews.Poppy.Tokens do
   @type request :: %{method: String.t(), url: String.t(), access_token: String.t() | nil}
 
   @type session_claims :: %{
-          client: Clients.client(),
+          client: Client.t(),
           sid: String.t(),
           sub: String.t(),
           agent_id: String.t() | nil,
@@ -41,20 +44,21 @@ defmodule Reviews.Poppy.Tokens do
     window = Poppy.config(:session_window_seconds, 60)
     skew = Poppy.config(:clock_skew_seconds, 30)
 
+    config = OAuth.config()
+
     with {:ok, jws} <- JOSE.decode(jwt),
          :ok <- check_session_header(jws.header),
          %{"iss" => iss} when is_binary(iss) <- jws.claims,
-         {:ok, client} <- Clients.fetch(iss),
+         {:ok, client} <- Clients.fetch(config, iss),
          {:ok, delegated_key, delegation_exp} <-
-           verify_delegation(jws.header["poppy_dlg"], client, now, skew),
+           verify_delegation(config, jws.header["poppy_dlg"], client, now, skew),
          :ok <- verify_signature(jws, delegated_key, ["ES256"], :bad_signature),
          {:ok, thumbprint} <- JOSE.thumbprint(delegated_key),
          :ok <- expect(jws.header["kid"] == thumbprint, :kid_not_thumbprint),
          {:ok, claims} <- check_session_claims(jws.claims, request, audience, now, window, skew),
          # Kept one second past the last accepted `iat`, so pruning can't drop
          # the entry while the JWT still verifies.
-         :ok <-
-           OAuth.Tokens.remember_jti("session", iss, claims.jti, claims.iat + window + skew + 1) do
+         :ok <- remember_jti("session", iss, claims.jti, claims.iat + window + skew + 1) do
       {:ok,
        Map.merge(claims, %{
          client: client,
@@ -82,10 +86,10 @@ defmodule Reviews.Poppy.Tokens do
 
   # Delegated keys (spec 5.2): verify the delegation with the key in jwks_uri
   # that its kid names, then its typ, iss, expiry, and lifetime.
-  defp verify_delegation(dlg, client, now, skew) do
+  defp verify_delegation(config, dlg, client, now, skew) do
     with {:ok, jws} <- JOSE.decode(dlg),
          :ok <- expect(jws.header["typ"] == "poppy-delegation+jwt", :bad_delegation_typ),
-         {:ok, root_key} <- Clients.key(client, jws.header["kid"]),
+         {:ok, root_key} <- Clients.key(config, client, jws.header["kid"]),
          :ok <- verify_signature(jws, root_key, ["ES256", "PS384"], :bad_delegation_signature),
          %{"iss" => iss, "iat" => iat, "exp" => exp, "cnf" => %{"jwk" => jwk}}
          when is_integer(iat) and is_integer(exp) and is_map(jwk) <- jws.claims,
@@ -150,55 +154,38 @@ defmodule Reviews.Poppy.Tokens do
   end
 
   @doc """
-  Verifies the DPoP proof of a request (RFC 9449 §4.3) and returns the
-  thumbprint of its key. `proofs` is every `DPoP` header value the request
-  carried. `request.access_token` is set at a protected resource, where `ath`
-  must match it, and nil at the token endpoint. `request.client_id` is the
-  verified client, which scopes the replay cache.
-
-  The proof is separate from the Session JWT and signed with its own key
-  (Poppy 5.2), the public key in its `jwk` header. Reviews issues no DPoP
-  nonces; `iat` and the replay cache limit how long a proof works.
+  Records `jti` of kind `kind` for `client_id` until `expires_at`. Returns
+  `{:error, :replayed}` when another request already used it, on any server.
   """
-  @spec verify_dpop_proof([String.t()], map(), keyword()) ::
-          {:ok, String.t()} | {:error, atom()}
-  def verify_dpop_proof(proofs, request, opts \\ [])
+  def remember_jti(kind, client_id, jti, expires_at) do
+    expires = DateTime.from_unix!(expires_at)
 
-  def verify_dpop_proof([proof], request, opts) do
-    now = Keyword.get_lazy(opts, :now, &now/0)
-    window = Poppy.config(:session_window_seconds, 60)
-    skew = Poppy.config(:clock_skew_seconds, 30)
+    {count, _} =
+      Repo.insert_all(
+        "oauth_seen_jtis",
+        [%{kind: kind, client_id: client_id, jti: jti, expires_at: expires}],
+        on_conflict: :nothing,
+        conflict_target: [:kind, :client_id, :jti]
+      )
 
-    with {:ok, jws} <- JOSE.decode(proof),
-         %{"typ" => "dpop+jwt", "jwk" => jwk} when is_map(jwk) <- jws.header,
-         :ok <- expect(jws.header["alg"] in Poppy.dpop_signing_algs(), :bad_alg),
-         :ok <- expect(JOSE.public_key?(jwk), :bad_dpop_key),
-         :ok <- verify_signature(jws, jwk, Poppy.dpop_signing_algs(), :bad_signature),
-         %{"jti" => jti, "htm" => htm, "htu" => htu, "iat" => iat}
-         when is_binary(jti) and is_integer(iat) <- jws.claims,
-         :ok <- expect(jti != "" and byte_size(jti) <= 255, :bad_jti),
-         :ok <- expect(htm == request.method, :wrong_method),
-         :ok <- expect(htu_matches?(htu, request.url), :wrong_url),
-         :ok <- expect(iat >= now - window - skew, :expired),
-         :ok <- expect(iat <= now + skew, :issued_in_future),
-         :ok <- check_proof_ath(jws.claims["ath"], request[:access_token]),
-         {:ok, jkt} <- JOSE.thumbprint(jwk),
-         :ok <- OAuth.Tokens.remember_jti("dpop", request.client_id, jti, iat + window + skew + 1) do
-      {:ok, jkt}
+    if count == 1 do
+      prune_expired_jtis()
+      :ok
     else
-      {:error, :malformed} -> {:error, :invalid_dpop_proof}
-      {:error, _} = error -> error
-      _ -> {:error, :invalid_dpop_proof}
+      {:error, :replayed}
     end
   end
 
-  def verify_dpop_proof([], _request, _opts), do: {:error, :missing_dpop_proof}
-  def verify_dpop_proof(_proofs, _request, _opts), do: {:error, :multiple_dpop_proofs}
+  # Keep the replay table small without a scheduled job: about one write in
+  # fifty clears entries whose window has passed.
+  defp prune_expired_jtis do
+    if :rand.uniform(50) == 1 do
+      now = DateTime.utc_now()
+      Repo.delete_all(from j in "oauth_seen_jtis", where: j.expires_at < ^now)
+    end
 
-  # At a protected resource, ath must match the access token (RFC 9449 §4.3
-  # step 12). The token endpoint has no token to cover.
-  defp check_proof_ath(_ath, nil), do: :ok
-  defp check_proof_ath(ath, token), do: expect(ath == JOSE.digest(token), :ath_mismatch)
+    :ok
+  end
 
   defp verify_signature(jws, key, algs, error) do
     if JOSE.verify(jws, key, algs), do: :ok, else: {:error, error}

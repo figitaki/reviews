@@ -24,7 +24,7 @@ defmodule Reviews.Threads do
 
   # Every comment reader preloads the same associations, so renaming one (such
   # as the attribution link) is a single change here, not one per query.
-  @comment_preloads [:author, :identity_link]
+  @comment_preloads [:author, :oauth_grant]
 
   # Postgres bigint. An id past this range reaches the driver as an unencodable
   # integer and takes the whole request down, so it is a miss like any other.
@@ -284,7 +284,7 @@ defmodule Reviews.Threads do
             thread_id: thread.id,
             author_id: author.id,
             body: body,
-            identity_link_id: attribution && attribution["link_id"],
+            oauth_grant_id: attribution && attribution["link_id"],
             attribution: attribution
           })
           |> insert_or_rollback()

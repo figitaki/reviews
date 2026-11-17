@@ -34,6 +34,18 @@ later fixes continue toward 0.0.2.
 
 ### Changed
 
+- The OAuth issuer runs on [gatekeep](https://github.com/figitaki/gatekeep)
+  (`Reviews.OAuth`). Endpoints, metadata, scopes, the agents-only rule,
+  refresh rotation, DPoP, and Settings → Connected agents work as before, and
+  a migration copies existing grants, tokens, and registered clients into
+  gatekeep's tables, so no one signs in again. New codes and tokens start with
+  `gkc_code_`, `gka_`, and `gkr_` instead of `ppc_`, `ppa_`, and `ppr_`.
+  Issuer metadata adds `response_modes_supported`, and resource metadata adds
+  `bearer_methods_supported`.
+  Revoking an access token at `/oauth/revoke` now revokes only that token, not
+  its grant; revoking the refresh token still ends the grant. The old OAuth
+  tables stay for one release.
+
 - One error vocabulary, `Reviews.Errors`, gives every surface the same
   codes, statuses and safe default details. MCP error results use it as
   REST and Poppy do; unknown reasons become `write_failed`. It adds
