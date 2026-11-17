@@ -117,6 +117,76 @@ defmodule ReviewsWeb.Api.ReviewPageControllerTest do
     assert text == comment.body
   end
 
+  test "continuations query revision metadata without aggregating file history", ctx do
+    for _ <- 1..3, do: ReviewsContext.append_patchset(ctx.review, %{raw_diff: ctx.diff})
+    [thread | _] = ctx.threads
+
+    latest =
+      get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}/threads", %{limit: 1})
+      |> json_response(200)
+
+    assert latest["revision"] == 4
+    assert [%{"originating_revision" => 1, "anchor_status" => "current"}] = latest["threads"]
+
+    paths = [
+      "/api/v1/reviews/#{ctx.review.slug}/files",
+      "/api/v1/reviews/#{ctx.review.slug}/threads",
+      "/api/v1/reviews/#{ctx.review.slug}/threads/#{thread.id}/comments"
+    ]
+
+    for path <- paths do
+      first =
+        get(build_conn(), path, %{revision: 1, limit: 1, max_bytes: 2000}) |> json_response(200)
+
+      assert first["next_cursor"]
+      owner = self()
+      handler = {__MODULE__, make_ref()}
+
+      :telemetry.attach(
+        handler,
+        [:reviews, :repo, :query],
+        fn _, _, metadata, _ ->
+          if self() == owner, do: send(owner, {:page_query, metadata.query})
+        end,
+        nil
+      )
+
+      try do
+        page =
+          get(build_conn(), path, %{
+            revision: 1,
+            limit: 1,
+            max_bytes: 2000,
+            cursor: first["next_cursor"]
+          })
+          |> json_response(200)
+
+        assert page["revision"] == 1
+      after
+        :telemetry.detach(handler)
+      end
+
+      queries = drain_queries([])
+      assert queries != []
+      refute Enum.any?(queries, &String.contains?(String.downcase(&1), "sum("))
+      revisions = Enum.filter(queries, &String.contains?(&1, "FROM \"patchsets\""))
+      assert revisions != []
+
+      assert Enum.all?(revisions, fn query ->
+               not String.contains?(query, "raw_diff") and
+                 (String.contains?(query, "LIMIT") or String.contains?(query, "ANY("))
+             end)
+    end
+  end
+
+  defp drain_queries(acc) do
+    receive do
+      {:page_query, query} -> drain_queries([query | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
   test "rejects malformed parameters and foreign or future threads", ctx do
     path = "/api/v1/reviews/#{ctx.review.slug}/threads"
 

@@ -18,9 +18,9 @@ defmodule ReviewsWeb.Api.ReviewPageController do
          {:ok, revision} <- integer(params["revision"], nil, 1, 2_147_483_647),
          true <- is_nil(params["cursor"]) or not is_nil(revision),
          {:ok, cursor} <- cursor(params["cursor"]),
-         revisions = ReviewsContext.list_patchset_summaries(review),
-         selected when not is_nil(selected) <- ReviewView.pick_patchset(revisions, revision),
-         {:ok, entries} <- entries(kind, review, revisions, selected, cursor, limit, params) do
+         selected when not is_nil(selected) <-
+           ReviewsContext.get_patchset_metadata(review, revision),
+         {:ok, entries} <- entries(kind, review, selected, cursor, limit, params) do
       header = %{kind => [], slug: review.slug, revision: selected.number, next_cursor: nil}
       room = max_bytes - byte_size(JSON.encode!(header)) - 256
       {items, next} = fit(entries, kind, cursor, room, limit)
@@ -37,11 +37,11 @@ defmodule ReviewsWeb.Api.ReviewPageController do
     end
   end
 
-  defp entries(:files, _review, _revisions, selected, {offset, 0}, limit, _params) do
+  defp entries(:files, _review, selected, {offset, 0}, limit, _params) do
     {:ok, ReviewsContext.list_file_summaries(selected, offset, limit + 1)}
   end
 
-  defp entries(:threads, review, revisions, selected, {after_id, 0}, limit, params) do
+  defp entries(:threads, review, selected, {after_id, 0}, limit, params) do
     if params["status"] in [nil, "open", "resolved"] and
          (is_nil(params["path"]) or is_binary(params["path"])) do
       filters = [
@@ -52,6 +52,12 @@ defmodule ReviewsWeb.Api.ReviewPageController do
 
       threads = Threads.list_thread_page(review, filters, after_id, limit + 1)
       counts = Threads.comment_counts(Enum.map(threads, & &1.id))
+
+      revisions =
+        ReviewsContext.list_patchset_metadata(
+          review,
+          Enum.map(threads, & &1.originating_patchset_id)
+        )
 
       {:ok,
        ReviewView.project_threads(review, revisions, selected, threads)
@@ -66,10 +72,10 @@ defmodule ReviewsWeb.Api.ReviewPageController do
     end
   end
 
-  defp entries(:comments, review, revisions, selected, {id, offset}, limit, params) do
+  defp entries(:comments, review, selected, {id, offset}, limit, params) do
     with {:ok, thread} <- Threads.get_review_thread(review, params["thread_id"]),
-         origin when not is_nil(origin) <-
-           Enum.find(revisions, &(&1.id == thread.originating_patchset_id)),
+         [origin] <-
+           ReviewsContext.list_patchset_metadata(review, [thread.originating_patchset_id]),
          true <- origin.number <= selected.number do
       comments =
         Threads.list_comment_page(thread.id, if(offset > 0, do: id - 1, else: id), limit + 1)
@@ -95,7 +101,7 @@ defmodule ReviewsWeb.Api.ReviewPageController do
     end
   end
 
-  defp entries(_, _, _, _, _, _, _), do: {:error, :invalid_parameters}
+  defp entries(_, _, _, _, _, _), do: {:error, :invalid_parameters}
 
   defp fit(entries, kind, cursor, room, limit) do
     fit(entries, kind, cursor, room, limit, [])
