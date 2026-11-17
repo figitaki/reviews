@@ -171,7 +171,7 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
       first = ReviewsContext.latest_patchset(review)
 
       {:ok, second} =
-        ReviewsContext.append_patchset(review, %{
+        ReviewsContext.append_patchset_unchecked(review, %{
           raw_diff: String.replace(first.raw_diff, "GITHUB_CLIENT_ID=", "NEW_VALUE=")
         })
 
