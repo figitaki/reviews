@@ -7,6 +7,8 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Add bounded REST and Poppy file, thread and comment pages with pinned revisions and UTF-8-safe comment continuation.
+
 - Expose comment IDs, safe verification attribution and projected anchor state consistently across API readers.
 
 ### Security

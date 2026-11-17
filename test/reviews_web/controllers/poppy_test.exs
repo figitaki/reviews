@@ -387,6 +387,54 @@ defmodule ReviewsWeb.PoppyTest do
                get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
     end
 
+    test "paged reads match REST and their published response schemas", ctx do
+      {:ok, %{thread: thread}} =
+        Reviews.Threads.publish_comment(ctx.review, ctx.owner, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "A comment",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      spec = get(build_conn(), "/api/poppy/openapi.json") |> json_response(200)
+
+      for {suffix, template} <- [
+            {"files", "files"},
+            {"threads", "threads"},
+            {"threads/#{thread.id}/comments", "threads/{thread_id}/comments"}
+          ] do
+        path = "/api/poppy/v1/reviews/#{ctx.review.slug}/#{suffix}"
+
+        conn =
+          Enum.reduce(Agent.headers(ctx.agent, "GET", path), build_conn(), fn {k, v}, c ->
+            put_req_header(c, k, v)
+          end)
+          |> get(path)
+
+        payload = json_response(conn, 200)
+
+        assert payload ==
+                 get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}/#{suffix}")
+                 |> json_response(200)
+
+        schema =
+          get_in(spec, [
+            "paths",
+            "/reviews/{slug}/#{template}",
+            "get",
+            "responses",
+            "200",
+            "content",
+            "application/json",
+            "schema"
+          ])
+
+        assert {:ok, _} = JSV.validate(payload, JSV.build!(schema))
+        assert get(build_conn(), path).status == 400
+        assert get_resp_header(conn, "x-robots-tag") == ["noindex, nofollow, noarchive"]
+      end
+    end
+
     test "a missing Session header or Poppy-Version is refused", ctx do
       path = "/api/poppy/v1/reviews/#{ctx.review.slug}"
 
