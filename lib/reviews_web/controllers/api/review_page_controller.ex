@@ -2,7 +2,7 @@ defmodule ReviewsWeb.Api.ReviewPageController do
   @moduledoc "Bounded read endpoints shared by REST and authenticated Poppy sessions."
   use ReviewsWeb, :controller
 
-  alias Reviews.{ReviewView, Threads}
+  alias Reviews.{Paging, ReviewView, Threads}
   alias Reviews.Reviews, as: ReviewsContext
   alias ReviewsWeb.MCP.Budget
   alias ReviewsWeb.Payloads
@@ -13,13 +13,14 @@ defmodule ReviewsWeb.Api.ReviewPageController do
 
   defp page(conn, params, kind) do
     with review when not is_nil(review) <- ReviewsContext.get_review_by_slug(params["slug"]),
-         {:ok, limit} <- integer(params["limit"], 25, 1, 100),
-         {:ok, max_bytes} <- integer(params["max_bytes"], 40_000, 2_000, 120_000),
-         {:ok, revision} <- integer(params["revision"], nil, 1, 2_147_483_647),
+         {:ok, limit} <- Paging.limit(params["limit"]),
+         {:ok, max_bytes} <- Paging.max_bytes(params["max_bytes"]),
+         {:ok, revision} <- revision(params["revision"]),
          true <- is_nil(params["cursor"]) or not is_nil(revision),
-         {:ok, cursor} <- cursor(params["cursor"]),
          selected when not is_nil(selected) <-
            ReviewsContext.get_patchset_metadata(review, revision),
+         scope = scope(kind, review, selected, params),
+         {:ok, cursor} <- cursor(params["cursor"], scope),
          {:ok, entries} <- entries(kind, review, selected, cursor, limit, params) do
       header = %{kind => [], slug: review.slug, revision: selected.number, next_cursor: nil}
       room = max_bytes - byte_size(JSON.encode!(header)) - 256
@@ -28,7 +29,7 @@ defmodule ReviewsWeb.Api.ReviewPageController do
       if entries != [] and items == [] do
         invalid(conn, "max_bytes is too small for the next item's metadata")
       else
-        json(conn, %{header | kind => items, next_cursor: next})
+        json(conn, %{header | kind => items, next_cursor: Paging.encode(scope, position(next))})
       end
     else
       nil -> missing(conn)
@@ -108,7 +109,7 @@ defmodule ReviewsWeb.Api.ReviewPageController do
   end
 
   defp fit([], _kind, _cursor, _room, _limit, acc), do: {Enum.reverse(acc), nil}
-  defp fit(_entries, _kind, cursor, _room, 0, acc), do: {Enum.reverse(acc), encode(cursor)}
+  defp fit(_entries, _kind, cursor, _room, 0, acc), do: {Enum.reverse(acc), cursor}
 
   defp fit([entry | rest], :comments, {id, offset}, room, limit, acc) do
     offset = if entry.id == id, do: offset, else: 0
@@ -125,10 +126,10 @@ defmodule ReviewsWeb.Api.ReviewPageController do
 
     cond do
       cost > room or (body == "" and not is_nil(next_offset)) ->
-        {Enum.reverse(acc), encode({id, offset})}
+        {Enum.reverse(acc), {id, offset}}
 
       next_offset ->
-        {Enum.reverse([item | acc]), encode({entry.id, next_offset})}
+        {Enum.reverse([item | acc]), {entry.id, next_offset}}
 
       true ->
         fit(rest, :comments, {entry.id, 0}, room - cost, limit - 1, [item | acc])
@@ -141,31 +142,42 @@ defmodule ReviewsWeb.Api.ReviewPageController do
 
     if cost <= room,
       do: fit(rest, kind, {next, 0}, room - cost, limit - 1, [item | acc]),
-      else: {Enum.reverse(acc), encode({id, 0})}
+      else: {Enum.reverse(acc), {id, 0}}
   end
 
-  defp cursor(nil), do: {:ok, {0, 0}}
+  # REST and Poppy share semantics. MCP comment positions use a different
+  # ID convention, so their cursors must never enter this namespace.
+  defp scope(:files, review, selected, _params),
+    do: {:rest_page, :files, review.id, selected.number}
 
-  defp cursor(value) when is_binary(value) and byte_size(value) <= 42 do
-    case Regex.run(~r/\Ac(\d{1,18})\.(\d{1,18})\z/, value) do
-      [_, id, offset] -> {:ok, {String.to_integer(id), String.to_integer(offset)}}
+  defp scope(:threads, review, selected, params),
+    do: {:rest_page, :threads, review.id, selected.number, params["status"], params["path"]}
+
+  defp scope(:comments, review, selected, params),
+    do: {:rest_page, :comments, review.id, selected.number, params["thread_id"]}
+
+  defp cursor(value, scope) do
+    case Paging.decode(value, scope) do
+      {:ok, nil} -> {:ok, {0, 0}}
+      {:ok, {:position, id, offset}} -> {:ok, {id, offset}}
       _ -> {:error, :invalid_cursor}
     end
   end
 
-  defp cursor(_), do: {:error, :invalid_cursor}
-  defp encode({id, offset}), do: "c#{id}.#{offset}"
+  defp position(nil), do: nil
+  defp position({id, offset}), do: {:position, id, offset}
 
-  defp integer(nil, default, _min, _max), do: {:ok, default}
+  # Revision IDs use the database int32 range, independently of page limits.
+  defp revision(nil), do: {:ok, nil}
 
-  defp integer(value, _default, min, max) when is_binary(value) and byte_size(value) <= 18 do
+  defp revision(value) when is_binary(value) and byte_size(value) <= 10 do
     case Integer.parse(value) do
-      {n, ""} when n >= min and n <= max -> {:ok, n}
+      {n, ""} when n >= 1 and n <= 2_147_483_647 -> {:ok, n}
       _ -> {:error, :invalid_parameters}
     end
   end
 
-  defp integer(_, _, _, _), do: {:error, :invalid_parameters}
+  defp revision(_), do: {:error, :invalid_parameters}
 
   defp invalid(conn, detail),
     do:

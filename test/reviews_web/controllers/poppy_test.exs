@@ -435,6 +435,45 @@ defmodule ReviewsWeb.PoppyTest do
       end
     end
 
+    test "REST cursors continue through Poppy but reject another endpoint", ctx do
+      {:ok, %{thread: thread}} =
+        Reviews.Threads.publish_comment(ctx.review, ctx.owner, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => String.duplicate("readable ", 1000),
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      suffix = "/reviews/#{ctx.review.slug}/threads/#{thread.id}/comments"
+
+      first =
+        get(build_conn(), "/api/v1" <> suffix, %{revision: 1, max_bytes: 2000})
+        |> json_response(200)
+
+      assert first["next_cursor"]
+      query = URI.encode_query(%{revision: 1, max_bytes: 2000, cursor: first["next_cursor"]})
+      path = "/api/poppy/v1" <> suffix <> "?" <> query
+
+      conn =
+        Enum.reduce(Agent.headers(ctx.agent, "GET", path), build_conn(), fn {k, v}, c ->
+          put_req_header(c, k, v)
+        end)
+        |> get(path)
+
+      assert json_response(conn, 200) ==
+               get(build_conn(), "/api/v1" <> suffix <> "?" <> query) |> json_response(200)
+
+      wrong = "/api/poppy/v1/reviews/#{ctx.review.slug}/files?" <> query
+
+      conn =
+        Enum.reduce(Agent.headers(ctx.agent, "GET", wrong), build_conn(), fn {k, v}, c ->
+          put_req_header(c, k, v)
+        end)
+        |> get(wrong)
+
+      assert json_response(conn, 422)["error_code"] == "invalid_pagination"
+    end
+
     test "a missing Session header or Poppy-Version is refused", ctx do
       path = "/api/poppy/v1/reviews/#{ctx.review.slug}"
 

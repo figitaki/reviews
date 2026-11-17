@@ -7,7 +7,7 @@ defmodule ReviewsWeb.PoppyDiscoveryController do
   """
   use ReviewsWeb, :controller
 
-  alias Reviews.Poppy
+  alias Reviews.{Paging, Poppy}
 
   def poppy_json(conn, _params) do
     issuer = Poppy.issuer()
@@ -160,17 +160,23 @@ defmodule ReviewsWeb.PoppyDiscoveryController do
           "required" => true,
           "schema" => %{"type" => "string"}
         },
-        query.("revision", %{"type" => "integer", "minimum" => 1}),
-        query.("limit", %{"type" => "integer", "minimum" => 1, "maximum" => 100, "default" => 25}),
+        query.("revision", %{"type" => "integer", "minimum" => 1, "maximum" => 2_147_483_647}),
+        query.("limit", %{
+          "type" => "integer",
+          "minimum" => 1,
+          "maximum" => Paging.max_limit(),
+          "default" => Paging.default_limit()
+        }),
         query.("max_bytes", %{
           "type" => "integer",
-          "minimum" => 2000,
-          "maximum" => 120_000,
-          "default" => 40000
+          "minimum" => Paging.min_max_bytes(),
+          "maximum" => Paging.max_bytes_limit(),
+          "default" => Paging.default_max_bytes()
         }),
         query.("cursor", %{
           "type" => "string",
-          "description" => "Return next_cursor unchanged with the same revision and filters"
+          "description" =>
+            "Opaque query-bound cursor: return next_cursor unchanged with the same endpoint, review, revision, thread and filters. REST/Poppy cursors are not MCP cursors."
         })
       ] ++ session_params
 

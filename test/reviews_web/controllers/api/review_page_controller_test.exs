@@ -1,6 +1,6 @@
 defmodule ReviewsWeb.Api.ReviewPageControllerTest do
   use ReviewsWeb.ConnCase, async: true
-  alias Reviews.{Accounts, Threads}
+  alias Reviews.{Accounts, Paging, Threads}
   alias Reviews.Reviews, as: ReviewsContext
 
   setup do
@@ -88,8 +88,12 @@ defmodule ReviewsWeb.Api.ReviewPageControllerTest do
     assert length(chunks) > 1
     id = hd(chunks)["id"]
     # Byte 1 is inside the first Ü, not a valid UTF-8 boundary.
-    assert get(build_conn(), path, %{revision: 1, cursor: "c#{id}.1"}).status == 422
-    assert get(build_conn(), path, %{revision: 1, cursor: "c#{id}.999999999"}).status == 422
+    scope = {:rest_page, :comments, ctx.review.id, 1, to_string(thread.id)}
+
+    for offset <- [1, 999_999_999] do
+      cursor = Paging.encode(scope, {:position, id, offset})
+      assert get(build_conn(), path, %{revision: 1, cursor: cursor}).status == 422
+    end
   end
 
   test "large verification metadata leaves comment bodies readable", ctx do
@@ -184,6 +188,80 @@ defmodule ReviewsWeb.Api.ReviewPageControllerTest do
       {:page_query, query} -> drain_queries([query | acc])
     after
       0 -> Enum.reverse(acc)
+    end
+  end
+
+  test "cursors reject different endpoints, reviews, revisions, filters and threads", ctx do
+    base = "/api/v1/reviews/#{ctx.review.slug}"
+    first = get(build_conn(), base <> "/threads", %{revision: 1, limit: 1}) |> json_response(200)
+    cursor = first["next_cursor"]
+
+    {:ok, %{review: other}} =
+      ReviewsContext.create_review_with_initial_patchset(
+        ctx.owner,
+        %{title: "Other scope", raw_diff: ctx.diff}
+      )
+
+    {:ok, _} = ReviewsContext.append_patchset(ctx.review, %{raw_diff: ctx.diff})
+
+    for {path, params} <- [
+          {base <> "/files", %{revision: 1}},
+          {"/api/v1/reviews/#{other.slug}/threads", %{revision: 1}},
+          {base <> "/threads", %{revision: 2}},
+          {base <> "/threads", %{revision: 1, status: "open"}},
+          {base <> "/threads", %{revision: 1, path: "f1"}}
+        ] do
+      assert get(build_conn(), path, Map.put(params, :cursor, cursor)).status == 422
+    end
+
+    # Budgets affect page size, not the query scope.
+    assert get(build_conn(), base <> "/threads", %{
+             revision: 1,
+             cursor: cursor,
+             limit: 2,
+             max_bytes: 3000
+           }).status == 200
+
+    [thread, other_thread | _] = ctx.threads
+    path = base <> "/threads/#{thread.id}/comments"
+    page = get(build_conn(), path, %{revision: 1, max_bytes: 2000}) |> json_response(200)
+
+    assert get(build_conn(), base <> "/threads/#{other_thread.id}/comments", %{
+             revision: 1,
+             cursor: page["next_cursor"]
+           }).status == 422
+
+    assert {:error, :invalid_cursor} =
+             Paging.decode(
+               page["next_cursor"],
+               {:thread, ctx.review.id, 1, thread.id}
+             )
+
+    mcp_cursor = Paging.encode({:thread, ctx.review.id, 1, thread.id}, {:position, 0, 0})
+    assert get(build_conn(), path, %{revision: 1, cursor: mcp_cursor}).status == 422
+    scope = {:rest_page, :comments, ctx.review.id, 1, to_string(thread.id)}
+    phase_cursor = Paging.encode(scope, {:fields, 0, 0})
+    assert get(build_conn(), path, %{revision: 1, cursor: phase_cursor}).status == 422
+  end
+
+  test "revision validation remains independent of shared page limits", ctx do
+    path = "/api/v1/reviews/#{ctx.review.slug}/files"
+
+    for revision <- ["0", "-1", "2147483648", "999999999999999999999", "1x", "1.0", ""] do
+      assert get(build_conn(), path, %{revision: revision}).status == 422
+    end
+
+    # Valid revision numbers beyond the page-size limit reach lookup, returning
+    # missing rather than invalid input; the maximum never overflows PostgreSQL.
+    for revision <- ["101", "2147483647"] do
+      assert get(build_conn(), path, %{revision: revision}).status == 404
+    end
+
+    assert get(build_conn(), path, %{revision: "1", limit: "100", max_bytes: "120000"}).status ==
+             200
+
+    for params <- [%{limit: "101"}, %{limit: "0"}, %{max_bytes: "1999"}, %{max_bytes: "120001"}] do
+      assert get(build_conn(), path, params).status == 422
     end
   end
 
