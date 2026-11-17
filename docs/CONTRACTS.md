@@ -391,3 +391,9 @@ or atom key) for new threads. It must identify a patchset of this review or the
 call returns `{:error, :patchset_not_found}` without writing. Omission defaults
 to the latest patchset. Callers creating comments on an older selected revision
 must pass its ID server-side. Replies keep their original thread's origin.
+
+### Public comment and thread metadata
+
+REST and Poppy snapshots retain `file_path`, `line_hint` and existing identity fields. Threads also expose `path`, `line`, `line_text`, `anchor_status` (`current` or `outdated`) and `originating_revision`; an outdated anchor has no projected line. Comments include stable `id` and public `attribution` (null for ordinary comments). Attribution uses the same allowlist as the web view: pairwise subjects, sessions and key thumbprints are never returned. `agent_id_claimed` indicates presence, not the private claimed identifier.
+
+MCP uses the same comment and identity serializers with its existing compact identity projection (`id`, `kind`, `handle`, `display_name`) and byte budgets. Public attribution is present for externally verified comments; absent ordinary attribution remains omitted in compact responses. Snapshot bodies from REST and Poppy are identical after authentication.

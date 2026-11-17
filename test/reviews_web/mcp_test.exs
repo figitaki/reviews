@@ -92,6 +92,63 @@ defmodule ReviewsWeb.MCPTest do
     }
   end
 
+  test "REST and MCP expose the same public comment and identity metadata", ctx do
+    attribution = %{
+      "provider" => "poppy",
+      "client_id" => "https://agent.example/client.json",
+      "owner_username" => "owner",
+      "agent_id_claimed" => "private-agent",
+      "access_token_dpop_key" => "private-key-thumbprint",
+      "subject" => "private-subject"
+    }
+
+    {:ok, %{thread: thread, comment: comment}} =
+      Threads.publish_comment(ctx.review, ctx.owner, %{
+        "file_path" => "lib/a.ex",
+        "side" => "new",
+        "body" => "Check this",
+        "thread_anchor" => %{
+          "granularity" => "line",
+          "line_number_hint" => 2,
+          "line_text" => "  def a, do: :new"
+        }
+      })
+
+    comment |> Ecto.Changeset.change(attribution: attribution) |> Reviews.Repo.update!()
+    rest = get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    [rest_thread] = rest["threads"]
+    [rest_comment] = rest_thread["comments"]
+    assert rest_comment["id"] == comment.id
+    assert rest_comment["attribution"]["token_binding"] == "dpop"
+    assert rest_comment["attribution"]["agent_id_claimed"] == true
+    refute JSON.encode!(rest) =~ "private-"
+    assert rest_thread["path"] == rest_thread["file_path"]
+    assert rest_thread["line"] == rest_thread["line_hint"]
+    assert rest_thread["anchor_status"] == "current"
+    assert rest_thread["originating_revision"] == 1
+
+    {_bytes, result} =
+      http_call(ctx.owner_token, "reviews_get_thread", %{
+        "review" => ctx.review.slug,
+        "thread_id" => thread.id
+      })
+
+    [mcp_comment] = result["comments"]
+    assert mcp_comment["id"] == rest_comment["id"]
+    assert mcp_comment["attribution"] == rest_comment["attribution"]
+
+    assert mcp_comment["author"] ==
+             Map.take(rest_comment["author"], ["id", "kind", "handle", "display_name"])
+
+    {:ok, _} = ReviewsContext.append_patchset(ctx.review, %{raw_diff: @diff_v2})
+    latest = get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    [outdated] = latest["threads"]
+    assert outdated["anchor_status"] == "outdated"
+    assert outdated["line_hint"] == nil
+    assert outdated["originating_revision"] == 1
+    assert outdated["line_text"] == "  def a, do: :new"
+  end
+
   describe "HTTP endpoint" do
     test "rejects requests without a valid token", %{conn: conn} do
       conn = mcp_request(conn, "tools/list")

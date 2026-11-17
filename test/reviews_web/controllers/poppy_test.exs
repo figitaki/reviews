@@ -383,7 +383,8 @@ defmodule ReviewsWeb.PoppyTest do
         end)
         |> get(path)
 
-      assert json_response(conn, 200)["slug"] == ctx.review.slug
+      assert json_response(conn, 200) ==
+               get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
     end
 
     test "a missing Session header or Poppy-Version is refused", ctx do

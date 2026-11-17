@@ -108,7 +108,7 @@ defmodule Reviews.Threads do
         where: c.thread_id == ^thread_id and c.id > ^after_id,
         order_by: [asc: c.id],
         limit: ^limit,
-        preload: [:author]
+        preload: [:author, :identity_link]
     )
   end
 

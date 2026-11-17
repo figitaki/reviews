@@ -761,28 +761,20 @@ defmodule ReviewsWeb.MCP.Handlers do
   end
 
   defp comment_parts(comment) do
-    meta = %{
-      id: comment.id,
-      author: identity_payload(comment.author),
-      inserted_at: comment.inserted_at
-    }
+    meta = comment |> ReviewsWeb.Payloads.comment(:compact) |> Map.delete(:body)
 
     {meta, :body, comment.body || ""}
   end
 
   defp thread_summary(thread, comment_count) do
-    %{
-      id: thread.id,
-      path: thread.file_path,
-      side: thread.side,
-      line: thread.anchor && thread.anchor["line_number_hint"],
+    thread
+    |> ReviewsWeb.Payloads.thread()
+    |> Map.take([:id, :path, :side, :line, :anchor_status, :originating_revision, :status])
+    |> Map.merge(%{
       line_text: Budget.cap(thread.original_anchor["line_text"], @line_text_cap),
-      anchor_status: thread.anchor_status,
-      originating_revision: thread.originating_patchset_number,
-      status: thread.status,
       resolved_by: identity_payload(thread.resolved_by),
       comment_count: comment_count
-    }
+    })
   end
 
   # Threads go in whole while they fit. A first thread too big for the page
@@ -812,13 +804,12 @@ defmodule ReviewsWeb.MCP.Handlers do
       thread.id
       |> Threads.list_comment_page(0, previews)
       |> Enum.map(fn comment ->
-        %{
-          id: comment.id,
-          author: identity_payload(comment.author),
+        comment
+        |> ReviewsWeb.Payloads.comment(:compact)
+        |> Map.merge(%{
           body: Budget.cap(comment.body, @listed_comment_cap),
-          body_truncated: byte_size(comment.body || "") > @listed_comment_cap,
-          inserted_at: comment.inserted_at
-        }
+          body_truncated: byte_size(comment.body || "") > @listed_comment_cap
+        })
       end)
 
     complete =
@@ -829,16 +820,7 @@ defmodule ReviewsWeb.MCP.Handlers do
     |> Map.merge(%{comments: comments, comments_complete: complete})
   end
 
-  defp identity_payload(%Identity{} = identity) do
-    %{
-      id: identity.id,
-      kind: identity.kind,
-      handle: identity.handle,
-      display_name: identity.display_name
-    }
-  end
-
-  defp identity_payload(_), do: nil
+  defp identity_payload(identity), do: ReviewsWeb.Payloads.identity(identity, :compact)
 
   defp review_url(review), do: ReviewsWeb.Endpoint.url() <> "/r/" <> review.slug
 
