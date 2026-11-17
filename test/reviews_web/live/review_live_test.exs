@@ -178,7 +178,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
     test "current and historical review pages discourage indexing", %{review: review} do
       {:ok, _patchset} =
-        ReviewsCtx.append_patchset(review, %{
+        ReviewsCtx.append_patchset_unchecked(review, %{
           raw_diff: "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
         })
 
@@ -625,12 +625,17 @@ defmodule ReviewsWeb.ReviewLiveTest do
           packet: %{
             "format_version" => 1,
             "title" => "First packet",
-            "sections" => []
+            "sections" => [
+              %{
+                "title" => "S",
+                "rows" => [%{"kind" => "hunk", "path" => "lib/one.ex", "hunk_index" => 1}]
+              }
+            ]
           }
         })
 
       {:ok, _ps2} =
-        ReviewsCtx.append_patchset(packet_review, %{
+        ReviewsCtx.append_patchset_unchecked(packet_review, %{
           raw_diff: """
           diff --git a/lib/two.ex b/lib/two.ex
           --- a/lib/two.ex
@@ -642,7 +647,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
         })
 
       {:ok, _ps3} =
-        ReviewsCtx.append_patchset(packet_review, %{
+        ReviewsCtx.append_patchset_unchecked(packet_review, %{
           raw_diff: """
           diff --git a/lib/three.ex b/lib/three.ex
           --- a/lib/three.ex
@@ -654,7 +659,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
           packet: %{
             "format_version" => 1,
             "title" => "Second packet",
-            "sections" => []
+            "sections" => [
+              %{
+                "title" => "S",
+                "rows" => [%{"kind" => "hunk", "path" => "lib/three.ex", "hunk_index" => 1}]
+              }
+            ]
           }
         })
 
@@ -962,7 +972,16 @@ defmodule ReviewsWeb.ReviewLiveTest do
           packet: %{
             "format_version" => 1,
             "title" => "Packet walkthrough",
-            "sections" => []
+            "sections" => [
+              %{
+                "title" => "S",
+                "rows" =>
+                  Enum.map(
+                    [1, 2],
+                    &%{"kind" => "hunk", "path" => "lib/packet.ex", "hunk_index" => &1}
+                  )
+              }
+            ]
           }
         })
 
@@ -1296,7 +1315,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       first = ReviewsCtx.latest_patchset(review)
 
       {:ok, second} =
-        ReviewsCtx.append_patchset(review, %{
+        ReviewsCtx.append_patchset_unchecked(review, %{
           raw_diff: String.replace(first.raw_diff, ":new", ":newer")
         })
 
@@ -1354,7 +1373,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
             "format_version" => 1,
             "title" => "Guide",
             "sections" =>
-              Enum.map([1, 2, 2], fn index ->
+              Enum.map([1, 2], fn index ->
                 %{
                   "title" => "Hunk #{index}",
                   "rows" => [%{"kind" => "hunk", "path" => "example.ex", "hunk_index" => index}]
@@ -1362,6 +1381,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
               end)
           }
         })
+
+      # Historical packets can repeat a hunk; navigation must choose the first.
+      patchset = ReviewsCtx.latest_patchset(review)
+      [first, second] = patchset.packet["sections"]
+      legacy = Map.put(patchset.packet, "sections", [first, second, second])
+      patchset |> Ecto.Changeset.change(packet: legacy) |> Reviews.Repo.update!()
 
       {:ok, %{thread: thread}} =
         Threads.publish_comment(review, author, %{
@@ -1664,7 +1689,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#packet-section-0 .review-section-action.is-active", "Approve")
 
       {:ok, _ps2} =
-        ReviewsCtx.append_patchset(packet_review, %{
+        ReviewsCtx.append_patchset_unchecked(packet_review, %{
           raw_diff: """
           diff --git a/lib/packet.ex b/lib/packet.ex
           --- a/lib/packet.ex
@@ -1744,7 +1769,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       {:ok, _ps3} =
-        ReviewsCtx.append_patchset(packet_review, %{
+        ReviewsCtx.append_patchset_unchecked(packet_review, %{
           raw_diff: """
           diff --git a/lib/packet.ex b/lib/packet.ex
           --- a/lib/packet.ex

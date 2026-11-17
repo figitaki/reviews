@@ -60,7 +60,7 @@ defmodule Reviews.CommentRevisionConcurrencyTest do
     await_lock(backend, System.monotonic_time(:millisecond) + 5_000)
 
     {:ok, second} =
-      ReviewsContext.append_patchset(review, %{
+      ReviewsContext.append_patchset_unchecked(review, %{
         raw_diff: String.replace(first.raw_diff, "+new", "+later")
       })
 

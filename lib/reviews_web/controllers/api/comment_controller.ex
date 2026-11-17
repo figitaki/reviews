@@ -15,19 +15,14 @@ defmodule ReviewsWeb.Api.CommentController do
 
   @doc "POST /api/v1/reviews/:slug/comments"
   def create(conn, %{"slug" => slug} = params) do
-    author = conn.assigns.current_identity
+    principal = conn.assigns.current_principal
 
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
         ReviewsWeb.ApiErrors.render(conn, :review_not_found)
 
       review ->
-        case ThreadsContext.publish_comment(
-               review,
-               author,
-               normalize(params),
-               conn.assigns[:attribution]
-             ) do
+        case ThreadsContext.publish_comment(review, principal, normalize(params)) do
           {:ok, %{thread: thread, comment: comment}} ->
             conn
             |> put_status(:created)
@@ -39,6 +34,11 @@ defmodule ReviewsWeb.Api.CommentController do
               anchor: thread.anchor,
               url: url(~p"/r/#{review.slug}") <> "#file-" <> file_anchor(thread)
             })
+
+          {:error, :forbidden} ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{errors: %{detail: "You cannot comment on this review"}})
 
           {:error, :thread_not_found} ->
             ReviewsWeb.ApiErrors.render(conn, :thread_not_found)

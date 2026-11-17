@@ -26,13 +26,15 @@ Missing/invalid token → `401` with body `{ "errors": { "detail": "Unauthorized
 
 ### Permissions
 
-The same rules hold on every surface (web, REST/CLI, Poppy) and are enforced
-by `Reviews.Policy` in the domain layer:
+The same rules hold on every surface (web, REST/CLI, Poppy, MCP) and are
+enforced by `Reviews.Policy` in the domain layer. Each surface authenticates
+its caller as a `Reviews.Principal` (identity, account, scopes, attribution)
+and passes it to the context functions:
 
 | Action | Who may do it |
 | --- | --- |
 | Read a review | Anyone with the link. |
-| Comment or reply | Any signed-in identity with the link. |
+| Comment or reply | Any signed-in identity with the link. A Poppy grant also needs the `comments:write` scope. |
 | Push a patchset | The review owner. |
 | Resolve or reopen a thread | The review owner or the thread's author. |
 | Decide a packet section | The review owner. Explicitly added reviewers will join once that feature exists. |
@@ -41,8 +43,10 @@ by `Reviews.Policy` in the domain layer:
 its agent identities share its permissions. Anyone else gets `403` with
 `{ "errors": { "detail": "..." } }`, and nothing is written.
 
-MCP (`docs/MCP.md`) still limits every tool to reviews the account owns,
-which is stricter than these rules, until it moves to them.
+API tokens hold every scope. An OAuth grant (Poppy) holds only the scopes it
+was approved for, so it can comment but cannot push, resolve, reopen or decide,
+even for an identity that could do so with an API token. A refused comment is
+`403`.
 
 ### `POST /api/v1/reviews`
 
@@ -175,8 +179,10 @@ packet-section decisions authored through the token use that identity.
 
 ### `POST /api/v1/reviews/:slug/sections/:section_index/decision`
 
-Sets or toggles the current token identity's decision for one packet section on
-the latest patchset. `section_index` is zero-based.
+Sets the token account's decision for one packet section on the latest
+patchset. `section_index` is zero-based. Decisions belong to the account (a
+person and their agent identities share one decision per section); the stored
+decision records which identity set it.
 
 Request body:
 
@@ -184,7 +190,8 @@ Request body:
 { "status": "approved" }
 ```
 
-`status` must be one of `"approved"`, `"denied"`, or `"ignored"`.
+`status` must be one of `"approved"`, `"denied"`, `"ignored"`, or `"pending"`
+(undecided, overriding a decision carried from an earlier patchset).
 
 Response `200`:
 
@@ -197,8 +204,11 @@ Response `200`:
 }
 ```
 
-Posting the same status again clears that identity's current decision. In that
-case, `status` is `null`, meaning the section is pending.
+The status is set, not toggled: posting the status the section already has
+changes nothing, so a retried request is safe. Before this change, posting the
+same status again cleared the decision and returned `"status": null`; the CLI
+still accepts that reply from older servers. Writes for one patchset are
+serialized, so concurrent requests never act on stale state.
 
 Only the review owner's identities may decide sections; any other token →
 `403` with `{ "errors": { "detail": "Only the review owner can decide sections" } }`.
@@ -265,8 +275,8 @@ go through.
 Streamable HTTP MCP endpoint for agents, off unless `MCP_ENABLED` is set (see
 `docs/MCP.md` for tools, flags, and client setup). It authenticates with the
 same `Authorization: Bearer <raw_token>` as the REST API and acts as the token's
-identity. Tools read and write only reviews owned by the token's account;
-foreign and unknown slugs get the same not-found result. Request bodies are
+identity. Tools find reviews by link and follow the permission rules above;
+unknown slugs get a not-found result. Request bodies are
 capped at 4 MB before decoding; the REST limit above does not apply.
 
 ---
@@ -411,3 +421,30 @@ Codes include `review_not_found`, `thread_not_found`, `patchset_not_found`, `sec
 `Reviews.Errors` is the one list of codes, with one HTTP status and one default detail each. REST, Poppy and MCP (`structuredContent.error.code`) all map domain reasons through it, so the same failure has the same code on every surface; an unknown reason is sent as `write_failed`, never as its internal name. It adds `invalid_pagination` (bad cursor, `limit` or `max_bytes` on paged reads) and `invalid_packet` (a packet that fails validation; field messages stay in `errors.packet`).
 
 MCP tool errors retain `isError` and human-readable content and add `structuredContent.error.{code,detail}`. Unclassified tool parameter errors use `invalid_request`; known missing resources, permissions, invalid anchors and failed writes have specific codes. Transport/framework errors remain owned by FastestMCP. The CLI consumes stable codes when available and falls back to existing HTTP-status hints for older servers. The invalid-anchor response is checked by both Elixir and Rust against `test/vectors/api/invalid-anchor.json`.
+
+### Packet hunk row numbering
+
+Packet `line_start` and `line_end` are one-based rows after the hunk's `@@` header. Context, added, deleted and empty rows each count once. A `\ No newline at end of file` marker does not count and stays with the preceding row when sliced. A final newline terminates the last row rather than adding a row. CLI validation, MCP coverage checks and the packet renderer use this convention.
+
+### Packet validation on upload
+
+Review creation and revision uploads validate a supplied packet in the shared patchset changeset. REST and MCP reject malformed shapes, unknown hunk references, invalid slices, omitted changes and repeated changed rows before committing. REST returns 422 with `errors.packet`; MCP returns a tool error. Omitted/null packets remain supported. Existing stored packets remain readable; this does not rewrite historical content.
+
+`Reviews.PacketValidation.check/2` returns `:ok` or coded problems: `invalid_packet.shape`, `invalid_packet.unknown_hunk`, `invalid_packet.invalid_slice`, `invalid_packet.uncovered_line`, and `invalid_packet.repeated_line`. Hunk indices and slice bounds must be JSON integers, not strings; paths and titles must not be blank. The CLI keeps its local preflight checks.
+
+### Public comment and thread metadata
+
+REST and Poppy snapshots retain `file_path`, `line_hint` and existing identity fields. Threads also expose `path`, `line`, `line_text`, `anchor_status` (`current` or `outdated`) and `originating_revision`; an outdated anchor has no projected line. Comments include stable `id` and public `attribution` (null for ordinary comments). Attribution uses the same allowlist as the web view: pairwise subjects, sessions and key thumbprints are never returned. `agent_id_claimed` indicates presence, not the private claimed identifier.
+
+MCP uses the same comment and identity serializers with its existing compact identity projection (`id`, `kind`, `handle`, `display_name`) and byte budgets. Public attribution is present for externally verified comments; absent ordinary attribution remains omitted in compact responses. Snapshot bodies from REST and Poppy are identical after authentication.
+
+Paged/compact comment readers cap each public attribution and identity string at 512 UTF-8 bytes and set `metadata_truncated: true` if any field was shortened. Full snapshots retain the complete public metadata. This prevents oversized client metadata from blocking comment-body pagination.
+### Bounded read endpoints
+
+Both `/api/v1` and `/api/poppy/v1` provide `GET /reviews/:slug/files`, `/reviews/:slug/threads`, and `/reviews/:slug/threads/:thread_id/comments`. REST keeps public link-based read access; Poppy requires a verified Session and Poppy-Version as for the snapshot. The existing snapshot endpoint remains unchanged for CLI compatibility.
+
+Pages return `slug`, `revision`, `next_cursor` (null at the end), and `files`, `threads` or `comments`. `limit` defaults to 25 and is 1–100. `max_bytes` defaults to 40000 and is 2000–120000; it bounds the JSON response body. File pages contain metadata and byte counts, never raw diffs. Thread pages contain projected anchor state and comment counts, never embedded comment bodies; `line_text` is capped at 500 bytes. Threads accept optional `status` (`open` or `resolved`) and `path` filters.
+
+REST and Poppy use `Reviews.Paging` for cursor encoding and page limits. Pass opaque `next_cursor` unchanged with the same endpoint, review, revision, thread and filters; a cursor from another query is rejected. Page sizes may change between calls. REST and Poppy share a cursor scope; MCP uses a distinct scope because comment position semantics differ. Cursors are query-tagged positions, not authorization tokens; every request retains its normal access checks. Legacy untagged cursors are rejected; restart from the first page. Revision numbers must be integers from 1 through 2147483647, independently of page-size limits. The first request may omit `revision` to select latest; all continuation requests must include the returned revision. Revision selection pins diff projection, not a database snapshot: new comments and thread status changes can appear while paging. Comments carry stable IDs, `offset` (UTF-8 byte offset), `body` (one chunk), and `complete`; concatenate chunks for the same comment until complete. A page can stop before `limit` to fit its byte budget. If metadata alone cannot fit, retry with a larger budget. Invalid limits, cursors, offsets or missing continuation revision return 422 with `error_code: invalid_pagination`; missing/foreign/future threads and missing revisions return 404 with `error_code: resource_not_found`. Both retain `errors.detail` and expose the same prose as `error_detail`.
+
+These endpoints use bounded domain page queries rather than loading the full review snapshot. Poppy OpenAPI documents their parameters and response envelopes, which are checked against actual endpoint results.
