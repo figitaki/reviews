@@ -297,7 +297,7 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
           "--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+newer\n"
 
       {:ok, ps2} =
-        ReviewsContext.append_patchset(review, %{
+        ReviewsContext.append_patchset_unchecked(review, %{
           base_sha: "cafef00d",
           branch_name: "carey/foo",
           raw_diff: diff_v2

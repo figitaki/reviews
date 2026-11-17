@@ -92,6 +92,127 @@ defmodule ReviewsWeb.MCPTest do
     }
   end
 
+  test "REST and MCP expose the same public comment and identity metadata", ctx do
+    attribution = %{
+      "provider" => "poppy",
+      "client_id" => "https://agent.example/client.json",
+      "owner_username" => "owner",
+      "agent_id_claimed" => "private-agent",
+      "access_token_dpop_key" => "private-key-thumbprint",
+      "subject" => "private-subject"
+    }
+
+    {:ok, %{thread: thread, comment: comment}} =
+      Threads.publish_comment(ctx.review, ctx.owner, %{
+        "file_path" => "lib/a.ex",
+        "side" => "new",
+        "body" => "Check this",
+        "thread_anchor" => %{
+          "granularity" => "line",
+          "line_number_hint" => 2,
+          "line_text" => "  def a, do: :new"
+        }
+      })
+
+    comment |> Ecto.Changeset.change(attribution: attribution) |> Reviews.Repo.update!()
+    rest = get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    [rest_thread] = rest["threads"]
+    [rest_comment] = rest_thread["comments"]
+    assert rest_comment["id"] == comment.id
+    assert rest_comment["attribution"]["token_binding"] == "dpop"
+    assert rest_comment["attribution"]["agent_id_claimed"] == true
+    refute JSON.encode!(rest) =~ "private-"
+    assert rest_thread["path"] == rest_thread["file_path"]
+    assert rest_thread["line"] == rest_thread["line_hint"]
+    assert rest_thread["anchor_status"] == "current"
+    assert rest_thread["originating_revision"] == 1
+
+    {_bytes, result} =
+      http_call(ctx.owner_token, "reviews_get_thread", %{
+        "review" => ctx.review.slug,
+        "thread_id" => thread.id
+      })
+
+    [mcp_comment] = result["comments"]
+    assert mcp_comment["id"] == rest_comment["id"]
+    assert mcp_comment["attribution"] == rest_comment["attribution"]
+
+    assert mcp_comment["author"] ==
+             Map.take(rest_comment["author"], ["id", "kind", "handle", "display_name"])
+
+    {:ok, _} = ReviewsContext.append_patchset_unchecked(ctx.review, %{raw_diff: @diff_v2})
+    latest = get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    [outdated] = latest["threads"]
+    assert outdated["anchor_status"] == "outdated"
+    assert outdated["line_hint"] == nil
+    assert outdated["originating_revision"] == 1
+    assert outdated["line_text"] == "  def a, do: :new"
+  end
+
+  test "oversized verified metadata permits progress through body chunks and later comments",
+       ctx do
+    body = String.duplicate("readable ✓ ", 15_000)
+
+    {:ok, %{thread: thread, comment: comment}} =
+      Threads.publish_comment(ctx.review, ctx.owner, %{
+        "file_path" => "lib/a.ex",
+        "side" => "new",
+        "body" => body,
+        "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
+      })
+
+    client_id = "https://agent.example/" <> String.duplicate("x", 61_000)
+
+    comment
+    |> Ecto.Changeset.change(attribution: %{"provider" => "poppy", "client_id" => client_id})
+    |> Reviews.Repo.update!()
+
+    {:ok, %{comment: reply}} =
+      Threads.publish_comment(ctx.review, ctx.owner, %{
+        "thread_id" => thread.id,
+        "file_path" => "lib/a.ex",
+        "side" => "new",
+        "body" => "later comment",
+        "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
+      })
+
+    {chunks, nil, cursors} =
+      Enum.reduce_while(1..20, {[], nil, MapSet.new()}, fn _, {chunks, cursor, seen} ->
+        args = %{
+          "review" => ctx.review.slug,
+          "thread_id" => thread.id,
+          "revision" => 1,
+          "max_bytes" => 120_000
+        }
+
+        args = if cursor, do: Map.put(args, "cursor", cursor), else: args
+        {bytes, result} = http_call(ctx.owner_token, "reviews_get_thread", args)
+        assert bytes <= 120_000
+        refute result["isError"]
+        assert [_ | _] = result["comments"]
+        next = result["next_cursor"]
+        refute next && MapSet.member?(seen, next)
+        state = {chunks ++ result["comments"], next, MapSet.put(seen, next)}
+        if next, do: {:cont, state}, else: {:halt, state}
+      end)
+
+    assert MapSet.size(cursors) > 1
+    first_chunks = Enum.filter(chunks, &(&1["id"] == comment.id))
+    assert length(first_chunks) > 1
+    assert Enum.map_join(first_chunks, & &1["body"]) == String.trim(body)
+    assert List.last(first_chunks)["complete"]
+
+    assert Enum.all?(first_chunks, fn chunk ->
+             chunk["metadata_truncated"] && byte_size(chunk["attribution"]["client_id"]) <= 512
+           end)
+
+    assert [%{"body" => "later comment", "complete" => true}] =
+             Enum.filter(chunks, &(&1["id"] == reply.id))
+
+    snapshot = get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    assert hd(hd(snapshot["threads"])["comments"])["attribution"]["client_id"] == client_id
+  end
+
   describe "HTTP endpoint" do
     test "rejects requests without a valid token", %{conn: conn} do
       conn = mcp_request(conn, "tools/list")
@@ -151,7 +272,7 @@ defmodule ReviewsWeb.MCPTest do
   end
 
   describe "read tools" do
-    test "scope reviews to the owning account", ctx do
+    test "find any review by link, like REST and the web page", ctx do
       assert %{slug: slug, title: "Owned review", revision: 1} =
                call!(ctx.agent_token, "reviews_get_review", %{
                  "review" => "https://reviews.example/r/#{ctx.review.slug}/changes"
@@ -159,13 +280,21 @@ defmodule ReviewsWeb.MCPTest do
 
       assert slug == ctx.review.slug
 
-      foreign = call(ctx.stranger_token, "reviews_get_review", %{"review" => ctx.review.slug})
+      # Link sharing: another account reads the same review it has the link to.
+      assert %{slug: ^slug} =
+               call!(ctx.stranger_token, "reviews_get_review", %{"review" => ctx.review.slug})
+
       unknown = call(ctx.stranger_token, "reviews_get_review", %{"review" => "nosuchslug"})
+      assert error_text(unknown) =~ "No review matching"
 
-      assert error_text(foreign) =~ "is owned by this account"
-
-      assert error_text(foreign) ==
-               String.replace(error_text(unknown), "nosuchslug", ctx.review.slug)
+      # And, like REST, any signed-in account with the link may comment.
+      assert %{thread_id: _} =
+               call!(ctx.stranger_token, "reviews_post_comment", %{
+                 "review" => ctx.review.slug,
+                 "path" => "lib/a.ex",
+                 "line" => 2,
+                 "body" => "Drive-by note"
+               })
     end
 
     test "page a long file diff within max_bytes, counting the whole response", ctx do
@@ -373,6 +502,47 @@ defmodule ReviewsWeb.MCPTest do
                String.trim(String.duplicate("Long note ✓ ", 150))
 
       assert length(comments) > 1
+
+      # A cursor continues only the query it came from: another filter or
+      # another thread refuses it instead of skipping or repeating items.
+      open_page =
+        call!(ctx.owner_token, "reviews_list_threads", %{
+          "review" => review.slug,
+          "revision" => 1,
+          "limit" => 2
+        })
+
+      assert [_, _] = open_page.threads
+
+      assert error_text(
+               call(ctx.owner_token, "reviews_list_threads", %{
+                 "review" => review.slug,
+                 "revision" => 1,
+                 "status" => "all",
+                 "cursor" => open_page.next_cursor
+               })
+             ) =~ "Invalid cursor"
+
+      [_, second | _] = threads
+
+      thread_page =
+        call!(ctx.owner_token, "reviews_get_thread", %{
+          "review" => review.slug,
+          "revision" => 1,
+          "thread_id" => first["id"],
+          "max_bytes" => 2_000
+        })
+
+      assert is_binary(thread_page.next_cursor)
+
+      assert error_text(
+               call(ctx.owner_token, "reviews_get_thread", %{
+                 "review" => review.slug,
+                 "revision" => 1,
+                 "thread_id" => second["id"],
+                 "cursor" => thread_page.next_cursor
+               })
+             ) =~ "Invalid cursor"
     end
 
     test "budget every row, including empty and missing ones", ctx do
@@ -541,8 +711,14 @@ defmodule ReviewsWeb.MCPTest do
       assert longer =~ "reviews_get_thread (thread_id #{thread.id})"
       refute longer =~ "Reply 21"
 
-      assert {:error, %{code: :not_found}} =
+      # The feedback resource is link-readable like every other read.
+      assert {:ok, _} =
                FastestMCP.read_resource(Server, "reviews://#{ctx.review.slug}/feedback",
+                 auth_input: bearer(ctx.stranger_token)
+               )
+
+      assert {:error, %{code: :not_found}} =
+               FastestMCP.read_resource(Server, "reviews://nosuchslug/feedback",
                  auth_input: bearer(ctx.stranger_token)
                )
     end
@@ -682,7 +858,10 @@ defmodule ReviewsWeb.MCPTest do
           "raw_diff" => @diff_v1
         })
 
-      assert error_text(refused) =~ "is owned by this account"
+      assert error_text(refused) =~ "Only its owner can push revisions"
+
+      assert %{revision_count: 2} =
+               call!(ctx.owner_token, "reviews_get_review", %{"review" => out.slug})
     end
 
     test "require packets to cover every changed line exactly once", ctx do
@@ -844,8 +1023,8 @@ defmodule ReviewsWeb.MCPTest do
           "status" => "resolved"
         })
 
-      # MCP keeps its owner-only limit until it moves to the shared rules (#176).
-      assert error_text(refused) =~ "is owned by this account"
+      # Reviews.Policy decides: neither the review owner nor the thread author.
+      assert error_text(refused) =~ "owner or a thread's author"
       assert [%{status: "open"}] = Threads.list_published_threads(ctx.review.id)
 
       assert %{status: "resolved", resolved_by: %{handle: "codex"}} =

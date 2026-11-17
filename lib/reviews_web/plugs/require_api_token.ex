@@ -1,7 +1,8 @@
 defmodule ReviewsWeb.Plugs.RequireApiToken do
   @moduledoc """
-  Looks for `Authorization: Bearer <token>` and assigns `:current_user` and
-  `:current_identity`.
+  Looks for `Authorization: Bearer <token>` and assigns `:current_user`,
+  `:current_identity`, and `:current_principal` (a `Reviews.Principal` with
+  every scope; API tokens are not scoped).
   Halts with 401 JSON if missing/invalid.
   """
   import Plug.Conn
@@ -17,6 +18,7 @@ defmodule ReviewsWeb.Plugs.RequireApiToken do
       conn
       |> assign(:current_user, user)
       |> assign(:current_identity, identity)
+      |> assign(:current_principal, Reviews.Principal.new(identity, :api_token, user))
     else
       _ ->
         conn
