@@ -257,11 +257,12 @@ defmodule Reviews.ReviewView do
     }
   end
 
+  @doc "Public verification metadata. Never exposes pairwise subjects, sessions or key thumbprints."
   # Only what the adapter verified, plus the agent's own claims labelled as
   # such. The pairwise User ID, Session, and key thumbprint stay server-side;
   # `token_binding` says only whether the token was bound to a DPoP key, and is
   # nil for comments recorded before Reviews kept that.
-  defp attribution_payload(%{attribution: %{"provider" => "poppy"} = a} = comment) do
+  def attribution_payload(%{attribution: %{"provider" => "poppy"} = a} = comment) do
     link = Map.get(comment, :identity_link)
 
     %{
@@ -278,7 +279,7 @@ defmodule Reviews.ReviewView do
     }
   end
 
-  defp attribution_payload(_comment), do: nil
+  def attribution_payload(_comment), do: nil
 
   defp token_binding(%{"access_token_dpop_key" => jkt}) when is_binary(jkt), do: "dpop"
   defp token_binding(%{"access_token_dpop_key" => nil}), do: "bearer"
