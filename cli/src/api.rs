@@ -269,6 +269,9 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
         StatusCode::UNAUTHORIZED => {
             " — your API token was rejected. Mint a new one in /settings and run `reviews login`."
         }
+        StatusCode::FORBIDDEN => {
+            " — this identity is not allowed to do that on this review. Only the review owner can push revisions or decide sections; the owner or the thread's author can resolve or reopen a thread."
+        }
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",
         _ => "",
@@ -313,6 +316,28 @@ mod tests {
         let msg = format!("{err:#}");
         assert!(msg.contains("401"), "msg = {msg}");
         assert!(msg.contains("reviews login"), "msg = {msg}");
+    }
+
+    #[test]
+    fn forbidden_explains_who_may_act() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("PATCH", "/api/v1/reviews/k7m2qz/threads/7")
+            .with_status(403)
+            .with_body(r#"{"errors":{"detail":"Only the review owner or the thread's author can resolve or reopen it"}}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let err = client
+            .update_thread_status(
+                "k7m2qz",
+                7,
+                &UpdateThreadStatusRequest { status: "resolved" },
+            )
+            .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("403"), "msg = {msg}");
+        assert!(msg.contains("review owner"), "msg = {msg}");
     }
 
     #[test]

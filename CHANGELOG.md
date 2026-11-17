@@ -7,6 +7,16 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+### Security
+
+- Only the review owner or a thread's author can resolve or reopen a thread,
+  and only the review owner can decide packet sections. Before, any signed-in
+  identity could do both on any review through the API (#176). Anyone else now
+  gets a 403, the review page hides those controls from them, and the CLI
+  explains the refusal. Commenting is unchanged: anyone signed in with the
+  link can comment. The rules live in `Reviews.Policy` and apply to every
+  surface.
+
 ### Added
 
 - Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with

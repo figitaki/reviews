@@ -1798,4 +1798,140 @@ defmodule ReviewsWeb.ReviewLiveTest do
       refute has_element?(carried_view, "#packet-section-0 .review-section-action.is-active")
     end
   end
+
+  describe "signed-in viewer who does not own the review" do
+    setup :seed!
+
+    setup %{conn: conn} do
+      {:ok, stranger} =
+        Accounts.upsert_from_github(%{
+          github_id: 5678 + System.unique_integer([:positive]),
+          username: "dana",
+          email: "dana@example.com",
+          avatar_url: nil
+        })
+
+      %{
+        stranger: stranger,
+        conn: Plug.Test.init_test_session(conn, %{current_user_id: stranger.id})
+      }
+    end
+
+    defp line_comment(body) do
+      %{
+        "file_path" => "lib/foo.ex",
+        "side" => "new",
+        "body" => body,
+        "thread_anchor" => %{
+          "granularity" => "line",
+          "line_text" => "  def bar, do: :new",
+          "context_before" => [],
+          "context_after" => [],
+          "line_number_hint" => 2
+        }
+      }
+    end
+
+    defp island_threads(view) do
+      view
+      |> render()
+      |> LazyHTML.from_document()
+      |> LazyHTML.query(~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"]|)
+      |> LazyHTML.attribute("data-threads")
+      |> List.first()
+      |> JSON.decode!()
+      |> Map.new(&{&1["id"], &1["can_update_status"]})
+    end
+
+    test "sees section decisions as owner-only and cannot record one", %{
+      conn: conn,
+      author: author,
+      stranger: stranger
+    } do
+      {:ok, %{review: packet_review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Packet",
+          raw_diff:
+            "diff --git a/lib/p.ex b/lib/p.ex\n--- a/lib/p.ex\n+++ b/lib/p.ex\n@@ -1 +1 @@\n-old\n+new\n",
+          packet: %{
+            "format_version" => 1,
+            "title" => "Packet walkthrough",
+            "sections" => [
+              %{
+                "title" => "Main change",
+                "rows" => [%{"kind" => "hunk", "path" => "lib/p.ex", "hunk_index" => 1}]
+              }
+            ]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
+      view |> element("#review-guide-tick-0") |> render_click()
+
+      assert has_element?(view, "#packet-section-0-decision.is-readonly")
+      assert has_element?(view, "#packet-section-0-decision-owner-only", "Only the review owner")
+      refute has_element?(view, "#packet-section-0-decision button")
+
+      assert render_hook(view, "set_section_status", %{
+               "section_index" => "0",
+               "status" => "approved"
+             }) =~ "Only the review owner can decide sections."
+
+      assert [] = Reviews.PacketSectionDecisions.list_for_review(packet_review, stranger)
+    end
+
+    test "can resolve only the threads they started", %{
+      conn: conn,
+      author: author,
+      stranger: stranger,
+      review: review
+    } do
+      {:ok, %{thread: owner_thread}} =
+        Threads.publish_comment(review, author, line_comment("owner's note"))
+
+      {:ok, %{thread: own_thread}} =
+        Threads.publish_comment(review, stranger, line_comment("my question"))
+
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}/changes")
+
+      assert island_threads(view) == %{owner_thread.id => false, own_thread.id => true}
+
+      assert render_hook(view, "update_thread_status", %{
+               "file_path" => "lib/foo.ex",
+               "thread_id" => owner_thread.id,
+               "status" => "resolved"
+             }) =~ "Only the review owner or the thread&#39;s author can resolve or reopen it."
+
+      render_hook(view, "update_thread_status", %{
+        "file_path" => "lib/foo.ex",
+        "thread_id" => own_thread.id,
+        "status" => "resolved"
+      })
+
+      statuses = Map.new(Threads.list_published_threads(review.id), &{&1.id, &1.status})
+      assert statuses == %{owner_thread.id => "open", own_thread.id => "resolved"}
+    end
+
+    test "the owner may resolve any thread on their review", %{
+      author: author,
+      stranger: stranger,
+      review: review
+    } do
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, stranger, line_comment("my question"))
+
+      conn = Plug.Test.init_test_session(build_conn(), %{current_user_id: author.id})
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}/changes")
+
+      assert island_threads(view) == %{thread.id => true}
+
+      render_hook(view, "update_thread_status", %{
+        "file_path" => "lib/foo.ex",
+        "thread_id" => thread.id,
+        "status" => "resolved"
+      })
+
+      assert [%{status: "resolved"}] = Threads.list_published_threads(review.id)
+    end
+  end
 end

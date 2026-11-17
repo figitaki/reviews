@@ -542,6 +542,34 @@ defmodule ReviewsWeb.PoppyTest do
     end
   end
 
+  describe "permissions" do
+    test "another account's agent may comment on a review it has the link to, and resolve only its own thread",
+         ctx do
+      stranger = user_fixture("dana")
+
+      {:ok, stranger_agent} =
+        Accounts.create_agent_identity(stranger, %{display_name: "Dana's bot", handle: "dbot"})
+
+      {:ok, %{thread: owner_thread}} =
+        Reviews.Threads.publish_comment(ctx.review, ctx.owner, comment_body(%{}))
+
+      tokens = sign_in(ctx.agent, stranger, stranger_agent)
+      conn = post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"])
+      assert %{"thread_id" => thread_id} = json_response(conn, 201)
+
+      assert {:error, :forbidden} =
+               Reviews.Threads.update_status(
+                 ctx.review,
+                 owner_thread.id,
+                 stranger_agent,
+                 "resolved"
+               )
+
+      assert {:ok, %{status: "resolved"}} =
+               Reviews.Threads.update_status(ctx.review, thread_id, stranger_agent, "resolved")
+    end
+  end
+
   describe "cross-tenant" do
     test "an access token only works with Session JWTs from the client it was issued to", ctx do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
