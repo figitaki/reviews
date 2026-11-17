@@ -15,7 +15,7 @@ defmodule ReviewsWeb.MCP.Handlers do
   """
 
   alias FastestMCP.Tools.Result
-  alias Reviews.{Accounts, Anchoring, ReviewHunks, ReviewPacket, ReviewView}
+  alias Reviews.{Accounts, ReviewHunks, ReviewPacket, ReviewView}
   alias Reviews.Accounts.Identity
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
@@ -1053,16 +1053,7 @@ defmodule ReviewsWeb.MCP.Handlers do
   defp changed_line?(line), do: String.starts_with?(line, ["+", "-"])
 
   defp comment_params(_review, %{"thread_id" => thread_id} = args) when not is_nil(thread_id) do
-    # A reply keeps its thread's file, side, anchor, and revision.
-    # publish_comment validates these placeholders but does not store them.
-    {:ok,
-     %{
-       "thread_id" => thread_id,
-       "body" => args["body"],
-       "file_path" => "(reply)",
-       "side" => "new",
-       "thread_anchor" => %{"granularity" => "line"}
-     }}
+    {:ok, %{"thread_id" => thread_id, "body" => args["body"]}}
   end
 
   defp comment_params(review, args) do
@@ -1070,8 +1061,7 @@ defmodule ReviewsWeb.MCP.Handlers do
 
     with {:path, path} when is_binary(path) <- {:path, args["path"]},
          {:line, line} when is_integer(line) <- {:line, args["line"]},
-         {:ok, _revisions, selected} <- select_revision(review, args),
-         {:ok, text} <- line_text(selected, path, side, line) do
+         {:ok, _revisions, selected} <- select_revision(review, args) do
       {:ok,
        %{
          "body" => args["body"],
@@ -1080,8 +1070,7 @@ defmodule ReviewsWeb.MCP.Handlers do
          "originating_patchset_id" => selected.id,
          "thread_anchor" => %{
            "granularity" => "line",
-           "line_number_hint" => line,
-           "line_text" => text
+           "line_number_hint" => line
          }
        }}
     else
@@ -1091,27 +1080,17 @@ defmodule ReviewsWeb.MCP.Handlers do
     end
   end
 
-  defp line_text(selected, path, side, line) do
-    text =
-      case ReviewsContext.get_file(selected, path) do
-        nil -> nil
-        file -> file |> Anchoring.index() |> Map.get({path, side}, %{}) |> Map.get(line)
-      end
-
-    if is_binary(text) do
-      {:ok, text}
-    else
-      {:error,
-       "Line #{line} on the #{side} side of #{path} is not in revision #{selected.number}'s diff. " <>
-         "Comment on a changed or context line."}
-    end
-  end
-
   defp write_error({:error, %Result{} = result}), do: result
   defp write_error({:error, message}) when is_binary(message), do: error_result(message)
 
   defp write_error({:error, :patchset_not_found}),
     do: error_result("That revision does not exist.")
+
+  defp write_error({:error, :invalid_anchor}),
+    do:
+      error_result(
+        "The anchor is not in the selected revision's diff. Comment on a changed or context line."
+      )
 
   defp write_error({:error, :forbidden}), do: error_result("Only the review's owner can do that.")
   defp write_error({:error, :empty_body}), do: error_result("body cannot be empty.")

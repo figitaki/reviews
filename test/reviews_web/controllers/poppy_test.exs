@@ -427,6 +427,61 @@ defmodule ReviewsWeb.PoppyTest do
     end
   end
 
+  test "Poppy request schema accepts minimal replies and validated anchor shapes" do
+    schema =
+      build_conn()
+      |> get("/api/poppy/openapi.json")
+      |> json_response(200)
+      |> get_in([
+        "paths",
+        "/reviews/{slug}/comments",
+        "post",
+        "requestBody",
+        "content",
+        "application/json",
+        "schema"
+      ])
+
+    root = JSV.build!(schema)
+    assert {:ok, _} = JSV.validate(%{"thread_id" => 1, "body" => "Reply"}, root)
+
+    line = %{
+      "file_path" => "foo",
+      "body" => "Comment",
+      "revision" => 1,
+      "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+    }
+
+    assert {:ok, _} = JSV.validate(line, root)
+    token = put_in(line, ["thread_anchor", "granularity"], "token_range")
+    assert {:error, _} = JSV.validate(token, root)
+
+    assert {:ok, _} =
+             JSV.validate(put_in(token, ["thread_anchor", "selection_text"], "foo"), root)
+
+    assert {:error, _} = JSV.validate(%{"body" => "Missing location"}, root)
+  end
+
+  test "Poppy replies need only thread_id and body, with attribution retained", ctx do
+    tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
+
+    first =
+      post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"])
+      |> json_response(201)
+
+    path = comment_path(ctx.review)
+    headers = Agent.headers(ctx.agent, "POST", path, access_token: tokens["access_token"])
+
+    conn =
+      Enum.reduce(headers, build_conn(), fn {k, v}, conn -> put_req_header(conn, k, v) end)
+      |> post(path, %{"thread_id" => first["thread_id"], "body" => "Reply"})
+
+    assert json_response(conn, 201)["thread_id"] == first["thread_id"]
+    [thread] = Reviews.Threads.list_published_threads(ctx.review.id)
+    assert length(thread.comments) == 2
+    assert Enum.all?(thread.comments, &is_map(&1.attribution))
+  end
+
   describe "replay" do
     test "the same Session JWT twice publishes once", ctx do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)

@@ -391,3 +391,13 @@ or atom key) for new threads. It must identify a patchset of this review or the
 call returns `{:error, :patchset_not_found}` without writing. Omission defaults
 to the latest patchset. Callers creating comments on an older selected revision
 must pass its ID server-side. Replies keep their original thread's origin.
+
+### Comment revisions and replies
+
+REST and Poppy comment creation accept an optional positive integer `revision` (the review-local revision number). The CLI exposes it as `reviews comment SLUG FILE:LINE --revision N`. `originating_patchset_id` is also accepted for clients that have the exact database ID; it must belong to this review. Do not send both selectors. Invalid or foreign targets return 422 without writing.
+
+An omitted target selects the latest committed revision when the request resolves its anchor. This is not an expected-latest precondition. Once selected, the immutable revision ID is used through insertion, even if another revision is appended concurrently. An exact older revision is never silently retargeted.
+
+New threads require a line present on the selected file and side of that revision's diff. The server captures line text and neighboring context. Token anchors must select text on that line; offsets use UTF-16 code units. Without an offset, the selected substring must occur exactly once. Invalid paths, lines or selections return 422.
+
+Replies require only `{thread_id, body}` and preserve the thread's file, side, anchor and originating revision. Extra location/revision fields do not redirect a reply. A missing or foreign thread returns 404. Poppy attribution is retained. The CLI posts replies directly without downloading the review snapshot.

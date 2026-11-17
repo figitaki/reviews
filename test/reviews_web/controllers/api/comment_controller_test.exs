@@ -119,6 +119,124 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
       assert resp["anchor"]["selection_text"] == "GITHUB_CLIENT_ID"
     end
 
+    test "pins an older revision and accepts a location-free reply", %{
+      raw_token: raw,
+      review: review
+    } do
+      first = ReviewsContext.latest_patchset(review)
+
+      {:ok, second} =
+        ReviewsContext.append_patchset(review, %{
+          raw_diff: String.replace(first.raw_diff, "GITHUB_CLIENT_ID=", "NEW_VALUE=")
+        })
+
+      params = %{
+        "file_path" => "foo",
+        "body" => "old revision",
+        "revision" => 1,
+        "thread_anchor" => %{
+          "granularity" => "line",
+          "line_number_hint" => 1,
+          "line_text" => "forged"
+        }
+      }
+
+      conn =
+        build_conn()
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> post(~p"/api/v1/reviews/#{review.slug}/comments", params)
+
+      response = json_response(conn, 201)
+      assert response["anchor"]["line_text"] == "GITHUB_CLIENT_ID="
+      [thread] = ThreadsContext.list_published_threads(review.id)
+      assert thread.originating_patchset_id == first.id
+
+      conn =
+        build_conn()
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> post(~p"/api/v1/reviews/#{review.slug}/comments", %{
+          thread_id: thread.id,
+          body: "reply",
+          originating_patchset_id: second.id
+        })
+
+      assert json_response(conn, 201)["thread_id"] == thread.id
+      [updated] = ThreadsContext.list_published_threads(review.id)
+      assert updated.originating_patchset_id == first.id
+      assert length(updated.comments) == 2
+    end
+
+    test "rejects missing lines, wrong token placement and invalid revisions without writing", %{
+      raw_token: raw,
+      review: review
+    } do
+      base = %{
+        "file_path" => "foo",
+        "body" => "bad anchor",
+        "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+      }
+
+      for params <- [
+            Map.put(base, "revision", 999),
+            Map.put(base, "file_path", "foreign"),
+            Map.put(base, "thread_anchor", %{"granularity" => "line", "line_number_hint" => 50}),
+            Map.put(base, "thread_anchor", %{
+              "granularity" => "token_range",
+              "line_number_hint" => 1,
+              "selection_text" => "GITHUB",
+              "selection_offset" => 2
+            })
+          ] do
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> post(~p"/api/v1/reviews/#{review.slug}/comments", params)
+
+        assert json_response(conn, 422)
+      end
+
+      assert ThreadsContext.list_published_threads(review.id) == []
+    end
+
+    test "foreign revision IDs and reply IDs cannot redirect writes", %{
+      raw_token: raw,
+      review: review,
+      user: user
+    } do
+      original = ReviewsContext.latest_patchset(review)
+
+      {:ok, %{review: foreign, patchset: foreign_revision}} =
+        ReviewsContext.create_review_with_initial_patchset(user, %{
+          title: "Foreign",
+          raw_diff: original.raw_diff
+        })
+
+      params = %{
+        "file_path" => "foo",
+        "side" => "new",
+        "body" => "Foreign",
+        "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+      }
+
+      {:ok, %{thread: thread}} = ThreadsContext.publish_comment(foreign, user, params)
+
+      for {body, status} <- [
+            {Map.put(params, "originating_patchset_id", foreign_revision.id), 422},
+            {%{"thread_id" => thread.id, "body" => "Reply"}, 404}
+          ] do
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> post(~p"/api/v1/reviews/#{review.slug}/comments", body)
+
+        assert json_response(conn, status)
+      end
+
+      assert ThreadsContext.list_published_threads(review.id) == []
+      [unchanged] = ThreadsContext.list_published_threads(foreign.id)
+      assert length(unchanged.comments) == 1
+    end
+
     test "rejects an empty body", %{conn: conn, raw_token: raw, review: review} do
       conn =
         conn

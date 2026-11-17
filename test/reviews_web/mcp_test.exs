@@ -588,7 +588,7 @@ defmodule ReviewsWeb.MCPTest do
           "body" => "Nope"
         })
 
-      assert error_text(outside) =~ "not in revision 1"
+      assert error_text(outside) =~ "not in the selected revision"
 
       %{thread: other_thread} = Reviews.ThreadFixtures.thread_fixture()
 

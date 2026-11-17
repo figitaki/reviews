@@ -7,6 +7,8 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.
+
 ### Security
 
 - Only the review owner or a thread's author can resolve or reopen a thread,
