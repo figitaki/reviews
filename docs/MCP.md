@@ -62,10 +62,12 @@ metadata and both copies of the result: the structured content and its JSON
 text. Lists and long text continue with `next_cursor` (or `next_offset` for
 file diffs). Send it back with the `revision` of the page it came from; a
 continuation without a revision is refused, so pages from two revisions are
-never mixed. Cursors are opaque strings such as `c40` or `c3.8892`; pass
+never mixed. Cursors are opaque strings such as `c40.0.512339871`; pass
 `next_cursor` back unchanged. They always start with a letter, so no client can
-read one as a number. They are plain positions, not signed tokens, and every
-page is authorized again. Reads load only what the page needs; they do not assemble
+read one as a number. A cursor works only for the call it came from: the same
+tool, review, revision, thread, section and filters. Any other call refuses it
+as an invalid cursor. Cursors are positions, not signed tokens, and every page
+is authorized again. `Reviews.Paging` owns the cursor format and the limits. Reads load only what the page needs; they do not assemble
 the whole review.
 
 | Tool | Does |

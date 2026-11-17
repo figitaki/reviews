@@ -373,6 +373,47 @@ defmodule ReviewsWeb.MCPTest do
                String.trim(String.duplicate("Long note ✓ ", 150))
 
       assert length(comments) > 1
+
+      # A cursor continues only the query it came from: another filter or
+      # another thread refuses it instead of skipping or repeating items.
+      open_page =
+        call!(ctx.owner_token, "reviews_list_threads", %{
+          "review" => review.slug,
+          "revision" => 1,
+          "limit" => 2
+        })
+
+      assert [_, _] = open_page.threads
+
+      assert error_text(
+               call(ctx.owner_token, "reviews_list_threads", %{
+                 "review" => review.slug,
+                 "revision" => 1,
+                 "status" => "all",
+                 "cursor" => open_page.next_cursor
+               })
+             ) =~ "Invalid cursor"
+
+      [_, second | _] = threads
+
+      thread_page =
+        call!(ctx.owner_token, "reviews_get_thread", %{
+          "review" => review.slug,
+          "revision" => 1,
+          "thread_id" => first["id"],
+          "max_bytes" => 2_000
+        })
+
+      assert is_binary(thread_page.next_cursor)
+
+      assert error_text(
+               call(ctx.owner_token, "reviews_get_thread", %{
+                 "review" => review.slug,
+                 "revision" => 1,
+                 "thread_id" => second["id"],
+                 "cursor" => thread_page.next_cursor
+               })
+             ) =~ "Invalid cursor"
     end
 
     test "budget every row, including empty and missing ones", ctx do
