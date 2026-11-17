@@ -92,6 +92,31 @@ defmodule ReviewsWeb.Api.ReviewPageControllerTest do
     assert get(build_conn(), path, %{revision: 1, cursor: "c#{id}.999999999"}).status == 422
   end
 
+  test "large verification metadata leaves comment bodies readable", ctx do
+    [thread | _] = ctx.threads
+    [comment] = Threads.list_comment_page(thread.id, 0, 1)
+
+    comment
+    |> Ecto.Changeset.change(
+      attribution: %{
+        "provider" => "poppy",
+        "client_id" => "https://agent.example/" <> String.duplicate("x", 130_000)
+      }
+    )
+    |> Reviews.Repo.update!()
+
+    body =
+      get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}/threads/#{thread.id}/comments", %{
+        max_bytes: 120_000
+      })
+      |> json_response(200)
+
+    assert [%{"metadata_truncated" => true, "complete" => true, "body" => text}] =
+             body["comments"]
+
+    assert text == comment.body
+  end
+
   test "rejects malformed parameters and foreign or future threads", ctx do
     path = "/api/v1/reviews/#{ctx.review.slug}/threads"
 

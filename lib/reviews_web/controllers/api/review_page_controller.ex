@@ -79,7 +79,8 @@ defmodule ReviewsWeb.Api.ReviewPageController do
           body = first.body || ""
 
           if first.id == id and offset <= byte_size(body) and
-               String.valid?(binary_part(body, 0, min(offset, byte_size(body)))),
+               (offset == byte_size(body) or
+                  not match?(<<0b10::2, _::6>>, binary_part(body, offset, 1))),
              do: {:ok, comments},
              else: {:error, :invalid_cursor}
 
@@ -105,7 +106,12 @@ defmodule ReviewsWeb.Api.ReviewPageController do
 
   defp fit([entry | rest], :comments, {id, offset}, room, limit, acc) do
     offset = if entry.id == id, do: offset, else: 0
-    meta = entry |> Payloads.comment() |> Map.merge(%{body: "", offset: offset, complete: false})
+
+    meta =
+      entry
+      |> Payloads.comment(:bounded)
+      |> Map.merge(%{body: "", offset: offset, complete: false})
+
     available = room - byte_size(JSON.encode!(meta)) - 4
     {body, next_offset} = Budget.fit_text(entry.body || "", offset, max(available, 0))
     item = %{meta | body: body, complete: is_nil(next_offset)}
