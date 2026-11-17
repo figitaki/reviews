@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import { HunkIslandDataset, hunkViewPayload } from "./schemas.js"
+import { HunkIslandDataset, Thread, hunkViewPayload } from "./schemas.js"
 
 const baseDataset = {
   fileId: "hunk-1-packet-section-0-row-0--hunk-lib-a-ex-1",
@@ -139,4 +139,19 @@ test("re-encodes grouped hunk attrs for the wire", () => {
 
   assert.equal(typeof payload.hunk_attrs, "string")
   assert.deepEqual(JSON.parse(payload.hunk_attrs), attrs)
+})
+
+test("a thread without can_update_status does not offer resolve or reopen", () => {
+  const thread = {
+    id: 1,
+    file_path: "lib/a.ex",
+    side: "new",
+    anchor: { granularity: "line", line_number_hint: 1 },
+    status: "open",
+    author: { id: 1, username: "carey" },
+    comments: [],
+  }
+
+  assert.equal(Thread.parse(thread).can_update_status, false)
+  assert.equal(Thread.parse({ ...thread, can_update_status: true }).can_update_status, true)
 })

@@ -13,6 +13,7 @@ defmodule Reviews.Threads do
 
   alias Reviews.Accounts
   alias Reviews.Accounts.{Identity, User}
+  alias Reviews.Policy
   alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
@@ -267,7 +268,9 @@ defmodule Reviews.Threads do
   Updates a thread's review status.
 
   Resolving records the acting identity and timestamp. Reopening clears both. The
-  thread must belong to the supplied review.
+  thread must belong to the supplied review, or this returns `{:error, :not_found}`.
+  Only the review owner or the thread's author may change it (`Reviews.Policy`);
+  anyone else gets `{:error, :forbidden}`, even when the status would not change.
   """
   def update_status(%Review{} = review, thread_id, %Identity{} = identity, status)
       when status in ["open", "resolved"] do
@@ -281,9 +284,20 @@ defmodule Reviews.Threads do
                       where: t.id == ^id and t.review_id == ^review.id,
                       lock: "FOR UPDATE"
                   ) do
-               %Thread{status: ^status} = thread -> {thread, false}
-               %Thread{} = thread -> {write_status(thread, identity, status), true}
-               nil -> Repo.rollback(:not_found)
+               nil ->
+                 Repo.rollback(:not_found)
+
+               %Thread{} = thread ->
+                 cond do
+                   not Policy.can?(identity, {:update_thread_status, thread}, review) ->
+                     Repo.rollback(:forbidden)
+
+                   thread.status == status ->
+                     {thread, false}
+
+                   true ->
+                     {write_status(thread, identity, status), true}
+                 end
              end
            end) do
       thread = preload_thread(thread)

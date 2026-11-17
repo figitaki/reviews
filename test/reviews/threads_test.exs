@@ -41,6 +41,13 @@ defmodule Reviews.ThreadsTest do
     %{author: author, review: review}
   end
 
+  defp agent_for(user) do
+    Accounts.create_agent_identity(user, %{
+      handle: "agent-#{System.unique_integer([:positive])}",
+      display_name: "Agent"
+    })
+  end
+
   defp line_params(body \\ "Should be `:newer`?") do
     %{
       "file_path" => "lib/foo.ex",
@@ -202,7 +209,7 @@ defmodule Reviews.ThreadsTest do
     test "re-resolving keeps the original resolver and stays quiet" do
       %{author: author, review: review} = setup_review!()
       %{author: other} = setup_review!()
-      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, other, line_params("nit"))
       {:ok, resolved} = Threads.update_status(review, thread.id, author, "resolved")
 
       Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
@@ -212,6 +219,47 @@ defmodule Reviews.ThreadsTest do
       assert again.resolved_by_id == resolved.resolved_by_id
       assert again.resolved_at == resolved.resolved_at
       refute_receive {:thread_updated, _}
+    end
+
+    test "only the review owner's and the thread author's accounts may change status" do
+      %{author: owner, review: review} = setup_review!()
+      %{author: commenter} = setup_review!()
+      %{author: stranger} = setup_review!()
+      {:ok, owner_agent} = agent_for(owner)
+      {:ok, commenter_agent} = agent_for(commenter)
+      {:ok, stranger_agent} = agent_for(stranger)
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, commenter, line_params("nit"))
+      Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
+
+      for actor <- [stranger, stranger_agent], status <- ["resolved", "open"] do
+        assert {:error, :forbidden} = Threads.update_status(review, thread.id, actor, status)
+      end
+
+      assert %Thread{status: "open", resolved_by_id: nil} = Repo.get(Thread, thread.id)
+      refute_receive {:thread_updated, _}
+
+      for actor <- [owner, owner_agent, commenter, commenter_agent] do
+        assert {:ok, %Thread{status: "resolved"}} =
+                 Threads.update_status(review, thread.id, actor, "resolved")
+
+        assert {:ok, %Thread{status: "open"}} =
+                 Threads.update_status(review, thread.id, actor, "open")
+      end
+    end
+
+    test "a thread started by an agent can be resolved by its owner's human identity" do
+      %{review: review} = setup_review!()
+      %{author: commenter} = setup_review!()
+      %{author: stranger} = setup_review!()
+      {:ok, commenter_agent} = agent_for(commenter)
+
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, commenter_agent, line_params("nit"))
+
+      assert {:error, :forbidden} = Threads.update_status(review, thread.id, stranger, "resolved")
+
+      assert {:ok, %Thread{status: "resolved"}} =
+               Threads.update_status(review, thread.id, commenter, "resolved")
     end
 
     test "treats an out-of-range thread id as a miss rather than crashing" do

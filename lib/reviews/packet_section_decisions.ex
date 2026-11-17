@@ -1,11 +1,16 @@
 defmodule Reviews.PacketSectionDecisions do
   @moduledoc """
   Persistence helpers for per-reviewer packet section decisions.
+
+  Only identities allowed to decide sections (`Reviews.Policy`, today the
+  review owner) may write them; `set_status/4`, `clear_status/4`, and
+  `put_section_status/7` return `{:error, :forbidden}` for anyone else.
   """
   import Ecto.Query, warn: false
 
   alias Reviews.Accounts
   alias Reviews.Accounts.{Identity, User}
+  alias Reviews.Policy
   alias Reviews.Repo
   alias Reviews.ReviewPacket
   alias Reviews.Reviews.{PacketSectionDecision, Patchset, Review}
@@ -27,6 +32,18 @@ defmodule Reviews.PacketSectionDecisions do
   def list_for_review(_review, nil), do: []
 
   def set_status(%Review{} = review, %Patchset{} = patchset, %Identity{} = author, attrs) do
+    if Policy.can?(author, :decide_section, review),
+      do: upsert_status(review, patchset, author, attrs),
+      else: {:error, :forbidden}
+  end
+
+  def set_status(%Review{} = review, %Patchset{} = patchset, %User{} = user, attrs) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      set_status(review, patchset, identity, attrs)
+    end
+  end
+
+  defp upsert_status(review, patchset, author, attrs) do
     section_index = attrs.section_index
 
     base_attrs = %{
@@ -56,26 +73,24 @@ defmodule Reviews.PacketSectionDecisions do
     )
   end
 
-  def set_status(%Review{} = review, %Patchset{} = patchset, %User{} = user, attrs) do
-    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
-      set_status(review, patchset, identity, attrs)
-    end
-  end
-
   def clear_status(
         %Review{} = review,
         %Patchset{} = patchset,
         %Identity{} = author,
         section_index
       ) do
-    case Repo.get_by(PacketSectionDecision,
-           review_id: review.id,
-           patchset_id: patchset.id,
-           author_id: author.id,
-           section_index: section_index
-         ) do
-      nil -> {:ok, nil}
-      %PacketSectionDecision{} = decision -> Repo.delete(decision)
+    if Policy.can?(author, :decide_section, review) do
+      case Repo.get_by(PacketSectionDecision,
+             review_id: review.id,
+             patchset_id: patchset.id,
+             author_id: author.id,
+             section_index: section_index
+           ) do
+        nil -> {:ok, nil}
+        %PacketSectionDecision{} = decision -> Repo.delete(decision)
+      end
+    else
+      {:error, :forbidden}
     end
   end
 

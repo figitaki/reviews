@@ -24,6 +24,26 @@ endpoint — tokens are user-initiated through the browser.
 
 Missing/invalid token → `401` with body `{ "errors": { "detail": "Unauthorized" } }`.
 
+### Permissions
+
+The same rules hold on every surface (web, REST/CLI, Poppy) and are enforced
+by `Reviews.Policy` in the domain layer:
+
+| Action | Who may do it |
+| --- | --- |
+| Read a review | Anyone with the link. |
+| Comment or reply | Any signed-in identity with the link. |
+| Push a patchset | The review owner. |
+| Resolve or reopen a thread | The review owner or the thread's author. |
+| Decide a packet section | The review owner. Explicitly added reviewers will join once that feature exists. |
+
+"Owner" and "author" mean the GitHub account: its human identity and all of
+its agent identities share its permissions. Anyone else gets `403` with
+`{ "errors": { "detail": "..." } }`, and nothing is written.
+
+MCP (`docs/MCP.md`) still limits every tool to reviews the account owns,
+which is stricter than these rules, until it moves to them.
+
 ### `POST /api/v1/reviews`
 
 Creates a new review and its first patchset.
@@ -78,7 +98,7 @@ Response `201`:
 { "patchset_number": 2, "url": "http://localhost:4000/r/k7m2qz" }
 ```
 
-Unknown slug → `404`.
+Unknown slug → `404`. A token whose account does not own the review → `403`.
 
 ### `GET /api/v1/reviews/:slug`
 
@@ -112,6 +132,22 @@ Publishes one comment right away as the token identity. Request body:
 `file_path`, `side`, `anchor`, and `url`. An empty body, a bad anchor, or a
 `file_path` over 255 characters → `422` with `{ "errors": { "detail": "..." } }`.
 Unknown slug → `404`.
+
+### `PATCH /api/v1/reviews/:slug/threads/:thread_id`
+
+Resolves or reopens a thread as the token identity. Powers `reviews resolve`
+and `reviews reopen`. Request body:
+
+```json
+{ "status": "resolved" }
+```
+
+`status` must be `"open"` or `"resolved"` (otherwise `422`). Response `200`
+has `id`, `status`, `resolved_by` (an identity, or `null`), and `resolved_at`.
+Setting the status a thread already has changes nothing and keeps the
+original resolver. Unknown slug, or a thread that is not in this review →
+`404`. A token whose account is neither the review owner nor the thread's
+author → `403`, even when the status would not change.
 
 ### `GET /api/v1/me`
 
@@ -164,6 +200,9 @@ Response `200`:
 Posting the same status again clears that identity's current decision. In that
 case, `status` is `null`, meaning the section is pending.
 
+Only the review owner's identities may decide sections; any other token →
+`403` with `{ "errors": { "detail": "Only the review owner can decide sections" } }`.
+
 ### OAuth issuer (`/oauth`)
 
 APIs other than `/api/v1` accept OAuth access tokens from the Reviews issuer
@@ -198,7 +237,8 @@ Personal Agents use Poppy 1.0 instead of bearer API tokens. Each request carries
 `Poppy-Version: 1.0`. A signed-in request also carries an access token from Direct Sign-In
 (`/oauth/authorize`, `/oauth/token`). `GET /api/poppy/v1/reviews/:slug` returns the same body as
 `GET /api/v1/reviews/:slug`. `POST /api/poppy/v1/reviews/:slug/comments` takes the same body and
-response as the CLI endpoint and needs the `comments:write` scope. Session errors are HTTP 400 with
+response as the CLI endpoint and needs the `comments:write` scope. Any linked agent may comment on any
+review it has the link to; the permission rules above apply. Session errors are HTTP 400 with
 `{"error": "invalid_session" | "session_ended" | "version_unsupported"}`. Token errors are 401 or 403
 in `WWW-Authenticate`, with a `Bearer` and a `DPoP` challenge. A token issued with
 `token_type: "DPoP"` is sent as `Authorization: DPoP <token>` with a `DPoP` proof (RFC 9449). A
@@ -251,7 +291,7 @@ unique DOM id, and `phx-update="ignore"` (the hook owns its DOM tree).
 | `data-side`            | string   | Always `"new"` today.                                    |
 | `data-raw-diff`        | string   | Raw unified diff for this file or hunk only.             |
 | `data-full-diff`       | optional string | Whole-file patch for added/deleted Markdown files, so sliced packet hunks can preview the complete document. Source and thread counts still use `data-raw-diff`. |
-| `data-threads`         | string (JSON) | Published threads in this file. Shape: the `Thread` schema in `schemas.js`. |
+| `data-threads`         | string (JSON) | Published threads in this file. Shape: the `Thread` schema in `schemas.js`. Each thread's `can_update_status` says whether the viewer may resolve or reopen it; the renderer shows those buttons only when it is `true`. |
 | `data-signed-in`       | string   | `"true"` or `"false"`. Signed-out viewers get a sign-in prompt instead of a composer. |
 | `data-diff-style`      | string   | `"split"` or `"unified"`.                                |
 

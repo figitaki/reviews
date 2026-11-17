@@ -49,6 +49,11 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
       {:error, :section_not_found} ->
         conn |> put_status(:not_found) |> json(%{errors: %{detail: "Section not found"}})
 
+      {:error, :forbidden} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{errors: %{detail: "Only the review owner can decide sections"}})
+
       _ ->
         conn
         |> put_status(:unprocessable_entity)
