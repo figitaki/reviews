@@ -78,5 +78,18 @@ defmodule ReviewsWeb.Api.CommentController do
   defp error_message(:unknown_granularity),
     do: "anchor granularity must be \"line\" or \"token_range\""
 
-  defp error_message(other), do: "could not publish: #{inspect(other)}"
+  defp error_message(:patchset_not_found),
+    do: "originating_patchset_id is not a patchset of this review"
+
+  defp error_message(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
+      Regex.replace(~r/%{(\w+)}/, msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
+    |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
+  end
+
+  defp error_message(_other), do: "could not publish comment"
 end

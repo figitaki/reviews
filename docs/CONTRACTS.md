@@ -73,6 +73,8 @@ Response `201`:
 ```
 
 Validation errors → `422` with `{ "errors": { "field": ["message", ...] } }`.
+`title`, `base_sha` and `branch_name` are at most 255 characters, as are file
+paths in `raw_diff`.
 
 ### `POST /api/v1/reviews/:slug/patchsets`
 
@@ -127,8 +129,9 @@ Publishes one comment right away as the token identity. Request body:
 ```
 
 `side` defaults to `"new"`. Response `201` has `thread_id`, `comment_id`,
-`file_path`, `side`, `anchor`, and `url`. An empty body or a bad anchor →
-`422`. Unknown slug → `404`.
+`file_path`, `side`, `anchor`, and `url`. An empty body, a bad anchor, or a
+`file_path` over 255 characters → `422` with `{ "errors": { "detail": "..." } }`.
+Unknown slug → `404`.
 
 ### `PATCH /api/v1/reviews/:slug/threads/:thread_id`
 
@@ -165,7 +168,8 @@ Powers `reviews whoami`. Response `200`:
 }
 ```
 
-`username` and `email` describe the owning GitHub account. `identity`
+`username` and `email` describe the owning GitHub account. `email` is `null`
+when the account has no public email. `identity`
 describes the actor attached to the bearer token; comments, review pushes, and
 packet-section decisions authored through the token use that identity.
 
