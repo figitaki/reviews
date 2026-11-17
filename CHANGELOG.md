@@ -9,8 +9,19 @@ later fixes continue toward 0.0.2.
 
 - Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.
 
+- Validate packet shape, hunk references, slices and changed-line coverage in the domain layer for all revision uploads.
+
+- Keep empty hunk rows when validating and rendering packet slices, matching the CLI; no-newline markers stay attached to their preceding row.
+
+- Add bounded REST and Poppy file, thread and comment pages with pinned revisions, query-bound cursors and UTF-8-safe comment continuation. REST/Poppy use the shared `Reviews.Paging` limits and codec with scopes distinct from MCP.
+
+- Expose comment IDs, safe verification attribution and projected anchor state consistently across API readers.
+
 ### Security
 
+- Plug 1.20.4 fixes EEF-CVE-2026-120287: the multipart `:length` limit did not
+  count part and header framing. It was taken one day after release, as an
+  approved exception to the seven-day dependency rule.
 - Only the review owner or a thread's author can resolve or reopen a thread,
   and only the review owner can decide packet sections. Before, any signed-in
   identity could do both on any review through the API (#176). Anyone else now
@@ -19,12 +30,37 @@ later fixes continue toward 0.0.2.
   link can comment. The rules live in `Reviews.Policy` and apply to every
   surface.
 
+### Changed
+
+- Section decisions belong to the account, not one identity: a person and
+  their agent identities share one decision per section, and each decision
+  records which identity made it. A migration merges existing decisions,
+  keeping each account's most recent one. `POST .../decision` now sets the
+  status explicitly and accepts `"pending"`; posting the same status again
+  no longer clears it, so retries are safe. `reviews section` accepts
+  `pending`. Decision writes lock the patchset row and load their own state.
+
+- MCP follows the same permission rules as the web page, REST and Poppy. Any
+  token can now read and comment on a review it has the link to, as on the web.
+  Pushing revisions and resolving threads still need the review owner (or, to
+  resolve, the thread's author). Every surface now passes a `Reviews.Principal`
+  to the domain, and `Reviews.Policy` checks reads, comments and OAuth scopes
+  too. The unchecked `Reviews.append_patchset/2` is renamed
+  `append_patchset_unchecked/2`.
+
 ### Added
 
 - Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with
   an existing API token and can read reviews, packet sections, diffs and
   threads, and post comments, resolve threads, and push reviews and revisions
   for reviews their account owns. See `docs/MCP.md`.
+
+### Changed
+
+- MCP cursors now name the call they continue. A cursor sent with another
+  filter, thread, section or revision is refused as invalid instead of
+  skipping or repeating items. The cursor format and page limits moved to
+  `Reviews.Paging`, which the REST and Poppy page endpoints will share.
 
 ### Fixed
 

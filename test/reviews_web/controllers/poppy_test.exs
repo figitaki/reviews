@@ -284,6 +284,11 @@ defmodule ReviewsWeb.PoppyTest do
         Reviews.ReviewView.thread_payloads_for_file(snapshot, "foo")
 
       assert payload.link_revoked
+
+      # Paged readers (MCP, REST pages) see the same revoked link, so every
+      # comment query preloads the attribution link.
+      [paged] = Reviews.Threads.list_comment_page(comment.thread_id, 0, 10)
+      assert Reviews.ReviewView.attribution_payload(paged).link_revoked
     end
 
     test "the redirect carries the issuer and state", ctx do
@@ -383,7 +388,95 @@ defmodule ReviewsWeb.PoppyTest do
         end)
         |> get(path)
 
-      assert json_response(conn, 200)["slug"] == ctx.review.slug
+      assert json_response(conn, 200) ==
+               get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    end
+
+    test "paged reads match REST and their published response schemas", ctx do
+      {:ok, %{thread: thread}} =
+        Reviews.Threads.publish_comment(ctx.review, ctx.owner, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "A comment",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      spec = get(build_conn(), "/api/poppy/openapi.json") |> json_response(200)
+
+      for {suffix, template} <- [
+            {"files", "files"},
+            {"threads", "threads"},
+            {"threads/#{thread.id}/comments", "threads/{thread_id}/comments"}
+          ] do
+        path = "/api/poppy/v1/reviews/#{ctx.review.slug}/#{suffix}"
+
+        conn =
+          Enum.reduce(Agent.headers(ctx.agent, "GET", path), build_conn(), fn {k, v}, c ->
+            put_req_header(c, k, v)
+          end)
+          |> get(path)
+
+        payload = json_response(conn, 200)
+
+        assert payload ==
+                 get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}/#{suffix}")
+                 |> json_response(200)
+
+        schema =
+          get_in(spec, [
+            "paths",
+            "/reviews/{slug}/#{template}",
+            "get",
+            "responses",
+            "200",
+            "content",
+            "application/json",
+            "schema"
+          ])
+
+        assert {:ok, _} = JSV.validate(payload, JSV.build!(schema))
+        assert get(build_conn(), path).status == 400
+        assert get_resp_header(conn, "x-robots-tag") == ["noindex, nofollow, noarchive"]
+      end
+    end
+
+    test "REST cursors continue through Poppy but reject another endpoint", ctx do
+      {:ok, %{thread: thread}} =
+        Reviews.Threads.publish_comment(ctx.review, ctx.owner, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => String.duplicate("readable ", 1000),
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      suffix = "/reviews/#{ctx.review.slug}/threads/#{thread.id}/comments"
+
+      first =
+        get(build_conn(), "/api/v1" <> suffix, %{revision: 1, max_bytes: 2000})
+        |> json_response(200)
+
+      assert first["next_cursor"]
+      query = URI.encode_query(%{revision: 1, max_bytes: 2000, cursor: first["next_cursor"]})
+      path = "/api/poppy/v1" <> suffix <> "?" <> query
+
+      conn =
+        Enum.reduce(Agent.headers(ctx.agent, "GET", path), build_conn(), fn {k, v}, c ->
+          put_req_header(c, k, v)
+        end)
+        |> get(path)
+
+      assert json_response(conn, 200) ==
+               get(build_conn(), "/api/v1" <> suffix <> "?" <> query) |> json_response(200)
+
+      wrong = "/api/poppy/v1/reviews/#{ctx.review.slug}/files?" <> query
+
+      conn =
+        Enum.reduce(Agent.headers(ctx.agent, "GET", wrong), build_conn(), fn {k, v}, c ->
+          put_req_header(c, k, v)
+        end)
+        |> get(wrong)
+
+      assert json_response(conn, 422)["error_code"] == "invalid_pagination"
     end
 
     test "a missing Session header or Poppy-Version is refused", ctx do
