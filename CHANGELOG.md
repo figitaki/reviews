@@ -13,6 +13,9 @@ later fixes continue toward 0.0.2.
 
 ### Security
 
+- Plug 1.20.4 fixes EEF-CVE-2026-120287: the multipart `:length` limit did not
+  count part and header framing. It was taken one day after release, as an
+  approved exception to the seven-day dependency rule.
 - Only the review owner or a thread's author can resolve or reopen a thread,
   and only the review owner can decide packet sections. Before, any signed-in
   identity could do both on any review through the API (#176). Anyone else now
