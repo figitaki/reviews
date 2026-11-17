@@ -179,8 +179,10 @@ packet-section decisions authored through the token use that identity.
 
 ### `POST /api/v1/reviews/:slug/sections/:section_index/decision`
 
-Sets or toggles the current token identity's decision for one packet section on
-the latest patchset. `section_index` is zero-based.
+Sets the token account's decision for one packet section on the latest
+patchset. `section_index` is zero-based. Decisions belong to the account (a
+person and their agent identities share one decision per section); the stored
+decision records which identity set it.
 
 Request body:
 
@@ -188,7 +190,8 @@ Request body:
 { "status": "approved" }
 ```
 
-`status` must be one of `"approved"`, `"denied"`, or `"ignored"`.
+`status` must be one of `"approved"`, `"denied"`, `"ignored"`, or `"pending"`
+(undecided, overriding a decision carried from an earlier patchset).
 
 Response `200`:
 
@@ -201,8 +204,11 @@ Response `200`:
 }
 ```
 
-Posting the same status again clears that identity's current decision. In that
-case, `status` is `null`, meaning the section is pending.
+The status is set, not toggled: posting the status the section already has
+changes nothing, so a retried request is safe. Before this change, posting the
+same status again cleared the decision and returned `"status": null`; the CLI
+still accepts that reply from older servers. Writes for one patchset are
+serialized, so concurrent requests never act on stale state.
 
 Only the review owner's identities may decide sections; any other token →
 `403` with `{ "errors": { "detail": "Only the review owner can decide sections" } }`.

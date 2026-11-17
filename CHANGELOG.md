@@ -19,6 +19,14 @@ later fixes continue toward 0.0.2.
 
 ### Changed
 
+- Section decisions belong to the account, not one identity: a person and
+  their agent identities share one decision per section, and each decision
+  records which identity made it. A migration merges existing decisions,
+  keeping each account's most recent one. `POST .../decision` now sets the
+  status explicitly and accepts `"pending"`; posting the same status again
+  no longer clears it, so retries are safe. `reviews section` accepts
+  `pending`. Decision writes lock the patchset row and load their own state.
+
 - MCP follows the same permission rules as the web page, REST and Poppy. Any
   token can now read and comment on a review it has the link to, as on the web.
   Pushing revisions and resolving threads still need the review owner (or, to
