@@ -153,6 +153,28 @@ defmodule Reviews.Reviews do
     Repo.get_by(Patchset, review_id: review_id, number: number)
   end
 
+  @doc "Select one revision's identity without loading its diff, packet or file totals."
+  def get_patchset_metadata(%Review{id: review_id}, number) do
+    query =
+      from p in Patchset,
+        where: p.review_id == ^review_id,
+        order_by: [desc: p.number],
+        limit: 1,
+        select: %{id: p.id, number: p.number}
+
+    query = if is_nil(number), do: query, else: from(p in query, where: p.number == ^number)
+    Repo.one(query)
+  end
+
+  @doc "Revision identities for a page's thread origins, scoped to their review."
+  def list_patchset_metadata(%Review{id: review_id}, ids) when is_list(ids) do
+    Repo.all(
+      from p in Patchset,
+        where: p.review_id == ^review_id and p.id in ^ids,
+        select: %{id: p.id, number: p.number}
+    )
+  end
+
   @doc "The packet of one patchset, without loading its diff."
   def get_packet(%{id: patchset_id}) do
     Repo.one(from p in Patchset, where: p.id == ^patchset_id, select: p.packet)
