@@ -21,6 +21,10 @@ defmodule Reviews.Threads do
 
   @pubsub Reviews.PubSub
 
+  # Every comment reader preloads the same associations, so renaming one (such
+  # as the attribution link) is a single change here, not one per query.
+  @comment_preloads [:author, :identity_link]
+
   # Postgres bigint. An id past this range reaches the driver as an unencodable
   # integer and takes the whole request down, so it is a miss like any other.
   @max_thread_id 9_223_372_036_854_775_807
@@ -43,7 +47,7 @@ defmodule Reviews.Threads do
 
     Repo.all(query)
     |> Enum.filter(fn thread -> thread.comments != [] end)
-    |> Repo.preload(comments: [:author, :identity_link])
+    |> Repo.preload(comments: @comment_preloads)
   end
 
   @doc "Thread counts by status, such as `%{\"open\" => 2}`."
@@ -108,7 +112,7 @@ defmodule Reviews.Threads do
         where: c.thread_id == ^thread_id and c.id > ^after_id,
         order_by: [asc: c.id],
         limit: ^limit,
-        preload: [:author, :identity_link]
+        preload: ^@comment_preloads
     )
   end
 
@@ -360,7 +364,7 @@ defmodule Reviews.Threads do
   defp comments_query do
     from c in Comment,
       order_by: [asc: c.inserted_at],
-      preload: [:author, :identity_link]
+      preload: ^@comment_preloads
   end
 
   # No thread_id starts a new thread. A thread_id that is not a thread of this
