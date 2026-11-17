@@ -148,7 +148,7 @@ impl ApiClient {
     fn require_token(&self, what: &str) -> Result<&str> {
         self.token
             .as_deref()
-            .ok_or_else(|| anyhow!("{what} requires an API token. Run `reviews login` first."))
+            .ok_or_else(|| anyhow!("{what} requires you to sign in. Run `reviews login` first."))
     }
 
     pub fn me(&self) -> Result<Me> {
@@ -267,7 +267,7 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
     let body = resp.text().unwrap_or_default();
     let hint = match status {
         StatusCode::UNAUTHORIZED => {
-            " — your API token was rejected. Mint a new one in /settings and run `reviews login`."
+            " — the server rejected your sign-in. Run `reviews login` again."
         }
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",

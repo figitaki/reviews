@@ -53,8 +53,11 @@ Then connect it to a Reviews server:
 reviews login
 ```
 
-For the hosted alpha, use `https://reviews.figitaki.dev` as the server URL and
-mint an API token from `/settings`.
+It prints a code and a link. Open the link on any device, sign in with GitHub,
+and enter the code; the CLI then signs in as you and keeps itself signed in.
+This works over SSH too. Use `--server <url>` for another server (the default
+is `https://reviews.figitaki.dev`), or `reviews login --token` to paste an API
+token from `/settings` instead.
 
 ## Getting Started
 
@@ -133,7 +136,10 @@ explaining what to set.
 
 ## CLI Workflow
 
-Mint an API token from `/settings`, then configure the CLI:
+Run `reviews login --server http://localhost:4000` and enter the code it
+shows at `/device`. For scripts, mint an API token from `/settings` and run
+`reviews login --server http://localhost:4000 --token < token.txt`, or write
+the config yourself:
 
 ```toml
 [default]

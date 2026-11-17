@@ -16,6 +16,8 @@ defmodule Reviews.Application do
       ReviewsWeb.MCP.Server,
       # The OAuth issuer's client metadata cache, after the repo.
       Reviews.OAuth.Issuer,
+      # Wrong-code counts for the CLI sign-in page (/device).
+      Reviews.OAuth.DeviceAttempts,
       # Start to serve requests, typically the last entry
       ReviewsWeb.Endpoint
     ]

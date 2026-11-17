@@ -1,0 +1,102 @@
+defmodule ReviewsWeb.DeviceController do
+  @moduledoc """
+  The CLI sign-in page (RFC 8628 §3.3): `reviews login` shows a code and
+  this URL; the person signs in with GitHub, enters the code, checks it
+  matches their terminal, and allows or denies it.
+
+    * `GET /device` - the code form, or, with `?user_code=`, the confirmation
+      for that code. A link never approves anything by itself.
+    * `POST /device` - looks up an entered code.
+    * `POST /device/decide` - allow or deny (`Reviews.OAuth.approve_device/2`).
+
+  Each wrong or expired code counts against the person
+  (`Reviews.OAuth.DeviceAttempts`); past the limit, the page refuses codes
+  for a while.
+  """
+  use ReviewsWeb, :controller
+
+  alias Reviews.OAuth
+  alias Reviews.OAuth.DeviceAttempts
+
+  def show(conn, params) do
+    case {conn.assigns.current_user, params["user_code"]} do
+      {nil, _} -> render_sign_in(conn)
+      {_user, code} when is_binary(code) and code != "" -> check(conn, code)
+      _ -> render_entry(conn, nil)
+    end
+  end
+
+  def lookup(conn, params) do
+    case conn.assigns.current_user do
+      nil -> render_sign_in(conn)
+      _user -> check(conn, to_string(params["user_code"]))
+    end
+  end
+
+  def decide(conn, %{"user_code" => code, "decision" => decision}) when is_binary(code) do
+    user = conn.assigns.current_user
+
+    # Guessing here would sign someone else's CLI in as the guesser, so a
+    # decision counts against the same limit as looking a code up.
+    result =
+      cond do
+        is_nil(user) -> :signed_out
+        not DeviceAttempts.allowed?(user.id) -> {:error, :too_many_attempts}
+        decision == "approve" -> OAuth.approve_device(user, code)
+        true -> with :ok <- OAuth.deny_device(code), do: :denied
+      end
+
+    case result do
+      :signed_out ->
+        render_sign_in(conn)
+
+      :ok ->
+        render_done(conn, :approved)
+
+      :denied ->
+        render_done(conn, :denied)
+
+      {:error, :too_many_attempts} ->
+        render_entry(conn, :too_many_attempts)
+
+      {:error, reason} ->
+        DeviceAttempts.record_failure(user.id)
+        render_entry(conn, reason)
+    end
+  end
+
+  def decide(conn, _params), do: render_entry(conn, :invalid_user_code)
+
+  defp check(conn, code) do
+    user = conn.assigns.current_user
+
+    if DeviceAttempts.allowed?(user.id) do
+      case OAuth.lookup_device(code) do
+        {:ok, request} ->
+          render(conn, :confirm, request: request, page_title: "Sign in to the Reviews CLI")
+
+        {:error, reason} ->
+          DeviceAttempts.record_failure(user.id)
+          render_entry(conn, reason)
+      end
+    else
+      render_entry(conn, :too_many_attempts)
+    end
+  end
+
+  defp render_entry(conn, error) do
+    conn
+    |> put_status(if(error, do: :bad_request, else: :ok))
+    |> render(:entry, error: error, page_title: "Sign in to the Reviews CLI")
+  end
+
+  defp render_sign_in(conn) do
+    render(conn, :sign_in,
+      return_to: current_path(conn),
+      page_title: "Sign in to the Reviews CLI"
+    )
+  end
+
+  defp render_done(conn, outcome),
+    do: render(conn, :done, outcome: outcome, page_title: "Reviews CLI")
+end

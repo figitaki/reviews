@@ -1,11 +1,11 @@
 use anyhow::Result;
 
-use crate::api::ApiClient;
+use crate::auth;
 use crate::config::Config;
 
 pub fn run() -> Result<()> {
     let cfg = Config::load()?;
-    let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
+    let client = auth::client(&cfg)?;
     let me = client.me()?;
     if let Some(identity) = me.identity {
         println!(
