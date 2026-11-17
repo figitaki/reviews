@@ -964,6 +964,39 @@ defmodule ReviewsWeb.MCPTest do
       refute second.diff =~ "-old"
     end
 
+    test "empty hunk rows retain CLI coverage and slice numbering", ctx do
+      raw = File.read!(Path.expand("../vectors/diffs/empty-hunk-rows.diff", __DIR__))
+
+      rows =
+        for n <- [2, 3] do
+          %{
+            "kind" => "hunk",
+            "path" => "x.txt",
+            "hunk_index" => 1,
+            "line_start" => n,
+            "line_end" => n
+          }
+        end
+
+      %{slug: slug} =
+        call!(ctx.agent_token, "reviews_create_review", %{
+          "title" => "Empty hunk rows",
+          "raw_diff" => raw,
+          "packet" => %{"title" => "P", "sections" => [%{"title" => "S", "rows" => rows}]}
+        })
+
+      %{rows: [first, second]} =
+        call!(ctx.agent_token, "reviews_get_packet_section", %{
+          "review" => slug,
+          "section_index" => 0
+        })
+
+      assert first.diff =~ "-old\n\\ No newline at end of file"
+      refute first.diff =~ "+new"
+      assert second.diff =~ "+new\n\\ No newline at end of file"
+      refute second.diff =~ "-old"
+    end
+
     test "refuse titles longer than the column", ctx do
       assert {:error, %{code: :invalid_params}} =
                FastestMCP.call_tool(
