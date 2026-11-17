@@ -151,7 +151,7 @@ defmodule ReviewsWeb.MCPTest do
   end
 
   describe "read tools" do
-    test "scope reviews to the owning account", ctx do
+    test "find any review by link, like REST and the web page", ctx do
       assert %{slug: slug, title: "Owned review", revision: 1} =
                call!(ctx.agent_token, "reviews_get_review", %{
                  "review" => "https://reviews.example/r/#{ctx.review.slug}/changes"
@@ -159,13 +159,21 @@ defmodule ReviewsWeb.MCPTest do
 
       assert slug == ctx.review.slug
 
-      foreign = call(ctx.stranger_token, "reviews_get_review", %{"review" => ctx.review.slug})
+      # Link sharing: another account reads the same review it has the link to.
+      assert %{slug: ^slug} =
+               call!(ctx.stranger_token, "reviews_get_review", %{"review" => ctx.review.slug})
+
       unknown = call(ctx.stranger_token, "reviews_get_review", %{"review" => "nosuchslug"})
+      assert error_text(unknown) =~ "No review matching"
 
-      assert error_text(foreign) =~ "is owned by this account"
-
-      assert error_text(foreign) ==
-               String.replace(error_text(unknown), "nosuchslug", ctx.review.slug)
+      # And, like REST, any signed-in account with the link may comment.
+      assert %{thread_id: _} =
+               call!(ctx.stranger_token, "reviews_post_comment", %{
+                 "review" => ctx.review.slug,
+                 "path" => "lib/a.ex",
+                 "line" => 2,
+                 "body" => "Drive-by note"
+               })
     end
 
     test "page a long file diff within max_bytes, counting the whole response", ctx do
@@ -541,8 +549,14 @@ defmodule ReviewsWeb.MCPTest do
       assert longer =~ "reviews_get_thread (thread_id #{thread.id})"
       refute longer =~ "Reply 21"
 
-      assert {:error, %{code: :not_found}} =
+      # The feedback resource is link-readable like every other read.
+      assert {:ok, _} =
                FastestMCP.read_resource(Server, "reviews://#{ctx.review.slug}/feedback",
+                 auth_input: bearer(ctx.stranger_token)
+               )
+
+      assert {:error, %{code: :not_found}} =
+               FastestMCP.read_resource(Server, "reviews://nosuchslug/feedback",
                  auth_input: bearer(ctx.stranger_token)
                )
     end
@@ -682,7 +696,10 @@ defmodule ReviewsWeb.MCPTest do
           "raw_diff" => @diff_v1
         })
 
-      assert error_text(refused) =~ "is owned by this account"
+      assert error_text(refused) =~ "Only its owner can push revisions"
+
+      assert %{revision_count: 2} =
+               call!(ctx.owner_token, "reviews_get_review", %{"review" => out.slug})
     end
 
     test "require packets to cover every changed line exactly once", ctx do
@@ -811,8 +828,8 @@ defmodule ReviewsWeb.MCPTest do
           "status" => "resolved"
         })
 
-      # MCP keeps its owner-only limit until it moves to the shared rules (#176).
-      assert error_text(refused) =~ "is owned by this account"
+      # Reviews.Policy decides: neither the review owner nor the thread author.
+      assert error_text(refused) =~ "owner or a thread's author"
       assert [%{status: "open"}] = Threads.list_published_threads(ctx.review.id)
 
       assert %{status: "resolved", resolved_by: %{handle: "codex"}} =

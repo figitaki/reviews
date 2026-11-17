@@ -4,9 +4,10 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   Every handler resolves the caller from the request's verified principal,
   which `ReviewsWeb.MCP.Server.authenticate/2` derives from an existing Reviews
-  API token. Reviews are scoped to the caller's account: the author's human
-  identity and its sibling agent identities. Unknown and foreign reviews get
-  the same not-found result.
+  API token, as a `Reviews.Principal`. Reviews are found by link, as on REST
+  and the web page: anyone signed in can read any review whose slug or URL
+  they have. Writes go through the context functions, so `Reviews.Policy`
+  decides them the same way for every surface.
 
   Every read fits in `max_bytes`, counting metadata and both encodings of the
   result (see `ReviewsWeb.MCP.Budget`). Lists and long text continue with
@@ -15,7 +16,7 @@ defmodule ReviewsWeb.MCP.Handlers do
   """
 
   alias FastestMCP.Tools.Result
-  alias Reviews.{Accounts, Anchoring, ReviewHunks, ReviewPacket, ReviewView}
+  alias Reviews.{Accounts, Anchoring, Principal, ReviewHunks, ReviewPacket, ReviewView}
   alias Reviews.Accounts.Identity
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
@@ -48,8 +49,7 @@ defmodule ReviewsWeb.MCP.Handlers do
   ## Reads
 
   def whoami(_args, ctx) do
-    identity = current_identity!(ctx)
-    owner = Accounts.get_user!(identity.owner_user_id)
+    %Principal{identity: identity, user: owner} = current_principal!(ctx)
 
     %{
       identity: identity_payload(identity),
@@ -320,7 +320,7 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def create_review(args, ctx) do
     ensure_writes_enabled!()
-    identity = current_identity!(ctx)
+    %Principal{identity: identity} = current_principal!(ctx)
 
     with :ok <- validate_diff_and_packet(args["raw_diff"], args["packet"]),
          {:ok, %{review: review, patchset: ps}} <-
@@ -335,9 +335,9 @@ defmodule ReviewsWeb.MCP.Handlers do
   def append_revision(args, ctx) do
     ensure_writes_enabled!()
 
-    with_review(args, ctx, fn review, identity ->
+    with_review(args, ctx, fn review, principal ->
       with :ok <- validate_diff_and_packet(args["raw_diff"], args["packet"]),
-           {:ok, ps} <- ReviewsContext.append_patchset(review, identity, push_attrs(args)) do
+           {:ok, ps} <- ReviewsContext.append_patchset(review, principal, push_attrs(args)) do
         %{slug: review.slug, url: review_url(review), revision: ps.number}
       else
         other -> write_error(other)
@@ -348,10 +348,10 @@ defmodule ReviewsWeb.MCP.Handlers do
   def post_comment(args, ctx) do
     ensure_writes_enabled!()
 
-    with_review(args, ctx, fn review, identity ->
+    with_review(args, ctx, fn review, principal ->
       with {:ok, params} <- comment_params(review, args),
            {:ok, %{thread: thread, comment: comment}} <-
-             Threads.publish_comment(review, identity, params) do
+             Threads.publish_comment(review, principal, params) do
         %{
           slug: review.slug,
           thread_id: thread.id,
@@ -374,8 +374,8 @@ defmodule ReviewsWeb.MCP.Handlers do
   def update_thread_status(args, ctx) do
     ensure_writes_enabled!()
 
-    with_review(args, ctx, fn review, identity ->
-      case Threads.update_status(review, args["thread_id"], identity, args["status"]) do
+    with_review(args, ctx, fn review, principal ->
+      case Threads.update_status(review, args["thread_id"], principal, args["status"]) do
         {:ok, thread} ->
           %{
             slug: review.slug,
@@ -396,9 +396,9 @@ defmodule ReviewsWeb.MCP.Handlers do
   ## Resources and prompts
 
   def feedback_markdown(%{"slug" => slug}, ctx) do
-    identity = current_identity!(ctx)
+    _ = current_principal!(ctx)
 
-    with {:ok, review} <- owned_review(slug, identity),
+    with {:ok, review} <- find_review(slug),
          {:ok, revisions, latest} <- select_revision(review, %{}) do
       FastestMCP.Resources.Text.new(render_feedback(review, revisions, latest),
         mime_type: "text/markdown"
@@ -431,17 +431,19 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   ## Caller and review resolution
 
-  defp current_identity!(%{principal: %{"identity_id" => id}}) when is_integer(id) do
-    Accounts.get_identity!(id)
+  # API tokens carry every scope; the verified principal names the identity.
+  defp current_principal!(%{principal: %{"identity_id" => id}}) when is_integer(id) do
+    identity = Accounts.get_identity!(id)
+    Principal.new(identity, :mcp, Accounts.get_user!(identity.owner_user_id))
   end
 
   defp with_review(args, ctx, fun) do
-    identity = current_identity!(ctx)
+    principal = current_principal!(ctx)
 
-    case owned_review(args["review"], identity) do
+    case find_review(args["review"]) do
       {:ok, review} ->
         try do
-          fun.(review, identity) |> unwrap()
+          fun.(review, principal) |> unwrap()
         catch
           :too_small -> error_result(@too_small)
         end
@@ -457,10 +459,10 @@ defmodule ReviewsWeb.MCP.Handlers do
   defp unwrap({:error, message}) when is_binary(message), do: error_result(message)
   defp unwrap(value), do: value
 
-  defp owned_review(ref, %Identity{} = identity) do
+  defp find_review(ref) do
     with {:ok, slug} <- parse_review_ref(ref),
          %Review{} = review <- ReviewsContext.get_review_by_slug(slug),
-         true <- ReviewsContext.owned_by?(review, identity) do
+         true <- Reviews.Policy.can?(nil, :read, review) do
       {:ok, review}
     else
       _ -> {:error, :not_found}
@@ -483,8 +485,7 @@ defmodule ReviewsWeb.MCP.Handlers do
   defp parse_review_ref(_), do: :error
 
   defp not_found_message(ref) do
-    "No review matching #{inspect(ref)} is owned by this account. MCP access covers reviews " <>
-      "pushed by you or your agent identities; check the slug or URL."
+    "No review matching #{inspect(ref)}. Check the slug or URL."
   end
 
   # Revision summaries carry no diffs, so picking a revision costs one query
@@ -1113,7 +1114,13 @@ defmodule ReviewsWeb.MCP.Handlers do
   defp write_error({:error, :patchset_not_found}),
     do: error_result("That revision does not exist.")
 
-  defp write_error({:error, :forbidden}), do: error_result("Only the review's owner can do that.")
+  defp write_error({:error, :forbidden}),
+    do:
+      error_result(
+        "You cannot do that on this review. Only its owner can push revisions, and only " <>
+          "its owner or a thread's author can resolve or reopen that thread."
+      )
+
   defp write_error({:error, :empty_body}), do: error_result("body cannot be empty.")
 
   defp write_error({:error, :invalid_status}),

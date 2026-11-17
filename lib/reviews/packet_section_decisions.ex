@@ -11,6 +11,7 @@ defmodule Reviews.PacketSectionDecisions do
   alias Reviews.Accounts
   alias Reviews.Accounts.{Identity, User}
   alias Reviews.Policy
+  alias Reviews.Principal
   alias Reviews.Repo
   alias Reviews.ReviewPacket
   alias Reviews.Reviews.{PacketSectionDecision, Patchset, Review}
@@ -31,9 +32,10 @@ defmodule Reviews.PacketSectionDecisions do
 
   def list_for_review(_review, nil), do: []
 
-  def set_status(%Review{} = review, %Patchset{} = patchset, %Identity{} = author, attrs) do
-    if Policy.can?(author, :decide_section, review),
-      do: upsert_status(review, patchset, author, attrs),
+  def set_status(%Review{} = review, %Patchset{} = patchset, actor, attrs)
+      when is_struct(actor, Identity) or is_struct(actor, Principal) do
+    if Policy.can?(actor, :decide_section, review),
+      do: upsert_status(review, patchset, Principal.from(actor).identity, attrs),
       else: {:error, :forbidden}
   end
 
@@ -76,10 +78,13 @@ defmodule Reviews.PacketSectionDecisions do
   def clear_status(
         %Review{} = review,
         %Patchset{} = patchset,
-        %Identity{} = author,
+        actor,
         section_index
-      ) do
-    if Policy.can?(author, :decide_section, review) do
+      )
+      when is_struct(actor, Identity) or is_struct(actor, Principal) do
+    author = Principal.from(actor).identity
+
+    if Policy.can?(actor, :decide_section, review) do
       case Repo.get_by(PacketSectionDecision,
              review_id: review.id,
              patchset_id: patchset.id,

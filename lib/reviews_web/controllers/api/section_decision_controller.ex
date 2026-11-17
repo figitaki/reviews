@@ -12,7 +12,8 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
 
   def create(conn, %{"slug" => slug, "section_index" => section_index, "status" => status})
       when status in @statuses do
-    identity = conn.assigns.current_identity
+    principal = conn.assigns.current_principal
+    identity = principal.identity
 
     with {:ok, section_index} <- parse_section_index(section_index),
          {:ok, review} <- fetch_review(slug),
@@ -24,7 +25,7 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
            PacketSectionDecisions.put_section_status(
              review,
              patchset,
-             identity,
+             principal,
              section,
              decisions,
              patchsets,
