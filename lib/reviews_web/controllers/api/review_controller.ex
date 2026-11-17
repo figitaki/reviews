@@ -25,12 +25,12 @@ defmodule ReviewsWeb.Api.ReviewController do
       {:error, :not_found} ->
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "Review not found"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
 
       {:error, :patchset_not_found} ->
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "Patchset not found"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:patchset_not_found, "Patchset not found"))
     end
   end
 
@@ -146,15 +146,17 @@ defmodule ReviewsWeb.Api.ReviewController do
       {:error, _step, changeset, _} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: format_changeset(changeset)})
+        |> json(ReviewsWeb.ApiErrors.changeset(changeset))
 
       {:error, %Ecto.Changeset{} = changeset} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: format_changeset(changeset)})
+        |> json(ReviewsWeb.ApiErrors.changeset(changeset))
 
       _ ->
-        conn |> put_status(:bad_request) |> json(%{errors: %{detail: "Invalid request"}})
+        conn
+        |> put_status(:bad_request)
+        |> json(ReviewsWeb.ApiErrors.detail(:invalid_request, "Invalid request"))
     end
   end
 
@@ -170,12 +172,4 @@ defmodule ReviewsWeb.Api.ReviewController do
   end
 
   defp normalize_params(_), do: nil
-
-  defp format_changeset(%Ecto.Changeset{} = cs) do
-    Ecto.Changeset.traverse_errors(cs, fn {msg, opts} ->
-      Regex.replace(~r/%{(\w+)}/, msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
-  end
 end

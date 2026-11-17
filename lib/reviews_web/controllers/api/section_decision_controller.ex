@@ -38,39 +38,51 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
       })
     else
       {:error, :invalid_section_index} ->
-        conn |> put_status(:bad_request) |> json(%{errors: %{detail: "Invalid section index"}})
+        conn
+        |> put_status(:bad_request)
+        |> json(ReviewsWeb.ApiErrors.detail(:invalid_section_index, "Invalid section index"))
 
       {:error, :review_not_found} ->
-        conn |> put_status(:not_found) |> json(%{errors: %{detail: "Review not found"}})
+        conn
+        |> put_status(:not_found)
+        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
 
       {:error, :patchset_not_found} ->
-        conn |> put_status(:not_found) |> json(%{errors: %{detail: "Patchset not found"}})
+        conn
+        |> put_status(:not_found)
+        |> json(ReviewsWeb.ApiErrors.detail(:patchset_not_found, "Patchset not found"))
 
       {:error, :section_not_found} ->
-        conn |> put_status(:not_found) |> json(%{errors: %{detail: "Section not found"}})
+        conn
+        |> put_status(:not_found)
+        |> json(ReviewsWeb.ApiErrors.detail(:section_not_found, "Section not found"))
 
       {:error, :forbidden} ->
         conn
         |> put_status(:forbidden)
-        |> json(%{errors: %{detail: "Only the review owner can decide sections"}})
+        |> json(
+          ReviewsWeb.ApiErrors.detail(:forbidden, "Only the review owner can decide sections")
+        )
 
       _ ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: %{detail: "Could not update section decision"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:write_failed, "Could not update section decision"))
     end
   end
 
   def create(conn, %{"status" => status}) when status not in @statuses do
     conn
     |> put_status(:unprocessable_entity)
-    |> json(%{errors: %{detail: "status must be approved, denied, or ignored"}})
+    |> json(
+      ReviewsWeb.ApiErrors.detail(:invalid_status, "status must be approved, denied, or ignored")
+    )
   end
 
   def create(conn, _params) do
     conn
-    |> put_status(:bad_request)
-    |> json(%{errors: %{detail: "Invalid request"}})
+    |> put_status(:unprocessable_entity)
+    |> json(ReviewsWeb.ApiErrors.detail(:invalid_request, "Invalid request"))
   end
 
   defp parse_section_index(value) do

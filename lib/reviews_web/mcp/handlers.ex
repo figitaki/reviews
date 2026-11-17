@@ -363,7 +363,10 @@ defmodule ReviewsWeb.MCP.Handlers do
         }
       else
         {:error, :thread_not_found} ->
-          error_result("No thread #{args["thread_id"]} on this review. List threads first.")
+          error_result(
+            "No thread #{args["thread_id"]} on this review. List threads first.",
+            :thread_not_found
+          )
 
         other ->
           write_error(other)
@@ -385,7 +388,10 @@ defmodule ReviewsWeb.MCP.Handlers do
           }
 
         {:error, :not_found} ->
-          error_result("No thread #{args["thread_id"]} on this review. List threads first.")
+          error_result(
+            "No thread #{args["thread_id"]} on this review. List threads first.",
+            :thread_not_found
+          )
 
         other ->
           write_error(other)
@@ -447,13 +453,16 @@ defmodule ReviewsWeb.MCP.Handlers do
         end
 
       {:error, :not_found} ->
-        error_result(not_found_message(args["review"]))
+        error_result(not_found_message(args["review"]), :review_not_found)
     end
   end
 
   defp unwrap({:error, %Result{} = result}), do: result
   defp unwrap(%Result{} = result), do: result
-  defp unwrap({:error, :patchset_not_found}), do: error_result("That revision does not exist.")
+
+  defp unwrap({:error, :patchset_not_found}),
+    do: error_result("That revision does not exist.", :patchset_not_found)
+
   defp unwrap({:error, message}) when is_binary(message), do: error_result(message)
   defp unwrap(value), do: value
 
@@ -1084,30 +1093,40 @@ defmodule ReviewsWeb.MCP.Handlers do
   defp write_error({:error, message}) when is_binary(message), do: error_result(message)
 
   defp write_error({:error, :patchset_not_found}),
-    do: error_result("That revision does not exist.")
+    do: error_result("That revision does not exist.", :patchset_not_found)
 
   defp write_error({:error, :invalid_anchor}),
     do:
       error_result(
-        "The anchor is not in the selected revision's diff. Comment on a changed or context line."
+        "The anchor is not in the selected revision's diff. Comment on a changed or context line.",
+        :invalid_anchor
       )
 
-  defp write_error({:error, :forbidden}), do: error_result("Only the review's owner can do that.")
-  defp write_error({:error, :empty_body}), do: error_result("body cannot be empty.")
+  defp write_error({:error, :forbidden}),
+    do: error_result("Only the review's owner can do that.", :forbidden)
+
+  defp write_error({:error, :empty_body}), do: error_result("body cannot be empty.", :empty_body)
 
   defp write_error({:error, :invalid_status}),
-    do: error_result("status must be open or resolved.")
+    do: error_result("status must be open or resolved.", :invalid_status)
 
   defp write_error({:error, %Ecto.Changeset{} = changeset}), do: changeset_result(changeset)
-  defp write_error({:error, _other}), do: error_result("The write failed. Nothing was saved.")
+
+  defp write_error({:error, _other}),
+    do: error_result("The write failed. Nothing was saved.", :write_failed)
 
   defp changeset_result(changeset) do
     errors =
       Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
       |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
 
-    error_result("Invalid input: #{errors}")
+    error_result("Invalid input: #{errors}", :validation_failed)
   end
 
-  defp error_result(message), do: Result.new(message, is_error: true)
+  defp error_result(message, code \\ :invalid_request),
+    do:
+      Result.new(message,
+        is_error: true,
+        structured_content: %{error: %{code: to_string(code), detail: message}}
+      )
 end

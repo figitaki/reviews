@@ -92,6 +92,22 @@ defmodule ReviewsWeb.MCPTest do
     }
   end
 
+  test "tool errors include stable structured codes without removing prose", ctx do
+    conn =
+      build_conn()
+      |> auth(ctx.owner_token)
+      |> mcp_request("tools/call", %{
+        "name" => "reviews_get_review",
+        "arguments" => %{"review" => "missing-review"}
+      })
+
+    result = json_response(conn, 200)["result"]
+    assert result["isError"]
+    assert result["structuredContent"]["error"]["code"] == "review_not_found"
+    assert [%{"text" => text}] = result["content"]
+    assert result["structuredContent"]["error"]["detail"] == text
+  end
+
   describe "HTTP endpoint" do
     test "rejects requests without a valid token", %{conn: conn} do
       conn = mcp_request(conn, "tools/list")

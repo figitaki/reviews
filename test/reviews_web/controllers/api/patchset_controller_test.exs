@@ -65,6 +65,8 @@ defmodule ReviewsWeb.Api.PatchsetControllerTest do
       })
 
     assert json_response(conn, 422) == %{
+             "error_code" => "validation_failed",
+             "error_detail" => "Invalid input",
              "errors" => %{"branch_name" => ["should be at most 255 character(s)"]}
            }
 

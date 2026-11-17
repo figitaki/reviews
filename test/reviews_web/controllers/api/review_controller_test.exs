@@ -117,6 +117,8 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
           })
 
         assert json_response(conn, 422) == %{
+                 "error_code" => "validation_failed",
+                 "error_detail" => "Invalid input",
                  "errors" => %{"title" => ["should be at most 255 character(s)"]}
                }
       end

@@ -7,6 +7,8 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Add stable API and MCP error codes while retaining legacy fields and Poppy authentication responses; teach the CLI to read them.
+
 - Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.
 
 ### Security
