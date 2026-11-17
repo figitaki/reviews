@@ -7,6 +7,8 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Keep empty hunk rows when validating and rendering packet slices, matching the CLI; no-newline markers stay attached to their preceding row.
+
 ### Security
 
 - Only the review owner or a thread's author can resolve or reopen a thread,

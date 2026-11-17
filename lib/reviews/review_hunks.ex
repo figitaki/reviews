@@ -75,8 +75,9 @@ defmodule Reviews.ReviewHunks do
     {header_lines, rest} = Enum.split_while(lines, &(not String.starts_with?(&1, "@@ ")))
     header = Enum.join(header_lines, "\n")
 
-    rest
-    |> chunk_hunks()
+    chunks = chunk_hunks(rest)
+
+    chunks
     |> Enum.with_index(1)
     |> Enum.map(fn {lines, index} ->
       raw = Enum.join(header_lines ++ lines, "\n")
@@ -89,6 +90,8 @@ defmodule Reviews.ReviewHunks do
         row_ref: "#{file_path}##{index}",
         hunk_index: index,
         hunk_header: List.first(lines) || "",
+        body_lines:
+          body_lines(lines, index == length(chunks) and String.ends_with?(raw_diff, "\n")),
         line_start: line_start,
         line_end: line_end,
         additions: additions,
@@ -104,6 +107,15 @@ defmodule Reviews.ReviewHunks do
   end
 
   defp parse_hunks(_raw_diff, _file_path, _status), do: []
+
+  # A terminal newline ends the last row; interior empty lines are real rows.
+  defp body_lines([_header | lines], true), do: Enum.drop(lines, -1)
+  defp body_lines([_header | lines], false), do: lines
+
+  @doc "Hunk body rows in CLI order, excluding no-newline markers."
+  def rows(%{body_lines: lines}) do
+    Enum.reject(lines, &String.starts_with?(&1, "\\"))
+  end
 
   defp chunk_hunks(lines) do
     {chunks, current} =
@@ -138,13 +150,12 @@ defmodule Reviews.ReviewHunks do
        when is_integer(line_start) and is_integer(line_end) do
     lines = String.split(hunk.raw_diff, "\n", trim: false)
     {header_lines, rest} = Enum.split_while(lines, &(not String.starts_with?(&1, "@@ ")))
-    [hunk_header | hunk_lines] = rest
+    [hunk_header | _] = rest
 
     # Rows are numbered as the CLI validates slices: "\\ No newline" markers
     # are not rows, and stay with the row they follow.
     {kept, _row, _kept?} =
-      hunk_lines
-      |> Enum.reject(&(&1 == ""))
+      hunk.body_lines
       |> Enum.reduce({[], 0, false}, fn line, {acc, row, prev_kept?} ->
         if String.starts_with?(line, "\\") do
           {if(prev_kept?, do: [line | acc], else: acc), row, prev_kept?}
@@ -209,7 +220,6 @@ defmodule Reviews.ReviewHunks do
     raw_diff
     |> String.split("\n", trim: false)
     |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
-    |> Enum.reject(&(&1 == ""))
   end
 
   defp hunk_line_range(header, "deleted") when is_binary(header) do

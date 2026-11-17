@@ -391,3 +391,7 @@ or atom key) for new threads. It must identify a patchset of this review or the
 call returns `{:error, :patchset_not_found}` without writing. Omission defaults
 to the latest patchset. Callers creating comments on an older selected revision
 must pass its ID server-side. Replies keep their original thread's origin.
+
+### Packet hunk row numbering
+
+Packet `line_start` and `line_end` are one-based rows after the hunk's `@@` header. Context, added, deleted and empty rows each count once. A `\ No newline at end of file` marker does not count and stays with the preceding row when sliced. A final newline terminates the last row rather than adding a row. CLI validation, MCP coverage checks and the packet renderer use this convention.

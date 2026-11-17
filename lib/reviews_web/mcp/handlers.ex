@@ -994,15 +994,7 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   defp hunk_row_count(hunk), do: length(hunk_rows(hunk))
 
-  # Rows after the @@ header, numbered as the CLI numbers them: empty strings
-  # and "\\ No newline" markers are not rows.
-  defp hunk_rows(hunk) do
-    hunk.raw_diff
-    |> String.split("\n")
-    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
-    |> Enum.drop(1)
-    |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "\\")))
-  end
+  defp hunk_rows(hunk), do: ReviewHunks.rows(hunk)
 
   # Every changed row must be covered exactly once, as the CLI requires, so
   # the packet view never drops or repeats a change. Rows with other problems

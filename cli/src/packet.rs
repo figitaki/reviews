@@ -1142,6 +1142,20 @@ Second thought.
     }
 
     #[test]
+    fn empty_hunk_rows_match_server_vector() {
+        let diff = include_str!("../../test/vectors/diffs/empty-hunk-rows.diff");
+        let index = diff_index(diff);
+        assert_eq!(index["x.txt"][0].row_count, 3);
+        assert_eq!(index["x.txt"][0].changed_rows, BTreeSet::from([2, 3]));
+        let check = check_file(
+            "packet.md",
+            "# T\n\n## S\n@hunk x.txt#1:L2-L2\n@hunk x.txt#1:L3-L3",
+            diff,
+        );
+        assert!(check.is_valid(), "issues = {:#?}", check.issues);
+    }
+
+    #[test]
     fn rejects_duplicate_changed_line_coverage() {
         let issue = only_issue(check_md(
             "# T\n\n## S\n@hunk lib/a.ex#1\n@hunk lib/a.ex#1:L2-L3\n@hunk lib/a.ex#2",
