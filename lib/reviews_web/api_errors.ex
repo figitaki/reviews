@@ -1,21 +1,42 @@
 defmodule ReviewsWeb.ApiErrors do
-  @moduledoc "Stable error codes added alongside legacy REST and Poppy response fields."
+  @moduledoc """
+  REST and Poppy error bodies: stable `error_code`/`error_detail` fields
+  alongside the legacy `errors` field. Codes, statuses and default details
+  come from `Reviews.Errors`, which MCP uses too.
+  """
+  import Plug.Conn, only: [put_status: 2]
 
-  @codes ~w(review_not_found thread_not_found patchset_not_found section_not_found forbidden unauthorized invalid_request invalid_status invalid_section_index invalid_anchor invalid_side invalid_file_path empty_body unknown_granularity write_failed validation_failed)a
+  alias Reviews.Errors
 
-  def code(%Ecto.Changeset{}), do: :validation_failed
-  def code(reason) when reason in @codes, do: reason
-  def code(_), do: :write_failed
+  defdelegate code(reason), to: Errors
 
-  def detail(code, message), do: payload(code, message, %{errors: %{detail: message}})
+  @doc """
+  Sends the error for a domain `reason` with the vocabulary's status. Pass
+  `message` to replace the default detail with a more specific one.
+  """
+  def render(conn, reason, message \\ nil)
 
-  def payload(code, message, legacy) do
-    Map.merge(legacy, %{error_code: to_string(code), error_detail: message})
+  def render(conn, %Ecto.Changeset{} = changeset, _message) do
+    conn |> put_status(Errors.status(changeset)) |> Phoenix.Controller.json(changeset(changeset))
+  end
+
+  def render(conn, reason, message) do
+    conn
+    |> put_status(Errors.status(reason))
+    |> Phoenix.Controller.json(detail(reason, message || Errors.detail(reason)))
+  end
+
+  def detail(reason, message), do: payload(reason, message, %{errors: %{detail: message}})
+
+  # Codes always pass through the vocabulary, so an unknown reason cannot
+  # reach a client as a code.
+  def payload(reason, message, legacy) do
+    Map.merge(legacy, %{error_code: to_string(Errors.code(reason)), error_detail: message})
   end
 
   def changeset(changeset) do
     fields = Ecto.Changeset.traverse_errors(changeset, &message/1)
-    payload(:validation_failed, "Invalid input", %{errors: fields})
+    payload(changeset, Errors.detail(changeset), %{errors: fields})
   end
 
   defp message({msg, opts}) do
