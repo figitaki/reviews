@@ -22,8 +22,30 @@ defmodule ReviewsWeb.Payloads do
   end
 
   def comment(comment, :compact) do
-    payload = comment(comment) |> Map.put(:author, identity(comment.author, :compact))
+    payload =
+      comment(comment) |> Map.put(:author, identity(comment.author, :compact)) |> bound_metadata()
+
     if is_nil(payload.attribution), do: Map.delete(payload, :attribution), else: payload
+  end
+
+  def comment(comment, :bounded), do: comment(comment) |> bound_metadata()
+
+  defp bound_metadata(payload) do
+    bounded =
+      Enum.reduce([:author, :attribution], payload, fn key, acc ->
+        Map.update!(acc, key, fn
+          nil ->
+            nil
+
+          metadata ->
+            Map.new(metadata, fn
+              {key, value} when is_binary(value) -> {key, ReviewsWeb.MCP.Budget.cap(value, 512)}
+              pair -> pair
+            end)
+        end)
+      end)
+
+    if bounded == payload, do: bounded, else: Map.put(bounded, :metadata_truncated, true)
   end
 
   def comment(comment) do
