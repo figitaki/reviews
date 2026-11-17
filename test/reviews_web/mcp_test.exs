@@ -149,6 +149,39 @@ defmodule ReviewsWeb.MCPTest do
     assert outdated["line_text"] == "  def a, do: :new"
   end
 
+  test "oversized verified metadata cannot block comment pagination at maximum budget", ctx do
+    {:ok, %{thread: thread, comment: comment}} =
+      Threads.publish_comment(ctx.review, ctx.owner, %{
+        "file_path" => "lib/a.ex",
+        "side" => "new",
+        "body" => "still readable",
+        "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
+      })
+
+    comment
+    |> Ecto.Changeset.change(
+      attribution: %{
+        "provider" => "poppy",
+        "client_id" => "https://agent.example/" <> String.duplicate("x", 130_000)
+      }
+    )
+    |> Reviews.Repo.update!()
+
+    {bytes, result} =
+      http_call(ctx.owner_token, "reviews_get_thread", %{
+        "review" => ctx.review.slug,
+        "thread_id" => thread.id,
+        "max_bytes" => 120_000
+      })
+
+    assert bytes <= 120_000
+
+    assert [%{"body" => "still readable", "metadata_truncated" => true, "complete" => true}] =
+             result["comments"]
+
+    assert result["next_cursor"] == nil
+  end
+
   describe "HTTP endpoint" do
     test "rejects requests without a valid token", %{conn: conn} do
       conn = mcp_request(conn, "tools/list")
