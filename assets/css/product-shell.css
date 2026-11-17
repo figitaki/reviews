@@ -648,7 +648,8 @@ textarea.ds-input{
 /* Narrow phones (#6): keep the topbar on one row down to 320px. The brand
    collapses to its mark (the link keeps its aria-label), the actions may
    shrink, and a long account name truncates instead of pushing the row
-   past the right edge. DOM order, and so focus order, does not change. */
+   past the right edge. DOM order, and so focus order, does not change.
+   480px, not 640px: above it the full brand label still fits (tokens.css). */
 @media (max-width: 480px) {
   .ds-shell-topbar{
     gap: 8px;
