@@ -50,10 +50,12 @@ later fixes continue toward 0.0.2.
   Revoking an access token at `/oauth/revoke` now revokes only that token, not
   its grant; revoking the refresh token still ends the grant. The old OAuth
   tables stay for one release.
+
 - One error vocabulary, `Reviews.Errors`, gives every surface the same
   codes, statuses and safe default details. MCP error results use it as
   REST and Poppy do; unknown reasons become `write_failed`. It adds
   `invalid_pagination` and `invalid_packet`.
+
 - Section decisions belong to the account, not one identity: a person and
   their agent identities share one decision per section, and each decision
   records which identity made it. A migration merges existing decisions,
