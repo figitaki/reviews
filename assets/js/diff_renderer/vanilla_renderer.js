@@ -76,10 +76,10 @@ function currentPierreTheme() {
     : "pierre-light"
 }
 
-function parsePatch(rawDiff, filePath) {
+export function parsePatch(rawDiff, filePath) {
   if (!rawDiff || typeof Diffs.parsePatchFiles !== "function") return null
   try {
-    const parsed = Diffs.parsePatchFiles(rawDiff, filePath || "patch")
+    const parsed = Diffs.parsePatchFiles(rawDiff, { cacheKeyPrefix: filePath || "patch" })
     const files = Array.isArray(parsed)
       ? parsed.flatMap((patch) => patch?.files || [])
       : []

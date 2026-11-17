@@ -34,6 +34,11 @@ later fixes continue toward 0.0.2.
 
 ### Changed
 
+- Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI).
+  Elixir 1.20.4 includes the fix for CVE-2026-75758.
+- Phoenix 1.8.15, LiveView 1.2.12, Tailwind CLI 4.3.3, esbuild 0.28.2 and
+  other dependency updates. Diff rendering moves to @pierre/diffs 1.6.4 and
+  packet navigation to @pierre/trees 1.0.0.
 - The OAuth issuer runs on [gatekeep](https://github.com/figitaki/gatekeep)
   (`Reviews.OAuth`). Endpoints, metadata, scopes, the agents-only rule,
   refresh rotation, DPoP, and Settings → Connected agents work as before, and
