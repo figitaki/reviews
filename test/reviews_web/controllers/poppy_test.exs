@@ -284,6 +284,11 @@ defmodule ReviewsWeb.PoppyTest do
         Reviews.ReviewView.thread_payloads_for_file(snapshot, "foo")
 
       assert payload.link_revoked
+
+      # Paged readers (MCP, REST pages) see the same revoked link, so every
+      # comment query preloads the attribution link.
+      [paged] = Reviews.Threads.list_comment_page(comment.thread_id, 0, 10)
+      assert Reviews.ReviewView.attribution_payload(paged).link_revoked
     end
 
     test "the redirect carries the issuer and state", ctx do
@@ -383,7 +388,8 @@ defmodule ReviewsWeb.PoppyTest do
         end)
         |> get(path)
 
-      assert json_response(conn, 200)["slug"] == ctx.review.slug
+      assert json_response(conn, 200) ==
+               get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
     end
 
     test "a missing Session header or Poppy-Version is refused", ctx do
