@@ -9,7 +9,7 @@ defmodule ReviewsWeb.AuthRelayHTML do
   def confirm(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="auth-relay-confirm" class="l-page design-page">
+      <div id="auth-relay-confirm" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow="Preview sign-in"
@@ -26,7 +26,7 @@ defmodule ReviewsWeb.AuthRelayHTML do
             </:actions>
           </.ds_page_header>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end

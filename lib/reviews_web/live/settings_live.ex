@@ -118,7 +118,7 @@ defmodule ReviewsWeb.SettingsLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="settings-page" class="l-page design-page">
+      <div id="settings-page" class="l-page design-page">
         <Layouts.landing_topbar current_user={@current_user} return_to={~p"/settings"} />
 
         <div class="design-main is-settings">
@@ -399,7 +399,7 @@ defmodule ReviewsWeb.SettingsLive do
             </div>
           <% end %>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end

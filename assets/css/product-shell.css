@@ -287,7 +287,7 @@
 .ds-input{
   width: 100%;
   min-height: 40px;
-  border: 1px solid var(--ds-line-strong);
+  border: 1px solid var(--ds-line-input);
   border-radius: 6px;
   background: var(--ds-panel);
   color: var(--ds-text);

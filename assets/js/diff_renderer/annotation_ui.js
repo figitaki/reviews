@@ -9,7 +9,7 @@ const colors = {
   raised: "var(--ds-panel-raised, #0b0b0c)",
   text: "var(--ds-text, #f5f5f5)",
   muted: "var(--ds-muted, #a3a3a3)",
-  faint: "var(--ds-faint, #707073)",
+  faint: "var(--ds-faint, #7c7c80)",
   line: "var(--ds-line, #242426)",
   lineStrong: "var(--ds-line-strong, #3a3a3d)",
   add: "var(--ds-add, #25d0a0)",

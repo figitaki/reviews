@@ -2902,7 +2902,7 @@ details[open] > summary .review-collapse-icon,
     display: block;
     width: 60px;
     min-height: 44px;
-    border: 1px solid var(--review-line-strong);
+    border: 1px solid var(--ds-line-input);
     border-radius: 6px;
     background: var(--review-panel);
     padding-inline: 6px;

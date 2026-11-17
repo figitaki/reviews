@@ -16,7 +16,7 @@ defmodule ReviewsWeb.OAuthHTML do
   def sign_in(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="poppy-sign-in" class="l-page design-page">
+      <div id="poppy-sign-in" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow={eyebrow(@request)}
@@ -35,7 +35,7 @@ defmodule ReviewsWeb.OAuthHTML do
             </:actions>
           </.ds_page_header>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
@@ -43,7 +43,7 @@ defmodule ReviewsWeb.OAuthHTML do
   def consent(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="poppy-consent" class="l-page design-page">
+      <div id="poppy-consent" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow={eyebrow(@request)}
@@ -168,7 +168,7 @@ defmodule ReviewsWeb.OAuthHTML do
             </form>
           </.ds_card>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
@@ -176,7 +176,7 @@ defmodule ReviewsWeb.OAuthHTML do
   def invalid_request(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="poppy-invalid-request" class="l-page design-page">
+      <div id="poppy-invalid-request" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_empty_state
             icon="hero-exclamation-triangle"
@@ -184,7 +184,7 @@ defmodule ReviewsWeb.OAuthHTML do
             body={reason_text(@reason)}
           />
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
