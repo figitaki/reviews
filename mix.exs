@@ -82,10 +82,9 @@ defmodule Reviews.MixProject do
       {:ueberauth, "~> 0.10"},
       {:ueberauth_github, "~> 0.8"},
       {:fastest_mcp, "~> 1.0.1"},
-      # The OAuth issuer (Reviews.OAuth). Not on Hex yet; pinned to the device
-      # authorization grant branch (figitaki/gatekeep#5). Move to its merge
-      # commit once it lands.
-      {:gatekeep, github: "figitaki/gatekeep", ref: "65f213d07436e6a2e119f067430981d810d565d8"}
+      # The OAuth issuer (Reviews.OAuth). Not on Hex yet; pinned to the merge
+      # of figitaki/gatekeep#5 (the device authorization grant).
+      {:gatekeep, github: "figitaki/gatekeep", ref: "3f096d6950d69b5287dcd26f15b65ec0d463b541"}
     ]
   end
 
