@@ -625,7 +625,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
           packet: %{
             "format_version" => 1,
             "title" => "First packet",
-            "sections" => []
+            "sections" => [
+              %{
+                "title" => "S",
+                "rows" => [%{"kind" => "hunk", "path" => "lib/one.ex", "hunk_index" => 1}]
+              }
+            ]
           }
         })
 
@@ -654,7 +659,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
           packet: %{
             "format_version" => 1,
             "title" => "Second packet",
-            "sections" => []
+            "sections" => [
+              %{
+                "title" => "S",
+                "rows" => [%{"kind" => "hunk", "path" => "lib/three.ex", "hunk_index" => 1}]
+              }
+            ]
           }
         })
 
@@ -962,7 +972,16 @@ defmodule ReviewsWeb.ReviewLiveTest do
           packet: %{
             "format_version" => 1,
             "title" => "Packet walkthrough",
-            "sections" => []
+            "sections" => [
+              %{
+                "title" => "S",
+                "rows" =>
+                  Enum.map(
+                    [1, 2],
+                    &%{"kind" => "hunk", "path" => "lib/packet.ex", "hunk_index" => &1}
+                  )
+              }
+            ]
           }
         })
 
@@ -1354,7 +1373,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
             "format_version" => 1,
             "title" => "Guide",
             "sections" =>
-              Enum.map([1, 2, 2], fn index ->
+              Enum.map([1, 2], fn index ->
                 %{
                   "title" => "Hunk #{index}",
                   "rows" => [%{"kind" => "hunk", "path" => "example.ex", "hunk_index" => index}]
@@ -1362,6 +1381,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
               end)
           }
         })
+
+      # Historical packets can repeat a hunk; navigation must choose the first.
+      patchset = ReviewsCtx.latest_patchset(review)
+      [first, second] = patchset.packet["sections"]
+      legacy = Map.put(patchset.packet, "sections", [first, second, second])
+      patchset |> Ecto.Changeset.change(packet: legacy) |> Reviews.Repo.update!()
 
       {:ok, %{thread: thread}} =
         Threads.publish_comment(review, author, %{

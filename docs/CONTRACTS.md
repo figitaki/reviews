@@ -395,3 +395,9 @@ must pass its ID server-side. Replies keep their original thread's origin.
 ### Packet hunk row numbering
 
 Packet `line_start` and `line_end` are one-based rows after the hunk's `@@` header. Context, added, deleted and empty rows each count once. A `\ No newline at end of file` marker does not count and stays with the preceding row when sliced. A final newline terminates the last row rather than adding a row. CLI validation, MCP coverage checks and the packet renderer use this convention.
+
+### Packet validation on upload
+
+Review creation and revision uploads validate a supplied packet in the shared patchset changeset. REST and MCP reject malformed shapes, unknown hunk references, invalid slices, omitted changes and repeated changed rows before committing. REST returns 422 with `errors.packet`; MCP returns a tool error. Omitted/null packets remain supported. Existing stored packets remain readable; this does not rewrite historical content.
+
+`Reviews.PacketValidation.check/2` returns `:ok` or coded problems: `invalid_packet.shape`, `invalid_packet.unknown_hunk`, `invalid_packet.invalid_slice`, `invalid_packet.uncovered_line`, and `invalid_packet.repeated_line`. Hunk indices and slice bounds must be JSON integers, not strings; paths and titles must not be blank. The CLI keeps its local preflight checks.

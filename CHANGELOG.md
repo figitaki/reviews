@@ -7,6 +7,8 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Validate packet shape, hunk references, slices and changed-line coverage in the domain layer for all revision uploads.
+
 - Keep empty hunk rows when validating and rendering packet slices, matching the CLI; no-newline markers stay attached to their preceding row.
 
 ### Security

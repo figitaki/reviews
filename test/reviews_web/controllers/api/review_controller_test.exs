@@ -151,7 +151,9 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
         "format_version" => 1,
         "title" => "Reviewer guide",
         "summary" => "Read this first.",
-        "tour" => [%{"kind" => "hunk", "path" => "foo"}]
+        "sections" => [
+          %{"title" => "S", "rows" => [%{"kind" => "hunk", "path" => "foo", "hunk_index" => 1}]}
+        ]
       }
 
       body = %{
@@ -172,6 +174,26 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
 
       conn = get(build_conn(), ~p"/api/v1/reviews/#{slug}")
       assert get_in(json_response(conn, 200), ["selected_patchset", "packet"]) == packet
+    end
+
+    test "rejects uncovered packets on both upload endpoints", %{raw_token: raw, user: user} do
+      diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"
+      packet = %{"title" => "T", "sections" => []}
+
+      {:ok, %{review: review}} =
+        ReviewsContext.create_review_with_initial_patchset(user, %{title: "T", raw_diff: diff})
+
+      for path <- [~p"/api/v1/reviews", ~p"/api/v1/reviews/#{review.slug}/patchsets"] do
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> post(path, %{title: "T", raw_diff: diff, packet: packet})
+
+        assert %{"errors" => %{"packet" => errors}} = json_response(conn, 422)
+        assert Enum.any?(errors, &String.contains?(&1, "not in any hunk row"))
+      end
+
+      assert length(ReviewsContext.list_patchsets(review)) == 1
     end
 
     test "rejects requests with no bearer token", %{conn: conn} do
@@ -218,7 +240,13 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
           packet: %{
             "format_version" => 1,
             "title" => "Packet v1",
-            "summary" => "Initial packet."
+            "summary" => "Initial packet.",
+            "sections" => [
+              %{
+                "title" => "S",
+                "rows" => [%{"kind" => "hunk", "path" => "foo", "hunk_index" => 1}]
+              }
+            ]
           }
         })
 
