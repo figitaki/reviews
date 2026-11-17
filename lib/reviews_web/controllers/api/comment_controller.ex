@@ -63,7 +63,9 @@ defmodule ReviewsWeb.Api.CommentController do
       "thread_anchor" => params["thread_anchor"] || %{},
       # Passed through as given. `publish_comment/3` casts it and returns
       # `:thread_not_found` when it is not a thread of this review.
-      "thread_id" => params["thread_id"]
+      "thread_id" => params["thread_id"],
+      "revision" => params["revision"],
+      "originating_patchset_id" => params["originating_patchset_id"]
     }
   end
 
@@ -73,13 +75,16 @@ defmodule ReviewsWeb.Api.CommentController do
   defp error_message(:empty_body), do: "body cannot be empty"
   defp error_message(:invalid_side), do: "side must be \"old\" or \"new\""
   defp error_message(:invalid_file_path), do: "file_path is required"
-  defp error_message(:invalid_anchor), do: "thread_anchor must include a granularity"
+
+  defp error_message(:invalid_anchor),
+    do: "thread_anchor must identify a line and valid token selection in the selected revision"
+
+  defp error_message(:patchset_not_found),
+    do:
+      "revision must identify a patchset of this review; supply revision or originating_patchset_id, not both"
 
   defp error_message(:unknown_granularity),
     do: "anchor granularity must be \"line\" or \"token_range\""
-
-  defp error_message(:patchset_not_found),
-    do: "originating_patchset_id is not a patchset of this review"
 
   defp error_message(%Ecto.Changeset{} = changeset) do
     changeset

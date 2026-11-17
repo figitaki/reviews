@@ -7,6 +7,8 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.
+
 - Validate packet shape, hunk references, slices and changed-line coverage in the domain layer for all revision uploads.
 
 - Keep empty hunk rows when validating and rendering packet slices, matching the CLI; no-newline markers stay attached to their preceding row.

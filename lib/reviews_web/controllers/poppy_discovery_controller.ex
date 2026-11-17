@@ -118,18 +118,38 @@ defmodule ReviewsWeb.PoppyDiscoveryController do
               "content" =>
                 json_schema(%{
                   "type" => "object",
-                  "required" => ["file_path", "body", "thread_anchor"],
+                  "required" => ["body"],
+                  "oneOf" => [
+                    %{"required" => ["thread_id"]},
+                    %{
+                      "required" => ["file_path", "thread_anchor"],
+                      "not" => %{"required" => ["thread_id"]}
+                    }
+                  ],
                   "properties" => %{
                     "file_path" => %{"type" => "string"},
+                    "revision" => %{
+                      "type" => "integer",
+                      "minimum" => 1,
+                      "description" => "Exact revision for a new thread; omitted selects latest"
+                    },
                     "side" => %{"type" => "string", "enum" => ["old", "new"], "default" => "new"},
                     "body" => %{"type" => "string", "description" => "Markdown"},
                     "thread_id" => %{"type" => "integer", "description" => "Reply to this thread"},
                     "thread_anchor" => %{
                       "type" => "object",
                       "required" => ["granularity", "line_number_hint"],
+                      "if" => %{"properties" => %{"granularity" => %{"const" => "token_range"}}},
+                      "then" => %{"required" => ["selection_text"]},
                       "properties" => %{
-                        "granularity" => %{"type" => "string", "enum" => ["line"]},
-                        "line_number_hint" => %{"type" => "integer"}
+                        "granularity" => %{"type" => "string", "enum" => ["line", "token_range"]},
+                        "line_number_hint" => %{"type" => "integer", "minimum" => 1},
+                        "selection_text" => %{"type" => "string", "minLength" => 1},
+                        "selection_offset" => %{
+                          "type" => "integer",
+                          "minimum" => 0,
+                          "description" => "UTF-16 code units"
+                        }
                       }
                     }
                   }
