@@ -1136,6 +1136,14 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-text);
 }
 
+.review-packet-section-note {
+  margin: 0;
+  color: var(--review-muted);
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
+}
+
 .review-guide-section-controls {
   display: flex;
   flex-wrap: wrap;

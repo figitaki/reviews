@@ -5,6 +5,7 @@ defmodule ReviewsWeb.SettingsLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.Accounts
+  alias Reviews.OAuth
 
   @impl true
   def mount(_params, session, socket) do
@@ -89,6 +90,26 @@ defmodule ReviewsWeb.SettingsLive do
 
           {:error, :not_found} ->
             {:noreply, put_flash(socket, :error, "Token not found.")}
+        end
+    end
+  end
+
+  @impl true
+  def handle_event("revoke_agent_link", %{"id" => id}, socket) do
+    case socket.assigns.current_user do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Sign in to manage connected agents.")}
+
+      user ->
+        case OAuth.revoke_grant(user, id) do
+          :ok ->
+            {:noreply,
+             socket
+             |> assign_account_data()
+             |> put_flash(:info, "Agent disconnected. Its tokens stopped working.")}
+
+          {:error, :not_found} ->
+            {:noreply, put_flash(socket, :error, "Connected agent not found.")}
         end
     end
   end
@@ -207,6 +228,60 @@ defmodule ReviewsWeb.SettingsLive do
                         <.icon name="hero-plus" class="size-4" /> New agent identity
                       </.ds_button>
                     </form>
+                  </.ds_card>
+                </div>
+              </.ds_section>
+
+              <.ds_section
+                id="connected-agents"
+                eyebrow="OAuth"
+                title="Connected agents"
+                description="Apps you allowed to act as one of your agent identities. Disconnecting stops their tokens at once; their earlier comments keep their attribution."
+              >
+                <div class="design-section-body">
+                  <.ds_card class="ds-settings-card">
+                    <.ds_empty_state
+                      :if={@agent_links == []}
+                      icon="hero-link"
+                      title="No connected agents"
+                      body="An app can ask to connect to one of your agent identities. You approve it on a Reviews page."
+                    />
+                    <ul :if={@agent_links != []} id="agent-links-list" class="ds-token-list">
+                      <li
+                        :for={link <- @agent_links}
+                        :key={link.id}
+                        id={"agent-link-#{link.id}"}
+                        class="ds-token-row"
+                      >
+                        <span class="ds-token-row-name" translate="no">
+                          {link_label(link)}
+                        </span>
+                        <span>
+                          Acts as {identity_label(link.identity)}. Calls itself {link.client_name ||
+                            "(no name)"} (not verified).
+                        </span>
+                        <span translate="no">{Enum.join(link.scopes, " ")}</span>
+                        <span>
+                          Approved {format_date(link.inserted_at)}. {last_used_label(
+                            link.last_used_at
+                          )}.
+                        </span>
+                        <span :if={link.revoked_at} class="ds-badge">
+                          Disconnected {format_date(link.revoked_at)}
+                        </span>
+                        <.ds_button
+                          :if={!link.revoked_at}
+                          id={"revoke-agent-link-#{link.id}"}
+                          variant="danger"
+                          phx-click="revoke_agent_link"
+                          phx-value-id={link.id}
+                          data-confirm="Disconnect this agent? Its tokens stop working at once."
+                          aria-label={"Disconnect #{link_label(link)}"}
+                        >
+                          Disconnect
+                        </.ds_button>
+                      </li>
+                    </ul>
                   </.ds_card>
                 </div>
               </.ds_section>
@@ -368,6 +443,7 @@ defmodule ReviewsWeb.SettingsLive do
     |> assign(:agent_identities, [])
     |> assign(:identity_token_stats, %{})
     |> assign(:tokens, [])
+    |> assign(:agent_links, [])
   end
 
   defp assign_account_data(%{assigns: %{current_user: user}} = socket) do
@@ -380,6 +456,15 @@ defmodule ReviewsWeb.SettingsLive do
     |> assign(:agent_identities, Enum.filter(identities, &(&1.kind == "agent")))
     |> assign(:identity_token_stats, Accounts.identity_token_counts(user))
     |> assign(:tokens, Accounts.list_tokens_for(user))
+    |> assign(:agent_links, OAuth.list_grants_for(user))
+  end
+
+  # A registered client has no domain; it goes by the name it gave.
+  defp link_label(%{client_id: client_id} = grant) do
+    case URI.parse(client_id) do
+      %URI{scheme: "https", host: host} when is_binary(host) -> host
+      _ -> "#{grant.client_name || "Unnamed app"} (registered app)"
+    end
   end
 
   defp identity_options(identities) do

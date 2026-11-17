@@ -49,6 +49,30 @@ defmodule ReviewsWeb.Api.PatchsetControllerTest do
     assert Reviews.list_patchsets(review) == patchsets
   end
 
+  test "rejects a branch_name over 255 characters with a validation error", %{
+    conn: conn,
+    review: review,
+    raw_token: raw
+  } do
+    patchsets = Reviews.list_patchsets(review)
+
+    conn =
+      conn
+      |> put_req_header("authorization", "Bearer #{raw}")
+      |> post(~p"/api/v1/reviews/#{review.slug}/patchsets", %{
+        raw_diff: @diff,
+        branch_name: String.duplicate("b", 256)
+      })
+
+    assert json_response(conn, 422) == %{
+             "error_code" => "validation_failed",
+             "error_detail" => "Invalid input",
+             "errors" => %{"branch_name" => ["should be at most 255 character(s)"]}
+           }
+
+    assert Reviews.list_patchsets(review) == patchsets
+  end
+
   test "rejects unauthenticated uploads without adding a revision", %{conn: conn, review: review} do
     patchsets = Reviews.list_patchsets(review)
     conn = post(conn, ~p"/api/v1/reviews/#{review.slug}/patchsets", %{raw_diff: @diff})
@@ -112,7 +136,10 @@ defmodule ReviewsWeb.Api.PatchsetControllerTest do
     packet = %{
       "format_version" => 1,
       "title" => "Patchset v2 guide",
-      "tasks" => [%{"key" => "smoke", "description" => "Smoke test it"}]
+      "tasks" => [%{"key" => "smoke", "description" => "Smoke test it"}],
+      "sections" => [
+        %{"title" => "S", "rows" => [%{"kind" => "hunk", "path" => "foo", "hunk_index" => 1}]}
+      ]
     }
 
     body = %{

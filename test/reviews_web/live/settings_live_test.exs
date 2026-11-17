@@ -126,4 +126,35 @@ defmodule ReviewsWeb.SettingsLiveTest do
 
     refute render(view) =~ "token_hash"
   end
+
+  test "lists connected agents and disconnects one", %{conn: conn} do
+    user = user!()
+
+    {:ok, agent} =
+      Accounts.create_agent_identity(user, %{display_name: "Claude", handle: "claude"})
+
+    {:ok, link} =
+      Gatekeep.Storage.Ecto.insert_grant([repo: Reviews.Repo], %{
+        client_id: "https://agent.example/client.json",
+        client_name: "Claude",
+        subject: to_string(agent.id),
+        owner: to_string(user.id),
+        resource: "https://reviews.test/api/test",
+        scopes: ["test:read"],
+        grant_type: "authorization_code"
+      })
+
+    conn = Plug.Test.init_test_session(conn, %{current_user_id: user.id})
+    {:ok, view, _html} = live(conn, ~p"/settings")
+
+    assert has_element?(view, "#agent-link-#{link.id}", "agent.example")
+    assert has_element?(view, "#agent-link-#{link.id}", "(not verified)")
+    assert has_element?(view, "#agent-link-#{link.id}", "Claude (@claude)")
+
+    view |> element("#revoke-agent-link-#{link.id}") |> render_click()
+
+    assert has_element?(view, "#agent-link-#{link.id}", "Disconnected")
+    refute has_element?(view, "#revoke-agent-link-#{link.id}")
+    assert Reviews.Repo.get!(Reviews.OAuth.Grant, link.id).revoked_at
+  end
 end
