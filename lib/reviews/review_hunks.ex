@@ -76,11 +76,14 @@ defmodule Reviews.ReviewHunks do
     header = Enum.join(header_lines, "\n")
 
     chunks = chunk_hunks(rest)
+    last_index = length(chunks)
+    terminated? = String.ends_with?(raw_diff, "\n")
 
     chunks
     |> Enum.with_index(1)
     |> Enum.map(fn {lines, index} ->
-      raw = Enum.join(header_lines ++ lines, "\n")
+      body = body_lines(lines, index == last_index and terminated?)
+      raw = Enum.join(header_lines ++ [hd(lines) | body], "\n") <> "\n"
       {additions, deletions} = changed_line_stats(raw)
       {line_start, line_end} = hunk_line_range(List.first(lines), status)
 
@@ -90,8 +93,7 @@ defmodule Reviews.ReviewHunks do
         row_ref: "#{file_path}##{index}",
         hunk_index: index,
         hunk_header: List.first(lines) || "",
-        body_lines:
-          body_lines(lines, index == length(chunks) and String.ends_with?(raw_diff, "\n")),
+        body_lines: body,
         line_start: line_start,
         line_end: line_end,
         additions: additions,
@@ -168,7 +170,7 @@ defmodule Reviews.ReviewHunks do
 
     hunk_lines = Enum.reverse(kept)
 
-    Enum.join(header_lines ++ [hunk_header | hunk_lines], "\n")
+    Enum.join(header_lines ++ [hunk_header | hunk_lines], "\n") <> "\n"
   end
 
   defp slice_hunk(hunk, _line_start, _line_end), do: hunk.raw_diff
@@ -207,7 +209,7 @@ defmodule Reviews.ReviewHunks do
       [first | rest]
       |> Enum.flat_map(&hunk_block_lines(&1.display_raw_diff))
 
-    Enum.join(header_lines ++ hunk_blocks, "\n")
+    Enum.join(header_lines ++ hunk_blocks, "\n") <> "\n"
   end
 
   defp file_header_lines(raw_diff) do
@@ -218,8 +220,13 @@ defmodule Reviews.ReviewHunks do
 
   defp hunk_block_lines(raw_diff) do
     raw_diff
+    |> strip_terminator()
     |> String.split("\n", trim: false)
     |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
+  end
+
+  defp strip_terminator(raw) do
+    if String.ends_with?(raw, "\n"), do: binary_part(raw, 0, byte_size(raw) - 1), else: raw
   end
 
   defp hunk_line_range(header, "deleted") when is_binary(header) do
