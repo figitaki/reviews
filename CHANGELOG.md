@@ -26,6 +26,13 @@ later fixes continue toward 0.0.2.
   threads, and post comments, resolve threads, and push reviews and revisions
   for reviews their account owns. See `docs/MCP.md`.
 
+### Changed
+
+- MCP cursors now name the call they continue. A cursor sent with another
+  filter, thread, section or revision is refused as invalid instead of
+  skipping or repeating items. The cursor format and page limits moved to
+  `Reviews.Paging`, which the REST and Poppy page endpoints will share.
+
 ### Fixed
 
 - The REST and Poppy comment endpoints no longer return database error text.
