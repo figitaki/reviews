@@ -19,6 +19,16 @@ later fixes continue toward 0.0.2.
   link can comment. The rules live in `Reviews.Policy` and apply to every
   surface.
 
+### Changed
+
+- MCP follows the same permission rules as the web page, REST and Poppy. Any
+  token can now read and comment on a review it has the link to, as on the web.
+  Pushing revisions and resolving threads still need the review owner (or, to
+  resolve, the thread's author). Every surface now passes a `Reviews.Principal`
+  to the domain, and `Reviews.Policy` checks reads, comments and OAuth scopes
+  too. The unchecked `Reviews.append_patchset/2` is renamed
+  `append_patchset_unchecked/2`.
+
 ### Added
 
 - Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with

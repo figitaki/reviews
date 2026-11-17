@@ -14,6 +14,7 @@ defmodule Reviews.Threads do
   alias Reviews.Accounts
   alias Reviews.Accounts.{Identity, User}
   alias Reviews.Policy
+  alias Reviews.Principal
   alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
@@ -168,6 +169,15 @@ defmodule Reviews.Threads do
   """
   def publish_comment(review, author, params, attribution \\ nil)
 
+  # Surfaces pass a principal: the policy decides whether it may comment, and
+  # its identity and attribution are recorded on the comment.
+  def publish_comment(%Review{} = review, %Principal{} = principal, params, nil)
+      when is_map(params) do
+    if Policy.can?(principal, :comment, review),
+      do: publish_comment(review, principal.identity, params, principal.attribution),
+      else: {:error, :forbidden}
+  end
+
   def publish_comment(%Review{} = review, %Identity{} = author, params, attribution)
       when is_map(params) do
     file_path = params["file_path"] || params[:file_path]
@@ -276,8 +286,11 @@ defmodule Reviews.Threads do
   Only the review owner or the thread's author may change it (`Reviews.Policy`);
   anyone else gets `{:error, :forbidden}`, even when the status would not change.
   """
-  def update_status(%Review{} = review, thread_id, %Identity{} = identity, status)
-      when status in ["open", "resolved"] do
+  def update_status(%Review{} = review, thread_id, actor, status)
+      when status in ["open", "resolved"] and
+             (is_struct(actor, Identity) or is_struct(actor, Principal)) do
+    identity = Principal.from(actor).identity
+
     with {:ok, id} <- cast_thread_id(thread_id),
          {:ok, {thread, changed?}} <-
            Repo.transaction(fn ->
@@ -293,7 +306,7 @@ defmodule Reviews.Threads do
 
                %Thread{} = thread ->
                  cond do
-                   not Policy.can?(identity, {:update_thread_status, thread}, review) ->
+                   not Policy.can?(actor, {:update_thread_status, thread}, review) ->
                      Repo.rollback(:forbidden)
 
                    thread.status == status ->
@@ -324,7 +337,9 @@ defmodule Reviews.Threads do
     end
   end
 
-  def update_status(%Review{}, _thread_id, %Identity{}, _status), do: {:error, :invalid_status}
+  def update_status(%Review{}, _thread_id, actor, _status)
+      when is_struct(actor, Identity) or is_struct(actor, Principal),
+      do: {:error, :invalid_status}
 
   defp write_status(thread, identity, status) do
     attrs =

@@ -271,5 +271,33 @@ defmodule Reviews.ThreadsTest do
       assert {:error, :not_found} =
                Threads.update_status(review, "99999999999999999999", author, "resolved")
     end
+
+    test "delegated principals act only within their scopes" do
+      %{review: review} = setup_review!()
+      %{author: commenter} = setup_review!()
+      {:ok, agent} = agent_for(commenter)
+      attribution = %{"provider" => "poppy", "client_id" => "https://agent.example"}
+
+      unscoped = Reviews.Principal.delegated(agent, commenter, [], attribution, :poppy)
+
+      scoped =
+        Reviews.Principal.delegated(agent, commenter, ["comments:write"], attribution, :poppy)
+
+      assert {:error, :forbidden} = Threads.publish_comment(review, unscoped, line_params("no"))
+      assert Threads.list_published_threads(review.id) == []
+
+      assert {:ok, %{thread: thread, comment: comment}} =
+               Threads.publish_comment(review, scoped, line_params("yes"))
+
+      assert comment.author_id == agent.id
+      assert comment.attribution == attribution
+
+      # The same identity may resolve its own thread with an API token, but an
+      # OAuth grant for comments does not extend to resolving.
+      assert {:error, :forbidden} = Threads.update_status(review, thread.id, scoped, "resolved")
+
+      assert {:ok, %Thread{status: "resolved"}} =
+               Threads.update_status(review, thread.id, agent, "resolved")
+    end
   end
 end
