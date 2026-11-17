@@ -32,10 +32,29 @@ defmodule Reviews.Reviews.Patchset do
 
   def changeset(patchset, attrs) do
     patchset
-    |> cast(attrs, @required ++ @optional)
+    |> cast(attrs, @required ++ (@optional -- [:packet]))
+    |> cast(attrs, [:packet], empty_values: [])
     |> validate_required(@required)
     |> validate_length(:base_sha, max: 255, count: :codepoints)
     |> validate_length(:branch_name, max: 255, count: :codepoints)
+    |> validate_packet()
     |> unique_constraint([:review_id, :number])
+  end
+
+  defp validate_packet(%Ecto.Changeset{valid?: false} = changeset), do: changeset
+
+  defp validate_packet(changeset) do
+    case Reviews.PacketValidation.check(
+           get_field(changeset, :packet),
+           get_field(changeset, :raw_diff)
+         ) do
+      :ok ->
+        changeset
+
+      {:error, problems} ->
+        Enum.reduce(problems, changeset, fn problem, acc ->
+          add_error(acc, :packet, "%{detail}", detail: problem.detail, code: problem.code)
+        end)
+    end
   end
 end

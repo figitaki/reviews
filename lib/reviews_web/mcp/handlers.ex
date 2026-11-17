@@ -904,116 +904,13 @@ defmodule ReviewsWeb.MCP.Handlers do
     }
   end
 
-  # The CLI checks packets before upload; MCP callers send the JSON directly,
-  # so apply the same hunk and slice rules here (cli/src/packet.rs).
-  defp validate_diff_and_packet(raw_diff, packet) do
-    files = ReviewsContext.parse_diff_files(raw_diff)
-
-    cond do
-      files == [] ->
-        {:error, "raw_diff has no files. Send the output of `git diff`."}
-
-      is_nil(packet) ->
-        :ok
-
-      true ->
-        hunks_by_path = ReviewHunks.for_files(files)
-
-        problems =
-          for section <- ReviewPacket.sections(packet),
-              row <- section.rows,
-              ReviewPacket.text(row, "kind") == "hunk",
-              problem = hunk_row_problem(hunks_by_path, row),
-              problem != nil,
-              do: problem
-
-        problems = problems ++ coverage_problems(packet, hunks_by_path)
-
-        if problems == [],
-          do: :ok,
-          else: {:error, "Invalid packet: " <> Enum.join(Enum.take(problems, 10), "; ")}
+  # Keep the MCP empty-diff guard; packet rules belong to the domain layer.
+  defp validate_diff_and_packet(raw_diff, _packet) do
+    case ReviewsContext.parse_diff_files(raw_diff) do
+      [] -> {:error, "raw_diff has no files. Send the output of `git diff`."}
+      _ -> :ok
     end
   end
-
-  defp hunk_row_problem(hunks_by_path, row) do
-    path = ReviewPacket.text(row, "path")
-    hunk_index = ReviewPacket.int(row, "hunk_index")
-    ref = "#{path}##{hunk_index}"
-
-    case ReviewHunks.find(hunks_by_path, path, hunk_index) do
-      nil ->
-        "#{ref} is not a hunk in raw_diff"
-
-      hunk ->
-        rows = hunk_row_count(hunk)
-
-        case {ReviewPacket.int(row, "line_start"), ReviewPacket.int(row, "line_end")} do
-          {nil, nil} ->
-            nil
-
-          {first, last} when is_nil(first) or is_nil(last) ->
-            "#{ref} needs both line_start and line_end, or neither"
-
-          {first, last} when first >= 1 and first <= last and last <= rows ->
-            nil
-
-          {first, last} ->
-            "#{ref}:L#{first}-L#{last} is outside the hunk, which has #{rows} rows"
-        end
-    end
-  end
-
-  defp hunk_row_count(hunk), do: length(hunk_rows(hunk))
-
-  defp hunk_rows(hunk), do: ReviewHunks.rows(hunk)
-
-  # Every changed row must be covered exactly once, as the CLI requires, so
-  # the packet view never drops or repeats a change. Rows with other problems
-  # are reported above and skipped here.
-  defp coverage_problems(packet, hunks_by_path) do
-    expected =
-      for {path, hunks} <- hunks_by_path,
-          hunk <- hunks,
-          {line, row} <- Enum.with_index(hunk_rows(hunk), 1),
-          changed_line?(line),
-          into: MapSet.new(),
-          do: {path, hunk.hunk_index, row}
-
-    covered =
-      for section <- ReviewPacket.sections(packet),
-          row <- section.rows,
-          ReviewPacket.text(row, "kind") == "hunk",
-          is_nil(hunk_row_problem(hunks_by_path, row)),
-          path = ReviewPacket.text(row, "path"),
-          hunk_index = ReviewPacket.int(row, "hunk_index"),
-          hunk = ReviewHunks.find(hunks_by_path, path, hunk_index),
-          first = ReviewPacket.int(row, "line_start") || 1,
-          last = ReviewPacket.int(row, "line_end") || hunk_row_count(hunk),
-          n <- first..last//1,
-          MapSet.member?(expected, {path, hunk_index, n}),
-          reduce: %{} do
-        acc -> Map.update(acc, {path, hunk_index, n}, 1, &(&1 + 1))
-      end
-
-    missing =
-      expected
-      |> Enum.reject(&Map.has_key?(covered, &1))
-      |> Enum.sort()
-      |> Enum.map(fn {path, i, n} -> "changed line #{path}##{i}:L#{n} is not in any hunk row" end)
-
-    repeated =
-      covered
-      |> Enum.filter(fn {_, count} -> count > 1 end)
-      |> Enum.sort()
-      |> Enum.map(fn {{path, i, n}, count} ->
-        "changed line #{path}##{i}:L#{n} is covered #{count} times"
-      end)
-
-    missing ++ repeated
-  end
-
-  # Hunk-body rows only, so "+++" and "---" are changes here, not file headers.
-  defp changed_line?(line), do: String.starts_with?(line, ["+", "-"])
 
   defp comment_params(_review, %{"thread_id" => thread_id} = args) when not is_nil(thread_id) do
     # A reply keeps its thread's file, side, anchor, and revision.
@@ -1093,7 +990,9 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   defp changeset_result(changeset) do
     errors =
-      Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
+      Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+        Keyword.get(opts, :detail, message)
+      end)
       |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
 
     error_result("Invalid input: #{errors}")

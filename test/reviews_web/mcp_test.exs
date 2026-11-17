@@ -401,7 +401,7 @@ defmodule ReviewsWeb.MCPTest do
         ]
       }
 
-      slug = review_fixture(ctx.owner, @diff_v1, packet).slug
+      slug = legacy_packet_fixture(ctx.owner, @diff_v1, packet).slug
 
       {pages, _} =
         Enum.reduce_while(1..50, {[], nil}, fn _, {acc, cursor} ->
@@ -554,7 +554,7 @@ defmodule ReviewsWeb.MCPTest do
         end
 
       packet = %{"title" => "Empty rows", "sections" => [%{"title" => "S", "rows" => rows}]}
-      slug = review_fixture(ctx.owner, @diff_v1, packet).slug
+      slug = legacy_packet_fixture(ctx.owner, @diff_v1, packet).slug
 
       listed =
         page_all(
@@ -1068,6 +1068,19 @@ defmodule ReviewsWeb.MCPTest do
         raw_diff: raw_diff,
         packet: packet
       })
+
+    review
+  end
+
+  # Before domain validation, these malformed packets could be persisted.
+  # Read pagination must still tolerate them without looping or losing rows.
+  defp legacy_packet_fixture(owner, raw_diff, packet) do
+    review = review_fixture(owner, raw_diff)
+
+    review
+    |> ReviewsContext.latest_patchset()
+    |> Ecto.Changeset.change(packet: packet)
+    |> Reviews.Repo.update!()
 
     review
   end
