@@ -136,7 +136,10 @@ defmodule ReviewsWeb.Api.PatchsetControllerTest do
     packet = %{
       "format_version" => 1,
       "title" => "Patchset v2 guide",
-      "tasks" => [%{"key" => "smoke", "description" => "Smoke test it"}]
+      "tasks" => [%{"key" => "smoke", "description" => "Smoke test it"}],
+      "sections" => [
+        %{"title" => "S", "rows" => [%{"kind" => "hunk", "path" => "foo", "hunk_index" => 1}]}
+      ]
     }
 
     body = %{
