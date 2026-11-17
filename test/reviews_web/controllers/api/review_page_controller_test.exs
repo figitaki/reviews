@@ -122,7 +122,7 @@ defmodule ReviewsWeb.Api.ReviewPageControllerTest do
   end
 
   test "continuations query revision metadata without aggregating file history", ctx do
-    for _ <- 1..3, do: ReviewsContext.append_patchset(ctx.review, %{raw_diff: ctx.diff})
+    for _ <- 1..3, do: ReviewsContext.append_patchset_unchecked(ctx.review, %{raw_diff: ctx.diff})
     [thread | _] = ctx.threads
 
     latest =
@@ -202,7 +202,7 @@ defmodule ReviewsWeb.Api.ReviewPageControllerTest do
         %{title: "Other scope", raw_diff: ctx.diff}
       )
 
-    {:ok, _} = ReviewsContext.append_patchset(ctx.review, %{raw_diff: ctx.diff})
+    {:ok, _} = ReviewsContext.append_patchset_unchecked(ctx.review, %{raw_diff: ctx.diff})
 
     for {path, params} <- [
           {base <> "/files", %{revision: 1}},
@@ -292,7 +292,7 @@ defmodule ReviewsWeb.Api.ReviewPageControllerTest do
     assert get(build_conn(), "/api/v1/reviews/#{other.slug}/threads/#{thread.id}/comments").status ==
              404
 
-    {:ok, _} = ReviewsContext.append_patchset(ctx.review, %{raw_diff: ctx.diff})
+    {:ok, _} = ReviewsContext.append_patchset_unchecked(ctx.review, %{raw_diff: ctx.diff})
 
     {:ok, %{thread: future}} =
       Threads.publish_comment(ctx.review, ctx.owner, %{
