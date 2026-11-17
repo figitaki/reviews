@@ -71,28 +71,24 @@ defmodule Reviews.PacketValidation do
           into: MapSet.new(),
           do: {path, hunk.hunk_index, n}
 
-    {problems, covered} =
+    {problems, boundaries} =
       packet["sections"]
       |> Enum.flat_map(& &1["rows"])
       |> Enum.filter(&(&1["kind"] == "hunk"))
-      |> Enum.reduce({[], %{}}, fn row, {problems, covered} ->
+      |> Enum.reduce({[], %{}}, fn row, {problems, boundaries} ->
         case reference(row, row_counts) do
           {:ok, first, last} ->
-            keys =
-              for n <- first..last//1,
-                  key = {row["path"], row["hunk_index"], n},
-                  MapSet.member?(expected, key),
-                  do: key
-
-            covered =
-              Enum.reduce(keys, covered, &Map.update(&2, &1, 1, fn count -> count + 1 end))
-
-            {problems, covered}
+            key = {row["path"], row["hunk_index"]}
+            events = [{first, 1}, {last + 1, -1}]
+            boundaries = Map.update(boundaries, key, events, &(events ++ &1))
+            {problems, boundaries}
 
           {:error, issue} ->
-            {[issue | problems], covered}
+            {[issue | problems], boundaries}
         end
       end)
+
+    covered = coverage_counts(expected, boundaries)
 
     missing =
       expected
@@ -114,6 +110,28 @@ defmodule Reviews.PacketValidation do
       [] -> :ok
       issues -> {:error, issues}
     end
+  end
+
+  # Sweep sorted slice boundaries only at changed rows. Context-only overlaps
+  # cost two events per reference, regardless of the lengths of their slices.
+  defp coverage_counts(expected, boundaries) do
+    expected
+    |> Enum.group_by(fn {path, hunk, _} -> {path, hunk} end)
+    |> Enum.reduce(%{}, fn {key, rows}, covered ->
+      events = boundaries |> Map.get(key, []) |> Enum.sort()
+
+      {covered, _, _} =
+        rows
+        |> Enum.sort()
+        |> Enum.reduce({covered, events, 0}, fn {_, _, row} = location, {acc, events, count} ->
+          {before, remaining} = Enum.split_while(events, fn {position, _} -> position <= row end)
+          count = Enum.reduce(before, count, fn {_, delta}, total -> total + delta end)
+          acc = if count > 0, do: Map.put(acc, location, count), else: acc
+          {acc, remaining, count}
+        end)
+
+      covered
+    end)
   end
 
   defp reference(row, row_counts) do
