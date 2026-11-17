@@ -23,6 +23,10 @@ pub struct CommentArgs {
     #[arg(long, value_name = "SUBSTRING")]
     pub token: Option<String>,
 
+    /// Exact revision number to comment on. Omitted selects the latest revision.
+    #[arg(long, value_parser = clap::value_parser!(i64).range(1..))]
+    pub revision: Option<i64>,
+
     /// Which side of the diff to anchor to. Defaults to "new".
     #[arg(long, default_value = "new", value_parser = ["new", "old"])]
     pub side: String,
@@ -41,10 +45,11 @@ pub fn run(args: CommentArgs) -> Result<()> {
 
     let anchor = build_anchor(line_number, args.token.as_deref());
     let req = CreateCommentRequest {
-        file_path: &file_path,
-        side: &args.side,
+        file_path: Some(&file_path),
+        side: Some(&args.side),
         body,
-        thread_anchor: anchor,
+        thread_anchor: Some(anchor),
+        revision: args.revision,
         // `comment` always opens a thread; `reviews reply` appends to one.
         thread_id: None,
     };

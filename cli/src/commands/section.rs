@@ -13,8 +13,9 @@ pub struct SectionArgs {
     /// Zero-based packet section index.
     pub section_index: i64,
 
-    /// Decision to apply to the section.
-    #[arg(value_parser = ["approved", "denied", "ignored"])]
+    /// Decision to set on the section. Setting the status it already has
+    /// changes nothing; `pending` resets it to undecided.
+    #[arg(value_parser = ["approved", "denied", "ignored", "pending"])]
     pub status: String,
 }
 
@@ -43,6 +44,7 @@ fn decision_message(resp: &crate::api::SectionDecisionResponse) -> String {
             "Section {} on {} marked {} in patchset {}.",
             resp.section_index, resp.review, status, resp.patchset_number
         ),
+        // Servers before decisions became explicit toggled them off and sent null.
         None => format!(
             "Section {} on {} cleared to pending in patchset {}.",
             resp.section_index, resp.review, resp.patchset_number

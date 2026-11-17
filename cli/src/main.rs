@@ -52,7 +52,7 @@ enum Command {
     /// Reopen a resolved review thread (requires `reviews login`)
     Reopen(commands::thread_status::ThreadStatusArgs),
 
-    /// Approve, deny, or ignore a packet section
+    /// Approve, deny, ignore, or reset a packet section to pending
     Section(commands::section::SectionArgs),
 }
 
