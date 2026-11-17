@@ -39,6 +39,51 @@ defmodule ReviewsWeb.Api.CommentControllerTest do
       %{user: user, raw_token: raw, agent_raw_token: agent_raw, agent: agent, review: review}
     end
 
+    test "rejects revisions outside the database integer range", %{raw_token: raw, review: review} do
+      for revision <- [2_147_483_648, 9_223_372_036_854_775_808] do
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> post("/api/v1/reviews/#{review.slug}/comments", %{
+            "file_path" => "foo",
+            "side" => "new",
+            "body" => "test",
+            "revision" => revision,
+            "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+          })
+
+        assert json_response(conn, 422)["errors"]["detail"] =~ "revision"
+      end
+
+      assert ThreadsContext.list_published_threads(review.id) == []
+    end
+
+    test "omits null optional offsets before returning anchors to the browser", %{
+      raw_token: raw,
+      review: review
+    } do
+      conn =
+        build_conn()
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> post("/api/v1/reviews/#{review.slug}/comments", %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "test",
+          "thread_anchor" => %{
+            "granularity" => "token_range",
+            "line_number_hint" => 1,
+            "selection_text" => "GITHUB_CLIENT_ID",
+            "selection_offset" => nil
+          }
+        })
+
+      anchor = json_response(conn, 201)["anchor"]
+      refute Map.has_key?(anchor, "selection_offset")
+      {:ok, snapshot} = Reviews.ReviewView.snapshot(review, nil)
+      [payload] = Reviews.ReviewView.thread_payloads_for_file(snapshot, "foo")
+      refute Map.has_key?(payload.anchor, "selection_offset")
+    end
+
     test "publishes a line-anchored comment", %{conn: conn, raw_token: raw, review: review} do
       body = %{
         "file_path" => "foo",

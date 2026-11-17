@@ -21,6 +21,7 @@ defmodule Reviews.Anchoring do
       anchor =
         anchor
         |> Map.take(["granularity", "line_number_hint", "selection_text", "selection_offset"])
+        |> Map.reject(fn {_key, value} -> is_nil(value) end)
         |> Map.put("line_text", text)
 
       {:ok, source_context(anchor, lines, text)}

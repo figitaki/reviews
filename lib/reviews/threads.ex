@@ -421,7 +421,7 @@ defmodule Reviews.Threads do
         {:error, :patchset_not_found}
 
       not is_nil(revision) ->
-        with true <- is_integer(revision) and revision > 0,
+        with true <- is_integer(revision) and revision > 0 and revision <= 2_147_483_647,
              %Reviews.Reviews.Patchset{id: id} <-
                ReviewsContext.get_patchset_by_number(review, revision) do
           {:ok, id}
