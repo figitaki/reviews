@@ -29,6 +29,15 @@ config :ueberauth, Ueberauth.Strategy.Github.OAuth,
   client_id: System.get_env("GITHUB_CLIENT_ID"),
   client_secret: System.get_env("GITHUB_CLIENT_SECRET")
 
+# Preview sign-in relay (Reviews.AuthRelay, docs/PREVIEW_ENVS.md). Production
+# is the relay: AUTH_RELAY_SECRET plus the GitHub OAuth app above.
+# Previews are clients: AUTH_RELAY_SECRET plus AUTH_RELAY_URL.
+env_present = fn name -> if System.get_env(name) not in [nil, ""], do: System.get_env(name) end
+
+config :reviews, :auth_relay,
+  secret: env_present.("AUTH_RELAY_SECRET"),
+  url: env_present.("AUTH_RELAY_URL")
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
@@ -62,6 +71,13 @@ if config_env() == :prod do
   host = System.get_env("PHX_HOST") || "example.com"
 
   config :reviews, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+
+  mcp_enabled = System.get_env("MCP_ENABLED") in ~w(true 1)
+
+  config :reviews, :mcp,
+    enabled: mcp_enabled,
+    writes_enabled: mcp_enabled and System.get_env("MCP_WRITES_ENABLED") in ~w(true 1),
+    allowed_hosts: [host]
 
   config :reviews, ReviewsWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],

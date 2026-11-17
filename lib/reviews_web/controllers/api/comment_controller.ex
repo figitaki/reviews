@@ -15,7 +15,7 @@ defmodule ReviewsWeb.Api.CommentController do
 
   @doc "POST /api/v1/reviews/:slug/comments"
   def create(conn, %{"slug" => slug} = params) do
-    author = conn.assigns.current_identity
+    principal = conn.assigns.current_principal
 
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
@@ -24,7 +24,7 @@ defmodule ReviewsWeb.Api.CommentController do
         |> json(%{errors: %{detail: "Review not found"}})
 
       review ->
-        case ThreadsContext.publish_comment(review, author, normalize(params)) do
+        case ThreadsContext.publish_comment(review, principal, normalize(params)) do
           {:ok, %{thread: thread, comment: comment}} ->
             conn
             |> put_status(:created)
@@ -36,6 +36,11 @@ defmodule ReviewsWeb.Api.CommentController do
               anchor: thread.anchor,
               url: url(~p"/r/#{review.slug}") <> "#file-" <> file_anchor(thread)
             })
+
+          {:error, :forbidden} ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{errors: %{detail: "You cannot comment on this review"}})
 
           {:error, :thread_not_found} ->
             conn
@@ -73,5 +78,18 @@ defmodule ReviewsWeb.Api.CommentController do
   defp error_message(:unknown_granularity),
     do: "anchor granularity must be \"line\" or \"token_range\""
 
-  defp error_message(other), do: "could not publish: #{inspect(other)}"
+  defp error_message(:patchset_not_found),
+    do: "originating_patchset_id is not a patchset of this review"
+
+  defp error_message(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
+      Regex.replace(~r/%{(\w+)}/, msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
+    |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
+  end
+
+  defp error_message(_other), do: "could not publish comment"
 end

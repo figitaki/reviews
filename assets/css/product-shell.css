@@ -371,6 +371,74 @@ textarea.ds-input{
   font-weight: 700;
 }
 
+/* OAuth consent page (ReviewsWeb.OAuthHTML). */
+.poppy-facts{
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.poppy-facts > div{
+  display: contents;
+}
+
+.poppy-facts dt{
+  color: var(--ds-muted);
+}
+
+.poppy-facts dd{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ds-text);
+}
+
+.poppy-consent-form{
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+  border-top: 1px solid var(--ds-line);
+  padding-top: 18px;
+}
+
+.poppy-consent-form fieldset{
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.poppy-consent-form legend{
+  margin-bottom: 8px;
+  color: var(--ds-text);
+  font-weight: 720;
+}
+
+.poppy-consent-form label{
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--ds-text);
+}
+
+.poppy-consent-note{
+  margin: 0;
+  color: var(--ds-muted);
+  font-size: 13px;
+}
+
+.poppy-consent-actions{
+  display: flex;
+  gap: 8px;
+}
+
 .ds-settings-empty-inline{
   display: flex;
   align-items: center;
@@ -578,7 +646,13 @@ textarea.ds-input{
   
 
   .ds-shell-topbar{
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .ds-shell-actions{
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
   }
 
   .ds-shell-nav{
@@ -637,4 +711,63 @@ textarea.ds-input{
   
 
   
+}
+
+/* Narrow phones (#6): keep the topbar on one row down to 320px. The brand
+   collapses to its mark (the link keeps its aria-label), the actions may
+   shrink, and a long account name truncates instead of pushing the row
+   past the right edge. DOM order, and so focus order, does not change. */
+@media (max-width: 480px) {
+  .ds-shell-topbar{
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .design-brand-label{
+    display: none;
+  }
+
+  .ds-shell-actions{
+    gap: 4px;
+  }
+
+  .ds-shell-actions > *{
+    flex-shrink: 0;
+  }
+
+  /* Only the account menu gives up width; its name truncates. */
+  .ds-shell-actions > .dropdown{
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .ds-shell-actions .review-button{
+    max-width: 100%;
+    padding: 0 8px;
+  }
+
+  .ds-shell-actions .review-button > span{
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Touch screens: topbar controls get a 44px tap target. */
+@media (pointer: coarse) {
+  .design-brand,
+  .ds-shell-actions .review-chip,
+  .ds-shell-actions .review-button{
+    min-height: 44px;
+  }
+
+  .design-brand{
+    min-width: 44px;
+    justify-content: center;
+  }
+
+  .ds-shell-actions .review-chip{
+    min-width: 44px;
+  }
 }

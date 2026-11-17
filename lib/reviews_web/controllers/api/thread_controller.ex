@@ -9,7 +9,7 @@ defmodule ReviewsWeb.Api.ThreadController do
 
   @doc "PATCH /api/v1/reviews/:slug/threads/:thread_id"
   def update(conn, %{"slug" => slug, "thread_id" => thread_id, "status" => status}) do
-    identity = conn.assigns.current_identity
+    principal = conn.assigns.current_principal
 
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
@@ -18,7 +18,7 @@ defmodule ReviewsWeb.Api.ThreadController do
         |> json(%{errors: %{detail: "Review not found"}})
 
       review ->
-        case Threads.update_status(review, thread_id, identity, status) do
+        case Threads.update_status(review, thread_id, principal, status) do
           {:ok, thread} ->
             json(conn, %{
               id: thread.id,
@@ -31,6 +31,15 @@ defmodule ReviewsWeb.Api.ThreadController do
             conn
             |> put_status(:not_found)
             |> json(%{errors: %{detail: "Thread not found"}})
+
+          {:error, :forbidden} ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{
+              errors: %{
+                detail: "Only the review owner or the thread's author can resolve or reopen it"
+              }
+            })
 
           {:error, :invalid_status} ->
             conn

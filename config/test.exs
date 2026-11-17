@@ -31,6 +31,14 @@ config :reviews, ReviewsWeb.Endpoint,
   secret_key_base: "PksNuEADSq2cFj3rPjGzuMlw2ulffcTg5IHJLaFhVcq8wWgjFfUr/EhTVD4cpvRl",
   server: false
 
+config :reviews, :mcp,
+  enabled: true,
+  writes_enabled: true,
+  allowed_hosts: ["localhost", "www.example.com"],
+  # Paging tests send many requests from one identity.
+  requests_per_second: 1_000.0,
+  burst: 1_000
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 
@@ -44,6 +52,14 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# OAuth: a fixed HTTPS issuer, client metadata served from memory, and a
+# test resource.
+config :reviews, Reviews.OAuth,
+  issuer: "https://reviews.test",
+  fetcher: Reviews.OAuthTestClient.Fetcher,
+  resources: [Reviews.Poppy, Reviews.OAuthTestResource.KeysOnly, Reviews.OAuthTestResource],
+  default_resource: Reviews.Poppy
 
 # Raise on LiveView test-time template problems instead of warning.
 config :phoenix_live_view, :test_warnings,

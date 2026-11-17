@@ -105,8 +105,7 @@ jobs:
         env:
           PREVIEW_SECRET_KEY_BASE: ${{ secrets.PREVIEW_SECRET_KEY_BASE }}
           PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
-          PREVIEW_GITHUB_CLIENT_ID: ${{ secrets.PREVIEW_GITHUB_CLIENT_ID }}
-          PREVIEW_GITHUB_CLIENT_SECRET: ${{ secrets.PREVIEW_GITHUB_CLIENT_SECRET }}
+          PREVIEW_AUTH_RELAY_SECRET: ${{ secrets.PREVIEW_AUTH_RELAY_SECRET }}
           PREVIEW_API_TOKEN: ${{ secrets.PREVIEW_API_TOKEN }}
         run: |
           # No tracing in this step: DATABASE_URL below is built from a
@@ -133,14 +132,15 @@ jobs:
           # exact mask, including passwords containing percent or newlines.
           echo "::add-mask::${DATABASE_URL//%/%25}"
 
-          # POOL_SIZE is not set here: fly.preview.toml sets it in [env].
+          # POOL_SIZE and AUTH_RELAY_URL are not set here: fly.preview.toml
+          # sets them in [env]. Previews get no GitHub OAuth credentials;
+          # GitHub sign-in goes through the relay on production.
           # Secrets go in on stdin, not argv, so they stay out of the process list.
           printf '%s\n' \
             "SECRET_KEY_BASE=$PREVIEW_SECRET_KEY_BASE" \
             "DATABASE_URL=$DATABASE_URL" \
             "PREVIEW_DB_NAME=$PREVIEW_DB_NAME" \
-            "GITHUB_CLIENT_ID=$PREVIEW_GITHUB_CLIENT_ID" \
-            "GITHUB_CLIENT_SECRET=$PREVIEW_GITHUB_CLIENT_SECRET" \
+            "AUTH_RELAY_SECRET=$PREVIEW_AUTH_RELAY_SECRET" \
             "PREVIEW_API_TOKEN=$PREVIEW_API_TOKEN" \
             "PHX_HOST=$APP_HOST" | flyctl secrets import --stage --app "$APP_NAME"
 

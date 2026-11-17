@@ -24,6 +24,30 @@ endpoint — tokens are user-initiated through the browser.
 
 Missing/invalid token → `401` with body `{ "errors": { "detail": "Unauthorized" } }`.
 
+### Permissions
+
+The same rules hold on every surface (web, REST/CLI, Poppy, MCP) and are
+enforced by `Reviews.Policy` in the domain layer. Each surface authenticates
+its caller as a `Reviews.Principal` (identity, account, scopes, attribution)
+and passes it to the context functions:
+
+| Action | Who may do it |
+| --- | --- |
+| Read a review | Anyone with the link. |
+| Comment or reply | Any signed-in identity with the link. A Poppy grant also needs the `comments:write` scope. |
+| Push a patchset | The review owner. |
+| Resolve or reopen a thread | The review owner or the thread's author. |
+| Decide a packet section | The review owner. Explicitly added reviewers will join once that feature exists. |
+
+"Owner" and "author" mean the GitHub account: its human identity and all of
+its agent identities share its permissions. Anyone else gets `403` with
+`{ "errors": { "detail": "..." } }`, and nothing is written.
+
+API tokens hold every scope. An OAuth grant (Poppy) holds only the scopes it
+was approved for, so it can comment but cannot push, resolve, reopen or decide,
+even for an identity that could do so with an API token. A refused comment is
+`403`.
+
 ### `POST /api/v1/reviews`
 
 Creates a new review and its first patchset.
@@ -53,6 +77,8 @@ Response `201`:
 ```
 
 Validation errors → `422` with `{ "errors": { "field": ["message", ...] } }`.
+`title`, `base_sha` and `branch_name` are at most 255 characters, as are file
+paths in `raw_diff`.
 
 ### `POST /api/v1/reviews/:slug/patchsets`
 
@@ -76,7 +102,7 @@ Response `201`:
 { "patchset_number": 2, "url": "http://localhost:4000/r/k7m2qz" }
 ```
 
-Unknown slug → `404`.
+Unknown slug → `404`. A token whose account does not own the review → `403`.
 
 ### `GET /api/v1/reviews/:slug`
 
@@ -107,8 +133,25 @@ Publishes one comment right away as the token identity. Request body:
 ```
 
 `side` defaults to `"new"`. Response `201` has `thread_id`, `comment_id`,
-`file_path`, `side`, `anchor`, and `url`. An empty body or a bad anchor →
-`422`. Unknown slug → `404`.
+`file_path`, `side`, `anchor`, and `url`. An empty body, a bad anchor, or a
+`file_path` over 255 characters → `422` with `{ "errors": { "detail": "..." } }`.
+Unknown slug → `404`.
+
+### `PATCH /api/v1/reviews/:slug/threads/:thread_id`
+
+Resolves or reopens a thread as the token identity. Powers `reviews resolve`
+and `reviews reopen`. Request body:
+
+```json
+{ "status": "resolved" }
+```
+
+`status` must be `"open"` or `"resolved"` (otherwise `422`). Response `200`
+has `id`, `status`, `resolved_by` (an identity, or `null`), and `resolved_at`.
+Setting the status a thread already has changes nothing and keeps the
+original resolver. Unknown slug, or a thread that is not in this review →
+`404`. A token whose account is neither the review owner nor the thread's
+author → `403`, even when the status would not change.
 
 ### `GET /api/v1/me`
 
@@ -129,14 +172,17 @@ Powers `reviews whoami`. Response `200`:
 }
 ```
 
-`username` and `email` describe the owning GitHub account. `identity`
+`username` and `email` describe the owning GitHub account. `email` is `null`
+when the account has no public email. `identity`
 describes the actor attached to the bearer token; comments, review pushes, and
 packet-section decisions authored through the token use that identity.
 
 ### `POST /api/v1/reviews/:slug/sections/:section_index/decision`
 
-Sets or toggles the current token identity's decision for one packet section on
-the latest patchset. `section_index` is zero-based.
+Sets the token account's decision for one packet section on the latest
+patchset. `section_index` is zero-based. Decisions belong to the account (a
+person and their agent identities share one decision per section); the stored
+decision records which identity set it.
 
 Request body:
 
@@ -144,7 +190,8 @@ Request body:
 { "status": "approved" }
 ```
 
-`status` must be one of `"approved"`, `"denied"`, or `"ignored"`.
+`status` must be one of `"approved"`, `"denied"`, `"ignored"`, or `"pending"`
+(undecided, overriding a decision carried from an earlier patchset).
 
 Response `200`:
 
@@ -157,13 +204,80 @@ Response `200`:
 }
 ```
 
-Posting the same status again clears that identity's current decision. In that
-case, `status` is `null`, meaning the section is pending.
+The status is set, not toggled: posting the status the section already has
+changes nothing, so a retried request is safe. Before this change, posting the
+same status again cleared the decision and returned `"status": null`; the CLI
+still accepts that reply from older servers. Writes for one patchset are
+serialized, so concurrent requests never act on stale state.
+
+Only the review owner's identities may decide sections; any other token →
+`403` with `{ "errors": { "detail": "Only the review owner can decide sections" } }`.
+
+### OAuth issuer (`/oauth`)
+
+APIs other than `/api/v1` accept OAuth access tokens from the Reviews issuer
+(`Reviews.OAuth`). Each such API is a protected resource configured in
+`config :reviews, Reviews.OAuth, resources: [...]`; none is configured on
+`main` yet.
+
+- `GET /.well-known/oauth-authorization-server`: RFC 8414 metadata.
+- `GET /.well-known/oauth-protected-resource[/<path>]`: RFC 9728 metadata for
+  the enabled resource at `<path>`, 404 otherwise.
+- `GET|POST /oauth/authorize`: authorization code with PKCE (`S256` only) and
+  an optional RFC 8707 `resource`. The owner signs in with GitHub and picks
+  one of their agent identities; the human identity is never offered or
+  accepted. Every redirect back carries `iss` (RFC 9207).
+- `POST /oauth/token` (`application/x-www-form-urlencoded`):
+  `authorization_code` and `refresh_token`. Clients authenticate with
+  `private_key_jwt` (ES256, PS384, RS256; `aud` is the issuer) or, for a
+  resource that takes public clients, `none`. Rotating refresh tokens revoke
+  the grant when a replaced one is presented again.
+- `POST /oauth/revoke`: RFC 7009.
+- `POST /oauth/register`: RFC 7591 JSON, public clients only, 201 with
+  `client_id`; 404 while no resource takes public clients.
+
+A `client_id` is either an HTTPS URL naming a client ID metadata document or
+an `rvc_` ID from registration. Discovery and the JSON endpoints send
+`Access-Control-Allow-Origin: *`. Tokens of one resource are refused by every
+other.
+
+### Poppy API (`/api/poppy/v1`)
+
+Personal Agents use Poppy 1.0 instead of bearer API tokens. Each request carries `Poppy-Session` and
+`Poppy-Version: 1.0`. A signed-in request also carries an access token from Direct Sign-In
+(`/oauth/authorize`, `/oauth/token`). `GET /api/poppy/v1/reviews/:slug` returns the same body as
+`GET /api/v1/reviews/:slug`. `POST /api/poppy/v1/reviews/:slug/comments` takes the same body and
+response as the CLI endpoint and needs the `comments:write` scope. Any linked agent may comment on any
+review it has the link to; the permission rules above apply. Session errors are HTTP 400 with
+`{"error": "invalid_session" | "session_ended" | "version_unsupported"}`. Token errors are 401 or 403
+in `WWW-Authenticate`, with a `Bearer` and a `DPoP` challenge. A token issued with
+`token_type: "DPoP"` is sent as `Authorization: DPoP <token>` with a `DPoP` proof (RFC 9449). A
+missing or invalid proof is 401 `invalid_dpop_proof`. Bearer API tokens are refused on these routes, and Poppy tokens are refused
+on `/api/v1`. See `docs/POPPY.md`.
+
+Comments posted this way store `attribution` (a map of what was verified) and `identity_link_id`.
+Thread payloads sent to the diff renderer include `comments[].attribution`, which is `null` for
+comments made in the browser or through the CLI. It contains only `provider`, `verified_at`,
+`client_id`, `client_domain`, `client_name_claimed`, `agent_id_claimed` (a boolean), `owner_username`,
+`approved_at`, `link_revoked`, and `token_binding`: `"dpop"` when the comment's access token was
+bound to the agent's DPoP key, `"bearer"` when it wasn't, and `null` for comments recorded before
+Reviews kept the binding.
 
 ### Body size
 
 `Plug.Parsers` is configured with `length: 50_000_000` so diffs up to ~50 MB
 go through.
+
+---
+
+## MCP — `/mcp`
+
+Streamable HTTP MCP endpoint for agents, off unless `MCP_ENABLED` is set (see
+`docs/MCP.md` for tools, flags, and client setup). It authenticates with the
+same `Authorization: Bearer <raw_token>` as the REST API and acts as the token's
+identity. Tools find reviews by link and follow the permission rules above;
+unknown slugs get a not-found result. Request bodies are
+capped at 4 MB before decoding; the REST limit above does not apply.
 
 ---
 
@@ -186,9 +300,24 @@ unique DOM id, and `phx-update="ignore"` (the hook owns its DOM tree).
 | `data-patchset-number` | string   | The patchset number this file belongs to.                |
 | `data-side`            | string   | Always `"new"` today.                                    |
 | `data-raw-diff`        | string   | Raw unified diff for this file or hunk only.             |
-| `data-threads`         | string (JSON) | Published threads in this file. Shape: the `Thread` schema in `schemas.js`. |
+| `data-full-diff`       | optional string | Whole-file patch for added/deleted Markdown files, so sliced packet hunks can preview the complete document. Source and thread counts still use `data-raw-diff`. |
+| `data-threads`         | string (JSON) | Published threads in this file. Shape: the `Thread` schema in `schemas.js`. Each thread's `can_update_status` says whether the viewer may resolve or reopen it; the renderer shows those buttons only when it is `true`. |
 | `data-signed-in`       | string   | `"true"` or `"false"`. Signed-out viewers get a sign-in prompt instead of a composer. |
 | `data-diff-style`      | string   | `"split"` or `"unified"`.                                |
+
+Markdown files default to Preview, including files with discussions, unless the
+excerpt is ambiguous or exceeds 1,500 rendered lines / 200 KiB. Explicit mode
+choices are stored locally per review URL and file path, across revisions.
+Opening a discussion (a discussion button or `open_review_thread`) switches that
+file to Source for the current page without changing the stored choice.
+Preview DOM is cached for the lifetime of its renderer, independently of thread,
+viewed, theme and layout updates. Large files use Source's virtualized renderer.
+Added/deleted files preview their complete document with a single panel. Other
+files remain excerpts: fences with omitted context, headerless table fragments,
+and leading indented continuations fall back to Source with an explanation.
+Repository-relative links are non-navigating text in Preview because no repository
+base URL is available; Source retains their exact destinations. External links
+open separately without sharing the review URL.
 
 ### Events the hook pushes to LiveView
 
@@ -272,3 +401,11 @@ or atom key) for new threads. It must identify a patchset of this review or the
 call returns `{:error, :patchset_not_found}` without writing. Omission defaults
 to the latest patchset. Callers creating comments on an older selected revision
 must pass its ID server-side. Replies keep their original thread's origin.
+
+### Public comment and thread metadata
+
+REST and Poppy snapshots retain `file_path`, `line_hint` and existing identity fields. Threads also expose `path`, `line`, `line_text`, `anchor_status` (`current` or `outdated`) and `originating_revision`; an outdated anchor has no projected line. Comments include stable `id` and public `attribution` (null for ordinary comments). Attribution uses the same allowlist as the web view: pairwise subjects, sessions and key thumbprints are never returned. `agent_id_claimed` indicates presence, not the private claimed identifier.
+
+MCP uses the same comment and identity serializers with its existing compact identity projection (`id`, `kind`, `handle`, `display_name`) and byte budgets. Public attribution is present for externally verified comments; absent ordinary attribution remains omitted in compact responses. Snapshot bodies from REST and Poppy are identical after authentication.
+
+Paged/compact comment readers cap each public attribution and identity string at 512 UTF-8 bytes and set `metadata_truncated: true` if any field was shortened. Full snapshots retain the complete public metadata. This prevents oversized client metadata from blocking comment-body pagination.
