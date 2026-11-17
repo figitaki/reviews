@@ -284,6 +284,11 @@ defmodule ReviewsWeb.PoppyTest do
         Reviews.ReviewView.thread_payloads_for_file(snapshot, "foo")
 
       assert payload.link_revoked
+
+      # Paged readers (MCP, REST pages) see the same revoked link, so every
+      # comment query preloads the attribution link.
+      [paged] = Reviews.Threads.list_comment_page(comment.thread_id, 0, 10)
+      assert Reviews.ReviewView.attribution_payload(paged).link_revoked
     end
 
     test "the redirect carries the issuer and state", ctx do
