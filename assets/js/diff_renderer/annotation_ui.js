@@ -1,5 +1,6 @@
 import { button as baseButton, el } from "./dom.js"
 import { renderMarkdown } from "../lib/markdown.js"
+import { COARSE } from "../lib/breakpoints.js"
 
 // Pierre owns the diff body theme. Annotation UI is rendered by Reviews through
 // `renderAnnotation`, so it uses Reviews design tokens and inline styles that
@@ -19,7 +20,7 @@ const colors = {
 const fontStack = "var(--font-sans, system-ui, sans-serif)"
 // Touch keeps 44px targets, 16px inputs (smaller text makes iOS zoom on
 // focus) and no keyboard hints.
-const touch = () => Boolean(window.matchMedia?.("(pointer: coarse)").matches)
+const touch = () => Boolean(window.matchMedia?.(COARSE).matches)
 const monoStack = "var(--font-mono, ui-monospace, monospace)"
 
 const bubbleBaseStyle = {
