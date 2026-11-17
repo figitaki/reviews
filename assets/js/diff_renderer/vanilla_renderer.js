@@ -1,5 +1,6 @@
 import * as Diffs from "@pierre/diffs"
 import { isMarkdown } from "../lib/markdown.js"
+import { COMPACT } from "../lib/breakpoints.js"
 import { discussionCount, markdownPreview, markdownPreviewState, previewNotice } from "./markdown_preview.js"
 
 import {
@@ -44,7 +45,7 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     position: absolute;
     top: 0;
     left: 6px;
-    z-index: 5;
+    z-index: var(--z-float);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -52,7 +53,7 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     height: 1lh;
     padding: 0;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     background-color: var(--diffs-modified-base);
     color: var(--diffs-bg);
     cursor: pointer;
@@ -63,6 +64,10 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
       color-mix(in lab, var(--diffs-computed-diff-line-bg) 82%, var(--diffs-modified-base)),
       color-mix(in lab, var(--diffs-computed-diff-line-bg) 75%, var(--diffs-modified-base))
     );
+  }
+  .reviews-thread-marker:focus-visible {
+    outline: 2px solid var(--ds-focus);
+    outline-offset: 2px;
   }
   .reviews-thread-marker::before { content: ""; position: absolute; inset: 0 0 0 -4px; }
   .reviews-thread-marker[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--diffs-bg), 0 0 0 3px var(--diffs-modified-base); }
@@ -84,7 +89,7 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     padding: 0 3px;
     box-sizing: border-box;
     border: 1px solid var(--diffs-modified-base);
-    border-radius: 7px;
+    border-radius: var(--radius-pill);
     background: var(--diffs-bg);
     color: var(--diffs-modified-base);
     font: 600 10px/12px var(--diffs-header-font-family, system-ui, sans-serif);
@@ -232,7 +237,7 @@ export class VanillaDiffRenderer {
     this.threadUI = new Map()
     // Phones keep threads out of the diff flow: a gutter button per commented
     // line opens that line's threads inline. Lines open now, as "side:line".
-    this.compactQuery = window.matchMedia("(max-width: 768px)")
+    this.compactQuery = window.matchMedia(COMPACT)
     this.onCompactChange = () => this.render()
     this.compactQuery.addEventListener("change", this.onCompactChange)
     this.openLines = new Set()

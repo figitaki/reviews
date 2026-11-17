@@ -2736,8 +2736,8 @@ details[open] > summary .review-collapse-icon,
     max-width: 60vw;
   }
 
-  /* Below 480px the brand shows only its mark, so the account name can use
-     the width the label gave up. */
+  /* Below 480px (narrow phones; see tokens.css) the brand shows only its
+     mark, so the account name can use the width the label gave up. */
   @media (max-width: 480px) {
     .review-page .ds-shell-actions .review-button {
       max-width: 100%;
@@ -3049,7 +3049,8 @@ details[open] > summary .review-collapse-icon,
 /* Phone section header: the section heading leads, then its meta and
    state. Eyebrow → title → meta → state, instead of the meta row sitting
    between the eyebrow and the heading. The review title stays in the
-   compact toolbar at its toolbar size. */
+   compact toolbar at its toolbar size. 480px, not 640px: wider phones fit
+   the meta row beside the eyebrow (see tokens.css). */
 @media (max-width: 480px) {
   .review-section-header-eyebrow {
     display: contents;

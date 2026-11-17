@@ -66,8 +66,8 @@ still stabilizing.
   count, left out when there are none, and a blue outline while comments are
   unread; the open rail shows a close mark. On phones, threads no
   longer break up the diff: a line with threads shows a comment button beside
-  its line number, with a badge counting its comments, and tapping it shows
-  them under the highlighted line. Phones hide line numbers, so the gutter only
+  its line number, with a badge counting its comments and a keyboard focus
+  ring, and tapping it shows them under the highlighted line. Phones hide line numbers, so the gutter only
   holds the change bar and the comment buttons. The composer stays inline under its line
   instead of a floating panel, inputs use 16px text so focusing them does not
   zoom the page, and keyboard hints are hidden. Opening a composer in a large virtualized file keeps your place.
