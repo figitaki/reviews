@@ -15,7 +15,7 @@ defmodule ReviewsWeb.Api.ThreadController do
       nil ->
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "Review not found"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
 
       review ->
         case Threads.update_status(review, thread_id, principal, status) do
@@ -30,26 +30,32 @@ defmodule ReviewsWeb.Api.ThreadController do
           {:error, :not_found} ->
             conn
             |> put_status(:not_found)
-            |> json(%{errors: %{detail: "Thread not found"}})
+            |> json(ReviewsWeb.ApiErrors.detail(:thread_not_found, "Thread not found"))
 
           {:error, :forbidden} ->
             conn
             |> put_status(:forbidden)
-            |> json(%{
-              errors: %{
-                detail: "Only the review owner or the thread's author can resolve or reopen it"
-              }
-            })
+            |> json(
+              ReviewsWeb.ApiErrors.detail(
+                :forbidden,
+                "Only the review owner or the thread's author can resolve or reopen it"
+              )
+            )
 
           {:error, :invalid_status} ->
             conn
             |> put_status(:unprocessable_entity)
-            |> json(%{errors: %{detail: "status must be \"open\" or \"resolved\""}})
+            |> json(
+              ReviewsWeb.ApiErrors.detail(
+                :invalid_status,
+                "status must be \"open\" or \"resolved\""
+              )
+            )
 
           {:error, _reason} ->
             conn
             |> put_status(:unprocessable_entity)
-            |> json(%{errors: %{detail: "could not update thread"}})
+            |> json(ReviewsWeb.ApiErrors.detail(:write_failed, "could not update thread"))
         end
     end
   end
@@ -57,7 +63,7 @@ defmodule ReviewsWeb.Api.ThreadController do
   def update(conn, _params) do
     conn
     |> put_status(:unprocessable_entity)
-    |> json(%{errors: %{detail: "status is required"}})
+    |> json(ReviewsWeb.ApiErrors.detail(:invalid_status, "status is required"))
   end
 
   defp identity_payload(identity) when not is_nil(identity) do

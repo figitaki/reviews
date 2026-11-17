@@ -159,7 +159,7 @@ defmodule Reviews.Threads do
         "thread_id"     => 123 # optional
       }
 
-  New threads may supply `"originating_patchset_id"` (or its atom key) to
+  New threads may supply `"revision"` or `"originating_patchset_id"` (or atom keys) to
   comment on an explicitly selected revision. It must belong to this review;
   omitted values default to the latest patchset. Replies retain their origin.
   Token-range anchors retain their selected text and offset across projection.
@@ -180,11 +180,52 @@ defmodule Reviews.Threads do
 
   def publish_comment(%Review{} = review, %Identity{} = author, params, attribution)
       when is_map(params) do
+    case Map.get(params, "thread_id", params[:thread_id]) do
+      nil -> start_thread(review, author, params, attribution)
+      thread_id -> reply(review, author, thread_id, params["body"] || params[:body], attribution)
+    end
+  end
+
+  def publish_comment(%Review{} = review, %User{} = user, params, attribution)
+      when is_map(params) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      publish_comment(review, identity, params, attribution)
+    end
+  end
+
+  @doc "Reply using only a review-scoped thread ID and body; location and origin are inherited."
+  def reply(review, author, thread_id, body, attribution \\ nil)
+
+  def reply(%Review{} = review, %Identity{} = author, thread_id, body, attribution) do
+    body = if is_binary(body), do: String.trim(body), else: ""
+
+    with false <- body == "",
+         {:ok, %Thread{} = thread} <- fetch_reply_thread(review, thread_id) do
+      insert_comment(
+        review,
+        author,
+        thread,
+        thread.file_path,
+        thread.side,
+        thread.anchor,
+        body,
+        thread.originating_patchset_id,
+        attribution
+      )
+    else
+      true -> {:error, :empty_body}
+      {:ok, nil} -> {:error, :thread_not_found}
+      error -> error
+    end
+  end
+
+  @doc "Start a thread on a validated line of the selected immutable revision."
+  def start_thread(%Review{} = review, %Identity{} = author, params, attribution \\ nil) do
     file_path = params["file_path"] || params[:file_path]
     side = params["side"] || params[:side]
-    body = String.trim(to_string(params["body"] || params[:body] || ""))
+    body = params["body"] || params[:body]
+    body = if is_binary(body), do: String.trim(body), else: ""
     anchor = params["thread_anchor"] || params[:thread_anchor] || %{}
-    thread_id = Map.get(params, "thread_id", params[:thread_id])
 
     cond do
       body == "" ->
@@ -203,12 +244,14 @@ defmodule Reviews.Threads do
         {:error, :unknown_granularity}
 
       true ->
-        with {:ok, existing} <- fetch_reply_thread(review, thread_id),
-             {:ok, origin_id} <- originating_patchset_id(review, existing, params) do
+        with {:ok, origin_id} <- originating_patchset_id(review, params),
+             :ok <- validate_new_thread(review, author, file_path, side, anchor, origin_id),
+             patchset = ReviewsContext.get_patchset!(origin_id),
+             {:ok, anchor} <- Reviews.Anchoring.validate_anchor(patchset, file_path, side, anchor) do
           insert_comment(
             review,
             author,
-            existing,
+            nil,
             file_path,
             side,
             anchor,
@@ -217,18 +260,6 @@ defmodule Reviews.Threads do
             attribution
           )
         end
-    end
-  rescue
-    # Never pass database error text to callers; it can leak schema details.
-    error in Postgrex.Error ->
-      Logger.error("publish_comment failed: " <> Exception.message(error))
-      {:error, :could_not_publish}
-  end
-
-  def publish_comment(%Review{} = review, %User{} = user, params, attribution)
-      when is_map(params) do
-    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
-      publish_comment(review, identity, params, attribution)
     end
   end
 
@@ -276,6 +307,10 @@ defmodule Reviews.Threads do
       {:error, reason} ->
         {:error, reason}
     end
+  rescue
+    error in Postgrex.Error ->
+      Logger.error("publish_comment failed: " <> Exception.message(error))
+      {:error, :could_not_publish}
   end
 
   @doc """
@@ -396,15 +431,24 @@ defmodule Reviews.Threads do
     end
   end
 
-  defp originating_patchset_id(_review, %Thread{} = thread, _params),
-    do: {:ok, thread.originating_patchset_id}
+  defp originating_patchset_id(review, params) do
+    revision = Map.get(params, "revision", params[:revision])
+    id = Map.get(params, "originating_patchset_id", params[:originating_patchset_id])
 
-  defp originating_patchset_id(review, nil, params) do
-    case Map.get(params, "originating_patchset_id", params[:originating_patchset_id]) do
-      nil ->
-        {:ok, ReviewsContext.latest_patchset_id(review)}
+    cond do
+      not is_nil(revision) and not is_nil(id) ->
+        {:error, :patchset_not_found}
 
-      id ->
+      not is_nil(revision) ->
+        with true <- is_integer(revision) and revision > 0 and revision <= 2_147_483_647,
+             %Reviews.Reviews.Patchset{id: id} <-
+               ReviewsContext.get_patchset_by_number(review, revision) do
+          {:ok, id}
+        else
+          _ -> {:error, :patchset_not_found}
+        end
+
+      not is_nil(id) ->
         with {:ok, id} <- cast_thread_id(id),
              true <-
                Repo.exists?(
@@ -415,10 +459,28 @@ defmodule Reviews.Threads do
         else
           _ -> {:error, :patchset_not_found}
         end
+
+      true ->
+        case ReviewsContext.latest_patchset_id(review) do
+          nil -> {:error, :patchset_not_found}
+          id -> {:ok, id}
+        end
     end
   end
 
-  defp create_thread(review, author, file_path, side, anchor, originating_patchset_id) do
+  defp create_thread(review, author, file_path, side, anchor, origin_id) do
+    thread_changeset(review, author, file_path, side, anchor, origin_id)
+    |> insert_or_rollback()
+  end
+
+  defp validate_new_thread(review, author, file_path, side, anchor, origin_id) do
+    case thread_changeset(review, author, file_path, side, anchor, origin_id) do
+      %Ecto.Changeset{valid?: true} -> :ok
+      changeset -> {:error, changeset}
+    end
+  end
+
+  defp thread_changeset(review, author, file_path, side, anchor, originating_patchset_id) do
     %Thread{}
     |> Thread.changeset(%{
       review_id: review.id,
@@ -429,7 +491,6 @@ defmodule Reviews.Threads do
       anchor: anchor,
       status: "open"
     })
-    |> insert_or_rollback()
   end
 
   defp insert_or_rollback(changeset) do

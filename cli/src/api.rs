@@ -5,6 +5,9 @@
 //!   POST /api/v1/reviews
 //!   POST /api/v1/reviews/:slug/patchsets
 //!   GET  /api/v1/reviews/:slug
+//!   POST /api/v1/reviews/:slug/comments (new thread or reply)
+//!   PATCH /api/v1/reviews/:slug/threads/:thread_id
+//!   POST /api/v1/reviews/:slug/sections/:section_index/decision
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::blocking::{Client, RequestBuilder, Response};
@@ -73,11 +76,16 @@ pub struct CreatePatchsetResponse {
 
 #[derive(Debug, Serialize)]
 pub struct CreateCommentRequest<'a> {
-    pub file_path: &'a str,
-    pub side: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_path: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub side: Option<&'a str>,
     pub body: &'a str,
-    pub thread_anchor: Value,
-    /// Set to append to an existing thread instead of opening a new one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_anchor: Option<Value>,
+    /// Exact revision number for a new thread; omitted selects latest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thread_id: Option<i64>,
 }
@@ -266,7 +274,15 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
         return Ok(resp);
     }
     let body = resp.text().unwrap_or_default();
-    let hint = match status {
+    let parsed = serde_json::from_str::<Value>(&body).ok();
+    let code = parsed
+        .as_ref()
+        .and_then(|v| v.get("error_code"))
+        .and_then(Value::as_str);
+    let hint = match code {
+        Some("invalid_anchor") => " — choose a line or token selection in the selected revision.",
+        Some("patchset_not_found") => " — select a revision that belongs to this review.",
+        _ => match status {
         StatusCode::UNAUTHORIZED => {
             " — your API token was rejected. Mint a new one in /settings and run `reviews login`."
         }
@@ -276,13 +292,32 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",
         _ => "",
+    },
     };
-    Err(anyhow!("{what} failed: HTTP {status}{hint}\nbody: {body}"))
+    let code_label = code.map(|c| format!(" [{c}]")).unwrap_or_default();
+    Err(anyhow!(
+        "{what} failed: HTTP {status}{code_label}{hint}\nbody: {body}"
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_stable_error_code_from_server_fixture() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("GET", "/api/v1/me")
+            .with_status(422)
+            .with_body(include_str!("../../test/vectors/api/invalid-anchor.json"))
+            .create();
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let error = format!("{}", client.me().unwrap_err());
+        assert!(error.contains("[invalid_anchor]"));
+        assert!(error.contains("choose a line or token selection"));
+        mock.assert();
+    }
 
     #[test]
     fn me_happy_path() {
@@ -479,11 +514,12 @@ mod tests {
             .create_comment(
                 "k7m2qz",
                 &CreateCommentRequest {
-                    file_path: "foo",
-                    side: "new",
+                    file_path: Some("foo"),
+                    side: Some("new"),
                     body: "lgtm",
-                    thread_anchor: anchor,
+                    thread_anchor: Some(anchor),
                     thread_id: None,
+                    revision: None,
                 },
             )
             .unwrap();
@@ -494,17 +530,62 @@ mod tests {
     }
 
     #[test]
+    fn reply_posts_only_thread_and_body_without_get() {
+        let mut server = mockito::Server::new();
+        let get = server.mock("GET", mockito::Matcher::Any).expect(0).create();
+        let post = server
+            .mock("POST", "/api/v1/reviews/slug/comments")
+            .match_body(mockito::Matcher::Json(
+                serde_json::json!({"thread_id": 7, "body": "reply"}),
+            ))
+            .with_status(201)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"thread_id":7,"comment_id":8,"url":"http://localhost/r/slug"}"#)
+            .create();
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        client
+            .create_comment(
+                "slug",
+                &CreateCommentRequest {
+                    file_path: None,
+                    side: None,
+                    body: "reply",
+                    thread_anchor: None,
+                    thread_id: Some(7),
+                    revision: None,
+                },
+            )
+            .unwrap();
+        post.assert();
+        get.assert();
+    }
+
+    #[test]
+    fn comment_serializes_exact_revision() {
+        let req = CreateCommentRequest {
+            file_path: Some("foo"),
+            side: Some("new"),
+            body: "comment",
+            thread_anchor: Some(serde_json::json!({"granularity":"line", "line_number_hint":1})),
+            thread_id: None,
+            revision: Some(2),
+        };
+        assert_eq!(serde_json::to_value(req).unwrap()["revision"], 2);
+    }
+
+    #[test]
     fn create_comment_requires_token() {
         let client = ApiClient::anonymous("http://example.invalid").unwrap();
         let err = client
             .create_comment(
                 "x",
                 &CreateCommentRequest {
-                    file_path: "f",
-                    side: "new",
+                    file_path: Some("f"),
+                    side: Some("new"),
                     body: "b",
-                    thread_anchor: serde_json::json!({"granularity": "line"}),
+                    thread_anchor: Some(serde_json::json!({"granularity": "line"})),
                     thread_id: None,
+                    revision: None,
                 },
             )
             .unwrap_err();

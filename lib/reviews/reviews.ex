@@ -62,7 +62,7 @@ defmodule Reviews.Reviews do
     patchset_attrs = %{
       number: 1,
       raw_diff: raw_diff,
-      packet: attrs[:packet] || attrs["packet"],
+      packet: Map.get(attrs, :packet, attrs["packet"]),
       base_sha: attrs[:base_sha] || attrs["base_sha"],
       branch_name: attrs[:branch_name] || attrs["branch_name"],
       pushed_at: DateTime.utc_now() |> DateTime.truncate(:second)
@@ -116,7 +116,7 @@ defmodule Reviews.Reviews do
       review_id: review.id,
       number: next_number,
       raw_diff: raw_diff,
-      packet: attrs[:packet] || attrs["packet"],
+      packet: Map.get(attrs, :packet, attrs["packet"]),
       base_sha: attrs[:base_sha] || attrs["base_sha"],
       branch_name: attrs[:branch_name] || attrs["branch_name"],
       pushed_at: DateTime.utc_now() |> DateTime.truncate(:second)
@@ -151,6 +151,28 @@ defmodule Reviews.Reviews do
 
   def get_patchset_by_number(%Review{id: review_id}, number) when is_integer(number) do
     Repo.get_by(Patchset, review_id: review_id, number: number)
+  end
+
+  @doc "Select one revision's identity without loading its diff, packet or file totals."
+  def get_patchset_metadata(%Review{id: review_id}, number) do
+    query =
+      from p in Patchset,
+        where: p.review_id == ^review_id,
+        order_by: [desc: p.number],
+        limit: 1,
+        select: %{id: p.id, number: p.number}
+
+    query = if is_nil(number), do: query, else: from(p in query, where: p.number == ^number)
+    Repo.one(query)
+  end
+
+  @doc "Revision identities for a page's thread origins, scoped to their review."
+  def list_patchset_metadata(%Review{id: review_id}, ids) when is_list(ids) do
+    Repo.all(
+      from p in Patchset,
+        where: p.review_id == ^review_id and p.id in ^ids,
+        select: %{id: p.id, number: p.number}
+    )
   end
 
   @doc "The packet of one patchset, without loading its diff."

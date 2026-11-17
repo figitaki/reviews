@@ -402,6 +402,34 @@ call returns `{:error, :patchset_not_found}` without writing. Omission defaults
 to the latest patchset. Callers creating comments on an older selected revision
 must pass its ID server-side. Replies keep their original thread's origin.
 
+### Comment revisions and replies
+
+REST and Poppy comment creation accept an optional positive integer `revision` (the review-local revision number). The CLI exposes it as `reviews comment SLUG FILE:LINE --revision N`. `originating_patchset_id` is also accepted for clients that have the exact database ID; it must belong to this review. Do not send both selectors. Invalid or foreign targets return 422 without writing.
+
+An omitted target selects the latest committed revision when the request resolves its anchor. This is not an expected-latest precondition. Once selected, the immutable revision ID is used through insertion, even if another revision is appended concurrently. An exact older revision is never silently retargeted.
+
+New threads require a line present on the selected file and side of that revision's diff. The server captures line text and neighboring context. Token anchors must select text on that line; offsets use UTF-16 code units. Without an offset, the selected substring must occur exactly once. Invalid paths, lines or selections return 422.
+
+Replies require only `{thread_id, body}` and preserve the thread's file, side, anchor and originating revision. Extra location/revision fields do not redirect a reply. A missing or foreign thread returns 404. Poppy attribution is retained. The CLI posts replies directly without downloading the review snapshot.
+
+### Stable application error codes
+
+REST and Poppy application errors add `error_code` and `error_detail` alongside the existing `errors` fields. Poppy authentication retains the protocol-required string `error` and challenge headers and adds the same code/detail fields. Clients should branch on the code, not the prose; field-validation messages remain in `errors`. This is additive rather than replacing the published v1 envelope.
+
+Codes include `review_not_found`, `thread_not_found`, `patchset_not_found`, `section_not_found`, `forbidden`, `unauthorized`, `invalid_request`, `invalid_status`, `invalid_section_index`, `invalid_anchor`, `invalid_side`, `invalid_file_path`, `empty_body`, `unknown_granularity`, `validation_failed` and `write_failed`. Poppy authentication uses its existing protocol codes (`invalid_session`, `session_ended`, `version_unsupported`, `invalid_token`, `invalid_dpop_proof`, `insufficient_scope`). Both thread and section-decision requests with missing status return 422. Malformed section indices retain their existing 400 response.
+
+MCP tool errors retain `isError` and human-readable content and add `structuredContent.error.{code,detail}`. Unclassified tool parameter errors use `invalid_request`; known missing resources, permissions, invalid anchors and failed writes have specific codes. Transport/framework errors remain owned by FastestMCP. The CLI consumes stable codes when available and falls back to existing HTTP-status hints for older servers. The invalid-anchor response is checked by both Elixir and Rust against `test/vectors/api/invalid-anchor.json`.
+
+### Packet hunk row numbering
+
+Packet `line_start` and `line_end` are one-based rows after the hunk's `@@` header. Context, added, deleted and empty rows each count once. A `\ No newline at end of file` marker does not count and stays with the preceding row when sliced. A final newline terminates the last row rather than adding a row. CLI validation, MCP coverage checks and the packet renderer use this convention.
+
+### Packet validation on upload
+
+Review creation and revision uploads validate a supplied packet in the shared patchset changeset. REST and MCP reject malformed shapes, unknown hunk references, invalid slices, omitted changes and repeated changed rows before committing. REST returns 422 with `errors.packet`; MCP returns a tool error. Omitted/null packets remain supported. Existing stored packets remain readable; this does not rewrite historical content.
+
+`Reviews.PacketValidation.check/2` returns `:ok` or coded problems: `invalid_packet.shape`, `invalid_packet.unknown_hunk`, `invalid_packet.invalid_slice`, `invalid_packet.uncovered_line`, and `invalid_packet.repeated_line`. Hunk indices and slice bounds must be JSON integers, not strings; paths and titles must not be blank. The CLI keeps its local preflight checks.
+
 ### Public comment and thread metadata
 
 REST and Poppy snapshots retain `file_path`, `line_hint` and existing identity fields. Threads also expose `path`, `line`, `line_text`, `anchor_status` (`current` or `outdated`) and `originating_revision`; an outdated anchor has no projected line. Comments include stable `id` and public `attribution` (null for ordinary comments). Attribution uses the same allowlist as the web view: pairwise subjects, sessions and key thumbprints are never returned. `agent_id_claimed` indicates presence, not the private claimed identifier.
@@ -409,3 +437,12 @@ REST and Poppy snapshots retain `file_path`, `line_hint` and existing identity f
 MCP uses the same comment and identity serializers with its existing compact identity projection (`id`, `kind`, `handle`, `display_name`) and byte budgets. Public attribution is present for externally verified comments; absent ordinary attribution remains omitted in compact responses. Snapshot bodies from REST and Poppy are identical after authentication.
 
 Paged/compact comment readers cap each public attribution and identity string at 512 UTF-8 bytes and set `metadata_truncated: true` if any field was shortened. Full snapshots retain the complete public metadata. This prevents oversized client metadata from blocking comment-body pagination.
+### Bounded read endpoints
+
+Both `/api/v1` and `/api/poppy/v1` provide `GET /reviews/:slug/files`, `/reviews/:slug/threads`, and `/reviews/:slug/threads/:thread_id/comments`. REST keeps public link-based read access; Poppy requires a verified Session and Poppy-Version as for the snapshot. The existing snapshot endpoint remains unchanged for CLI compatibility.
+
+Pages return `slug`, `revision`, `next_cursor` (null at the end), and `files`, `threads` or `comments`. `limit` defaults to 25 and is 1–100. `max_bytes` defaults to 40000 and is 2000–120000; it bounds the JSON response body. File pages contain metadata and byte counts, never raw diffs. Thread pages contain projected anchor state and comment counts, never embedded comment bodies; `line_text` is capped at 500 bytes. Threads accept optional `status` (`open` or `resolved`) and `path` filters.
+
+REST and Poppy use `Reviews.Paging` for cursor encoding and page limits. Pass opaque `next_cursor` unchanged with the same endpoint, review, revision, thread and filters; a cursor from another query is rejected. Page sizes may change between calls. REST and Poppy share a cursor scope; MCP uses a distinct scope because comment position semantics differ. Cursors are query-tagged positions, not authorization tokens; every request retains its normal access checks. Legacy untagged cursors are rejected; restart from the first page. Revision numbers must be integers from 1 through 2147483647, independently of page-size limits. The first request may omit `revision` to select latest; all continuation requests must include the returned revision. Revision selection pins diff projection, not a database snapshot: new comments and thread status changes can appear while paging. Comments carry stable IDs, `offset` (UTF-8 byte offset), `body` (one chunk), and `complete`; concatenate chunks for the same comment until complete. A page can stop before `limit` to fit its byte budget. If metadata alone cannot fit, retry with a larger budget. Invalid limits, cursors, offsets or missing continuation revision return 422 with `error_code: invalid_pagination`; missing/foreign/future threads and missing revisions return 404 with `error_code: resource_not_found`. Both retain `errors.detail` and expose the same prose as `error_detail`.
+
+These endpoints use bounded domain page queries rather than loading the full review snapshot. Poppy OpenAPI documents their parameters and response envelopes, which are checked against actual endpoint results.

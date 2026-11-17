@@ -92,6 +92,52 @@ defmodule ReviewsWeb.MCPTest do
     }
   end
 
+  test "tool errors include stable structured codes without removing prose", ctx do
+    conn =
+      build_conn()
+      |> auth(ctx.owner_token)
+      |> mcp_request("tools/call", %{
+        "name" => "reviews_get_review",
+        "arguments" => %{"review" => "missing-review"}
+      })
+
+    result = json_response(conn, 200)["result"]
+    assert result["isError"]
+    assert result["structuredContent"]["error"]["code"] == "review_not_found"
+    assert [%{"text" => text}] = result["content"]
+    assert result["structuredContent"]["error"]["detail"] == text
+  end
+
+  test "missing thread and section reads have resource codes", ctx do
+    for {tool, args, code} <- [
+          {"reviews_get_thread", %{"thread_id" => 999_999_999}, "thread_not_found"},
+          {"reviews_get_packet_section", %{"section_index" => 999}, "section_not_found"}
+        ] do
+      conn =
+        build_conn()
+        |> auth(ctx.owner_token)
+        |> mcp_request("tools/call", %{
+          "name" => tool,
+          "arguments" => Map.put(args, "review", ctx.review.slug)
+        })
+
+      assert json_response(conn, 200)["result"]["structuredContent"]["error"]["code"] == code
+    end
+  end
+
+  test "blank comment paths are validation errors rather than write failures", ctx do
+    conn =
+      build_conn()
+      |> auth(ctx.owner_token)
+      |> mcp_request("tools/call", %{
+        "name" => "reviews_post_comment",
+        "arguments" => %{"review" => ctx.review.slug, "path" => "", "line" => 1, "body" => "test"}
+      })
+
+    assert json_response(conn, 200)["result"]["structuredContent"]["error"]["code"] ==
+             "invalid_file_path"
+  end
+
   test "REST and MCP expose the same public comment and identity metadata", ctx do
     attribution = %{
       "provider" => "poppy",
@@ -401,7 +447,7 @@ defmodule ReviewsWeb.MCPTest do
         ]
       }
 
-      slug = review_fixture(ctx.owner, @diff_v1, packet).slug
+      slug = legacy_packet_fixture(ctx.owner, @diff_v1, packet).slug
 
       {pages, _} =
         Enum.reduce_while(1..50, {[], nil}, fn _, {acc, cursor} ->
@@ -554,7 +600,7 @@ defmodule ReviewsWeb.MCPTest do
         end
 
       packet = %{"title" => "Empty rows", "sections" => [%{"title" => "S", "rows" => rows}]}
-      slug = review_fixture(ctx.owner, @diff_v1, packet).slug
+      slug = legacy_packet_fixture(ctx.owner, @diff_v1, packet).slug
 
       listed =
         page_all(
@@ -764,7 +810,7 @@ defmodule ReviewsWeb.MCPTest do
           "body" => "Nope"
         })
 
-      assert error_text(outside) =~ "not in revision 1"
+      assert error_text(outside) =~ "not in the selected revision"
 
       %{thread: other_thread} = Reviews.ThreadFixtures.thread_fixture()
 
@@ -964,6 +1010,39 @@ defmodule ReviewsWeb.MCPTest do
       refute second.diff =~ "-old"
     end
 
+    test "empty hunk rows retain CLI coverage and slice numbering", ctx do
+      raw = File.read!(Path.expand("../vectors/diffs/empty-hunk-rows.diff", __DIR__))
+
+      rows =
+        for n <- [2, 3] do
+          %{
+            "kind" => "hunk",
+            "path" => "x.txt",
+            "hunk_index" => 1,
+            "line_start" => n,
+            "line_end" => n
+          }
+        end
+
+      %{slug: slug} =
+        call!(ctx.agent_token, "reviews_create_review", %{
+          "title" => "Empty hunk rows",
+          "raw_diff" => raw,
+          "packet" => %{"title" => "P", "sections" => [%{"title" => "S", "rows" => rows}]}
+        })
+
+      %{rows: [first, second]} =
+        call!(ctx.agent_token, "reviews_get_packet_section", %{
+          "review" => slug,
+          "section_index" => 0
+        })
+
+      assert first.diff =~ "-old\n\\ No newline at end of file"
+      refute first.diff =~ "+new"
+      assert second.diff =~ "+new\n\\ No newline at end of file"
+      refute second.diff =~ "-old"
+    end
+
     test "refuse titles longer than the column", ctx do
       assert {:error, %{code: :invalid_params}} =
                FastestMCP.call_tool(
@@ -1035,6 +1114,19 @@ defmodule ReviewsWeb.MCPTest do
         raw_diff: raw_diff,
         packet: packet
       })
+
+    review
+  end
+
+  # Before domain validation, these malformed packets could be persisted.
+  # Read pagination must still tolerate them without looping or losing rows.
+  defp legacy_packet_fixture(owner, raw_diff, packet) do
+    review = review_fixture(owner, raw_diff)
+
+    review
+    |> ReviewsContext.latest_patchset()
+    |> Ecto.Changeset.change(packet: packet)
+    |> Reviews.Repo.update!()
 
     review
   end

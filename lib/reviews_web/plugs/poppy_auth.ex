@@ -112,7 +112,9 @@ defmodule ReviewsWeb.Plugs.PoppyAuth do
   # Every other failure is the same error, without the reason (spec 5.3).
   defp reject(conn, _reason, _scheme), do: send_json(conn, 400, %{error: "invalid_session"})
 
-  defp send_json(conn, status, body) do
+  defp send_json(conn, status, %{error: code} = body) do
+    body = ReviewsWeb.ApiErrors.payload(code, code, body)
+
     conn
     |> put_resp_content_type("application/json")
     |> put_resp_header("cache-control", "no-store")

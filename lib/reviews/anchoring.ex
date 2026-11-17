@@ -9,6 +9,27 @@ defmodule Reviews.Anchoring do
 
   alias Reviews.Reviews, as: ReviewsContext
 
+  @doc "Validate a new anchor against one revision and capture server-derived line text and context."
+  def validate_anchor(patchset, path, side, anchor) do
+    lines = Map.get(index(patchset), {path, side}, %{})
+    number = anchor["line_number_hint"]
+
+    with true <- anchor["granularity"] in ["line", "token_range"],
+         true <- is_integer(number) and number > 0,
+         text when is_binary(text) <- lines[number],
+         :ok <- selection_matches(anchor, text) do
+      anchor =
+        anchor
+        |> Map.take(["granularity", "line_number_hint", "selection_text", "selection_offset"])
+        |> Map.reject(fn {_key, value} -> is_nil(value) end)
+        |> Map.put("line_text", text)
+
+      {:ok, source_context(anchor, lines, text)}
+    else
+      _ -> {:error, :invalid_anchor}
+    end
+  end
+
   def relocate(thread, old_patchset, new_patchset) do
     relocate_indexed(thread, index(old_patchset), index(new_patchset))
   end

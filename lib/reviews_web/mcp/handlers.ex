@@ -16,7 +16,7 @@ defmodule ReviewsWeb.MCP.Handlers do
   """
 
   alias FastestMCP.Tools.Result
-  alias Reviews.{Accounts, Anchoring, Paging, Principal, ReviewHunks, ReviewPacket, ReviewView}
+  alias Reviews.{Accounts, Paging, Principal, ReviewHunks, ReviewPacket, ReviewView}
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
   alias Reviews.Threads
@@ -360,7 +360,10 @@ defmodule ReviewsWeb.MCP.Handlers do
         }
       else
         {:error, :thread_not_found} ->
-          error_result("No thread #{args["thread_id"]} on this review. List threads first.")
+          error_result(
+            "No thread #{args["thread_id"]} on this review. List threads first.",
+            :thread_not_found
+          )
 
         other ->
           write_error(other)
@@ -382,7 +385,10 @@ defmodule ReviewsWeb.MCP.Handlers do
           }
 
         {:error, :not_found} ->
-          error_result("No thread #{args["thread_id"]} on this review. List threads first.")
+          error_result(
+            "No thread #{args["thread_id"]} on this review. List threads first.",
+            :thread_not_found
+          )
 
         other ->
           write_error(other)
@@ -447,13 +453,16 @@ defmodule ReviewsWeb.MCP.Handlers do
         end
 
       {:error, :not_found} ->
-        error_result(not_found_message(args["review"]))
+        error_result(not_found_message(args["review"]), :review_not_found)
     end
   end
 
   defp unwrap({:error, %Result{} = result}), do: result
   defp unwrap(%Result{} = result), do: result
-  defp unwrap({:error, :patchset_not_found}), do: error_result("That revision does not exist.")
+
+  defp unwrap({:error, :patchset_not_found}),
+    do: error_result("That revision does not exist.", :patchset_not_found)
+
   defp unwrap({:error, message}) when is_binary(message), do: error_result(message)
   defp unwrap(value), do: value
 
@@ -519,13 +528,20 @@ defmodule ReviewsWeb.MCP.Handlers do
     cond do
       not ReviewPacket.present?(packet) ->
         {:error,
-         "Revision #{selected.number} has no packet. Use reviews_list_files and reviews_get_file_diff."}
+         error_result(
+           "Revision #{selected.number} has no packet. Use reviews_list_files and reviews_get_file_diff.",
+           :section_not_found
+         )}
 
       section = Enum.find(sections, &(&1.index == index)) ->
         {:ok, section, length(sections)}
 
       true ->
-        {:error, "No packet section #{index}. Section indexes start at 0."}
+        {:error,
+         error_result(
+           "No packet section #{index}. Section indexes start at 0.",
+           :section_not_found
+         )}
     end
   end
 
@@ -538,8 +554,11 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   defp review_thread(review, thread_id) do
     case Threads.get_review_thread(review, thread_id) do
-      {:ok, thread} -> {:ok, thread}
-      {:error, :not_found} -> {:error, "No thread #{thread_id} on this review."}
+      {:ok, thread} ->
+        {:ok, thread}
+
+      {:error, :not_found} ->
+        {:error, error_result("No thread #{thread_id} on this review.", :thread_not_found)}
     end
   end
 
@@ -904,136 +923,16 @@ defmodule ReviewsWeb.MCP.Handlers do
     }
   end
 
-  # The CLI checks packets before upload; MCP callers send the JSON directly,
-  # so apply the same hunk and slice rules here (cli/src/packet.rs).
-  defp validate_diff_and_packet(raw_diff, packet) do
-    files = ReviewsContext.parse_diff_files(raw_diff)
-
-    cond do
-      files == [] ->
-        {:error, "raw_diff has no files. Send the output of `git diff`."}
-
-      is_nil(packet) ->
-        :ok
-
-      true ->
-        hunks_by_path = ReviewHunks.for_files(files)
-
-        problems =
-          for section <- ReviewPacket.sections(packet),
-              row <- section.rows,
-              ReviewPacket.text(row, "kind") == "hunk",
-              problem = hunk_row_problem(hunks_by_path, row),
-              problem != nil,
-              do: problem
-
-        problems = problems ++ coverage_problems(packet, hunks_by_path)
-
-        if problems == [],
-          do: :ok,
-          else: {:error, "Invalid packet: " <> Enum.join(Enum.take(problems, 10), "; ")}
+  # Keep the MCP empty-diff guard; packet rules belong to the domain layer.
+  defp validate_diff_and_packet(raw_diff, _packet) do
+    case ReviewsContext.parse_diff_files(raw_diff) do
+      [] -> {:error, "raw_diff has no files. Send the output of `git diff`."}
+      _ -> :ok
     end
   end
-
-  defp hunk_row_problem(hunks_by_path, row) do
-    path = ReviewPacket.text(row, "path")
-    hunk_index = ReviewPacket.int(row, "hunk_index")
-    ref = "#{path}##{hunk_index}"
-
-    case ReviewHunks.find(hunks_by_path, path, hunk_index) do
-      nil ->
-        "#{ref} is not a hunk in raw_diff"
-
-      hunk ->
-        rows = hunk_row_count(hunk)
-
-        case {ReviewPacket.int(row, "line_start"), ReviewPacket.int(row, "line_end")} do
-          {nil, nil} ->
-            nil
-
-          {first, last} when is_nil(first) or is_nil(last) ->
-            "#{ref} needs both line_start and line_end, or neither"
-
-          {first, last} when first >= 1 and first <= last and last <= rows ->
-            nil
-
-          {first, last} ->
-            "#{ref}:L#{first}-L#{last} is outside the hunk, which has #{rows} rows"
-        end
-    end
-  end
-
-  defp hunk_row_count(hunk), do: length(hunk_rows(hunk))
-
-  # Rows after the @@ header, numbered as the CLI numbers them: empty strings
-  # and "\\ No newline" markers are not rows.
-  defp hunk_rows(hunk) do
-    hunk.raw_diff
-    |> String.split("\n")
-    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
-    |> Enum.drop(1)
-    |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "\\")))
-  end
-
-  # Every changed row must be covered exactly once, as the CLI requires, so
-  # the packet view never drops or repeats a change. Rows with other problems
-  # are reported above and skipped here.
-  defp coverage_problems(packet, hunks_by_path) do
-    expected =
-      for {path, hunks} <- hunks_by_path,
-          hunk <- hunks,
-          {line, row} <- Enum.with_index(hunk_rows(hunk), 1),
-          changed_line?(line),
-          into: MapSet.new(),
-          do: {path, hunk.hunk_index, row}
-
-    covered =
-      for section <- ReviewPacket.sections(packet),
-          row <- section.rows,
-          ReviewPacket.text(row, "kind") == "hunk",
-          is_nil(hunk_row_problem(hunks_by_path, row)),
-          path = ReviewPacket.text(row, "path"),
-          hunk_index = ReviewPacket.int(row, "hunk_index"),
-          hunk = ReviewHunks.find(hunks_by_path, path, hunk_index),
-          first = ReviewPacket.int(row, "line_start") || 1,
-          last = ReviewPacket.int(row, "line_end") || hunk_row_count(hunk),
-          n <- first..last//1,
-          MapSet.member?(expected, {path, hunk_index, n}),
-          reduce: %{} do
-        acc -> Map.update(acc, {path, hunk_index, n}, 1, &(&1 + 1))
-      end
-
-    missing =
-      expected
-      |> Enum.reject(&Map.has_key?(covered, &1))
-      |> Enum.sort()
-      |> Enum.map(fn {path, i, n} -> "changed line #{path}##{i}:L#{n} is not in any hunk row" end)
-
-    repeated =
-      covered
-      |> Enum.filter(fn {_, count} -> count > 1 end)
-      |> Enum.sort()
-      |> Enum.map(fn {{path, i, n}, count} ->
-        "changed line #{path}##{i}:L#{n} is covered #{count} times"
-      end)
-
-    missing ++ repeated
-  end
-
-  # Hunk-body rows only, so "+++" and "---" are changes here, not file headers.
-  defp changed_line?(line), do: String.starts_with?(line, ["+", "-"])
 
   defp comment_params(_review, %{"thread_id" => thread_id} = args) when not is_nil(thread_id) do
-    # A reply keeps its thread's file, side, anchor, and revision.
-    # publish_comment validates these placeholders but does not store them.
-    {:ok,
-     %{
-       "thread_id" => thread_id,
-       "body" => args["body"],
-       "file_path" => "(reply)",
-       "side" => "new",
-       "thread_anchor" => %{"granularity" => "line"}
-     }}
+    {:ok, %{"thread_id" => thread_id, "body" => args["body"]}}
   end
 
   defp comment_params(review, args) do
@@ -1041,8 +940,7 @@ defmodule ReviewsWeb.MCP.Handlers do
 
     with {:path, path} when is_binary(path) <- {:path, args["path"]},
          {:line, line} when is_integer(line) <- {:line, args["line"]},
-         {:ok, _revisions, selected} <- select_revision(review, args),
-         {:ok, text} <- line_text(selected, path, side, line) do
+         {:ok, _revisions, selected} <- select_revision(review, args) do
       {:ok,
        %{
          "body" => args["body"],
@@ -1051,8 +949,7 @@ defmodule ReviewsWeb.MCP.Handlers do
          "originating_patchset_id" => selected.id,
          "thread_anchor" => %{
            "granularity" => "line",
-           "line_number_hint" => line,
-           "line_text" => text
+           "line_number_hint" => line
          }
        }}
     else
@@ -1062,50 +959,54 @@ defmodule ReviewsWeb.MCP.Handlers do
     end
   end
 
-  defp line_text(selected, path, side, line) do
-    text =
-      case ReviewsContext.get_file(selected, path) do
-        nil -> nil
-        file -> file |> Anchoring.index() |> Map.get({path, side}, %{}) |> Map.get(line)
-      end
-
-    if is_binary(text) do
-      {:ok, text}
-    else
-      {:error,
-       "Line #{line} on the #{side} side of #{path} is not in revision #{selected.number}'s diff. " <>
-         "Comment on a changed or context line."}
-    end
-  end
-
   defp write_error({:error, %Result{} = result}), do: result
   defp write_error({:error, message}) when is_binary(message), do: error_result(message)
 
   defp write_error({:error, :patchset_not_found}),
-    do: error_result("That revision does not exist.")
+    do: error_result("That revision does not exist.", :patchset_not_found)
+
+  defp write_error({:error, :invalid_anchor}),
+    do:
+      error_result(
+        "The anchor is not in the selected revision's diff. Comment on a changed or context line.",
+        :invalid_anchor
+      )
 
   defp write_error({:error, :forbidden}),
     do:
       error_result(
         "You cannot do that on this review. Only its owner can push revisions, and only " <>
-          "its owner or a thread's author can resolve or reopen that thread."
+          "its owner or a thread's author can resolve or reopen that thread.",
+        :forbidden
       )
 
-  defp write_error({:error, :empty_body}), do: error_result("body cannot be empty.")
+  defp write_error({:error, :invalid_file_path}),
+    do: error_result("file_path is required", :invalid_file_path)
+
+  defp write_error({:error, :empty_body}), do: error_result("body cannot be empty.", :empty_body)
 
   defp write_error({:error, :invalid_status}),
-    do: error_result("status must be open or resolved.")
+    do: error_result("status must be open or resolved.", :invalid_status)
 
   defp write_error({:error, %Ecto.Changeset{} = changeset}), do: changeset_result(changeset)
-  defp write_error({:error, _other}), do: error_result("The write failed. Nothing was saved.")
+
+  defp write_error({:error, _other}),
+    do: error_result("The write failed. Nothing was saved.", :write_failed)
 
   defp changeset_result(changeset) do
     errors =
-      Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
+      Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+        Keyword.get(opts, :detail, message)
+      end)
       |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
 
-    error_result("Invalid input: #{errors}")
+    error_result("Invalid input: #{errors}", :validation_failed)
   end
 
-  defp error_result(message), do: Result.new(message, is_error: true)
+  defp error_result(message, code \\ :invalid_request),
+    do:
+      Result.new(message,
+        is_error: true,
+        structured_content: %{error: %{code: to_string(code), detail: message}}
+      )
 end

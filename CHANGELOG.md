@@ -7,6 +7,16 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Add stable API and MCP error codes while retaining legacy fields and Poppy authentication responses; teach the CLI to read them.
+
+- Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.
+
+- Validate packet shape, hunk references, slices and changed-line coverage in the domain layer for all revision uploads.
+
+- Keep empty hunk rows when validating and rendering packet slices, matching the CLI; no-newline markers stay attached to their preceding row.
+
+- Add bounded REST and Poppy file, thread and comment pages with pinned revisions, query-bound cursors and UTF-8-safe comment continuation. REST/Poppy use the shared `Reviews.Paging` limits and codec with scopes distinct from MCP.
+
 - Expose comment IDs, safe verification attribution and projected anchor state consistently across API readers.
 
 ### Security

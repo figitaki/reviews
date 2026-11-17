@@ -23,7 +23,10 @@ defmodule ReviewsWeb.Plugs.RequireApiToken do
       _ ->
         conn
         |> put_resp_content_type("application/json")
-        |> send_resp(401, JSON.encode!(%{errors: %{detail: "Unauthorized"}}))
+        |> send_resp(
+          401,
+          JSON.encode!(ReviewsWeb.ApiErrors.detail(:unauthorized, "Unauthorized"))
+        )
         |> halt()
     end
   end
