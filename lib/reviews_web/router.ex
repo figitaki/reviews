@@ -115,6 +115,9 @@ defmodule ReviewsWeb.Router do
     pipe_through [:poppy_api, :review_content]
 
     get "/reviews/:slug", ReviewController, :show
+    get "/reviews/:slug/files", ReviewPageController, :files
+    get "/reviews/:slug/threads", ReviewPageController, :threads
+    get "/reviews/:slug/threads/:thread_id/comments", ReviewPageController, :comments
   end
 
   scope "/api/poppy/v1", ReviewsWeb.Api do
@@ -144,6 +147,9 @@ defmodule ReviewsWeb.Router do
     pipe_through [:api, :review_content]
 
     get "/reviews/:slug", ReviewController, :show
+    get "/reviews/:slug/files", ReviewPageController, :files
+    get "/reviews/:slug/threads", ReviewPageController, :threads
+    get "/reviews/:slug/threads/:thread_id/comments", ReviewPageController, :comments
   end
 
   scope "/api/v1", ReviewsWeb.Api do

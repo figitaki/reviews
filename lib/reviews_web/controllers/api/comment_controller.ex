@@ -15,21 +15,16 @@ defmodule ReviewsWeb.Api.CommentController do
 
   @doc "POST /api/v1/reviews/:slug/comments"
   def create(conn, %{"slug" => slug} = params) do
-    author = conn.assigns.current_identity
+    principal = conn.assigns.current_principal
 
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "Review not found"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
 
       review ->
-        case ThreadsContext.publish_comment(
-               review,
-               author,
-               normalize(params),
-               conn.assigns[:attribution]
-             ) do
+        case ThreadsContext.publish_comment(review, principal, normalize(params)) do
           {:ok, %{thread: thread, comment: comment}} ->
             conn
             |> put_status(:created)
@@ -42,15 +37,25 @@ defmodule ReviewsWeb.Api.CommentController do
               url: url(~p"/r/#{review.slug}") <> "#file-" <> file_anchor(thread)
             })
 
+          {:error, :forbidden} ->
+            conn
+            |> put_status(:forbidden)
+            |> json(%{errors: %{detail: "You cannot comment on this review"}})
+
           {:error, :thread_not_found} ->
             conn
             |> put_status(:not_found)
-            |> json(%{errors: %{detail: "Thread not found"}})
+            |> json(ReviewsWeb.ApiErrors.detail(:thread_not_found, "Thread not found"))
 
           {:error, reason} ->
             conn
             |> put_status(:unprocessable_entity)
-            |> json(%{errors: %{detail: error_message(reason)}})
+            |> json(
+              ReviewsWeb.ApiErrors.detail(
+                ReviewsWeb.ApiErrors.code(reason),
+                error_message(reason)
+              )
+            )
         end
     end
   end
@@ -63,7 +68,9 @@ defmodule ReviewsWeb.Api.CommentController do
       "thread_anchor" => params["thread_anchor"] || %{},
       # Passed through as given. `publish_comment/3` casts it and returns
       # `:thread_not_found` when it is not a thread of this review.
-      "thread_id" => params["thread_id"]
+      "thread_id" => params["thread_id"],
+      "revision" => params["revision"],
+      "originating_patchset_id" => params["originating_patchset_id"]
     }
   end
 
@@ -73,10 +80,26 @@ defmodule ReviewsWeb.Api.CommentController do
   defp error_message(:empty_body), do: "body cannot be empty"
   defp error_message(:invalid_side), do: "side must be \"old\" or \"new\""
   defp error_message(:invalid_file_path), do: "file_path is required"
-  defp error_message(:invalid_anchor), do: "thread_anchor must include a granularity"
+
+  defp error_message(:invalid_anchor),
+    do: "thread_anchor must identify a line and valid token selection in the selected revision"
+
+  defp error_message(:patchset_not_found),
+    do:
+      "revision must identify a patchset of this review; supply revision or originating_patchset_id, not both"
 
   defp error_message(:unknown_granularity),
     do: "anchor granularity must be \"line\" or \"token_range\""
 
-  defp error_message(other), do: "could not publish: #{inspect(other)}"
+  defp error_message(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
+      Regex.replace(~r/%{(\w+)}/, msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
+    |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
+  end
+
+  defp error_message(_other), do: "could not publish comment"
 end

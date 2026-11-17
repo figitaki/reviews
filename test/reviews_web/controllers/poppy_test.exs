@@ -12,7 +12,6 @@ defmodule ReviewsWeb.PoppyTest do
   alias Reviews.Accounts
   alias Reviews.OAuth
   alias Reviews.OAuth.Grant
-  alias Reviews.Poppy
   alias Reviews.PoppyTestAgent, as: Agent
   alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsContext
@@ -207,6 +206,24 @@ defmodule ReviewsWeb.PoppyTest do
   end
 
   describe "Direct Sign-In and a signed-in comment" do
+    test "a file_path over 255 characters is a clean validation error", ctx do
+      tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
+
+      conn =
+        post_comment(ctx.agent, ctx.review,
+          access_token: tokens["access_token"],
+          body: %{"file_path" => String.duplicate("a", 256)}
+        )
+
+      assert json_response(conn, 422) == %{
+               "error_code" => "validation_failed",
+               "error_detail" => "file_path should be at most 255 character(s)",
+               "errors" => %{"detail" => "file_path should be at most 255 character(s)"}
+             }
+
+      assert comment_count() == 0
+    end
+
     test "the comment is attributed to the owner-approved Reviews agent", ctx do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
       assert tokens["token_type"] == "Bearer"
@@ -267,6 +284,11 @@ defmodule ReviewsWeb.PoppyTest do
         Reviews.ReviewView.thread_payloads_for_file(snapshot, "foo")
 
       assert payload.link_revoked
+
+      # Paged readers (MCP, REST pages) see the same revoked link, so every
+      # comment query preloads the attribution link.
+      [paged] = Reviews.Threads.list_comment_page(comment.thread_id, 0, 10)
+      assert Reviews.ReviewView.attribution_payload(paged).link_revoked
     end
 
     test "the redirect carries the issuer and state", ctx do
@@ -366,13 +388,101 @@ defmodule ReviewsWeb.PoppyTest do
         end)
         |> get(path)
 
-      assert json_response(conn, 200)["slug"] == ctx.review.slug
+      assert json_response(conn, 200) ==
+               get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}") |> json_response(200)
+    end
+
+    test "paged reads match REST and their published response schemas", ctx do
+      {:ok, %{thread: thread}} =
+        Reviews.Threads.publish_comment(ctx.review, ctx.owner, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "A comment",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      spec = get(build_conn(), "/api/poppy/openapi.json") |> json_response(200)
+
+      for {suffix, template} <- [
+            {"files", "files"},
+            {"threads", "threads"},
+            {"threads/#{thread.id}/comments", "threads/{thread_id}/comments"}
+          ] do
+        path = "/api/poppy/v1/reviews/#{ctx.review.slug}/#{suffix}"
+
+        conn =
+          Enum.reduce(Agent.headers(ctx.agent, "GET", path), build_conn(), fn {k, v}, c ->
+            put_req_header(c, k, v)
+          end)
+          |> get(path)
+
+        payload = json_response(conn, 200)
+
+        assert payload ==
+                 get(build_conn(), "/api/v1/reviews/#{ctx.review.slug}/#{suffix}")
+                 |> json_response(200)
+
+        schema =
+          get_in(spec, [
+            "paths",
+            "/reviews/{slug}/#{template}",
+            "get",
+            "responses",
+            "200",
+            "content",
+            "application/json",
+            "schema"
+          ])
+
+        assert {:ok, _} = JSV.validate(payload, JSV.build!(schema))
+        assert get(build_conn(), path).status == 400
+        assert get_resp_header(conn, "x-robots-tag") == ["noindex, nofollow, noarchive"]
+      end
+    end
+
+    test "REST cursors continue through Poppy but reject another endpoint", ctx do
+      {:ok, %{thread: thread}} =
+        Reviews.Threads.publish_comment(ctx.review, ctx.owner, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => String.duplicate("readable ", 1000),
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      suffix = "/reviews/#{ctx.review.slug}/threads/#{thread.id}/comments"
+
+      first =
+        get(build_conn(), "/api/v1" <> suffix, %{revision: 1, max_bytes: 2000})
+        |> json_response(200)
+
+      assert first["next_cursor"]
+      query = URI.encode_query(%{revision: 1, max_bytes: 2000, cursor: first["next_cursor"]})
+      path = "/api/poppy/v1" <> suffix <> "?" <> query
+
+      conn =
+        Enum.reduce(Agent.headers(ctx.agent, "GET", path), build_conn(), fn {k, v}, c ->
+          put_req_header(c, k, v)
+        end)
+        |> get(path)
+
+      assert json_response(conn, 200) ==
+               get(build_conn(), "/api/v1" <> suffix <> "?" <> query) |> json_response(200)
+
+      wrong = "/api/poppy/v1/reviews/#{ctx.review.slug}/files?" <> query
+
+      conn =
+        Enum.reduce(Agent.headers(ctx.agent, "GET", wrong), build_conn(), fn {k, v}, c ->
+          put_req_header(c, k, v)
+        end)
+        |> get(wrong)
+
+      assert json_response(conn, 422)["error_code"] == "invalid_pagination"
     end
 
     test "a missing Session header or Poppy-Version is refused", ctx do
       path = "/api/poppy/v1/reviews/#{ctx.review.slug}"
 
-      assert %{"error" => "invalid_session"} =
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
                build_conn()
                |> put_req_header("poppy-version", "1.0")
                |> get(path)
@@ -410,6 +520,61 @@ defmodule ReviewsWeb.PoppyTest do
     end
   end
 
+  test "Poppy request schema accepts minimal replies and validated anchor shapes" do
+    schema =
+      build_conn()
+      |> get("/api/poppy/openapi.json")
+      |> json_response(200)
+      |> get_in([
+        "paths",
+        "/reviews/{slug}/comments",
+        "post",
+        "requestBody",
+        "content",
+        "application/json",
+        "schema"
+      ])
+
+    root = JSV.build!(schema)
+    assert {:ok, _} = JSV.validate(%{"thread_id" => 1, "body" => "Reply"}, root)
+
+    line = %{
+      "file_path" => "foo",
+      "body" => "Comment",
+      "revision" => 1,
+      "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+    }
+
+    assert {:ok, _} = JSV.validate(line, root)
+    token = put_in(line, ["thread_anchor", "granularity"], "token_range")
+    assert {:error, _} = JSV.validate(token, root)
+
+    assert {:ok, _} =
+             JSV.validate(put_in(token, ["thread_anchor", "selection_text"], "foo"), root)
+
+    assert {:error, _} = JSV.validate(%{"body" => "Missing location"}, root)
+  end
+
+  test "Poppy replies need only thread_id and body, with attribution retained", ctx do
+    tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
+
+    first =
+      post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"])
+      |> json_response(201)
+
+    path = comment_path(ctx.review)
+    headers = Agent.headers(ctx.agent, "POST", path, access_token: tokens["access_token"])
+
+    conn =
+      Enum.reduce(headers, build_conn(), fn {k, v}, conn -> put_req_header(conn, k, v) end)
+      |> post(path, %{"thread_id" => first["thread_id"], "body" => "Reply"})
+
+    assert json_response(conn, 201)["thread_id"] == first["thread_id"]
+    [thread] = Reviews.Threads.list_published_threads(ctx.review.id)
+    assert length(thread.comments) == 2
+    assert Enum.all?(thread.comments, &is_map(&1.attribution))
+  end
+
   describe "replay" do
     test "the same Session JWT twice publishes once", ctx do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
@@ -421,7 +586,7 @@ defmodule ReviewsWeb.PoppyTest do
 
       assert json_response(post_comment(ctx.agent, ctx.review, headers: headers), 201)
 
-      assert %{"error" => "invalid_session"} =
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
                json_response(post_comment(ctx.agent, ctx.review, headers: headers), 400)
 
       assert comment_count() == 1
@@ -463,7 +628,8 @@ defmodule ReviewsWeb.PoppyTest do
           iat: Agent.now() - 300
         )
 
-      assert %{"error" => "invalid_session"} = json_response(conn, 400)
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+               json_response(conn, 400)
     end
 
     test "an expired delegation is refused", ctx do
@@ -477,7 +643,8 @@ defmodule ReviewsWeb.PoppyTest do
           delegation: delegation
         )
 
-      assert %{"error" => "invalid_session"} = json_response(conn, 400)
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+               json_response(conn, 400)
     end
 
     test "an expired access token is invalid_token", ctx do
@@ -521,7 +688,9 @@ defmodule ReviewsWeb.PoppyTest do
 
       for aud <- ["https://other.example", @issuer <> "/"] do
         conn = post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"], aud: aud)
-        assert %{"error" => "invalid_session"} = json_response(conn, 400)
+
+        assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+                 json_response(conn, 400)
       end
 
       assert comment_count() == 0
@@ -532,7 +701,9 @@ defmodule ReviewsWeb.PoppyTest do
 
       for opts <- [[htu: @issuer <> "/api/poppy/v1/reviews/other/comments"], [htm: "GET"]] do
         conn = post_comment(ctx.agent, ctx.review, [access_token: tokens["access_token"]] ++ opts)
-        assert %{"error" => "invalid_session"} = json_response(conn, 400)
+
+        assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+                 json_response(conn, 400)
       end
     end
 
@@ -544,13 +715,44 @@ defmodule ReviewsWeb.PoppyTest do
     end
   end
 
+  describe "permissions" do
+    test "another account's agent may comment on a review it has the link to, and resolve only its own thread",
+         ctx do
+      stranger = user_fixture("dana")
+
+      {:ok, stranger_agent} =
+        Accounts.create_agent_identity(stranger, %{display_name: "Dana's bot", handle: "dbot"})
+
+      {:ok, %{thread: owner_thread}} =
+        Reviews.Threads.publish_comment(ctx.review, ctx.owner, comment_body(%{}))
+
+      tokens = sign_in(ctx.agent, stranger, stranger_agent)
+      conn = post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"])
+      assert %{"thread_id" => thread_id} = json_response(conn, 201)
+
+      assert {:error, :forbidden} =
+               Reviews.Threads.update_status(
+                 ctx.review,
+                 owner_thread.id,
+                 stranger_agent,
+                 "resolved"
+               )
+
+      assert {:ok, %{status: "resolved"}} =
+               Reviews.Threads.update_status(ctx.review, thread_id, stranger_agent, "resolved")
+    end
+  end
+
   describe "cross-tenant" do
     test "an access token only works with Session JWTs from the client it was issued to", ctx do
       tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
       other = Agent.new()
 
       conn = post_comment(other, ctx.review, access_token: tokens["access_token"])
-      assert %{"error" => "invalid_session"} = json_response(conn, 400)
+
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
+               json_response(conn, 400)
+
       assert comment_count() == 0
     end
 
@@ -747,7 +949,7 @@ defmodule ReviewsWeb.PoppyTest do
       Agent.publish(ctx.agent, %{}, [])
       Gatekeep.Clients.forget(OAuth.config(), ctx.agent.client_id)
 
-      assert %{"error" => "invalid_session"} =
+      assert %{"error" => "invalid_session", "error_code" => "invalid_session"} =
                json_response(
                  post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"]),
                  400

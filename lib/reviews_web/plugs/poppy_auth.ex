@@ -10,8 +10,10 @@ defmodule ReviewsWeb.Plugs.PoppyAuth do
       `insufficient_scope`.
 
   Assigns `:poppy` (the adapter result) and `:attribution`. Signed in, it also
-  assigns `:current_identity` and `:current_user` (the identity's owner), the
-  same assigns `RequireApiToken` sets, so API controllers work unchanged.
+  assigns `:current_identity`, `:current_user` (the identity's owner), and
+  `:current_principal`, the same assigns `RequireApiToken` sets, so API
+  controllers work unchanged. The principal carries the granted scopes and the
+  attribution, so `Reviews.Policy` checks them too.
   """
   import Plug.Conn
 
@@ -84,6 +86,16 @@ defmodule ReviewsWeb.Plugs.PoppyAuth do
     conn
     |> assign(:current_identity, result.identity)
     |> assign(:current_user, result.owner)
+    |> assign(
+      :current_principal,
+      Reviews.Principal.delegated(
+        result.identity,
+        result.owner,
+        result.scopes,
+        result.attribution,
+        :poppy
+      )
+    )
   end
 
   defp reject(conn, error, scheme) when error in [:invalid_token, :invalid_dpop_proof] do
@@ -100,7 +112,9 @@ defmodule ReviewsWeb.Plugs.PoppyAuth do
   # Every other failure is the same error, without the reason (spec 5.3).
   defp reject(conn, _reason, _scheme), do: send_json(conn, 400, %{error: "invalid_session"})
 
-  defp send_json(conn, status, body) do
+  defp send_json(conn, status, %{error: code} = body) do
+    body = ReviewsWeb.ApiErrors.payload(code, code, body)
+
     conn
     |> put_resp_content_type("application/json")
     |> put_resp_header("cache-control", "no-store")

@@ -21,6 +21,7 @@ defmodule ReviewsWeb.ReviewLive do
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
+  alias Reviews.Policy
   alias Reviews.ReviewNavigation
   alias Reviews.ReviewPacket
   alias Reviews.ReviewView
@@ -58,6 +59,10 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:page_title, review.title)
               |> assign(:current_user, current_user)
               |> assign(:current_identity, current_identity)
+              |> assign(
+                :can_decide_sections,
+                Policy.can?(current_identity, :decide_section, snapshot.review)
+              )
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
               |> assign(:expanded_hunk_ids, MapSet.new())
@@ -125,8 +130,14 @@ defmodule ReviewsWeb.ReviewLive do
        |> refresh_snapshot!()
        |> collapse_packet_section(section_index)}
     else
-      nil -> {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
-      _ -> {:noreply, put_flash(socket, :error, "Could not update section.")}
+      nil ->
+        {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
+
+      {:error, :forbidden} ->
+        {:noreply, put_flash(socket, :error, "Only the review owner can decide sections.")}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Could not update section.")}
     end
   end
 
@@ -332,6 +343,14 @@ defmodule ReviewsWeb.ReviewLive do
              ) do
           {:ok, _thread} ->
             {:noreply, push_threads_for_file(socket, params["file_path"])}
+
+          {:error, :forbidden} ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Only the review owner or the thread's author can resolve or reopen it."
+             )}
 
           {:error, reason} ->
             Logger.warning("update_thread_status failed: #{inspect(reason)}")
@@ -594,6 +613,7 @@ defmodule ReviewsWeb.ReviewLive do
                 selected_patchset={@selected_patchset}
                 published_threads={@published_threads}
                 current_user={@current_user}
+                can_decide_sections={@can_decide_sections}
                 return_to={@return_to}
                 diff_style={@diff_style}
                 expanded_hunk_ids={@expanded_hunk_ids}
@@ -1140,15 +1160,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp file_diff_id(file), do: "file-diff-#{file.id}"
 
-  defp put_section_status(socket, patchset, user, section, status) do
-    PacketSectionDecisions.put_section_status(
-      socket.assigns.review,
-      patchset,
-      user,
-      section,
-      socket.assigns.packet_section_decisions,
-      socket.assigns.patchsets,
-      status
-    )
+  defp put_section_status(socket, patchset, identity, section, status) do
+    PacketSectionDecisions.toggle(socket.assigns.review, patchset, identity, section, status)
   end
 end
