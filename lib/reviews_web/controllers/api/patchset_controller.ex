@@ -5,19 +5,20 @@ defmodule ReviewsWeb.Api.PatchsetController do
   `POST` appends a new patchset to an existing review and returns the new
   patchset number. Requires a bearer token belonging to the review owner's
   account (human or agent identity). Link access alone does not allow uploads.
+  An optional `code_snapshot_id` claims a ready code snapshot for the patchset.
   """
   use ReviewsWeb, :controller
 
-  import ReviewsWeb.Api.ApiHelpers
-
-  alias Reviews.CodeStorage.Errors
   alias Reviews.Reviews
+  alias ReviewsWeb.ApiErrors
 
   @doc "POST /api/v1/reviews/:slug/patchsets"
   def create(conn, %{"slug" => slug} = params) do
     case Reviews.get_review_by_slug(slug) do
       nil ->
-        error_json(conn, :not_found, "Review not found")
+        conn
+        |> put_status(:not_found)
+        |> json(ApiErrors.detail(:review_not_found, "Review not found"))
 
       review ->
         attrs = %{
@@ -28,7 +29,7 @@ defmodule ReviewsWeb.Api.PatchsetController do
           code_snapshot_id: params["code_snapshot_id"]
         }
 
-        case Reviews.append_patchset(review, conn.assigns.current_identity, attrs) do
+        case Reviews.append_patchset(review, conn.assigns.current_principal, attrs) do
           {:ok, %{patchset: patchset, code_snapshot: code_snapshot}} ->
             response = %{
               patchset_number: patchset.number,
@@ -42,18 +43,13 @@ defmodule ReviewsWeb.Api.PatchsetController do
           {:error, :forbidden} ->
             conn
             |> put_status(:forbidden)
-            |> json(%{errors: %{detail: "Forbidden"}})
+            |> json(ApiErrors.detail(:forbidden, "Forbidden"))
 
-          {:error, {:code_snapshot, code}} when is_atom(code) ->
-            error_json(conn, Errors.http_status(code), code, Errors.message(code))
+          {:error, {:code_snapshot, code}} ->
+            ApiErrors.render(conn, code)
 
-          {:error, %Ecto.Changeset{} = changeset} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{errors: format_changeset(changeset)})
-
-          {:error, _reason} ->
-            error_json(conn, :unprocessable_entity, "Could not append patchset")
+          {:error, reason} ->
+            ApiErrors.render(conn, reason)
         end
     end
   end

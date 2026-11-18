@@ -9,14 +9,22 @@ defmodule Reviews.Threads do
   """
   import Ecto.Query, warn: false
 
+  require Logger
+
   alias Reviews.Accounts
   alias Reviews.Accounts.{Identity, User}
+  alias Reviews.Policy
+  alias Reviews.Principal
   alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
   alias Reviews.Threads.{Comment, Thread}
 
   @pubsub Reviews.PubSub
+
+  # Every comment reader preloads the same associations, so renaming one (such
+  # as the attribution link) is a single change here, not one per query.
+  @comment_preloads [:author, :identity_link]
 
   # Postgres bigint. An id past this range reaches the driver as an unencodable
   # integer and takes the whole request down, so it is a miss like any other.
@@ -40,7 +48,7 @@ defmodule Reviews.Threads do
 
     Repo.all(query)
     |> Enum.filter(fn thread -> thread.comments != [] end)
-    |> Repo.preload(comments: [:author, :identity_link])
+    |> Repo.preload(comments: @comment_preloads)
   end
 
   @doc "Thread counts by status, such as `%{\"open\" => 2}`."
@@ -105,7 +113,7 @@ defmodule Reviews.Threads do
         where: c.thread_id == ^thread_id and c.id > ^after_id,
         order_by: [asc: c.id],
         limit: ^limit,
-        preload: [:author]
+        preload: ^@comment_preloads
     )
   end
 
@@ -151,7 +159,7 @@ defmodule Reviews.Threads do
         "thread_id"     => 123 # optional
       }
 
-  New threads may supply `"originating_patchset_id"` (or its atom key) to
+  New threads may supply `"revision"` or `"originating_patchset_id"` (or atom keys) to
   comment on an explicitly selected revision. It must belong to this review;
   omitted values default to the latest patchset. Replies retain their origin.
   Token-range anchors retain their selected text and offset across projection.
@@ -161,13 +169,63 @@ defmodule Reviews.Threads do
   """
   def publish_comment(review, author, params, attribution \\ nil)
 
+  # Surfaces pass a principal: the policy decides whether it may comment, and
+  # its identity and attribution are recorded on the comment.
+  def publish_comment(%Review{} = review, %Principal{} = principal, params, nil)
+      when is_map(params) do
+    if Policy.can?(principal, :comment, review),
+      do: publish_comment(review, principal.identity, params, principal.attribution),
+      else: {:error, :forbidden}
+  end
+
   def publish_comment(%Review{} = review, %Identity{} = author, params, attribution)
       when is_map(params) do
+    case Map.get(params, "thread_id", params[:thread_id]) do
+      nil -> start_thread(review, author, params, attribution)
+      thread_id -> reply(review, author, thread_id, params["body"] || params[:body], attribution)
+    end
+  end
+
+  def publish_comment(%Review{} = review, %User{} = user, params, attribution)
+      when is_map(params) do
+    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
+      publish_comment(review, identity, params, attribution)
+    end
+  end
+
+  @doc "Reply using only a review-scoped thread ID and body; location and origin are inherited."
+  def reply(review, author, thread_id, body, attribution \\ nil)
+
+  def reply(%Review{} = review, %Identity{} = author, thread_id, body, attribution) do
+    body = if is_binary(body), do: String.trim(body), else: ""
+
+    with false <- body == "",
+         {:ok, %Thread{} = thread} <- fetch_reply_thread(review, thread_id) do
+      insert_comment(
+        review,
+        author,
+        thread,
+        thread.file_path,
+        thread.side,
+        thread.anchor,
+        body,
+        thread.originating_patchset_id,
+        attribution
+      )
+    else
+      true -> {:error, :empty_body}
+      {:ok, nil} -> {:error, :thread_not_found}
+      error -> error
+    end
+  end
+
+  @doc "Start a thread on a validated line of the selected immutable revision."
+  def start_thread(%Review{} = review, %Identity{} = author, params, attribution \\ nil) do
     file_path = params["file_path"] || params[:file_path]
     side = params["side"] || params[:side]
-    body = String.trim(to_string(params["body"] || params[:body] || ""))
+    body = params["body"] || params[:body]
+    body = if is_binary(body), do: String.trim(body), else: ""
     anchor = params["thread_anchor"] || params[:thread_anchor] || %{}
-    thread_id = Map.get(params, "thread_id", params[:thread_id])
 
     cond do
       body == "" ->
@@ -186,12 +244,14 @@ defmodule Reviews.Threads do
         {:error, :unknown_granularity}
 
       true ->
-        with {:ok, existing} <- fetch_reply_thread(review, thread_id),
-             {:ok, origin_id} <- originating_patchset_id(review, existing, params) do
+        with {:ok, origin_id} <- originating_patchset_id(review, params),
+             :ok <- validate_new_thread(review, author, file_path, side, anchor, origin_id),
+             patchset = ReviewsContext.get_patchset!(origin_id),
+             {:ok, anchor} <- Reviews.Anchoring.validate_anchor(patchset, file_path, side, anchor) do
           insert_comment(
             review,
             author,
-            existing,
+            nil,
             file_path,
             side,
             anchor,
@@ -200,15 +260,6 @@ defmodule Reviews.Threads do
             attribution
           )
         end
-    end
-  rescue
-    error in [Ecto.InvalidChangesetError, Postgrex.Error] -> {:error, error}
-  end
-
-  def publish_comment(%Review{} = review, %User{} = user, params, attribution)
-      when is_map(params) do
-    with {:ok, identity} <- Accounts.ensure_human_identity(user) do
-      publish_comment(review, identity, params, attribution)
     end
   end
 
@@ -236,7 +287,7 @@ defmodule Reviews.Threads do
             identity_link_id: attribution && attribution["link_id"],
             attribution: attribution
           })
-          |> Repo.insert!()
+          |> insert_or_rollback()
 
         %{thread: thread, comment: comment}
       end)
@@ -256,16 +307,25 @@ defmodule Reviews.Threads do
       {:error, reason} ->
         {:error, reason}
     end
+  rescue
+    error in Postgrex.Error ->
+      Logger.error("publish_comment failed: " <> Exception.message(error))
+      {:error, :could_not_publish}
   end
 
   @doc """
   Updates a thread's review status.
 
   Resolving records the acting identity and timestamp. Reopening clears both. The
-  thread must belong to the supplied review.
+  thread must belong to the supplied review, or this returns `{:error, :not_found}`.
+  Only the review owner or the thread's author may change it (`Reviews.Policy`);
+  anyone else gets `{:error, :forbidden}`, even when the status would not change.
   """
-  def update_status(%Review{} = review, thread_id, %Identity{} = identity, status)
-      when status in ["open", "resolved"] do
+  def update_status(%Review{} = review, thread_id, actor, status)
+      when status in ["open", "resolved"] and
+             (is_struct(actor, Identity) or is_struct(actor, Principal)) do
+    identity = Principal.from(actor).identity
+
     with {:ok, id} <- cast_thread_id(thread_id),
          {:ok, {thread, changed?}} <-
            Repo.transaction(fn ->
@@ -276,9 +336,20 @@ defmodule Reviews.Threads do
                       where: t.id == ^id and t.review_id == ^review.id,
                       lock: "FOR UPDATE"
                   ) do
-               %Thread{status: ^status} = thread -> {thread, false}
-               %Thread{} = thread -> {write_status(thread, identity, status), true}
-               nil -> Repo.rollback(:not_found)
+               nil ->
+                 Repo.rollback(:not_found)
+
+               %Thread{} = thread ->
+                 cond do
+                   not Policy.can?(actor, {:update_thread_status, thread}, review) ->
+                     Repo.rollback(:forbidden)
+
+                   thread.status == status ->
+                     {thread, false}
+
+                   true ->
+                     {write_status(thread, identity, status), true}
+                 end
              end
            end) do
       thread = preload_thread(thread)
@@ -301,7 +372,9 @@ defmodule Reviews.Threads do
     end
   end
 
-  def update_status(%Review{}, _thread_id, %Identity{}, _status), do: {:error, :invalid_status}
+  def update_status(%Review{}, _thread_id, actor, _status)
+      when is_struct(actor, Identity) or is_struct(actor, Principal),
+      do: {:error, :invalid_status}
 
   defp write_status(thread, identity, status) do
     attrs =
@@ -341,7 +414,7 @@ defmodule Reviews.Threads do
   defp comments_query do
     from c in Comment,
       order_by: [asc: c.inserted_at],
-      preload: [:author, :identity_link]
+      preload: ^@comment_preloads
   end
 
   # No thread_id starts a new thread. A thread_id that is not a thread of this
@@ -358,15 +431,24 @@ defmodule Reviews.Threads do
     end
   end
 
-  defp originating_patchset_id(_review, %Thread{} = thread, _params),
-    do: {:ok, thread.originating_patchset_id}
+  defp originating_patchset_id(review, params) do
+    revision = Map.get(params, "revision", params[:revision])
+    id = Map.get(params, "originating_patchset_id", params[:originating_patchset_id])
 
-  defp originating_patchset_id(review, nil, params) do
-    case Map.get(params, "originating_patchset_id", params[:originating_patchset_id]) do
-      nil ->
-        {:ok, ReviewsContext.latest_patchset_id(review)}
+    cond do
+      not is_nil(revision) and not is_nil(id) ->
+        {:error, :patchset_not_found}
 
-      id ->
+      not is_nil(revision) ->
+        with true <- is_integer(revision) and revision > 0 and revision <= 2_147_483_647,
+             %Reviews.Reviews.Patchset{id: id} <-
+               ReviewsContext.get_patchset_by_number(review, revision) do
+          {:ok, id}
+        else
+          _ -> {:error, :patchset_not_found}
+        end
+
+      not is_nil(id) ->
         with {:ok, id} <- cast_thread_id(id),
              true <-
                Repo.exists?(
@@ -377,10 +459,28 @@ defmodule Reviews.Threads do
         else
           _ -> {:error, :patchset_not_found}
         end
+
+      true ->
+        case ReviewsContext.latest_patchset_id(review) do
+          nil -> {:error, :patchset_not_found}
+          id -> {:ok, id}
+        end
     end
   end
 
-  defp create_thread(review, author, file_path, side, anchor, originating_patchset_id) do
+  defp create_thread(review, author, file_path, side, anchor, origin_id) do
+    thread_changeset(review, author, file_path, side, anchor, origin_id)
+    |> insert_or_rollback()
+  end
+
+  defp validate_new_thread(review, author, file_path, side, anchor, origin_id) do
+    case thread_changeset(review, author, file_path, side, anchor, origin_id) do
+      %Ecto.Changeset{valid?: true} -> :ok
+      changeset -> {:error, changeset}
+    end
+  end
+
+  defp thread_changeset(review, author, file_path, side, anchor, originating_patchset_id) do
     %Thread{}
     |> Thread.changeset(%{
       review_id: review.id,
@@ -391,6 +491,12 @@ defmodule Reviews.Threads do
       anchor: anchor,
       status: "open"
     })
-    |> Repo.insert!()
+  end
+
+  defp insert_or_rollback(changeset) do
+    case Repo.insert(changeset) do
+      {:ok, record} -> record
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
   end
 end

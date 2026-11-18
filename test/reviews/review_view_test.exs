@@ -36,8 +36,8 @@ defmodule Reviews.ReviewViewTest do
       "diff --git a/foo b/foo\n" <>
         "--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+newer\n"
 
-    {:ok, %{patchset: ps2}} =
-      ReviewsContext.append_patchset(review, %{
+    {:ok, ps2} =
+      ReviewsContext.append_patchset_unchecked(review, %{
         base_sha: "cafef00d",
         branch_name: "carey/foo",
         raw_diff: diff_v2
@@ -129,8 +129,8 @@ defmodule Reviews.ReviewViewTest do
     {:ok, %{thread: original}} = Threads.publish_comment(review, author, params)
     {:ok, resolved} = Threads.update_status(review, original.id, author, "resolved")
 
-    {:ok, %{patchset: ps3}} =
-      ReviewsContext.append_patchset(review, %{
+    {:ok, ps3} =
+      ReviewsContext.append_patchset_unchecked(review, %{
         raw_diff:
           "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -8 +8,2 @@\n-old\n+inserted\n+new\n"
       })
@@ -213,7 +213,7 @@ defmodule Reviews.ReviewViewTest do
           {"+gone", "outdated"}
         ] do
       {:ok, _} =
-        ReviewsContext.append_patchset(review, %{
+        ReviewsContext.append_patchset_unchecked(review, %{
           raw_diff: "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -20 +20 @@\n-old\n#{body}\n"
         })
 

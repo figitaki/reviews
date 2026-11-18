@@ -9,6 +9,8 @@ defmodule Reviews.Reviews do
 
   alias Reviews.Accounts
   alias Reviews.Accounts.{Identity, User}
+  alias Reviews.Policy
+  alias Reviews.Principal
   alias Reviews.Repo
   alias Reviews.Reviews.{File, Patchset, Review}
 
@@ -62,7 +64,7 @@ defmodule Reviews.Reviews do
     patchset_attrs = %{
       number: 1,
       raw_diff: raw_diff,
-      packet: attrs[:packet] || attrs["packet"],
+      packet: Map.get(attrs, :packet, attrs["packet"]),
       base_sha: attrs[:base_sha] || attrs["base_sha"],
       branch_name: attrs[:branch_name] || attrs["branch_name"],
       pushed_at: DateTime.utc_now() |> DateTime.truncate(:second)
@@ -99,37 +101,26 @@ defmodule Reviews.Reviews do
   Otherwise returns `{:ok, %{patchset: patchset, code_snapshot: result}}`, where
   `result` is `nil`, a claimed snapshot, or `{:skipped, code}`.
   """
-  def append_patchset(%Review{} = review, %Identity{} = identity, attrs) when is_map(attrs) do
-    if revision_uploader?(review, identity),
-      do: insert_patchset(identity, review, attrs),
+  def append_patchset(%Review{} = review, actor, attrs) when is_map(attrs) do
+    if Policy.can?(actor, :push, review),
+      do: insert_patchset(Principal.from(actor).identity, review, attrs),
       else: {:error, :forbidden}
   end
 
-  def append_patchset(%Review{}, _actor, attrs) when is_map(attrs),
-    do: {:error, :forbidden}
-
   @doc """
-  True when `identity` may upload revisions (patchsets and their code
-  snapshots) to `review`: it must be owned by the same user as the review
-  author's identity.
+  Appends a new patchset to an existing review. Auto-numbers to (max+1).
+  Also populates the per-file rows for the new patchset so the sidebar
+  renders without a re-parse.
+
+  Trusted setup path (seeds, demos, tests) that skips `Reviews.Policy`. Every
+  surface must use `append_patchset/3` with the authenticated principal.
+  Returns `{:ok, patchset}`; with no pusher identity it never claims a code
+  snapshot.
   """
-  def revision_uploader?(%Review{} = review, %Identity{owner_user_id: owner_id})
-      when not is_nil(owner_id) do
-    Repo.exists?(
-      from i in Identity,
-        where: i.id == ^review.author_id and i.owner_user_id == ^owner_id
-    )
+  def append_patchset_unchecked(%Review{} = review, attrs) when is_map(attrs) do
+    with {:ok, %{patchset: patchset}} <- insert_patchset(nil, review, attrs),
+         do: {:ok, patchset}
   end
-
-  def revision_uploader?(%Review{}, _identity), do: false
-
-  @doc """
-  Trusted internal setup path without authorization. User-facing callers must
-  use `append_patchset/3` with the authenticated identity instead. It returns
-  the same map, and a snapshot id is only honored under the code storage policy.
-  """
-  def append_patchset(%Review{} = review, attrs) when is_map(attrs),
-    do: insert_patchset(nil, review, attrs)
 
   defp insert_patchset(identity, %Review{} = review, attrs) do
     next_number = next_patchset_number(review.id)
@@ -140,7 +131,7 @@ defmodule Reviews.Reviews do
       review_id: review.id,
       number: next_number,
       raw_diff: raw_diff,
-      packet: attrs[:packet] || attrs["packet"],
+      packet: Map.get(attrs, :packet, attrs["packet"]),
       base_sha: attrs[:base_sha] || attrs["base_sha"],
       branch_name: attrs[:branch_name] || attrs["branch_name"],
       pushed_at: DateTime.utc_now() |> DateTime.truncate(:second)
@@ -203,6 +194,28 @@ defmodule Reviews.Reviews do
 
   def get_patchset_by_number(%Review{id: review_id}, number) when is_integer(number) do
     Repo.get_by(Patchset, review_id: review_id, number: number)
+  end
+
+  @doc "Select one revision's identity without loading its diff, packet or file totals."
+  def get_patchset_metadata(%Review{id: review_id}, number) do
+    query =
+      from p in Patchset,
+        where: p.review_id == ^review_id,
+        order_by: [desc: p.number],
+        limit: 1,
+        select: %{id: p.id, number: p.number}
+
+    query = if is_nil(number), do: query, else: from(p in query, where: p.number == ^number)
+    Repo.one(query)
+  end
+
+  @doc "Revision identities for a page's thread origins, scoped to their review."
+  def list_patchset_metadata(%Review{id: review_id}, ids) when is_list(ids) do
+    Repo.all(
+      from p in Patchset,
+        where: p.review_id == ^review_id and p.id in ^ids,
+        select: %{id: p.id, number: p.number}
+    )
   end
 
   @doc "The packet of one patchset, without loading its diff."

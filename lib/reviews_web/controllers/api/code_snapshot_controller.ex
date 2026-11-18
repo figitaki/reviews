@@ -11,48 +11,42 @@ defmodule ReviewsWeb.Api.CodeSnapshotController do
   """
   use ReviewsWeb, :controller
 
-  import ReviewsWeb.Api.ApiHelpers
-
   alias Reviews.CodeSnapshots
   alias Reviews.CodeStorage
-  alias Reviews.CodeStorage.Errors
+  alias ReviewsWeb.ApiErrors
+
+  @reserve_errors [
+    :review_not_found,
+    :unsupported_object_format,
+    :snapshot_not_authorized,
+    :invalid_oid,
+    :invalid_head_kind
+  ]
+
+  @complete_errors [:snapshot_not_ready, :snapshot_not_authorized, :upload_expired, :ref_mismatch]
 
   @doc "POST /api/v1/code-snapshots"
   def create(conn, params) do
-    identity = conn.assigns.current_identity
-
     with :ok <- check_enabled(),
-         {:ok, result} <- CodeSnapshots.reserve(identity, normalize_params(params)) do
+         {:ok, result} <-
+           CodeSnapshots.reserve(conn.assigns.current_principal, normalize_params(params)) do
       conn
       |> put_status(:created)
       |> json(render_reservation(result))
     else
-      {:error, :code_storage_disabled} ->
-        disabled(conn)
+      {:error, reason} when reason in [:code_storage_disabled | @reserve_errors] ->
+        ApiErrors.render(conn, reason)
 
-      {:error, :review_not_found} ->
-        error_json(conn, :not_found, "Review not found")
-
-      {:error, code} when code in [:unsupported_object_format, :snapshot_not_authorized] ->
-        error_json(conn, Errors.http_status(code), code, Errors.message(code))
-
-      {:error, code} when code in [:invalid_oid, :invalid_head_kind] ->
-        error_json(conn, :unprocessable_entity, "Invalid snapshot parameters")
-
-      {:error, :upload_failed} ->
-        error_json(conn, :bad_gateway, "code storage unavailable")
-
+      # Provider failures (create repo, signing) never reach the client.
       {:error, _reason} ->
-        error_json(conn, :bad_gateway, "code storage unavailable")
+        ApiErrors.render(conn, :code_storage_unavailable)
     end
   end
 
   @doc "POST /api/v1/code-snapshots/:id/complete"
   def complete(conn, %{"id" => id}) do
-    identity = conn.assigns.current_identity
-
     with :ok <- check_enabled(),
-         {:ok, snapshot} <- CodeSnapshots.complete(identity, id) do
+         {:ok, snapshot} <- CodeSnapshots.complete(conn.assigns.current_identity, id) do
       json(conn, %{
         id: snapshot.public_id,
         status: snapshot.status,
@@ -60,29 +54,16 @@ defmodule ReviewsWeb.Api.CodeSnapshotController do
         head_oid: snapshot.head_oid
       })
     else
-      {:error, :code_storage_disabled} ->
-        disabled(conn)
-
-      {:error, code}
-      when code in [:snapshot_not_ready, :snapshot_not_authorized, :upload_expired, :ref_mismatch] ->
-        error_json(conn, Errors.http_status(code), code, Errors.message(code))
+      {:error, reason} when reason in [:code_storage_disabled | @complete_errors] ->
+        ApiErrors.render(conn, reason)
 
       {:error, {:verify_failed, _reason}} ->
-        error_json(conn, :bad_gateway, "code storage unavailable")
+        ApiErrors.render(conn, :code_storage_unavailable)
     end
   end
 
   defp check_enabled do
     if CodeStorage.enabled?(), do: :ok, else: {:error, :code_storage_disabled}
-  end
-
-  defp disabled(conn) do
-    error_json(
-      conn,
-      Errors.http_status(:code_storage_disabled),
-      :code_storage_disabled,
-      Errors.message(:code_storage_disabled)
-    )
   end
 
   defp normalize_params(params) do

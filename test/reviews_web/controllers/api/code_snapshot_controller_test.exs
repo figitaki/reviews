@@ -57,12 +57,12 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
   describe "with code storage disabled" do
     test "reserve returns 404 with a stable code", %{conn: conn} do
       conn = post(conn, ~p"/api/v1/code-snapshots", @reserve_body)
-      assert %{"errors" => %{"code" => "code_storage_disabled"}} = json_response(conn, 404)
+      assert %{"error_code" => "code_storage_disabled"} = json_response(conn, 404)
     end
 
     test "complete returns 404 with a stable code", %{conn: conn} do
       conn = post(conn, ~p"/api/v1/code-snapshots/#{Ecto.UUID.generate()}/complete")
-      assert %{"errors" => %{"code" => "code_storage_disabled"}} = json_response(conn, 404)
+      assert %{"error_code" => "code_storage_disabled"} = json_response(conn, 404)
     end
   end
 
@@ -146,7 +146,7 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
 
       conn = post(conn, ~p"/api/v1/code-snapshots", body)
 
-      assert %{"errors" => %{"code" => "unsupported_object_format"}} = json_response(conn, 422)
+      assert %{"error_code" => "unsupported_object_format"} = json_response(conn, 422)
       assert Repo.aggregate(CodeSnapshot, :count) == 1
     end
 
@@ -172,7 +172,7 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
       conn =
         post(conn, ~p"/api/v1/code-snapshots", Map.put(@reserve_body, "review_slug", review.slug))
 
-      assert %{"errors" => %{"code" => "snapshot_not_authorized"}} = json_response(conn, 403)
+      assert %{"error_code" => "snapshot_not_authorized"} = json_response(conn, 403)
       assert Repo.aggregate(CodeSnapshot, :count) == 0
       assert Repo.aggregate(Reviews.Reviews.CodeRepository, :count) == 0
     end
@@ -188,7 +188,7 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
       conn =
         post(conn, ~p"/api/v1/code-snapshots", Map.put(@reserve_body, "object_format", "sha256"))
 
-      assert %{"errors" => %{"code" => "unsupported_object_format"}} = json_response(conn, 422)
+      assert %{"error_code" => "unsupported_object_format"} = json_response(conn, 422)
     end
 
     test "reserve rejects malformed oids", %{conn: conn} do
@@ -231,7 +231,7 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
           })
 
         conn = post(ctx.conn, ~p"/api/v1/code-snapshots/#{snapshot.public_id}/complete")
-        assert %{"errors" => %{"code" => "upload_expired"}} = json_response(conn, 410)
+        assert %{"error_code" => "upload_expired"} = json_response(conn, 410)
       end
     end
 
@@ -249,7 +249,7 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
         )
 
         conn = post(ctx.conn, ~p"/api/v1/code-snapshots/#{snapshot.public_id}/complete")
-        assert %{"errors" => %{"code" => "upload_expired"}} = json_response(conn, 410)
+        assert %{"error_code" => "upload_expired"} = json_response(conn, 410)
         assert Repo.get!(CodeSnapshot, snapshot.id).status == "expired"
       end
     end
@@ -294,7 +294,7 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
       snapshot = code_snapshot_fixture(identity, repository, %{status: "reserved"})
 
       conn = post(conn, ~p"/api/v1/code-snapshots/#{snapshot.public_id}/complete")
-      assert %{"errors" => %{"code" => "ref_mismatch"}} = json_response(conn, 422)
+      assert %{"error_code" => "ref_mismatch"} = json_response(conn, 422)
       assert Repo.get!(CodeSnapshot, snapshot.id).status == "failed"
     end
 
@@ -312,7 +312,7 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
       snapshot = code_snapshot_fixture(other, repository, %{status: "reserved"})
 
       conn = post(conn, ~p"/api/v1/code-snapshots/#{snapshot.public_id}/complete")
-      assert %{"errors" => %{"code" => "snapshot_not_authorized"}} = json_response(conn, 403)
+      assert %{"error_code" => "snapshot_not_authorized"} = json_response(conn, 403)
     end
 
     test "complete on an expired snapshot returns 410", %{conn: conn, identity: identity} do
@@ -320,7 +320,7 @@ defmodule ReviewsWeb.Api.CodeSnapshotControllerTest do
       snapshot = code_snapshot_fixture(identity, repository, %{status: "expired"})
 
       conn = post(conn, ~p"/api/v1/code-snapshots/#{snapshot.public_id}/complete")
-      assert %{"errors" => %{"code" => "upload_expired"}} = json_response(conn, 410)
+      assert %{"error_code" => "upload_expired"} = json_response(conn, 410)
     end
   end
 

@@ -90,7 +90,7 @@ defmodule ReviewsWeb.Api.CodeSnapshotClaimTest do
         "code_snapshot_id" => Ecto.UUID.generate()
       })
 
-    assert %{"errors" => %{"code" => "snapshot_not_ready"}} = json_response(conn, 422)
+    assert %{"error_code" => "snapshot_not_ready"} = json_response(conn, 422)
     assert Repo.aggregate(Review, :count) == before_count
   end
 

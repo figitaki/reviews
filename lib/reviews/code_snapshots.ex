@@ -12,6 +12,8 @@ defmodule Reviews.CodeSnapshots do
 
   alias Reviews.Accounts.Identity
   alias Reviews.CodeStorage
+  alias Reviews.Policy
+  alias Reviews.Principal
   alias Reviews.Repo
   alias Reviews.Reviews.{CodeRepository, CodeSnapshot, Patchset, Review}
 
@@ -45,11 +47,22 @@ defmodule Reviews.CodeSnapshots do
 
   Provider calls are not transactional with the DB rows; the sweeper cleans
   up partial state after `expires_at`.
+
+  `actor` is a `Reviews.Principal` or an `Identity`; reserving against an
+  existing review needs `Reviews.Policy` push permission on it.
   """
-  def reserve(%Identity{} = identity, attrs) do
-    with :ok <- validate_reserve_attrs(attrs),
-         {:ok, repository} <- find_or_create_repository(identity, attrs) do
+  def reserve(actor, attrs) do
+    with {:ok, identity} <- actor_identity(actor),
+         :ok <- validate_reserve_attrs(attrs),
+         {:ok, repository} <- find_or_create_repository(actor, identity, attrs) do
       reserve_in_repository(identity, repository, attrs)
+    end
+  end
+
+  defp actor_identity(actor) do
+    case Principal.from(actor) do
+      %Principal{identity: %Identity{} = identity} -> {:ok, identity}
+      _ -> {:error, :snapshot_not_authorized}
     end
   end
 
@@ -193,14 +206,14 @@ defmodule Reviews.CodeSnapshots do
   # Only identities that may upload revisions to the review can reserve
   # against it. Otherwise any token holder could write refs into another
   # review's storage repository.
-  defp find_or_create_repository(identity, %{review_slug: review_slug} = attrs)
+  defp find_or_create_repository(actor, identity, %{review_slug: review_slug} = attrs)
        when is_binary(review_slug) do
     case Repo.get_by(Review, slug: review_slug) do
       nil ->
         {:error, :review_not_found}
 
       %Review{} = review ->
-        if Reviews.Reviews.revision_uploader?(review, identity) do
+        if Policy.can?(actor, :push, review) do
           case Repo.one(from r in CodeRepository, where: r.review_id == ^review.id) do
             %CodeRepository{} = repository -> {:ok, repository}
             nil -> create_staging_repository(identity, attrs[:object_format])
@@ -211,7 +224,7 @@ defmodule Reviews.CodeSnapshots do
     end
   end
 
-  defp find_or_create_repository(identity, attrs),
+  defp find_or_create_repository(_actor, identity, attrs),
     do: create_staging_repository(identity, attrs[:object_format])
 
   # A Git repository has one object format. A later patchset must match the
