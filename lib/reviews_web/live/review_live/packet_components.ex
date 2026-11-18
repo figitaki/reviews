@@ -508,11 +508,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           <% true -> %>
             <.icon name="hero-pencil-square" />
         <% end %>
-        <span :if={!@editing} class="review-section-decision-toggle-label" aria-hidden="true">
-          {if @section.effective_status in ~w(approved denied ignored),
-            do: guide_status_label(@section.effective_status),
-            else: "Decide"}
-        </span>
       </button>
       <div
         id={"packet-section-#{@section.index}-decision-controls"}

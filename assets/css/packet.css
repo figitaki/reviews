@@ -1343,19 +1343,78 @@ details[open] > summary .review-collapse-icon,
   font-size: var(--font-meta-size);
 }
 
-.review-section-decision-toggle {
+/* In the Guide the decision is a floating button in the bottom-right corner,
+   below Comments, at every width, and expands into a panel from there. The
+   same rules serve phones; their media query only changes sizes. */
+.review-packet-shell.has-outline .review-section-decision {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  margin: 0;
+}
+
+/* The grid's bottom padding lets the last lines scroll clear of the
+   decision and Comments buttons stacked in the corner. */
+.review-packet-shell.has-outline .review-packet-grid {
+  padding-bottom: calc(2 * var(--size-fab) + 44px + env(safe-area-inset-bottom));
+}
+
+.review-packet-shell.has-outline .review-section-decision.is-editing {
+  width: min(28rem, calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+}
+
+/* The closed decision is a floating button like Sections and Comments:
+   --size-fab, --radius-lg and --shadow-float. */
+.review-section-decision:not(.is-editing) {
+  width: var(--size-fab);
+  margin-left: auto;
+  margin-right: 0;
+  justify-self: end;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.review-section-decision:not(.is-editing) .review-section-decision-copy,
+.review-section-decision:not(.is-editing) .review-packet-section-actions {
   display: none;
 }
 
-/* Expanded, the toggle is a small close button in the bar's top-right
-   corner, out of the bar's flex layout. */
+.review-section-decision-toggle {
+  display: inline-flex;
+  flex: 0 0 var(--size-fab);
+  align-items: center;
+  justify-content: center;
+  width: var(--size-fab);
+  height: var(--size-fab);
+  border: 1px solid var(--review-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--review-panel-raised);
+  color: var(--decision-accent);
+  cursor: pointer;
+  box-shadow: var(--shadow-float);
+}
+
+.review-section-decision-toggle:hover {
+  background: var(--review-hover);
+}
+
+.review-section-decision-toggle:focus-visible {
+  outline: 2px solid var(--decision-accent);
+  outline-offset: 3px;
+}
+
+.review-section-decision-toggle > span {
+  width: var(--size-fab-icon);
+  height: var(--size-fab-icon);
+}
+
+/* Expanded, the toggle is a small close button in the panel's top-right
+   corner, out of the panel's flex layout. */
 .review-section-decision.is-editing .review-section-decision-toggle {
   position: absolute;
   top: 4px;
   right: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 24px;
   height: 24px;
   border: 0;
@@ -1371,81 +1430,21 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-text);
 }
 
-.review-section-decision.is-editing .review-section-decision-copy {
-  padding-right: 28px;
-}
-
 .review-section-decision.is-editing .review-section-decision-toggle > span {
   width: 14px;
   height: 14px;
 }
 
-/* Above phones the decision collapses to a pill at the right edge of the
-   content, like the phone button; its toggle expands the full bar. */
-@media (min-width: 641px) {
-  .review-section-decision:not(.is-editing):not(.is-readonly) {
-    /* Centres the 40px pill on the 48px Comments button. */
-    bottom: calc(20px + env(safe-area-inset-bottom));
-    width: fit-content;
-    margin-left: auto;
-    margin-right: 0;
-    justify-self: end;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    box-shadow: none;
-  }
+.review-section-decision.is-editing .review-section-decision-copy {
+  flex: 1;
+  min-width: 0;
+  padding-right: 28px;
+}
 
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-section-decision-copy,
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-packet-section-actions {
-    display: none;
-  }
-
-  .review-section-decision-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    height: 40px;
-    border: 1px solid var(--review-line-strong);
-    border-radius: 999px;
-    padding: 0 16px 0 12px;
-    background: var(--review-panel-raised);
-    color: var(--decision-accent);
-    cursor: pointer;
-    box-shadow: var(--shadow-float);
-    font-size: var(--font-ui-size);
-    font-weight: var(--font-ui-weight);
-    line-height: var(--font-ui-leading);
-  }
-
-  .review-section-decision-toggle:hover {
-    background: var(--review-hover);
-  }
-
-  .review-section-decision-toggle:focus-visible {
-    outline: 2px solid var(--decision-accent);
-    outline-offset: 3px;
-  }
-
-  .review-section-decision-toggle > .review-section-state-icon,
-  .review-section-decision-toggle > [class*="hero-"] {
-    width: 18px;
-    height: 18px;
-  }
-
-  .review-section-decision-toggle-label {
-    color: var(--review-text);
-  }
-
-  /* Bottom-aligned actions stay clear of the close button in the corner. */
-  .review-section-decision.is-editing {
-    align-items: flex-end;
-    padding-top: 22px;
-  }
-
-  .review-section-decision.is-editing .review-packet-section-actions {
-    margin-left: auto;
-  }
+.review-section-decision .review-packet-section-actions {
+  width: 100%;
+  flex-basis: 100%;
+  justify-content: flex-start;
 }
 
 .review-section-decision-prompt {
@@ -1538,18 +1537,6 @@ details[open] > summary .review-collapse-icon,
     padding-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
-  /* Only people who can decide get the floating button. Everyone else sees
-     the decision inline, with the owner-only note or sign-in link. */
-  .review-packet-shell.has-outline .review-section-decision:not(.is-readonly) {
-    position: fixed;
-    right: calc(16px + env(safe-area-inset-right));
-    margin: 0;
-  }
-
-  .review-section-decision.is-readonly {
-    position: static;
-  }
-
   .review-packet-shell.has-outline .review-section-decision.is-editing {
     width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
   }
@@ -1558,77 +1545,12 @@ details[open] > summary .review-collapse-icon,
     --review-decision-action-padding: 0 8px;
 
     padding: 12px;
-    border-radius: var(--radius-lg);
     gap: 12px;
   }
 
-  /* The closed decision is a floating button like Sections and Comments:
-     --size-fab, --radius-lg and --shadow-float. */
-  .review-section-decision:not(.is-editing):not(.is-readonly) {
-    width: var(--size-fab);
-    margin-left: auto;
-    margin-right: 0;
-    justify-self: end;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-section-decision-copy,
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-packet-section-actions {
-    display: none;
-  }
-
-  .review-section-decision-toggle {
-    display: inline-flex;
-    flex: 0 0 var(--size-fab);
-    align-items: center;
-    justify-content: center;
-    width: var(--size-fab);
-    height: var(--size-fab);
-    border: 1px solid var(--review-line-strong);
-    border-radius: var(--radius-lg);
-    background: var(--review-panel-raised);
-    color: var(--decision-accent);
-    cursor: pointer;
-    box-shadow: var(--shadow-float);
-  }
-
-  .review-section-decision-toggle:hover {
-    background: var(--review-hover);
-  }
-
-  .review-section-decision-toggle:focus-visible {
-    outline: 2px solid var(--decision-accent);
-    outline-offset: 3px;
-  }
-
-  .review-section-decision-toggle > span {
-    width: var(--size-fab-icon);
-    height: var(--size-fab-icon);
-  }
-
-  .review-section-decision-toggle > .review-section-decision-toggle-label {
-    display: none;
-  }
-
   .review-section-decision.is-editing .review-section-decision-toggle {
-    top: 4px;
-    right: 4px;
     width: 32px;
     height: 32px;
-  }
-
-  .review-section-decision.is-editing .review-section-decision-copy {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .review-section-decision .review-packet-section-actions {
-    width: 100%;
-    flex-basis: 100%;
-    justify-content: flex-start;
   }
 
   .review-section-decision .review-section-action {

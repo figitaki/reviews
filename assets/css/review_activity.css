@@ -263,9 +263,17 @@
 /* Leave room so the button never covers the last lines of code. */
 .review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 
-/* Above phones the sticky section decision bar stops short of the button. */
+/* In the Guide the decision button sits in the corner and Comments stacks
+   above it, at every width. The open decision panel hides Comments. */
+.review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity {
+  --review-quick-bottom: calc(16px + var(--size-fab) + 12px + env(safe-area-inset-bottom));
+}
+.review-page:has(.review-packet-shell.has-outline .review-section-decision.is-editing) .review-activity { display: none; }
+
+/* Above phones a sticky decision bar outside the Guide map stops short of
+   the button. */
 @media (min-width: 641px) {
-  .review-page:has(.review-activity:not([data-empty])) .review-section-decision { margin-right: 64px; }
+  .review-page:has(.review-activity:not([data-empty])) .review-packet-shell:not(.has-outline) .review-section-decision { margin-right: 64px; }
   /* The Guide grid's own bottom padding already clears the button. Padding
      below the Guide shell ended the sticky Guide rail early, so it jumped up
      at the bottom of the page over empty space. */
@@ -285,15 +293,9 @@
 /* Phones: icon-only floating buttons, Sections (Guide only) above Comments,
    stacked above the section decision button, all three --size-fab. */
 @media (max-width: 640px) {
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
-    --review-quick-right: calc(16px + env(safe-area-inset-right));
-    --review-quick-bottom: calc(16px + var(--size-fab) + 12px + env(safe-area-inset-bottom));
-  }
   /* Sections scrolls the Guide map in below the sticky review toolbar, so its
      close button stays visible. */
   #review-guide-shell { scroll-margin-top: var(--rev-header-h, 48px); }
-  /* The open decision panel spans the screen. */
-  .review-page:has(.review-section-decision.is-editing) .review-activity { display: none; }
   /* The Guide grid already reserves space for the decision button. */
   .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
     padding-bottom: 72px;
