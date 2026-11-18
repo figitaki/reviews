@@ -330,8 +330,11 @@ defmodule ReviewsWeb.ReviewListLive do
         color: var(--ds-warn);
       }
 
+      /* One flex row, so the avatar, handle, dot and time share a centre
+         line and no stray whitespace sits between them. */
       .rl-meta {
         display: flex;
+        grid-column: 1;
         min-width: 0;
         flex-wrap: wrap;
         align-items: center;
@@ -342,9 +345,7 @@ defmodule ReviewsWeb.ReviewListLive do
         line-height: var(--font-meta-leading);
       }
 
-      .rl-meta > span + span::before {
-        content: "·";
-        margin-right: var(--space-2);
+      .rl-dot {
         color: var(--ds-faint);
       }
 
@@ -553,32 +554,29 @@ defmodule ReviewsWeb.ReviewListLive do
             <.link navigate={~p"/r/#{entry.review.slug}"}>{entry.review.title}</.link>
           </h2>
           <p class="rl-meta">
-            <span>
-              <.link
-                patch={list_path(%{@filters | author: entry.review.author.handle})}
-                class="rl-author"
-                title={"Show reviews by @#{entry.review.author.handle}"}
-              >
-                <img
-                  :if={entry.review.author.avatar_url}
-                  src={entry.review.author.avatar_url}
-                  alt=""
-                  width="16"
-                  height="16"
-                  loading="lazy"
-                />
-                <span translate="no">
-                  @{entry.review.author.handle}{if entry.review.author.kind == "agent",
-                    do: " (agent)"}
-                </span>
-              </.link>
-            </span>
-            <span>
-              <time datetime={DateTime.to_iso8601(entry.updated_at)}>
-                {relative_time(entry.updated_at, @now)}
-              </time>
-            </span>
-            <span>{entry.patchset_count} {plural(entry.patchset_count, "patchset")}</span>
+            <.link
+              patch={list_path(%{@filters | author: entry.review.author.handle})}
+              class="rl-author"
+              title={"Show reviews by @#{entry.review.author.handle}"}
+            >
+              <img
+                :if={entry.review.author.avatar_url}
+                src={entry.review.author.avatar_url}
+                alt=""
+                width="16"
+                height="16"
+                loading="lazy"
+              />
+              <span translate="no">
+                @{entry.review.author.handle}{if entry.review.author.kind == "agent",
+                  do: " (agent)"}
+              </span>
+            </.link>
+            <span class="rl-dot" aria-hidden="true">·</span>
+            <time datetime={DateTime.to_iso8601(entry.updated_at)}>{relative_time(
+              entry.updated_at,
+              @now
+            )}</time>
           </p>
           <div :if={entry.has_new_patchset or entry.open_thread_count > 0} class="rl-status">
             <span :if={entry.has_new_patchset} class="ds-badge rl-badge-new">New patchset</span>
@@ -721,9 +719,6 @@ defmodule ReviewsWeb.ReviewListLive do
       do: "Try another search, or clear the filters to see all your reviews.",
       else: "Reviews you push, and reviews you comment on, show up here."
   end
-
-  defp plural(1, word), do: word
-  defp plural(_count, word), do: word <> "s"
 
   @doc false
   def relative_time(%DateTime{} = at, %DateTime{} = now) do

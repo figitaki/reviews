@@ -36,7 +36,7 @@ defmodule ReviewsWeb.ReviewListLiveTest do
 
     assert has_element?(view, "#nav-reviews[aria-current=page]")
     assert has_element?(view, "#review-#{mine.id} a[href='/r/#{mine.slug}']", "Speed up lookup")
-    assert has_element?(view, "#review-#{mine.id}", "1 patchset")
+    refute has_element?(view, "#review-#{mine.id}", "patchset")
     assert has_element?(view, "#review-#{involved.id} .rl-author", "@conner")
     assert has_element?(view, "#review-#{involved.id} .rl-badge-open", "1 open")
     refute has_element?(view, "#review-#{mine.id} .rl-badge-open")
