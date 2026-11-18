@@ -161,7 +161,7 @@ defmodule Reviews.ReviewDecidersTest do
     assert %{decision: "ignored", ignored: 2} = deciders["skipper"]
   end
 
-  test "includes agent identities and comment-only reviewers, and skips the review owner's account" do
+  test "includes agent identities and comment-only reviewers, and the owner only for decisions" do
     author = user!("author")
     %{review: review, patchset: ps} = packet_review!(author)
 
@@ -189,7 +189,14 @@ defmodule Reviews.ReviewDecidersTest do
 
     deciders = by_handle(deciders(review))
 
-    assert Map.keys(deciders) |> Enum.sort() == ["codex", "commenter"]
+    # The owner's decisions show, marked as the author's; the owner's comments
+    # and its agent's comment-only activity do not add entries.
+    assert Map.keys(deciders) |> Enum.sort() == ["author", "codex", "commenter"]
+
+    assert %{owner: true, decision: "in_progress", approved: 1, comment_count: 0} =
+             deciders["author"]
+
+    assert %{owner: false} = deciders["codex"]
 
     assert %{
              decision: "approved",

@@ -119,8 +119,9 @@ later fixes continue toward 0.0.2.
   page returns there; an explicit `return_to` still wins.
 
 - The review screen shows a reviewers stack: one avatar for each person or
-  agent outside the review owner's account who decided a section or
-  commented, ringed with their account's decision for the selected revision.
+  agent who decided a section, or commented from outside the review owner's
+  account, ringed with their account's decision for the selected revision.
+  The owner's own decisions show with a dashed ring, marked as the author's.
   It updates live when a section decision changes.
 
 - `reviews login` signs in from the browser on any device with the OAuth

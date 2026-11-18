@@ -181,6 +181,11 @@
   --decider-color: var(--ds-blue);
 }
 
+/* The review author's own decisions: same colors, dashed ring. */
+.rev-decider.is-owner {
+  border-style: dashed;
+}
+
 .rev-decider-more {
   --decider-color: var(--ds-line-strong);
   color: var(--ds-muted);

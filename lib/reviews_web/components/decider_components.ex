@@ -40,9 +40,10 @@ defmodule ReviewsWeb.DeciderComponents do
         :for={decider <- @visible_deciders}
         :key={decider.author.id}
         id={"#{@id}-#{decider.author.id}"}
-        class={["rev-decider", decision_class(decider.decision)]}
+        class={["rev-decider", decision_class(decider.decision), decider.owner && "is-owner"]}
         data-decision={decider.decision}
         data-kind={decider.author.kind}
+        data-owner={to_string(decider.owner)}
         data-label={decider_label(decider)}
         title={decider_label(decider)}
         tabindex="0"
@@ -87,7 +88,7 @@ defmodule ReviewsWeb.DeciderComponents do
 
   defp decider_label(%{author: author} = decider) do
     [
-      "#{author_name(author)}: #{decision_label(decider)}",
+      "#{author_name(author)}#{if decider.owner, do: " (author)"}: #{decision_label(decider)}",
       comment_label(decider.comment_count)
     ]
     |> Enum.reject(&is_nil/1)

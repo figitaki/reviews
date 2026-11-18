@@ -2,9 +2,12 @@ defmodule Reviews.ReviewDeciders do
   @moduledoc """
   Read model for the published reviewers ("deciders") of a review.
 
-  A decider is any identity, human or agent, outside the review owner's account
-  (`Reviews.Policy` treats a person and their agents as one account), that has
-  a packet section decision on the review or a published comment on it.
+  A decider is any identity, human or agent, that has a packet section
+  decision on the review, or a published comment on it from outside the review
+  owner's account (`Reviews.Policy` treats a person and their agents as one
+  account). The owner's account appears only for its decisions, with `owner:
+  true`, so the stack shows the author's own review while only owners may
+  decide sections.
   Section decisions are saved as soon as they are made, so they count as
   published.
 
@@ -44,6 +47,7 @@ defmodule Reviews.ReviewDeciders do
           ignored: non_neg_integer(),
           section_count: non_neg_integer(),
           comment_count: non_neg_integer(),
+          owner: boolean(),
           last_active_at: DateTime.t() | nil
         }
 
@@ -54,10 +58,10 @@ defmodule Reviews.ReviewDeciders do
   def list(%Review{} = review, patchsets, selected_patchset) do
     owner_account_id = owner_account_id(review)
 
-    decisions =
-      review
-      |> PacketSectionDecisions.list_visible_for_review()
-      |> Enum.reject(&(&1.account_id == owner_account_id))
+    # Only the owner's account may decide sections today (`Reviews.Policy`),
+    # so its decisions stay in the stack, marked as the author's. Its comments
+    # are replies, not reviews, so they still do not add it.
+    decisions = PacketSectionDecisions.list_visible_for_review(review)
 
     comment_authors =
       review.id
@@ -90,6 +94,7 @@ defmodule Reviews.ReviewDeciders do
       |> Map.drop([:decisions])
       |> Map.merge(%{
         author: author,
+        owner: same_account?(author, owner_account_id),
         comment_count: (comments && comments.comment_count) || 0,
         last_active_at: last_active_at(rollup.decisions, comments)
       })

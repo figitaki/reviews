@@ -886,8 +886,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
       })
       |> Reviews.Repo.insert!()
 
-      # The owner's decision broadcasts, so open pages reload; the owner's own
-      # account stays out of the reviewers stack.
+      # The owner's decision broadcasts, so open pages reload, and shows in the
+      # stack marked as the author's.
       {:ok, _} =
         Reviews.PacketSectionDecisions.decide(
           packet_review,
@@ -903,7 +903,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       assert has_element?(view, "#decider-stack-#{zara.id} .rev-decider-badge .hero-check")
-      refute has_element?(view, "#decider-stack-#{owner_identity.id}")
+
+      assert has_element?(
+               view,
+               ~s|#decider-stack-#{owner_identity.id}.is-owner.is-denied[title="@owner (author): denied 1 of 1 section"]|
+             )
+
+      refute has_element?(view, "#decider-stack-#{zara.id}.is-owner")
     end
 
     test "does not render the old publish review button", %{conn: conn, review: review} do
