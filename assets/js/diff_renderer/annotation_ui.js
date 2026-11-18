@@ -1,5 +1,6 @@
 import { button as baseButton, el } from "./dom.js"
 import { renderMarkdown } from "../lib/markdown.js"
+import { COARSE } from "../lib/breakpoints.js"
 
 // Pierre owns the diff body theme. Annotation UI is rendered by Reviews through
 // `renderAnnotation`, so it uses Reviews design tokens and inline styles that
@@ -17,6 +18,9 @@ const colors = {
 }
 
 const fontStack = "var(--font-sans, system-ui, sans-serif)"
+// Touch keeps 44px targets, 16px inputs (smaller text makes iOS zoom on
+// focus) and no keyboard hints.
+const touch = () => Boolean(window.matchMedia?.(COARSE).matches)
 const monoStack = "var(--font-mono, ui-monospace, monospace)"
 
 const bubbleBaseStyle = {
@@ -31,7 +35,7 @@ const bubbleBaseStyle = {
   boxSizing: "border-box",
 }
 
-const composerStyle = { ...bubbleBaseStyle, padding: "12px", marginBottom: "0" }
+const composerStyle = { ...bubbleBaseStyle, padding: "10px 12px", marginBottom: "0" }
 
 const buttonStyle = {
   display: "inline-flex",
@@ -125,16 +129,14 @@ const statusPillStyle = {
   outdated: { ...statusPillBaseStyle, color: colors.faint },
 }
 
-const threadRunStyle = { marginTop: "8px" }
 const threadRunHeaderStyle = {
   display: "flex",
   alignItems: "center",
   gap: "6px",
-  marginTop: "4px",
   fontWeight: "600",
 }
 const threadRunCommentsStyle = {
-  margin: "4px 0 0 0",
+  margin: "0",
   padding: "0 0 0 26px",
   listStyle: "none",
 }
@@ -142,8 +144,8 @@ const threadCommentStyle = {
   display: "flex",
   alignItems: "baseline",
   flexWrap: "wrap",
-  gap: "4px 12px",
-  padding: "4px 0",
+  gap: "2px 12px",
+  padding: "2px 0",
 }
 const threadCommentBodyStyle = {
   flex: "1 1 180px",
@@ -325,7 +327,7 @@ export function commentComposer({
   focusSelection,
 }) {
   const textarea = el("textarea", {
-    style: textareaStyle,
+    style: touch() ? { ...textareaStyle, fontSize: "16px" } : textareaStyle,
     rows: 2,
     placeholder,
     "aria-label": saveLabel === "Reply" ? "Reply to thread" : "Comment",
@@ -373,9 +375,9 @@ export function commentComposer({
     role: "group", "aria-label": "Comment composer",
   }, [
     textarea,
-    el("div", { style: { ...composerActionsStyle, marginTop: "12px", justifyContent: "space-between" } }, [
-      el("span", { style: { color: colors.muted, fontSize: "11px" } }, `${shortcut} to post · Esc to cancel`),
-      el("div", { style: composerActionsStyle }, [
+    el("div", { style: { ...composerActionsStyle, marginTop: "8px", justifyContent: "space-between" } }, [
+      touch() ? null : el("span", { style: { color: colors.muted, fontSize: "11px" } }, `${shortcut} to post · Esc to cancel`),
+      el("div", { style: { ...composerActionsStyle, marginLeft: "auto" } }, [
         button("Cancel", () => {
           submitted = true
           onCancel?.()
@@ -405,6 +407,11 @@ export function commentComposer({
   return node
 }
 
+function signInHref() {
+  const returnTo = window.location.pathname + window.location.search
+  return `/auth/github?return_to=${encodeURIComponent(returnTo)}`
+}
+
 export function signInPrompt(onCancel) {
   return el("div", { style: composerStyle }, [
     el(
@@ -420,7 +427,7 @@ export function signInPrompt(onCancel) {
       "Sign in with GitHub to leave a comment."
     ),
     el("div", { style: composerActionsStyle }, [
-      el("a", { href: "/auth/github", style: primaryButtonStyle }, "Sign in with GitHub"),
+      el("a", { href: signInHref(), style: primaryButtonStyle }, "Sign in with GitHub"),
       button("Cancel", onCancel),
     ]),
   ])
@@ -440,6 +447,78 @@ function commentTime(iso, prefix = "") {
   )
 }
 
+const attributionStyle = {
+  flex: "1 1 100%",
+  fontSize: "11px",
+  color: colors.muted,
+}
+const attributionSummaryStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  cursor: "pointer",
+  listStyle: "none",
+}
+const attributionBadgeStyle = {
+  border: `1px solid color-mix(in srgb, ${colors.add} 35%, ${colors.line})`,
+  borderRadius: "999px",
+  padding: "0 6px",
+  color: colors.add,
+  fontWeight: "600",
+}
+const attributionListStyle = {
+  display: "grid",
+  gridTemplateColumns: "max-content 1fr",
+  gap: "2px 10px",
+  margin: "6px 0 2px",
+}
+
+// The verified agent label and its details (issue #154). Only facts the server
+// verified are stated as verified; the agent's own name and Agent ID are shown
+// as its claims, and parties Poppy 1.0 can't establish are named as such.
+export function attributionDetails(attribution, author) {
+  if (!attribution || attribution.provider !== "poppy") return null
+  const domain = attribution.client_domain || "unknown agent"
+  const handle = author?.username ? `@${author.username}` : "this agent"
+  const row = (term, ...detail) => [
+    el("dt", { style: { color: colors.faint } }, term),
+    el("dd", { style: { margin: "0", color: colors.text } }, detail),
+  ]
+  const claim = (text) => el("span", { style: { color: colors.faint } }, ` (${text})`)
+
+  return el("details", { style: attributionStyle, dataset: { attribution: "poppy" } }, [
+    el("summary", { style: attributionSummaryStyle, "aria-label": `Verified agent via ${domain}. Show details.` }, [
+      el("span", { style: attributionBadgeStyle }, "Verified agent"),
+      el("span", {}, `via ${domain}`),
+      attribution.link_revoked ? el("span", { style: { color: colors.faint } }, "· since disconnected") : null,
+    ]),
+    el("dl", { style: attributionListStyle }, [
+      ...row("Acts as", `${handle}, a Reviews agent`),
+      ...row("Owner", `@${attribution.owner_username}`, claim(`approved this agent ${formatDate(attribution.approved_at)}`)),
+      ...row("Personal Agent", domain, claim("proved by its signing keys")),
+      ...row("Calls itself", attribution.client_name_claimed || "(no name)", claim("not verified")),
+      ...(attribution.agent_id_claimed ? row("Agent ID", "sent", claim("not verified")) : []),
+      ...row("Workload", "not established", claim("Poppy 1.0 has no workload proof")),
+      ...row("Delegation", "owner approval in Reviews", claim("no signed delegation chain")),
+      ...tokenRow(attribution.token_binding, row, claim),
+      ...(attribution.link_revoked ? row("Status", "Disconnected after this comment") : []),
+    ]),
+  ])
+}
+
+// Whether the comment's access token was bound to the agent's key. Comments
+// recorded before Reviews kept this have no row.
+function tokenRow(binding, row, claim) {
+  if (binding === "dpop") return row("Token", "Bound to agent key (DPoP)")
+  if (binding === "bearer") return row("Token", "Bearer", claim("not bound to a key"))
+  return []
+}
+
+function formatDate(iso) {
+  const date = iso ? new Date(iso) : null
+  return date && !Number.isNaN(date.valueOf()) ? `on ${date.toISOString().slice(0, 10)}` : ""
+}
+
 function commentBody(body, condensed = false) {
   const node = el("div", {
     className: "review-rich-markdown review-comment-markdown",
@@ -453,16 +532,17 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
   const runs = groupCommentsByAuthor(thread.comments)
   const commentRows = []
 
-  for (const run of runs) {
+  for (const [index, run] of runs.entries()) {
     const comments = run.comments.map((comment) =>
       el("li", { style: threadCommentStyle }, [
         commentBody(comment.body),
         commentTime(comment.inserted_at),
+        attributionDetails(comment.attribution, run.author),
       ])
     )
 
     commentRows.push(
-      el("li", { style: threadRunStyle }, [
+      el("li", { style: { marginTop: index ? "8px" : "0" } }, [
         el("header", { style: threadRunHeaderStyle }, [
           avatar(run.author),
           el("span", {}, run.author?.username || "reviewer"),
@@ -484,13 +564,15 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
     const expanded = !resolved || ui.expanded
     const where = anchorPinpoint(thread.anchor, thread.side)
     const header = el("header", {
-      style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", padding: "10px 12px", borderBottom: `1px solid ${colors.line}` },
+      style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", minHeight: "36px", padding: "3px 4px 3px 12px", borderBottom: `1px solid ${colors.line}` },
     }, [bubbleAnchorLink({ anchor: thread.anchor, side: thread.side, status: thread.status, commentCount: thread.comments?.length || 0 })])
     if (onUpdateStatus && ["open", "resolved"].includes(thread.status)) {
-      header.append(button(resolved ? "Reopen" : "Resolve", () => {
+      const status = button(resolved ? "Reopen" : "Resolve", () => {
         ui.expanded = false
         onUpdateStatus(thread, resolved ? "open" : "resolved")
-      }, { ariaLabel: `${resolved ? "Reopen" : "Resolve"} thread on line ${where}` }))
+      }, { ariaLabel: `${resolved ? "Reopen" : "Resolve"} thread on line ${where}` })
+      Object.assign(status.style, { marginLeft: "auto", background: "transparent", minHeight: touch() ? "44px" : "28px" })
+      header.append(status)
     }
     root.replaceChildren(header)
     if (resolved) {
@@ -510,7 +592,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
       ]))
     }
     if (!expanded) return
-    root.append(el("ul", { style: { listStyle: "none", margin: "0", padding: "4px 12px 12px" } }, commentRows))
+    root.append(el("ul", { style: { listStyle: "none", margin: "0", padding: "8px 12px" } }, commentRows))
     if (!onReply) return
     const footer = el("footer", { style: { ...threadFooterStyle, marginTop: "0", paddingTop: "0" } })
     root.append(footer)
@@ -547,7 +629,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
         ui.focusReply = true
         render()
       }, { ariaLabel: `Reply to thread on line ${where}` })
-      Object.assign(replyButton.style, { width: "100%", justifyContent: "flex-start", minHeight: "44px", padding: "8px 12px", background: "transparent", color: colors.muted, borderRadius: "0" })
+      Object.assign(replyButton.style, { width: "100%", justifyContent: "flex-start", minHeight: touch() ? "44px" : "34px", padding: "0 12px", background: "transparent", color: colors.muted, borderRadius: "0" })
       footer.append(replyButton)
     }
   }

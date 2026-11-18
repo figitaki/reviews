@@ -14,7 +14,11 @@ defmodule ReviewsWeb.Plugs.CanonicalHost do
   @impl true
   def init(opts), do: opts
 
+  # MCP checks the Host itself and answers 403. A redirect would invite a
+  # client to resend its bearer token to another host.
   @impl true
+  def call(%Plug.Conn{path_info: ["mcp" | _]} = conn, _opts), do: conn
+
   def call(conn, _opts) do
     case canonical_host() do
       nil ->

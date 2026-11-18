@@ -22,13 +22,16 @@ config :reviews, ReviewsWeb.Endpoint,
   pubsub_server: Reviews.PubSub,
   live_view: [signing_salt: "RllUbgpY"]
 
+# Hosted MCP endpoint (docs/MCP.md). Off unless enabled; dev and test enable
+# it, and prod reads MCP_ENABLED / MCP_WRITES_ENABLED in runtime.exs.
+config :reviews, :mcp, enabled: false, writes_enabled: false, allowed_hosts: :localhost
+
 # Configure esbuild (the version is required)
-# The JSX loaders are left over from the old React diff island. No source uses JSX now.
 config :esbuild,
-  version: "0.25.4",
+  version: "0.28.2",
   reviews: [
     args:
-      ~w(js/app.js js/theme.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=. --loader:.jsx=jsx --loader:.js=jsx),
+      ~w(js/app.js js/theme.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ]
@@ -42,7 +45,7 @@ config :ueberauth, Ueberauth,
 
 # Configure tailwind (the version is required)
 config :tailwind,
-  version: "4.3.0",
+  version: "4.3.3",
   reviews: [
     args: ~w(
       --input=assets/css/app.css
@@ -59,6 +62,36 @@ config :logger, :default_formatter,
 
 # Use Elixir's built-in JSON module for Phoenix, Postgrex (jsonb columns) and Ueberauth.
 config :phoenix, :json_library, JSON
+
+# Keep OAuth secrets out of request logs. Phoenix already filters "password";
+# the rest are sign-in values (Reviews.OAuth).
+config :phoenix, :filter_parameters, [
+  "password",
+  "client_assertion",
+  "code",
+  "code_verifier",
+  "device_code",
+  "user_code",
+  "refresh_token",
+  "token"
+]
+
+# The OAuth issuer (Reviews.OAuth, on gatekeep). Each API that accepts its
+# tokens is a Reviews.OAuth.Resource listed here. A request without `resource`
+# or a scope it recognizes goes to the default. The other keys are
+# Gatekeep.Config options. Registered clients keep the `rvc_` IDs Reviews
+# handed out before gatekeep, and DPoP proofs use ES256, as Session JWTs do.
+config :reviews, Reviews.OAuth,
+  # Reviews.OAuth.CLI is `reviews login`: the device authorization grant,
+  # approved at /device, for the CLI's own client only.
+  resources: [Reviews.Poppy, Reviews.OAuth.CLI],
+  default_resource: Reviews.Poppy,
+  device_verification_uri: "/device",
+  storage: {Gatekeep.Storage.Ecto, repo: Reviews.Repo},
+  consent: ReviewsWeb.OAuthController,
+  registered_client_prefix: "rvc_",
+  dpop_signing_algs: ["ES256"]
+
 config :postgrex, :json_library, JSON
 
 # Import environment specific config. This must remain at the bottom

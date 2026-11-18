@@ -3,6 +3,7 @@ use clap::Args;
 use serde_json::Value;
 
 use crate::api::ApiClient;
+use crate::auth;
 use crate::config::Config;
 
 const DEFAULT_SERVER: &str = "https://reviews.figitaki.dev";
@@ -34,7 +35,10 @@ fn resolve_server_and_token(server_override: Option<&str>) -> Result<(String, Op
         return Ok((s.to_string(), None));
     }
     match Config::load() {
-        Ok(cfg) => Ok((cfg.default.server_url, Some(cfg.default.api_token))),
+        Ok(cfg) => {
+            let token = auth::token(&cfg)?;
+            Ok((cfg.default.server_url, Some(token)))
+        }
         Err(_) => Ok((DEFAULT_SERVER.to_string(), None)),
     }
 }
