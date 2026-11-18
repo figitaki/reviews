@@ -34,7 +34,7 @@ defmodule ReviewsWeb.HomeLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="reviews-home" class="l-page">
+      <div id="reviews-home" class="l-page">
         <Layouts.landing_topbar current_user={@current_user} show_workflow_anchor={false} />
 
         <div class="home-content">
@@ -108,7 +108,7 @@ defmodule ReviewsWeb.HomeLive do
             <a href={@repo_url}>GitHub</a>
           </div>
         </footer>
-      </main>
+      </div>
       <script :type={Phoenix.LiveView.ColocatedHook} name=".InstallCopy">
         export default {
           mounted() {

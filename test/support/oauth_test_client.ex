@@ -11,7 +11,7 @@ defmodule Reviews.OAuthTestClient do
 
   defmodule Fetcher do
     @moduledoc false
-    @behaviour Reviews.OAuth.Fetcher
+    @behaviour Gatekeep.Fetcher
     @table :oauth_test_fetcher
 
     def setup do
@@ -26,7 +26,7 @@ defmodule Reviews.OAuthTestClient do
     def delete(url), do: :ets.delete(@table, url)
 
     @impl true
-    def get(url) do
+    def get(url, _config) do
       case :ets.lookup(@table, url) do
         [{^url, body}] -> {:ok, %{status: 200, body: JSON.encode!(body)}}
         [] -> {:ok, %{status: 404, body: ""}}

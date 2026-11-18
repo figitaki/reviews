@@ -1,5 +1,6 @@
 import { button as baseButton, el } from "./dom.js"
 import { renderMarkdown } from "../lib/markdown.js"
+import { COARSE } from "../lib/breakpoints.js"
 
 // Pierre owns the diff body theme. Annotation UI is rendered by Reviews through
 // `renderAnnotation`, so it uses Reviews design tokens and inline styles that
@@ -9,7 +10,7 @@ const colors = {
   raised: "var(--ds-panel-raised, #0b0b0c)",
   text: "var(--ds-text, #f5f5f5)",
   muted: "var(--ds-muted, #a3a3a3)",
-  faint: "var(--ds-faint, #707073)",
+  faint: "var(--ds-faint, #7c7c80)",
   line: "var(--ds-line, #242426)",
   lineStrong: "var(--ds-line-strong, #3a3a3d)",
   add: "var(--ds-add, #25d0a0)",
@@ -17,6 +18,9 @@ const colors = {
 }
 
 const fontStack = "var(--font-sans, system-ui, sans-serif)"
+// Touch keeps 44px targets, 16px inputs (smaller text makes iOS zoom on
+// focus) and no keyboard hints.
+const touch = () => Boolean(window.matchMedia?.(COARSE).matches)
 const monoStack = "var(--font-mono, ui-monospace, monospace)"
 
 const bubbleBaseStyle = {
@@ -31,7 +35,7 @@ const bubbleBaseStyle = {
   boxSizing: "border-box",
 }
 
-const composerStyle = { ...bubbleBaseStyle, padding: "12px", marginBottom: "0" }
+const composerStyle = { ...bubbleBaseStyle, padding: "10px 12px", marginBottom: "0" }
 
 const buttonStyle = {
   display: "inline-flex",
@@ -125,16 +129,14 @@ const statusPillStyle = {
   outdated: { ...statusPillBaseStyle, color: colors.faint },
 }
 
-const threadRunStyle = { marginTop: "8px" }
 const threadRunHeaderStyle = {
   display: "flex",
   alignItems: "center",
   gap: "6px",
-  marginTop: "4px",
   fontWeight: "600",
 }
 const threadRunCommentsStyle = {
-  margin: "4px 0 0 0",
+  margin: "0",
   padding: "0 0 0 26px",
   listStyle: "none",
 }
@@ -142,8 +144,8 @@ const threadCommentStyle = {
   display: "flex",
   alignItems: "baseline",
   flexWrap: "wrap",
-  gap: "4px 12px",
-  padding: "4px 0",
+  gap: "2px 12px",
+  padding: "2px 0",
 }
 const threadCommentBodyStyle = {
   flex: "1 1 180px",
@@ -325,7 +327,7 @@ export function commentComposer({
   focusSelection,
 }) {
   const textarea = el("textarea", {
-    style: textareaStyle,
+    style: touch() ? { ...textareaStyle, fontSize: "16px" } : textareaStyle,
     rows: 2,
     placeholder,
     "aria-label": saveLabel === "Reply" ? "Reply to thread" : "Comment",
@@ -373,9 +375,9 @@ export function commentComposer({
     role: "group", "aria-label": "Comment composer",
   }, [
     textarea,
-    el("div", { style: { ...composerActionsStyle, marginTop: "12px", justifyContent: "space-between" } }, [
-      el("span", { style: { color: colors.muted, fontSize: "11px" } }, `${shortcut} to post · Esc to cancel`),
-      el("div", { style: composerActionsStyle }, [
+    el("div", { style: { ...composerActionsStyle, marginTop: "8px", justifyContent: "space-between" } }, [
+      touch() ? null : el("span", { style: { color: colors.muted, fontSize: "11px" } }, `${shortcut} to post · Esc to cancel`),
+      el("div", { style: { ...composerActionsStyle, marginLeft: "auto" } }, [
         button("Cancel", () => {
           submitted = true
           onCancel?.()
@@ -539,7 +541,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
   const runs = groupCommentsByAuthor(thread.comments)
   const commentRows = []
 
-  for (const run of runs) {
+  for (const [index, run] of runs.entries()) {
     const comments = run.comments.map((comment) =>
       el("li", { style: threadCommentStyle }, [
         commentBody(comment.body),
@@ -549,7 +551,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
     )
 
     commentRows.push(
-      el("li", { style: threadRunStyle }, [
+      el("li", { style: { marginTop: index ? "8px" : "0" } }, [
         el("header", { style: threadRunHeaderStyle }, [
           avatar(run.author),
           el("span", {}, run.author?.username || "reviewer"),
@@ -571,13 +573,15 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
     const expanded = !resolved || ui.expanded
     const where = anchorPinpoint(thread.anchor, thread.side)
     const header = el("header", {
-      style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", padding: "10px 12px", borderBottom: `1px solid ${colors.line}` },
+      style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", minHeight: "36px", padding: "3px 4px 3px 12px", borderBottom: `1px solid ${colors.line}` },
     }, [bubbleAnchorLink({ anchor: thread.anchor, side: thread.side, status: thread.status, commentCount: thread.comments?.length || 0 })])
     if (onUpdateStatus && ["open", "resolved"].includes(thread.status)) {
-      header.append(button(resolved ? "Reopen" : "Resolve", () => {
+      const status = button(resolved ? "Reopen" : "Resolve", () => {
         ui.expanded = false
         onUpdateStatus(thread, resolved ? "open" : "resolved")
-      }, { ariaLabel: `${resolved ? "Reopen" : "Resolve"} thread on line ${where}` }))
+      }, { ariaLabel: `${resolved ? "Reopen" : "Resolve"} thread on line ${where}` })
+      Object.assign(status.style, { marginLeft: "auto", background: "transparent", minHeight: touch() ? "44px" : "28px" })
+      header.append(status)
     }
     root.replaceChildren(header)
     if (resolved) {
@@ -597,7 +601,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
       ]))
     }
     if (!expanded) return
-    root.append(el("ul", { style: { listStyle: "none", margin: "0", padding: "4px 12px 12px" } }, commentRows))
+    root.append(el("ul", { style: { listStyle: "none", margin: "0", padding: "8px 12px" } }, commentRows))
     if (!onReply) return
     const footer = el("footer", { style: { ...threadFooterStyle, marginTop: "0", paddingTop: "0" } })
     root.append(footer)
@@ -634,7 +638,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
         ui.focusReply = true
         render()
       }, { ariaLabel: `Reply to thread on line ${where}` })
-      Object.assign(replyButton.style, { width: "100%", justifyContent: "flex-start", minHeight: "44px", padding: "8px 12px", background: "transparent", color: colors.muted, borderRadius: "0" })
+      Object.assign(replyButton.style, { width: "100%", justifyContent: "flex-start", minHeight: touch() ? "44px" : "34px", padding: "0 12px", background: "transparent", color: colors.muted, borderRadius: "0" })
       footer.append(replyButton)
     }
   }

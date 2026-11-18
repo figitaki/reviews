@@ -1,8 +1,18 @@
 defmodule Reviews.OAuth.TokensTest do
+  @moduledoc """
+  Client assertions and client metadata, which gatekeep checks
+  (`Gatekeep.ClientAuth`, `Gatekeep.Clients`), with Reviews' issuer config.
+  """
   use Reviews.DataCase, async: false
 
-  alias Reviews.OAuth.{Clients, JOSE, Tokens}
+  alias Gatekeep.{Clients, JOSE}
+  alias Reviews.OAuth
   alias Reviews.OAuthTestClient, as: Client
+
+  defp verify_client_assertion(params),
+    do: Gatekeep.ClientAuth.verify_client_assertion(OAuth.config(), params)
+
+  defp fetch(client_id), do: Clients.fetch(OAuth.config(), client_id)
 
   describe "JOSE" do
     test "verifies the RFC 7515 A.3 ES256 example and rejects a changed payload" do
@@ -36,22 +46,22 @@ defmodule Reviews.OAuth.TokensTest do
     end
   end
 
-  describe "verify_client_assertion/2" do
+  describe "client assertions" do
     setup do
       %{client: Client.new()}
     end
 
     test "accepts ES256 and PS384 assertions addressed to the issuer", %{client: client} do
-      assert {:ok, %{client_id: id}} = Tokens.verify_client_assertion(Client.client_auth(client))
+      assert {:ok, %{client_id: id}} = verify_client_assertion(Client.client_auth(client))
       assert id == client.client_id
-      assert {:ok, _} = Tokens.verify_client_assertion(Client.client_auth(client, rsa: true))
+      assert {:ok, _} = verify_client_assertion(Client.client_auth(client, rsa: true))
     end
 
     test "refuses the token endpoint, or a list, as the audience, unless the client is listed",
          %{client: client} do
       for aud <- ["https://reviews.test/oauth/token", ["https://reviews.test"]] do
         assert {:error, :wrong_audience} =
-                 Tokens.verify_client_assertion(Client.client_auth(client, aud: aud))
+                 verify_client_assertion(Client.client_auth(client, aud: aud))
       end
 
       listed = Client.new()
@@ -65,12 +75,12 @@ defmodule Reviews.OAuth.TokensTest do
       )
 
       assert {:ok, _} =
-               Tokens.verify_client_assertion(
+               verify_client_assertion(
                  Client.client_auth(listed, aud: "https://reviews.test/oauth/token")
                )
 
       assert {:error, :wrong_audience} =
-               Tokens.verify_client_assertion(
+               verify_client_assertion(
                  Client.client_auth(client, aud: "https://reviews.test/oauth/token")
                )
     end
@@ -79,16 +89,14 @@ defmodule Reviews.OAuth.TokensTest do
       now = Client.now()
 
       assert {:error, :expired} =
-               Tokens.verify_client_assertion(
-                 Client.client_auth(client, iat: now - 600, exp: now - 300)
-               )
+               verify_client_assertion(Client.client_auth(client, iat: now - 600, exp: now - 300))
 
       assert {:error, :assertion_too_long} =
-               Tokens.verify_client_assertion(Client.client_auth(client, exp: now + 3600))
+               verify_client_assertion(Client.client_auth(client, exp: now + 3600))
 
       params = Client.client_auth(client)
-      assert {:ok, _} = Tokens.verify_client_assertion(params)
-      assert {:error, :replayed} = Tokens.verify_client_assertion(params)
+      assert {:ok, _} = verify_client_assertion(params)
+      assert {:error, :replayed} = verify_client_assertion(params)
     end
 
     test "refuses an assertion signed by another client's key", %{client: client} do
@@ -101,44 +109,50 @@ defmodule Reviews.OAuth.TokensTest do
             root: %{other.root | kid: client.root.kid}
         })
 
-      assert {:error, :bad_signature} = Tokens.verify_client_assertion(forged)
+      assert {:error, :bad_signature} = verify_client_assertion(forged)
     end
   end
 
-  describe "Clients.fetch/1" do
-    test "expired entries are swept, and a full cache stops caching" do
-      client = Client.new() |> Client.publish()
-      assert {:ok, _} = Clients.fetch(client.client_id)
-      assert [{_, _, _, _}] = :ets.lookup(Clients, client.client_id)
+  # Expiry and sweeping of the cache are gatekeep's, and its own tests cover
+  # them; these check what Reviews' config changes.
+  describe "client metadata" do
+    test "is cached until forgotten, and a full cache stops caching" do
+      client = Client.new()
+      assert {:ok, %{client_name: "Test Client"}} = fetch(client.client_id)
 
-      [{id, result, _expires_at, jwks_at}] = :ets.lookup(Clients, client.client_id)
-      :ets.insert(Clients, {id, result, Client.now() - 1, jwks_at})
-      Clients.sweep()
-      assert :ets.lookup(Clients, client.client_id) == []
+      Client.publish(client, %{"client_name" => "Renamed"})
+      assert {:ok, %{client_name: "Test Client"}} = fetch(client.client_id)
 
+      Clients.forget(OAuth.config(), client.client_id)
+      assert {:ok, %{client_name: "Renamed"}} = fetch(client.client_id)
+
+      # The cache already holds that client, so a size of one is full: other
+      # clients' results are used but not cached.
       previous = Application.get_env(:reviews, Reviews.OAuth)
       on_exit(fn -> Application.put_env(:reviews, Reviews.OAuth, previous) end)
-      Application.put_env(:reviews, Reviews.OAuth, Keyword.put(previous, :client_cache_size, 0))
+      Application.put_env(:reviews, Reviews.OAuth, Keyword.put(previous, :client_cache_size, 1))
 
-      assert {:ok, _} = Clients.fetch(client.client_id)
-      assert :ets.lookup(Clients, client.client_id) == []
+      other = Client.new()
+      assert {:ok, %{client_name: "Test Client"}} = fetch(other.client_id)
+      Client.publish(other, %{"client_name" => "Other"})
+      assert {:ok, %{client_name: "Other"}} = fetch(other.client_id)
     end
 
     test "refuses client metadata whose client_id doesn't match its URL" do
       client = Client.new(metadata: %{"client_id" => "https://elsewhere.example/client.json"})
 
-      assert {:error, :invalid_client_metadata} = Clients.fetch(client.client_id)
+      assert {:error, :invalid_client_metadata} = fetch(client.client_id)
     end
 
     test "a key removed from jwks_uri stops verifying once the cache is refreshed" do
       client = Client.new()
-      assert {:ok, _} = Tokens.verify_client_assertion(Client.client_auth(client))
+      assert {:ok, _} = verify_client_assertion(Client.client_auth(client))
 
       Client.publish(client, %{}, [client.rsa.public])
-      Clients.forget(client.client_id)
+      Clients.forget(OAuth.config(), client.client_id)
 
-      assert {:error, :bad_signature} = Tokens.verify_client_assertion(Client.client_auth(client))
-      assert {:ok, _} = Tokens.verify_client_assertion(Client.client_auth(client, rsa: true))
+      assert {:error, :bad_signature} = verify_client_assertion(Client.client_auth(client))
+      assert {:ok, _} = verify_client_assertion(Client.client_auth(client, rsa: true))
     end
   end
 end
