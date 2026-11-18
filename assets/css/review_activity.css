@@ -97,6 +97,12 @@
   outline-offset: -2px;
 }
 
+/* Collapsed on phones and wide screens, the rail is just the icon and count;
+   the label stays for screen readers. */
+@media (max-width: 640px), (min-width: 1200px) {
+  .review-activity-panel:not([open]) .review-activity-label { @apply sr-only; }
+}
+
 @media (min-width: 1200px) {
   .review-activity {
     width: 224px;
@@ -105,14 +111,6 @@
     align-self: start;
   }
   .review-activity:not(:has(details[open])) { width: auto; }
-  /* Collapsed, the rail is just the icon and count. */
-  .review-activity-panel:not([open]) .review-activity-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
   .review-activity-body {
     max-height: calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 96px);
     overflow-y: auto;
@@ -136,13 +134,13 @@
     position: fixed;
     right: var(--review-quick-right);
     bottom: var(--review-quick-bottom);
-    z-index: 9;
+    z-index: var(--z-fab);
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 12px;
   }
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity {
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
     --review-quick-right: calc(16px + 4px + env(safe-area-inset-right));
     --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
   }
@@ -163,10 +161,10 @@
     width: 48px;
     height: 48px;
     border: 1px solid var(--review-line-strong, var(--ds-line));
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     background: var(--ds-panel-raised, var(--ds-panel));
     color: var(--ds-text);
-    box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
+    box-shadow: var(--shadow-float);
   }
   .review-quick-button {
     display: inline-flex;
@@ -187,7 +185,7 @@
   .review-activity-panel:not([open]) { overflow: visible; }
   .review-activity-panel:not([open])[data-unread="true"] {
     border-color: var(--ds-blue);
-    box-shadow: 0 0 0 1px var(--ds-blue), 0 4px 12px rgb(0 0 0 / 0.18);
+    box-shadow: 0 0 0 1px var(--ds-blue), var(--shadow-float);
   }
   .review-activity-panel:not([open]) .review-activity-summary {
     position: relative;
@@ -198,13 +196,6 @@
     padding: 0;
   }
   .review-activity-panel:not([open]) .review-activity-icon { width: 22px; height: 22px; }
-  .review-activity-panel:not([open]) .review-activity-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
   .review-activity-panel:not([open]) .review-activity-count {
     position: absolute;
     top: -6px;
@@ -214,7 +205,7 @@
     padding: 0 5px;
     box-sizing: border-box;
     border: 1px solid var(--review-line-strong, var(--ds-line));
-    border-radius: 10px;
+    border-radius: var(--radius-pill);
     background: var(--ds-panel-raised, var(--ds-panel));
     font-size: 11px;
     line-height: 18px;
@@ -231,7 +222,7 @@
   .review-activity:has(details[open]) .review-quick-button { display: none; }
   .review-activity-panel[open] {
     align-self: stretch;
-    box-shadow: 0 8px 28px rgb(0 0 0 / 0.22);
+    box-shadow: var(--shadow-panel);
   }
   .review-activity-panel[open] .review-activity-body {
     max-height: calc(60svh - var(--review-quick-bottom));

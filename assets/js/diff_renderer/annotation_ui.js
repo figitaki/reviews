@@ -1,5 +1,6 @@
 import { button as baseButton, el } from "./dom.js"
 import { renderMarkdown } from "../lib/markdown.js"
+import { COARSE } from "../lib/breakpoints.js"
 
 // Pierre owns the diff body theme. Annotation UI is rendered by Reviews through
 // `renderAnnotation`, so it uses Reviews design tokens and inline styles that
@@ -19,7 +20,7 @@ const colors = {
 const fontStack = "var(--font-sans, system-ui, sans-serif)"
 // Touch keeps 44px targets, 16px inputs (smaller text makes iOS zoom on
 // focus) and no keyboard hints.
-const touch = () => Boolean(window.matchMedia?.("(pointer: coarse)").matches)
+const touch = () => Boolean(window.matchMedia?.(COARSE).matches)
 const monoStack = "var(--font-mono, ui-monospace, monospace)"
 
 const bubbleBaseStyle = {
@@ -446,6 +447,78 @@ function commentTime(iso, prefix = "") {
   )
 }
 
+const attributionStyle = {
+  flex: "1 1 100%",
+  fontSize: "11px",
+  color: colors.muted,
+}
+const attributionSummaryStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  cursor: "pointer",
+  listStyle: "none",
+}
+const attributionBadgeStyle = {
+  border: `1px solid color-mix(in srgb, ${colors.add} 35%, ${colors.line})`,
+  borderRadius: "999px",
+  padding: "0 6px",
+  color: colors.add,
+  fontWeight: "600",
+}
+const attributionListStyle = {
+  display: "grid",
+  gridTemplateColumns: "max-content 1fr",
+  gap: "2px 10px",
+  margin: "6px 0 2px",
+}
+
+// The verified agent label and its details (issue #154). Only facts the server
+// verified are stated as verified; the agent's own name and Agent ID are shown
+// as its claims, and parties Poppy 1.0 can't establish are named as such.
+export function attributionDetails(attribution, author) {
+  if (!attribution || attribution.provider !== "poppy") return null
+  const domain = attribution.client_domain || "unknown agent"
+  const handle = author?.username ? `@${author.username}` : "this agent"
+  const row = (term, ...detail) => [
+    el("dt", { style: { color: colors.faint } }, term),
+    el("dd", { style: { margin: "0", color: colors.text } }, detail),
+  ]
+  const claim = (text) => el("span", { style: { color: colors.faint } }, ` (${text})`)
+
+  return el("details", { style: attributionStyle, dataset: { attribution: "poppy" } }, [
+    el("summary", { style: attributionSummaryStyle, "aria-label": `Verified agent via ${domain}. Show details.` }, [
+      el("span", { style: attributionBadgeStyle }, "Verified agent"),
+      el("span", {}, `via ${domain}`),
+      attribution.link_revoked ? el("span", { style: { color: colors.faint } }, "· since disconnected") : null,
+    ]),
+    el("dl", { style: attributionListStyle }, [
+      ...row("Acts as", `${handle}, a Reviews agent`),
+      ...row("Owner", `@${attribution.owner_username}`, claim(`approved this agent ${formatDate(attribution.approved_at)}`)),
+      ...row("Personal Agent", domain, claim("proved by its signing keys")),
+      ...row("Calls itself", attribution.client_name_claimed || "(no name)", claim("not verified")),
+      ...(attribution.agent_id_claimed ? row("Agent ID", "sent", claim("not verified")) : []),
+      ...row("Workload", "not established", claim("Poppy 1.0 has no workload proof")),
+      ...row("Delegation", "owner approval in Reviews", claim("no signed delegation chain")),
+      ...tokenRow(attribution.token_binding, row, claim),
+      ...(attribution.link_revoked ? row("Status", "Disconnected after this comment") : []),
+    ]),
+  ])
+}
+
+// Whether the comment's access token was bound to the agent's key. Comments
+// recorded before Reviews kept this have no row.
+function tokenRow(binding, row, claim) {
+  if (binding === "dpop") return row("Token", "Bound to agent key (DPoP)")
+  if (binding === "bearer") return row("Token", "Bearer", claim("not bound to a key"))
+  return []
+}
+
+function formatDate(iso) {
+  const date = iso ? new Date(iso) : null
+  return date && !Number.isNaN(date.valueOf()) ? `on ${date.toISOString().slice(0, 10)}` : ""
+}
+
 function commentBody(body, condensed = false) {
   const node = el("div", {
     className: "review-rich-markdown review-comment-markdown",
@@ -464,6 +537,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
       el("li", { style: threadCommentStyle }, [
         commentBody(comment.body),
         commentTime(comment.inserted_at),
+        attributionDetails(comment.attribution, run.author),
       ])
     )
 

@@ -21,6 +21,13 @@ kill_signal = 'SIGTERM'
   PORT = '8080'
   # Ecto pool of each running preview machine. Prod uses the default (10).
   POOL_SIZE = '2'
+  # GitHub sign-in goes through the relay on production. It is on once the
+  # workflow also stages AUTH_RELAY_SECRET. See "GitHub sign-in on previews"
+  # in docs/PREVIEW_ENVS.md.
+  AUTH_RELAY_URL = 'https://reviews.figitaki.dev'
+  # Hosted MCP at /mcp (docs/MCP.md). Production leaves both unset (off).
+  MCP_ENABLED = 'true'
+  MCP_WRITES_ENABLED = 'true'
 
 [http_service]
   internal_port = 8080

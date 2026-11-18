@@ -1,4 +1,5 @@
 import { ReviewActivityReadState } from "../lib/review_activity_read_state.js"
+import { PHONE } from "../lib/breakpoints.js"
 
 function storage() {
   try { return window.localStorage } catch { return null }
@@ -38,7 +39,7 @@ export const ReviewActivity = {
       this.readState.markRead([thread])
       this.renderActivity()
       // On phones the open list floats over the code; get out of the way.
-      if (window.matchMedia("(max-width: 640px)").matches) this.details.open = false
+      if (window.matchMedia(PHONE).matches) this.details.open = false
       // Navigation owns revealing the section/file, opening the thread and focus.
       window.dispatchEvent(new CustomEvent("reviews:open-thread", {
         detail: { threadId: thread.id, filePath: thread.filePath },
@@ -53,7 +54,7 @@ export const ReviewActivity = {
     this.onOpen = event => this.pushEvent("open_activity_thread", { thread_id: event.detail.threadId })
     // On phones the open list floats over the code; a tap elsewhere or
     // Escape closes it.
-    const phone = () => window.matchMedia("(max-width: 640px)").matches
+    const phone = () => window.matchMedia(PHONE).matches
     this.onOutside = event => {
       if (!this.el.contains(event.target) && this.details.open && phone()) this.details.open = false
     }

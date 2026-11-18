@@ -371,6 +371,74 @@ textarea.ds-input{
   font-weight: 700;
 }
 
+/* OAuth consent page (ReviewsWeb.OAuthHTML). */
+.poppy-facts{
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.poppy-facts > div{
+  display: contents;
+}
+
+.poppy-facts dt{
+  color: var(--ds-muted);
+}
+
+.poppy-facts dd{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ds-text);
+}
+
+.poppy-consent-form{
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+  border-top: 1px solid var(--ds-line);
+  padding-top: 18px;
+}
+
+.poppy-consent-form fieldset{
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.poppy-consent-form legend{
+  margin-bottom: 8px;
+  color: var(--ds-text);
+  font-weight: 720;
+}
+
+.poppy-consent-form label{
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--ds-text);
+}
+
+.poppy-consent-note{
+  margin: 0;
+  color: var(--ds-muted);
+  font-size: 13px;
+}
+
+.poppy-consent-actions{
+  display: flex;
+  gap: 8px;
+}
+
 .ds-settings-empty-inline{
   display: flex;
   align-items: center;
@@ -648,7 +716,8 @@ textarea.ds-input{
 /* Narrow phones (#6): keep the topbar on one row down to 320px. The brand
    collapses to its mark (the link keeps its aria-label), the actions may
    shrink, and a long account name truncates instead of pushing the row
-   past the right edge. DOM order, and so focus order, does not change. */
+   past the right edge. DOM order, and so focus order, does not change.
+   480px, not 640px: above it the full brand label still fits (tokens.css). */
 @media (max-width: 480px) {
   .ds-shell-topbar{
     gap: 8px;
