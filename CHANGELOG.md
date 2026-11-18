@@ -12,6 +12,20 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   `/design/layouts` frames the real list, review and Settings pages at desktop
   and phone widths. All of it stays off in production.
 
+- Packets have a default section order: the core change first, then what
+  follows from it (callers, schema, tests), then glue (config, generated
+  files, lockfiles, docs). The writing-review-packets skill shows it as the
+  default, not a rule. `reviews push --dry-run` prints a note when a section
+  of only glue files comes before a section that changes code. Notes do not
+  change the exit status or stop a push.
+
+- Poppy Personal Agents whose identity key Turnkey holds show "Delegation:
+  signed by Turnkey" on their comments when the delegation matches Turnkey's
+  draft `poppy-delegation/v1` profile. They still act as the agent identity
+  their owner approved. Client assertions may carry a 256-character `jti`, as
+  that profile allows (gatekeep, figitaki/gatekeep#7). See "Turnkey-held
+  identity keys" in `docs/POPPY.md`.
+
 - `<.ds_button>` is the one button. It renders a link when given `navigate`,
   `patch` or `href`, comes in `sm` (28px), `md` (32px) and `lg` (40px, the
   height of a field), no longer lifts on hover, and keeps a 44px tap target on
@@ -66,6 +80,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   Signed-out readers get the same control, and expanding it offers "Sign in
   to decide", which returns to the review with that section and its decision
   open.
+
+- Guide prose uses the same 52rem column in split and stacked diffs, so
+  switching diff style no longer changes its width. On phones, section
+  headings are 20px, the same size as on desktop.
 
 ## [0.0.2] - 2026-11-18
 
