@@ -165,7 +165,7 @@
 .l-status { padding-block: 96px 72px; }
 .l-status h1 {
   margin: 0;
-  font-size: clamp(32px, 4vw, 48px);
+  font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: var(--tracking-flat);
