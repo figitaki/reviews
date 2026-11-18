@@ -19,7 +19,7 @@ defmodule ReviewsWeb.Api.CommentController do
 
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
-        ReviewsWeb.ApiErrors.render(conn, :review_not_found)
+        ReviewsWeb.ApiErrors.render(conn, ReviewsContext.not_found_reason(slug))
 
       review ->
         case ThreadsContext.publish_comment(review, principal, normalize(params)) do

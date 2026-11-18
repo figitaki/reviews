@@ -411,6 +411,113 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
     end
   end
 
+  describe "deleting a review" do
+    setup do
+      owner = github_user("deleter")
+
+      {:ok, agent} =
+        Accounts.create_agent_identity(owner, %{display_name: "Codex", handle: "codex"})
+
+      {:ok, _token, agent_raw} =
+        Accounts.mint_token(owner, %{name: "agent", identity_id: agent.id})
+
+      stranger = github_user("bystander")
+      {:ok, _token, stranger_raw} = Accounts.mint_token(stranger, %{"name" => "test"})
+
+      {:ok, %{review: review}} =
+        ReviewsContext.create_review_with_initial_patchset(owner, %{
+          title: "Pushed by mistake",
+          raw_diff: "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+        })
+
+      {:ok, _} =
+        Threads.publish_comment(review, stranger, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "Is this the right branch?",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      %{review: review, agent_raw: agent_raw, stranger_raw: stranger_raw, stranger: stranger}
+    end
+
+    test "the owner's agent previews and deletes; the link then reports 410", ctx do
+      preview =
+        ctx.agent_raw
+        |> bearer()
+        |> get(~p"/api/v1/reviews/#{ctx.review.slug}/deletion")
+        |> json_response(200)
+
+      assert %{
+               "slug" => slug,
+               "title" => "Pushed by mistake",
+               "patchsets" => 1,
+               "threads" => 1,
+               "comments" => 1,
+               "other_comments" => 1,
+               "other_authors" => ["bystander"]
+             } = preview
+
+      assert slug == ctx.review.slug
+
+      conn = ctx.agent_raw |> bearer() |> delete(~p"/api/v1/reviews/#{slug}")
+      assert json_response(conn, 200) == %{"slug" => slug, "deleted" => true}
+
+      for conn <- [
+            get(build_conn(), ~p"/api/v1/reviews/#{slug}"),
+            ctx.agent_raw |> bearer() |> delete(~p"/api/v1/reviews/#{slug}"),
+            ctx.stranger_raw
+            |> bearer()
+            |> post(~p"/api/v1/reviews/#{slug}/comments", %{"body" => "late", "thread_id" => 1})
+          ] do
+        assert %{"error_code" => "review_deleted", "error_detail" => "This review was deleted."} =
+                 json_response(conn, 410)
+      end
+    end
+
+    test "anyone else is refused and nothing is deleted", ctx do
+      for request <- [
+            &get(&1, ~p"/api/v1/reviews/#{ctx.review.slug}/deletion"),
+            &delete(&1, ~p"/api/v1/reviews/#{ctx.review.slug}")
+          ] do
+        conn = request.(bearer(ctx.stranger_raw))
+
+        assert %{
+                 "error_code" => "forbidden",
+                 "error_detail" => "Only the review owner can delete it."
+               } =
+                 json_response(conn, 403)
+
+        assert json_response(request.(build_conn()), 401)
+      end
+
+      assert ReviewsContext.get_review_by_slug(ctx.review.slug)
+    end
+
+    test "an unknown slug is 404 review_not_found", ctx do
+      conn = ctx.agent_raw |> bearer() |> delete(~p"/api/v1/reviews/does-not-exist")
+      assert %{"error_code" => "review_not_found"} = json_response(conn, 404)
+    end
+  end
+
+  defp github_user(username) do
+    {:ok, user} =
+      Accounts.upsert_from_github(%{
+        github_id: 3_000_000 + System.unique_integer([:positive]),
+        username: username,
+        email: "#{username}@example.com",
+        avatar_url: nil
+      })
+
+    user
+  end
+
+  defp bearer(raw) do
+    build_conn()
+    |> put_req_header("authorization", "Bearer #{raw}")
+    |> put_req_header("content-type", "application/json")
+  end
+
   describe "GET /api/v1/reviews" do
     import Reviews.ReviewIndexFixtures
 

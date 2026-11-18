@@ -133,18 +133,19 @@
    remain available for marketing and legacy components.
 ---------------------------------------------------------------------------- */
 :root {
-  /* Sizes (px) */
-  --font-size-3xs:  10px;  /* effort pills, status letters */
-  --font-size-2xs:  11px;  /* eyebrows, revision labels (uppercase + tracked) */
-  --font-size-xs:   12px;  /* chips, buttons, meta */
-  --font-size-sm:   13px;  /* body / hunk title / file path (mono) */
-  --font-size-base: 14px;  /* default body */
-  --font-size-md:   15px;  /* card / section heading */
-  --font-size-lg:   17px;  /* lede paragraph / section title */
-  --font-size-xl:   18px;  /* h3 in markdown */
-  --font-size-2xl:  30px;  /* DS section h2 */
-  --font-size-3xl:  36px;  /* packet title */
-  --font-size-hero: clamp(46px, 8vw, 108px); /* marketing/hero h1 */
+  /* Sizes, in rem so text follows the reader's browser font size
+     (comments give the px at the default 16px). */
+  --font-size-3xs: 0.625rem;  /* 10px: effort pills, status letters */
+  --font-size-2xs: 0.6875rem;  /* 11px: eyebrows, revision labels (uppercase + tracked) */
+  --font-size-xs: 0.75rem;  /* 12px: chips, buttons, meta */
+  --font-size-sm: 0.8125rem;  /* 13px: body / hunk title / file path (mono) */
+  --font-size-base: 0.875rem;  /* 14px: default body */
+  --font-size-md: 0.9375rem;  /* 15px: card / section heading */
+  --font-size-lg: 1.0625rem;  /* 17px: lede paragraph / section title */
+  --font-size-xl: 1.125rem;  /* 18px: h3 in markdown */
+  --font-size-2xl: 1.875rem;  /* 30px: DS section h2 */
+  --font-size-3xl: 2.25rem;  /* 36px: packet title */
+  --font-size-hero: clamp(2.875rem, 8vw, 6.75rem); /* marketing/hero h1 */
 
   /* Line heights */
   --leading-tight:  1.08;  /* hero / packet title */
@@ -192,29 +193,43 @@
    Spacing / radius / shadow tokens
 ---------------------------------------------------------------------------- */
 :root {
-  /* Spacing (px). The product uses a fine-grained scale because rows are
+  /* Spacing, in rem so layout grows with text (comments give the px at the
+     default 16px). The product uses a fine-grained scale because rows are
      dense. Use the lower end for inline gaps, the higher end for section
      rhythm. */
-  --space-1:  4px;
-  --space-2:  6px;
-  --space-3:  8px;
-  --space-4: 10px;
-  --space-5: 12px;
-  --space-6: 14px;
-  --space-7: 16px;
-  --space-8: 18px;
-  --space-9: 20px;
-  --space-10: 24px;
-  --space-12: 32px;
-  --space-14: 52px;  /* packet section rhythm */
-  --space-16: 88px;  /* hero top padding */
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.375rem;  /* 6px */
+  --space-3: 0.5rem;  /* 8px */
+  --space-4: 0.625rem;  /* 10px */
+  --space-5: 0.75rem;  /* 12px */
+  --space-6: 0.875rem;  /* 14px */
+  --space-7: 1rem;  /* 16px */
+  --space-8: 1.125rem;  /* 18px */
+  --space-9: 1.25rem;  /* 20px */
+  --space-10: 1.5rem;  /* 24px */
+  --space-12: 2rem;  /* 32px */
+  --space-14: 3.25rem;  /* 52px: packet section rhythm */
+  --space-16: 5.5rem;  /* 88px: hero top padding */
 
   /* Radius — small numbers; 6/8 for cards, 999 for pills */
-  --radius-xs: 4px;   /* inline code, status letter tile */
-  --radius-sm: 6px;   /* chips, buttons */
-  --radius-md: 8px;   /* cards, panels, banners, modals */
-  --radius-lg: 14px;  /* floating action buttons */
+  --radius-xs: 0.25rem;   /* 4px: inline code, status letter tile */
+  --radius-sm: 0.375rem;   /* 6px: chips, buttons */
+  --radius-md: 0.5rem;   /* 8px: cards, panels, banners, modals */
+  --radius-lg: 0.875rem;  /* 14px: floating action buttons */
   --radius-pill: 999px;
+
+  /* Control heights: buttons, fields and chips. A field and an lg button
+     share one height. */
+  --size-control-sm: 1.75rem; /* 28px: dense rows, chips */
+  --size-control-md: 2rem;    /* 32px: toolbars and panels */
+  --size-control-lg: 2.5rem;  /* 40px: forms, fields */
+  --size-icon-sm: 0.875rem;   /* 14px */
+  --size-icon-md: 1rem;       /* 16px */
+
+  /* Floating buttons (Sections, Comments, the section decision): one size,
+     in rem so they follow the root font size. */
+  --size-fab: 3rem;          /* 48px */
+  --size-fab-icon: 1.375rem; /* 22px */
 
   /* Border — Reviews uses 1px for content, the daisyUI plugin sets 1.5px
      for form/button surfaces; we expose both. */
@@ -248,8 +263,8 @@
      reorder the section header, where 640px still has room for both. */
 
   /* Header heights (used in sticky offsets) */
-  --review-main-nav-h:      64px;
-  --review-section-sticky-h: 46px;
+  --review-main-nav-h:      4rem;    /* 64px */
+  --review-section-sticky-h: 2.875rem; /* 46px */
 
   /* Packet guide layout primitives */
   --guide-rail-w:   48px;

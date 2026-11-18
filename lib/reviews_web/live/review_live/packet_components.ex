@@ -387,13 +387,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :section_count, :integer, required: true
   attr :current_user, :any, default: nil
 
-  defp packet_section_header(assigns) do
+  # Public for the design catalog (/design/components).
+  def packet_section_header(assigns) do
     assigns =
-      assign(assigns, :title_id, "review-split-section-overview-title-#{assigns.section.index}")
+      assign(assigns, :title_id, "review-section-header-title-#{assigns.section.index}")
 
     ~H"""
     <header
-      id={"review-split-section-overview-#{@section.index}"}
+      id={"review-section-header-#{@section.index}"}
       class="review-section-header"
       aria-labelledby={@title_id}
     >
@@ -446,7 +447,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :show_nav, :boolean, default: false
   attr :editing, :boolean, default: false
 
-  defp packet_section_decision(assigns) do
+  # Public for the component playground (/design/components).
+  def packet_section_decision(assigns) do
+    # Signed-out readers get the same collapsible control, with a sign-in CTA.
+    assigns =
+      assigns
+      |> assign(:collapsible, assigns.can_decide or is_nil(assigns.current_user))
+      |> assign(:sign_in_return_to, section_return_to(assigns.return_to, assigns.section.index))
+
     ~H"""
     <footer
       id={"packet-section-#{@section.index}-decision"}
@@ -454,7 +462,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         "review-section-decision",
         "is-#{@section.effective_status || "pending"}",
         @editing && "is-editing",
-        !@can_decide && "is-readonly"
+        !@collapsible && "is-readonly"
       ]}
       phx-hook=".SectionDecision"
       data-editing={to_string(@editing)}
@@ -470,7 +478,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </p>
       </div>
       <button
-        :if={@can_decide}
+        :if={@collapsible}
         id={"packet-section-#{@section.index}-decision-toggle"}
         type="button"
         class="review-section-decision-toggle"
@@ -499,6 +507,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           <% true -> %>
             <.icon name="hero-pencil-square" />
         <% end %>
+        <span :if={!@editing} class="review-section-decision-toggle-label" aria-hidden="true">
+          {if @section.effective_status in ~w(approved denied ignored),
+            do: guide_status_label(@section.effective_status),
+            else: "Decide"}
+        </span>
       </button>
       <div
         id={"packet-section-#{@section.index}-decision-controls"}
@@ -547,10 +560,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             </p>
           <% true -> %>
             <.link
-              href={~p"/auth/github?#{[return_to: @return_to]}"}
-              class="review-packet-section-signin"
+              id={"packet-section-#{@section.index}-decision-signin"}
+              href={~p"/auth/github?#{[return_to: @sign_in_return_to]}"}
+              class="review-button review-button-primary review-packet-section-signin"
             >
-              Sign in to record a section decision
+              <.github_mark /> Sign in to decide
             </.link>
         <% end %>
       </div>
@@ -559,11 +573,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       export default {
         mounted() {
           this.editing = this.el.dataset.editing
-          // PHONE in assets/js/lib/breakpoints.js; colocated hooks cannot import it.
-          this.mobile = window.matchMedia("(max-width: 640px)")
           this.el.addEventListener("keydown", event => {
-            if (event.key === "Escape" && this.el.dataset.editing === "true" &&
-                this.mobile.matches) {
+            if (event.key === "Escape" && this.el.dataset.editing === "true") {
               event.stopPropagation()
               this.el.querySelector("[aria-expanded]").click()
             }
@@ -571,7 +582,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         },
         updated() {
           const editing = this.el.dataset.editing
-          if (editing !== this.editing && this.mobile.matches) {
+          if (editing !== this.editing) {
             const target = editing === "true"
               ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector(".review-packet-section-signin")
               : this.el.querySelector("[aria-expanded]")
@@ -748,6 +759,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   defp section_decision_state_label(%{previous: %{}}), do: "Pending for this revision"
   defp section_decision_state_label(_section), do: "Pending"
+
+  # Brings a signed-out reader back to this section with its decision open.
+  defp section_return_to(return_to, section_index) do
+    uri = URI.parse(return_to)
+    query = Map.put(URI.decode_query(uri.query || ""), "section", to_string(section_index))
+    URI.to_string(%{uri | query: URI.encode_query(query)})
+  end
 
   defp pad2(value), do: String.pad_leading(Integer.to_string(value), 2, "0")
 
@@ -1335,6 +1353,34 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   def packet_hunk_id(row_id, hunk) do
     "#{row_id}--#{hunk.id}"
   end
+
+  @doc "Resolves a fragment only against hunk cards in this packet and patchset."
+  def fragment_target(packet, hunks_by_path, id) when is_binary(id) do
+    packet
+    |> ReviewPacket.sections()
+    |> Enum.find_value(fn section ->
+      section
+      |> packet_units(hunks_by_path)
+      |> Enum.find_value(fn
+        %{kind: :hunk_group, hunk: hunk, row_id: row_id, row_ids: row_ids} ->
+          cond do
+            id in row_ids ->
+              %{section_index: section.index, hunk_id: hunk.id, id: row_id}
+
+            id in [hunk.id, "#{hunk.id}-summary", "#{hunk.id}-diff"] ->
+              %{section_index: section.index, hunk_id: hunk.id, id: "#{hunk.id}-summary"}
+
+            true ->
+              nil
+          end
+
+        _ ->
+          nil
+      end)
+    end)
+  end
+
+  def fragment_target(_packet, _hunks_by_path, _id), do: nil
 
   def packet_units(section, hunks_by_path) do
     section.rows

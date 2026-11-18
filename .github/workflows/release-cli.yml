@@ -80,6 +80,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # All tags, for the compare link and the server image line.
+          fetch-depth: 0
 
       - name: Validate CLI version
         run: |
@@ -103,6 +106,9 @@ jobs:
           cd dist
           sha256sum *.tar.gz > checksums.txt
 
+      - name: Write release notes from CHANGELOG.md
+        run: python3 .github/scripts/release_notes.py "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > release-notes.md
+
       - uses: softprops/action-gh-release@v2
         with:
           name: Reviews CLI v${{ env.version }}
@@ -111,4 +117,4 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/checksums.txt
-          generate_release_notes: true
+          body_path: release-notes.md

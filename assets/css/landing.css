@@ -50,22 +50,11 @@
   color: var(--ds-text);
 }
 
-.l-nav-user { gap: 8px; }
-.l-nav-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  object-fit: cover;
-  border: 1px solid var(--ds-line);
-}
 .l-nav-signin {
   margin-left: 4px;
-  height: 32px;
-  padding: 0 14px;
-  font-size: 13px;
 }
 
-/* Only the account link gives up width; a long name truncates instead of
+/* Only the account menu gives up width; a long name truncates instead of
    wrapping. */
 .l-nav {
   min-width: 0;
@@ -75,19 +64,11 @@
   flex-shrink: 0;
 }
 
-.l-nav > .l-nav-user {
+.l-nav > .account-menu {
   flex-shrink: 1;
-  min-width: 0;
 }
 
-.l-nav-user-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Small phones: keep the brand, Reviews, and the account link on one row. */
+/* Small phones: keep the brand, Reviews, and the account menu on one row. */
 @media (max-width: 520px) {
   .l-nav-optional {
     display: none;
@@ -107,7 +88,7 @@
 }
 
 @media (max-width: 380px) {
-  .l-nav-user:has(.l-nav-avatar) .l-nav-user-name {
+  .l-nav .account-menu-button:has(.account-menu-avatar) .account-menu-name {
     display: none;
   }
 }
@@ -116,6 +97,7 @@
 @media (pointer: coarse) {
   .l-topbar .r-brand,
   .l-nav .r-nav-item,
+  .l-nav .account-menu-button,
   .l-nav-signin {
     min-height: 44px;
   }
@@ -135,7 +117,7 @@
   border-top: 1px solid var(--ds-line);
   padding: 28px 0;
   color: var(--ds-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .l-footer-inner {
   display: flex;
@@ -160,7 +142,7 @@
 .home-hero { padding-block: 80px 48px; }
 .home-hero h1 {
   margin: 0;
-  font-size: clamp(40px, 5vw, 64px);
+  font-size: clamp(2.5rem, 5vw, 4rem);
   font-weight: 600;
   line-height: 1.08;
   letter-spacing: var(--tracking-flat);
@@ -179,10 +161,22 @@
   gap: 12px;
   margin-top: 28px;
 }
-.home-actions .r-button {
-  min-height: 44px;
-  padding-inline: 18px;
-  text-decoration: none;
+/* Error pages a visitor should understand (ReviewsWeb.ErrorHTML.status_page). */
+.l-status { padding-block: 96px 72px; }
+.l-status h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: var(--tracking-flat);
+}
+.l-status-message {
+  max-width: 58ch;
+  margin: 20px 0 0;
+  color: var(--ds-muted);
+  font-size: var(--font-prose-size);
+  line-height: var(--font-prose-leading);
+  text-wrap: pretty;
 }
 .home-demo-note {
   margin: 14px 0 0;

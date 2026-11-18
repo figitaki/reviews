@@ -69,6 +69,9 @@ defmodule ReviewsWeb.Router do
     live "/settings", SettingsLive, :edit
     # Off in production unless DESIGN_CATALOG is set; see ReviewsWeb.DesignLive.
     live "/design", DesignLive, :index
+    live "/design/components", DesignComponentsLive, :index
+    live "/design/components/phone", DesignComponentsLive, :phone
+    live "/design/layouts", DesignLayoutsLive, :index
   end
 
   scope "/", ReviewsWeb do
@@ -175,6 +178,8 @@ defmodule ReviewsWeb.Router do
 
     get "/reviews", ReviewController, :index
     post "/reviews", ReviewController, :create
+    get "/reviews/:slug/deletion", ReviewController, :deletion
+    delete "/reviews/:slug", ReviewController, :delete
     post "/reviews/:slug/patchsets", PatchsetController, :create
     post "/reviews/:slug/comments", CommentController, :create
     patch "/reviews/:slug/threads/:thread_id", ThreadController, :update

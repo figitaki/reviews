@@ -61,14 +61,18 @@ defmodule ReviewsWeb.HomeLive do
               through your changes, not just a wall of edits.
             </p>
             <div class="home-actions">
-              <.link
+              <.ds_button
                 id="home-demo-link"
                 navigate={~p"/r/#{@demo_slug}"}
-                class="r-button r-button-primary"
+                variant="primary"
+                size="lg"
+                icon="hero-book-open"
               >
                 Open demo review
-              </.link>
-              <a href="#home-install" class="r-button">Install the CLI</a>
+              </.ds_button>
+              <.ds_button href="#home-install" size="lg" icon="hero-command-line">
+                Install the CLI
+              </.ds_button>
             </div>
             <p class="home-demo-note">A real review packet. No sign-in needed to read.</p>
           </section>
@@ -102,14 +106,13 @@ defmodule ReviewsWeb.HomeLive do
             <p>Install the CLI and agent skills, then push your first review packet.</p>
             <div id="hero-install-root" class="home-install-command" phx-hook=".InstallCopy">
               <code data-install-cmd>{@install_command}</code>
-              <button
-                type="button"
-                class="r-button"
+              <.ds_button
                 data-install-copy
+                icon="hero-clipboard-document"
                 aria-label="Copy install command"
               >
                 Copy
-              </button>
+              </.ds_button>
               <span class="home-copy-status" role="status" data-copy-status></span>
             </div>
             <a id="home-docs-link" href={@repo_url <> "#readme"} class="home-docs-link">

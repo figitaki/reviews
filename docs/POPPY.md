@@ -19,6 +19,7 @@ neither kind of token works on the other's routes.
 | Agent ID (`agent_id` claim) | Signed by the Personal Agent, but it chooses the value | No: "sent (not verified)" |
 | Execution workload | Poppy 1.0 has no proof of it | "not established" |
 | Delegation chain | Poppy 1.0 has none. Approval happens in Reviews. | "owner approval in Reviews" |
+| Delegation signed by Turnkey | Turnkey-hosted `client_id`, and a delegation of Turnkey's `poppy-delegation/v1` shape signed by the key Turnkey publishes | Yes: "signed by Turnkey". See "Turnkey-held identity keys". |
 
 The approval is a grant of the OAuth issuer, which runs on
 [gatekeep](https://github.com/figitaki/gatekeep): a `gatekeep_grants` row with the Personal Agent's
@@ -124,8 +125,9 @@ DPoP.
   offer PAR, so it has no pushed request to bind the code from (spec 4.2, RFC 9449 §10.1).
 - **Attribution.** Comments posted with a DPoP-bound token record the key's thumbprint in
   `attribution["access_token_dpop_key"]`. It's `nil` for Bearer tokens. The review page shows only
-  which kind it was: the "Verified agent" details have a Token row, "Bound to agent key (DPoP)" or
-  "Bearer (not bound to a key)". Comments recorded before Reviews kept the binding have no row.
+  which kind it was: the "Verified agent" details have a Token row, "Access token bound to agent key"
+  or "Bearer (not bound to a key)". It reflects only the access token's binding, never the Session JWT's
+  key. Comments recorded before Reviews kept the binding have no row.
 
 ## Revocation
 
@@ -151,6 +153,69 @@ node kit/company/validate/index.ts keygen --base-url https://<where you host age
 node kit/company/validate/index.ts check https://<reviews host> --milestone foundation \
   --probe https://<reviews host>/api/poppy/v1/reviews/<slug> --probe-session
 ```
+
+## Turnkey-held identity keys
+
+Turnkey can hold a Personal Agent's identity key, host its `agent.json` and key set, and sign with
+that key only when the agent's Turnkey policies allow it. This follows Turnkey's public draft guide,
+"Personal Agent Protocol" (tkhq/docs#946, marked Beta, stacked on tkhq/docs#945). Nothing here was
+tested against Turnkey: every token in the tests is signed locally in the guide's shapes.
+
+Turnkey signs two kinds of JWT, and both are ordinary Poppy JWTs:
+
+- **Client assertions** (`turnkey.io/client-assertion/v1`): ES256, `kid` = the key's RFC 7638
+  thumbprint, `iss` = `sub` = the `client_id`, `aud` = the Reviews issuer, at most 300 seconds, and a
+  `jti` of 22 to 256 characters. The issuer (gatekeep) already accepts these; since
+  figitaki/gatekeep#7 it allows a 256-character `jti` (it allowed 255).
+- **Delegations** (`turnkey.io/poppy-delegation/v1`): `typ` `poppy-delegation+jwt`, ES256, `kid` = the
+  identity key's thumbprint, and only `iss`, `cnf.jwk`, `iat`, `exp`, and `jti`, with no audience. The
+  Poppy checks already accept these.
+
+`Reviews.Turnkey.Adapter` wraps `Reviews.Poppy.Adapter` and is the adapter `PoppyAuth` uses
+(`config :reviews, Reviews.Poppy, adapter:`). Every Poppy check runs first and the request acts as the
+identity its owner approved, so actor IDs don't change. When the `client_id` is a Turnkey-hosted agent
+URL, the adapter also checks the request's delegation against the profile
+(`Reviews.Turnkey.verify_delegation/4`):
+
+1. The `client_id` is `https://<agent host>/t/<organization ID>/agents/<agent>/agent.json` and the
+   `jwks_uri` is the `jwks.json` next to it.
+2. The header is exactly `alg` ES256, `typ`, and `kid`. The claims are exactly `iss`, `cnf`, `iat`,
+   `exp`, and `jti`. An `aud` or any other member fails.
+3. The signature verifies with the P-256 key that `kid` names in the agent's key set, and `kid` is that
+   key's thumbprint.
+4. `iss` is the `client_id`. `cnf` holds only `jwk`, with only `kty`, `crv` P-256, `x`, and `y`. It is
+   the key that signed this request's Session JWT and is not the identity key.
+5. The lifetime is 1 to 86,400 seconds, `exp` hasn't passed, `iat` isn't in the future (30 seconds of
+   skew), and `jti` is 22 to 256 base64url characters.
+
+When they pass, the comment's attribution records `delegation_signed_by: "turnkey"`, the profile, the
+Turnkey organization ID and agent slug, the identity key's thumbprint, and the delegation's `jti`. The
+comment details then show "Delegation: signed by Turnkey" and "Turnkey agent: <agent> in organization
+<ID>". When a Turnkey-hosted agent's delegation is a valid Poppy delegation but not the profile's
+shape, the comment still posts, with `delegation_signed_by: null` and the reason in
+`turnkey_delegation_problem`, and shows "owner approval in Reviews" as before. Other agents are
+unchanged.
+
+**Provisional.** These come from the draft guide and may change before Turnkey ships:
+
+- The agent host, `config :reviews, Reviews.Turnkey, agent_hosts: ["id.turnkey.com"]`.
+- The URL layout and the agent slug rule (1 to 64 lowercase letters, digits, and hyphens).
+- The organization ID format, which the guide doesn't give. Reviews accepts 1 to 128 letters, digits,
+  and hyphens.
+- The exact header and claims, which the guide lists with "nothing else".
+
+**What "signed by Turnkey" means.** The delegation verifies with the key Turnkey publishes for that
+agent and has the profile's shape. It says the identity key vouched for this request's session key. It
+doesn't prove a Turnkey policy approved the mint: if the agent's organization lacks the guide's DENY
+policy on raw signing, a raw signature over the same claims looks the same. It names no owner and no
+company, so owner approval in Reviews is still what grants account access. Reviews doesn't verify the
+signed key set (`jwks.jwt`) that the attestations guide describes, because the agent guide doesn't say
+it is served for agents.
+
+**Headless agents.** Turnkey lists `redirect_uris` as empty for a headless agent. Gatekeep accepts
+client metadata with no redirect URIs, so such an agent can send Session JWTs (read signed out) and
+client assertions. It can't use Direct Sign-In, because no redirect URI matches, so it can't post
+comments.
 
 ## Adding other verification methods
 
