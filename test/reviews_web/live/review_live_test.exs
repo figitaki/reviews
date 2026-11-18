@@ -383,7 +383,9 @@ defmodule ReviewsWeb.ReviewLiveTest do
                "Sign in to record a section decision"
              )
 
-      assert has_element?(view, ~s|.review-button[href="#{sign_in_href}"]|, "Sign in")
+      # The top bar's Sign in is the shared, text-only account control.
+      assert has_element?(view, ~s|.l-nav-signin[href="#{sign_in_href}"]|, "Sign in")
+      refute has_element?(view, ".l-nav-signin svg")
 
       # Without a decision to record, the footer stays inline: no phone toggle.
       assert has_element?(view, "#packet-section-0-decision.is-readonly")

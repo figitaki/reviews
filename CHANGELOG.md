@@ -52,6 +52,15 @@ later fixes continue toward 0.0.2.
   controls now have icons. `/design` lists the icons in use and what each
   means.
 
+- Every top bar ends in one account control, `Layouts.account_menu`. Signed
+  in, the avatar and name open a menu with Settings and Sign out on Home, the
+  review list and Settings too, replacing their Settings link. Signed out, the
+  review page's Sign in is text only like the other pages.
+
+- The closed section decision on phones is a 48px floating button like
+  Sections and Comments, and the decision panel uses the same `--radius-lg`
+  and `--shadow-float` tokens instead of its own radius and two-layer shadow.
+
 - Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI).
   Elixir 1.20.4 includes the fix for CVE-2026-75758.
 - Phoenix 1.8.15, LiveView 1.2.12, Tailwind CLI 4.3.3, esbuild 0.28.2 and

@@ -50,19 +50,11 @@
   color: var(--ds-text);
 }
 
-.l-nav-user { gap: 8px; }
-.l-nav-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  object-fit: cover;
-  border: 1px solid var(--ds-line);
-}
 .l-nav-signin {
   margin-left: 4px;
 }
 
-/* Only the account link gives up width; a long name truncates instead of
+/* Only the account menu gives up width; a long name truncates instead of
    wrapping. */
 .l-nav {
   min-width: 0;
@@ -72,19 +64,11 @@
   flex-shrink: 0;
 }
 
-.l-nav > .l-nav-user {
+.l-nav > .account-menu {
   flex-shrink: 1;
-  min-width: 0;
 }
 
-.l-nav-user-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Small phones: keep the brand, Reviews, and the account link on one row. */
+/* Small phones: keep the brand, Reviews, and the account menu on one row. */
 @media (max-width: 520px) {
   .l-nav-optional {
     display: none;
@@ -104,7 +88,7 @@
 }
 
 @media (max-width: 380px) {
-  .l-nav-user:has(.l-nav-avatar) .l-nav-user-name {
+  .l-nav .account-menu-button:has(.account-menu-avatar) .account-menu-name {
     display: none;
   }
 }
@@ -113,6 +97,7 @@
 @media (pointer: coarse) {
   .l-topbar .r-brand,
   .l-nav .r-nav-item,
+  .l-nav .account-menu-button,
   .l-nav-signin {
     min-height: 44px;
   }

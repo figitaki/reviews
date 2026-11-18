@@ -1348,10 +1348,10 @@ details[open] > summary .review-collapse-icon,
   gap: 12px 20px;
   margin-top: 24px;
   border: 1px solid var(--review-line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 16px 20px;
   background: var(--review-panel-raised);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.08);
+  box-shadow: var(--shadow-float);
   --decision-accent: var(--ds-warn);
 }
 
@@ -1493,8 +1493,10 @@ details[open] > summary .review-collapse-icon,
     gap: 12px;
   }
 
+  /* The closed decision is a floating button like Sections and Comments:
+     48px, --radius-lg and --shadow-float. */
   .review-section-decision:not(.is-editing):not(.is-readonly) {
-    width: 56px;
+    width: 48px;
     margin-left: auto;
     margin-right: 0;
     justify-self: end;
@@ -1511,11 +1513,11 @@ details[open] > summary .review-collapse-icon,
 
   .review-section-decision-toggle {
     display: inline-flex;
-    flex: 0 0 56px;
+    flex: 0 0 48px;
     align-items: center;
     justify-content: center;
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
     border: 1px solid var(--review-line-strong);
     border-radius: var(--radius-lg);
     background: var(--review-panel-raised);
@@ -1534,8 +1536,8 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-section-decision-toggle > span {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
   }
 
   .review-section-decision.is-editing .review-section-decision-toggle {
@@ -2915,29 +2917,6 @@ details[open] > summary .review-collapse-icon,
     .review-page .ds-shell-actions .review-button {
       max-width: 100%;
     }
-  }
-
-  /* Keep the signed-out button compact without shrinking its tap area. */
-  .review-page .ds-shell-actions > a.review-button {
-    position: relative;
-    min-height: 32px;
-  }
-
-  .review-page .ds-shell-actions > a.review-button::after {
-    content: "";
-    position: absolute;
-    inset: -7px 0;
-  }
-
-  .review-page .ds-shell-actions .review-button > span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .review-page .ds-shell-actions img {
-    flex: 0 0 auto;
   }
 
   .review-toolbar {

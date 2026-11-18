@@ -79,7 +79,10 @@ defmodule ReviewsWeb.DesignLiveTest do
     path = ReviewsWeb.DesignFixtures.file_path()
 
     assert has_element?(view, "#dcp-shell .l-topbar")
-    assert has_element?(view, "#dcp-shell .dropdown a[href='/settings']")
+    # Every signed-in top bar uses the same account menu.
+    assert has_element?(view, "#dcp-shell .l-topbar .account-menu a[href='/settings']")
+    assert has_element?(view, "#dcp-shell .ds-shell-actions .account-menu a[href='/auth/logout']")
+    refute has_element?(view, "#dcp-shell .l-nav-signin svg")
     assert has_element?(view, "#dcp-hunk-diff[phx-hook=DiffRenderer]")
     # The sample patch adds five lines and removes two; the stat must agree.
     assert render(view) =~ "5 additions, 2 deletions"

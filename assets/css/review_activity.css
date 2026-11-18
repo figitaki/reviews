@@ -295,11 +295,11 @@
 .review-quick-button { display: none; }
 
 /* Phones: icon-only floating buttons, Sections (Guide only) above Comments,
-   stacked above the section decision button and centred on it. */
+   stacked above the section decision button, all three 48px. */
 @media (max-width: 640px) {
   .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
-    --review-quick-right: calc(16px + 4px + env(safe-area-inset-right));
-    --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
+    --review-quick-right: calc(16px + env(safe-area-inset-right));
+    --review-quick-bottom: calc(16px + 48px + 12px + env(safe-area-inset-bottom));
   }
   /* Sections scrolls the Guide map in below the sticky review toolbar, so its
      close button stays visible. */

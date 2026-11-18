@@ -14,7 +14,7 @@ defmodule ReviewsWeb.DesignComponentsLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.ReviewView
-  alias ReviewsWeb.{DesignFixtures, DesignLive, ReviewLive}
+  alias ReviewsWeb.{DesignFixtures, DesignLive}
   alias ReviewsWeb.ReviewLive.{ActivityComponents, PacketComponents}
 
   @hunk_id "dcp-hunk"
@@ -296,16 +296,13 @@ defmodule ReviewsWeb.DesignComponentsLive do
           <h2 id="dcp-shell-title">App shell and navigation</h2>
           <ul class="dc-rules">
             <li>
-              Home, the review list and Settings use <code>Layouts.landing_topbar</code>. Signed in,
-              Reviews links to the list and the avatar and name link to Settings.
+              Home, the review list and Settings use <code>Layouts.landing_topbar</code>; the review
+              page uses <code>ds_shell</code>. Signed in, Reviews links to the list.
             </li>
             <li>
-              The review page uses <code>ds_shell</code>
-              with a different top bar, where the name opens an account menu with Settings and Sign out.
-            </li>
-            <li>
-              Open question: the two top bars give the signed-in user different controls. One of them
-              should win.
+              Both bars end in the one account control, <code>Layouts.account_menu</code>: signed in,
+              the avatar and name open a menu with Settings and Sign out; signed out, a text-only
+              Sign in. Sign-in buttons in the page body carry the GitHub mark.
             </li>
             <li>The shell follows the page theme, so these samples are not paired by theme.</li>
           </ul>
@@ -325,13 +322,22 @@ defmodule ReviewsWeb.DesignComponentsLive do
             <figure class="review-page">
               <.ds_shell brand="Reviews" home="#">
                 <:actions>
-                  <ReviewLive.user_menu current_user={@viewer} return_to="/design/components" />
+                  <Layouts.account_menu current_user={@viewer} return_to="/design/components" />
                 </:actions>
                 <span></span>
               </.ds_shell>
               <figcaption class="dc-name">
-                ds_shell with ReviewLive.user_menu: click the name for the menu
+                ds_shell, signed in: click the name for the menu
               </figcaption>
+            </figure>
+            <figure class="review-page">
+              <.ds_shell brand="Reviews" home="#">
+                <:actions>
+                  <Layouts.account_menu return_to="/design/components" />
+                </:actions>
+                <span></span>
+              </.ds_shell>
+              <figcaption class="dc-name">ds_shell, signed out</figcaption>
             </figure>
           </div>
         </section>
