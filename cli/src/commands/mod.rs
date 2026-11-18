@@ -1,4 +1,5 @@
 pub mod comment;
+pub mod delete;
 pub mod diff;
 pub mod login;
 pub mod push;

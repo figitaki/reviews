@@ -54,6 +54,9 @@ enum Command {
 
     /// Approve, deny, ignore, or reset a packet section to pending
     Section(commands::section::SectionArgs),
+
+    /// Permanently delete a review you own, after typing its slug to confirm
+    Delete(commands::delete::DeleteArgs),
 }
 
 fn main() {
@@ -77,5 +80,6 @@ fn run() -> Result<()> {
         Command::Resolve(args) => commands::thread_status::run(args, "resolved"),
         Command::Reopen(args) => commands::thread_status::run(args, "open"),
         Command::Section(args) => commands::section::run(args),
+        Command::Delete(args) => commands::delete::run(args),
     }
 }
