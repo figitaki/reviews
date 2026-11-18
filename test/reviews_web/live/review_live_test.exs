@@ -2062,4 +2062,124 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert [%{status: "resolved"}] = Threads.list_published_threads(review.id)
     end
   end
+
+  describe "deleting the review" do
+    setup :seed!
+
+    setup %{review: review} do
+      {:ok, commenter} =
+        Accounts.upsert_from_github(%{
+          github_id: 9100 + System.unique_integer([:positive]),
+          username: "erin",
+          email: "erin@example.com",
+          avatar_url: nil
+        })
+
+      {:ok, _} =
+        Threads.publish_comment(review, commenter, %{
+          "file_path" => "lib/foo.ex",
+          "side" => "new",
+          "body" => "Looks off",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
+        })
+
+      %{commenter: commenter}
+    end
+
+    test "the owner confirms by typing the slug, after a warning about others' comments", %{
+      conn: conn,
+      author: author,
+      review: review
+    } do
+      conn = Plug.Test.init_test_session(conn, %{current_user_id: author.id})
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      view |> element("#open-delete-review") |> render_click()
+
+      assert view |> element("#delete-review-impact") |> render() =~
+               "1 revision, 1 thread and 1 comment"
+
+      assert view |> element("#delete-review-others-warning") |> render() =~
+               "1 comment by other people or agents will be deleted too (erin)"
+
+      assert has_element?(view, "#confirm-delete-review[disabled]")
+
+      view |> form("#delete-review-form", %{confirm_slug: "wrong"}) |> render_change()
+      assert has_element?(view, "#confirm-delete-review[disabled]")
+
+      # Submitting a wrong slug anyway (the button is only disabled in the browser).
+      view |> form("#delete-review-form", %{confirm_slug: "wrong"}) |> render_submit()
+      assert ReviewsCtx.get_review_by_slug(review.slug)
+
+      view |> form("#delete-review-form", %{confirm_slug: review.slug}) |> render_change()
+      refute has_element?(view, "#confirm-delete-review[disabled]")
+
+      {:ok, _home, html} =
+        view
+        |> form("#delete-review-form", %{confirm_slug: review.slug})
+        |> render_submit()
+        |> follow_redirect(conn, ~p"/")
+
+      assert html =~ "Deleted review #{review.slug}."
+      assert ReviewsCtx.deleted?(review.slug)
+    end
+
+    test "cancel closes the dialog without deleting", %{
+      conn: conn,
+      author: author,
+      review: review
+    } do
+      conn = Plug.Test.init_test_session(conn, %{current_user_id: author.id})
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+
+      view |> element("#open-delete-review") |> render_click()
+      view |> element("#cancel-delete-review") |> render_click()
+
+      refute has_element?(view, "#delete-review-dialog")
+      assert ReviewsCtx.get_review_by_slug(review.slug)
+    end
+
+    test "other viewers get no delete action, and a forged event deletes nothing", %{
+      conn: conn,
+      review: review,
+      commenter: commenter
+    } do
+      {:ok, anonymous, _html} = live(conn, ~p"/r/#{review.slug}")
+      refute has_element?(anonymous, "#review-owner-menu")
+
+      conn = Plug.Test.init_test_session(build_conn(), %{current_user_id: commenter.id})
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+      refute has_element?(view, "#review-owner-menu")
+
+      render_hook(view, "open_delete_review", %{})
+      refute has_element?(view, "#delete-review-dialog")
+
+      assert render_hook(view, "delete_review", %{"confirm_slug" => review.slug}) =~
+               "Only the review owner can delete it."
+
+      assert ReviewsCtx.get_review_by_slug(review.slug)
+    end
+
+    test "open pages reload, and the link then says the review was deleted", %{
+      conn: conn,
+      author: author,
+      review: review
+    } do
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}/changes")
+
+      {:ok, _} = ReviewsCtx.delete_review(review, Accounts.human_identity_for(author))
+      assert_redirect(view, ~p"/r/#{review.slug}/changes")
+
+      for path <- [~p"/r/#{review.slug}", ~p"/r/#{review.slug}/changes"] do
+        {410, headers, body} = assert_error_sent(410, fn -> get(build_conn(), path) end)
+
+        assert body =~ "This review was deleted"
+        assert body =~ ~s(id="review-deleted-home")
+        assert {"x-robots-tag", "noindex, nofollow, noarchive"} in headers
+      end
+
+      # A slug that never existed keeps today's not-found handling (#180).
+      assert {:error, {:live_redirect, %{to: "/"}}} = live(build_conn(), ~p"/r/never-existed")
+    end
+  end
 end

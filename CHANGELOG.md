@@ -7,6 +7,8 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Let a review's owner delete it for good (#202): from the review page's options menu, `DELETE /api/v1/reviews/:slug`, or `reviews delete <slug>`. The owner confirms by typing the slug, and the warning says when other people's or agents' comments will go too. Deletion removes patchsets, packets, threads, comments, section decisions and viewed-hunk state. The link then shows "This review was deleted" with status 410, and the API answers `410` `review_deleted`.
+
 - Add stable API and MCP error codes while retaining legacy fields and Poppy authentication responses; teach the CLI to read them.
 
 - Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.

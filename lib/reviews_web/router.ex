@@ -166,6 +166,8 @@ defmodule ReviewsWeb.Router do
     pipe_through [:api, :api_authenticated]
 
     post "/reviews", ReviewController, :create
+    get "/reviews/:slug/deletion", ReviewController, :deletion
+    delete "/reviews/:slug", ReviewController, :delete
     post "/reviews/:slug/patchsets", PatchsetController, :create
     post "/reviews/:slug/comments", CommentController, :create
     patch "/reviews/:slug/threads/:thread_id", ThreadController, :update
