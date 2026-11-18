@@ -36,7 +36,7 @@ defmodule ReviewsWeb.Api.AnalyticsControllerTest do
     for raw <- [nil, "Bearer rev_general", "Bearer wrong", "Bearer " <> token <> "x"] do
       conn = if raw, do: put_req_header(build_conn(), "authorization", raw), else: build_conn()
       response = get(conn, @path)
-      assert json_response(response, 401)["errors"]
+      assert json_response(response, 401)["error_code"] == "unauthorized"
       assert get_resp_header(response, "cache-control") == ["no-store"]
     end
   end
@@ -72,6 +72,14 @@ defmodule ReviewsWeb.Api.AnalyticsControllerTest do
   } do
     assert {:error, :invalid_token} = Reviews.Accounts.authenticate_token(token)
 
+    # Even if it reached a context function, its principal could not write.
+    {:ok, digest} = Credential.authenticate(token)
+    principal = Reviews.Principal.aggregate_export(digest)
+
+    for action <- [:comment, :push, :decide_section, {:update_thread_status, %{author_id: 1}}] do
+      refute Reviews.Policy.can?(principal, action, %Reviews.Reviews.Review{})
+    end
+
     for {method, path} <- [
           {:get, "/api/v1/me"},
           {:get, "/api/v1/reviews/anything"},
@@ -80,7 +88,11 @@ defmodule ReviewsWeb.Api.AnalyticsControllerTest do
         ] do
       conn = build_conn() |> put_req_header("authorization", "Bearer " <> token)
       conn = dispatch(conn, @endpoint, method, path, nil)
-      assert json_response(conn, 403)["errors"]["detail"] == "Credential scope denied"
+
+      assert %{"error_code" => "insufficient_scope", "errors" => %{"detail" => detail}} =
+               json_response(conn, 403)
+
+      assert detail == "Credential scope denied"
     end
   end
 
@@ -99,13 +111,13 @@ defmodule ReviewsWeb.Api.AnalyticsControllerTest do
             |> put_req_header("authorization", "Bearer " <> token)
             |> get(@path <> query)
 
-          assert json_response(conn, 400)["errors"]
+          assert json_response(conn, 400)["error_code"] == "invalid_request"
         end
 
         conn =
           build_conn() |> put_req_header("authorization", "Bearer " <> token) |> post(@path, %{})
 
-        assert json_response(conn, 405)["errors"]
+        assert json_response(conn, 405)["error_code"] == "method_not_allowed"
 
         conn =
           build_conn()
@@ -129,7 +141,7 @@ defmodule ReviewsWeb.Api.AnalyticsControllerTest do
     end
 
     conn = build_conn() |> put_req_header("authorization", "Bearer " <> token) |> get(@path)
-    assert json_response(conn, 429)["errors"]
+    assert json_response(conn, 429)["error_code"] == "rate_limited"
     Application.delete_env(:reviews, :analytics_export)
 
     assert build_conn()
@@ -150,7 +162,13 @@ defmodule ReviewsWeb.Api.AnalyticsControllerTest do
     {:load, ticket} = Reviews.Analytics.Cache.reserve()
     Reviews.Analytics.Cache.store(ticket, {:error, :unavailable})
     conn = build_conn() |> put_req_header("authorization", "Bearer " <> token) |> get(@path)
-    assert json_response(conn, 503) == %{"errors" => %{"detail" => "Snapshot unavailable"}}
+
+    assert json_response(conn, 503) == %{
+             "error_code" => "unavailable",
+             "error_detail" => "Snapshot unavailable",
+             "errors" => %{"detail" => "Snapshot unavailable"}
+           }
+
     assert get_resp_header(conn, "cache-control") == ["no-store"]
   end
 end

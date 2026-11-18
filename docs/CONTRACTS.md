@@ -68,7 +68,13 @@ Exactly two windows (7 and 30 days) each contain `days`, `start`, `end`,
 Active accounts count distinct identity owners, deduplicating human and agent
 identities belonging to the same account. All counts are computed in PostgreSQL;
 no identity IDs or content leave the database. See [aggregate export](AGGREGATE_EXPORT.md)
-for boundaries, credential expiry/revocation, per-instance limits, and error statuses.
+for boundaries, credential expiry/revocation and per-instance limits.
+
+The credential authenticates as a `Reviews.Principal` with `via: :aggregate_export`
+and no identity, account or scopes, so `Reviews.Policy` refuses it every write.
+Errors carry the shared `error_code`: `unauthorized` (401), `invalid_request` (400,
+query string or body), `method_not_allowed` (405), `insufficient_scope` (403, this
+credential on any other route), `rate_limited` (429) and `unavailable` (503).
 
 ### `POST /api/v1/reviews`
 
@@ -458,7 +464,7 @@ Replies require only `{thread_id, body}` and preserve the thread's file, side, a
 
 REST and Poppy application errors add `error_code` and `error_detail` alongside the existing `errors` fields. Poppy authentication retains the protocol-required string `error` and challenge headers and adds the same code/detail fields. Clients should branch on the code, not the prose; field-validation messages remain in `errors`. This is additive rather than replacing the published v1 envelope.
 
-Codes include `review_not_found`, `thread_not_found`, `patchset_not_found`, `section_not_found`, `forbidden`, `unauthorized`, `invalid_request`, `invalid_status`, `invalid_section_index`, `invalid_anchor`, `invalid_side`, `invalid_file_path`, `empty_body`, `unknown_granularity`, `validation_failed` and `write_failed`. Poppy authentication uses its existing protocol codes (`invalid_session`, `session_ended`, `version_unsupported`, `invalid_token`, `invalid_dpop_proof`, `insufficient_scope`). Both thread and section-decision requests with missing status return 422. Malformed section indices retain their existing 400 response.
+Codes include `review_not_found`, `thread_not_found`, `patchset_not_found`, `section_not_found`, `forbidden`, `unauthorized`, `invalid_request`, `invalid_status`, `invalid_section_index`, `invalid_anchor`, `invalid_side`, `invalid_file_path`, `empty_body`, `unknown_granularity`, `validation_failed`, `write_failed`, `method_not_allowed`, `rate_limited` and `unavailable`. Poppy authentication uses its existing protocol codes (`invalid_session`, `session_ended`, `version_unsupported`, `invalid_token`, `invalid_dpop_proof`, `insufficient_scope`). Both thread and section-decision requests with missing status return 422. Malformed section indices retain their existing 400 response.
 
 `Reviews.Errors` is the one list of codes, with one HTTP status and one default detail each. REST, Poppy and MCP (`structuredContent.error.code`) all map domain reasons through it, so the same failure has the same code on every surface; an unknown reason is sent as `write_failed`, never as its internal name. It adds `invalid_pagination` (bad cursor, `limit` or `max_bytes` on paged reads) and `invalid_packet` (a packet that fails validation; field messages stay in `errors.packet`).
 

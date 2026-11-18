@@ -1,7 +1,13 @@
 defmodule ReviewsWeb.Plugs.AggregateExport do
-  @moduledoc "Reject aggregate credentials on other paths; authenticate before request logging/parsing."
+  @moduledoc """
+  Reject aggregate credentials on other paths; authenticate before request
+  logging/parsing. A valid credential assigns `:current_principal`, a
+  `Reviews.Principal.aggregate_export/1` with no identity or scopes. Errors use
+  the `Reviews.Errors` codes through `ReviewsWeb.ApiErrors`.
+  """
   import Plug.Conn
   alias Reviews.Analytics.Credential
+  alias Reviews.Principal
   @path "/api/v1/analytics/snapshot"
 
   def init(opts), do: opts
@@ -17,14 +23,14 @@ defmodule ReviewsWeb.Plugs.AggregateExport do
 
     cond do
       conn.method != "GET" ->
-        error(conn, 405, "Method not allowed")
+        error(conn, :method_not_allowed)
 
       conn.query_string != "" ->
-        error(conn, 400, "Parameters are not supported")
+        error(conn, :invalid_request, "Parameters are not supported")
 
       get_req_header(conn, "content-length") not in [[], ["0"]] or
           get_req_header(conn, "transfer-encoding") != [] ->
-        error(conn, 400, "Body is not supported")
+        error(conn, :invalid_request, "Body is not supported")
 
       true ->
         authenticate(conn, authorization)
@@ -37,7 +43,7 @@ defmodule ReviewsWeb.Plugs.AggregateExport do
         conn
         |> private_headers()
         |> delete_req_header("authorization")
-        |> error(403, "Credential scope denied")
+        |> error(:insufficient_scope, "Credential scope denied")
 
       false ->
         conn
@@ -46,7 +52,7 @@ defmodule ReviewsWeb.Plugs.AggregateExport do
 
   defp authenticate(conn, ["Bearer " <> token]) do
     case Credential.authenticate(token) do
-      {:ok, digest} -> assign(conn, :analytics_export_digest, digest)
+      {:ok, digest} -> assign(conn, :current_principal, Principal.aggregate_export(digest))
       _ -> unauthorized(conn)
     end
   end
@@ -55,8 +61,8 @@ defmodule ReviewsWeb.Plugs.AggregateExport do
 
   defp unauthorized(conn) do
     case Reviews.Analytics.Cache.admit_rejection() do
-      :ok -> error(conn, 401, "Unauthorized")
-      :limited -> error(conn, 429, "Rate limit exceeded")
+      :ok -> error(conn, :unauthorized, "Unauthorized")
+      :limited -> error(conn, :rate_limited)
     end
   end
 
@@ -69,7 +75,6 @@ defmodule ReviewsWeb.Plugs.AggregateExport do
     |> put_resp_header("content-security-policy", "default-src 'none'; frame-ancestors 'none'")
   end
 
-  defp error(conn, status, message) do
-    conn |> put_status(status) |> Phoenix.Controller.json(%{errors: %{detail: message}}) |> halt()
-  end
+  defp error(conn, reason, message \\ nil),
+    do: conn |> ReviewsWeb.ApiErrors.render(reason, message) |> halt()
 end

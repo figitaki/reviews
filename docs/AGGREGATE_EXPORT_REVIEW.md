@@ -2,11 +2,12 @@
 
 ## Base and scope
 
-This feature is staged on `reviews-private-analytics-current` at verified public main
-`91b13c66f29d277cc99c974f167e7f7a72d6935a` from `https://github.com/figitaki/reviews.git`.
-Public main was rechecked before publication and had not advanced. Only the
-aggregate feature was ported; current security, identity, dependency and UI changes
-are retained. Earlier results from an obsolete base do not describe this revision.
+This feature was staged on `reviews-private-analytics-current` at public main
+`91b13c66f29d277cc99c974f167e7f7a72d6935a` from `https://github.com/figitaki/reviews.git`,
+then brought up to date by merging main `0a5b51e`. After the merge the collector
+authenticates as a `Reviews.Principal` (`via: :aggregate_export`, no identity or
+scopes) and its errors use the shared `Reviews.Errors` codes. The SQL is unchanged:
+section decisions gained `account_id`, but `author_id` still resolves to the same owner.
 
 Adds a disabled-by-default fixed aggregate endpoint, early dedicated authentication,
 expiry/revocation, bounded single-flight cache, owner-deduplicated SQL, tests and
@@ -15,7 +16,7 @@ content permission, deployment configuration or dependency version is changed.
 Human and agent identities belonging to the same owner count as one active account.
 Kind subtotals are not exported; declared identity kind is not proof of a human operator.
 
-## Validation (local, 2026-11-16)
+## Validation (local, 2026-11-16, before the merge with main)
 
 - `mix precommit`: **160 passed**, strict compilation and formatting successful,
   using a disposable local PostgreSQL cluster and separate database.
