@@ -514,12 +514,21 @@ export function attributionDetails(attribution, author) {
   ])
 }
 
-// Whether the comment's access token was bound to the agent's key. Comments
-// recorded before Reviews kept this have no row.
+// The Token row's value and its faint note: whether the comment's access token
+// was bound to the agent's key (RFC 9449). The Session JWT's key is a separate
+// check and never shows here. Comments recorded before Reviews kept this have
+// no row.
+export function tokenBindingText(binding) {
+  if (binding === "dpop") return ["Access token bound to agent key", null]
+  if (binding === "bearer") return ["Bearer", "not bound to a key"]
+  return null
+}
+
 function tokenRow(binding, row, claim) {
-  if (binding === "dpop") return row("Token", "Bound to agent key (DPoP)")
-  if (binding === "bearer") return row("Token", "Bearer", claim("not bound to a key"))
-  return []
+  const text = tokenBindingText(binding)
+  if (!text) return []
+  const [value, note] = text
+  return note ? row("Token", value, claim(note)) : row("Token", value)
 }
 
 function formatDate(iso) {

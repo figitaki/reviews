@@ -1,6 +1,7 @@
 defmodule Reviews.ThreadsTest do
   use Reviews.DataCase, async: true
 
+  import Ecto.Query
   alias Reviews.Accounts
   alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsCtx
@@ -98,6 +99,37 @@ defmodule Reviews.ThreadsTest do
 
       assert listed_first.id == first.id
       assert listed_second.id == second.id
+    end
+
+    # Timestamps have one-second precision, so a reply often shares its
+    # parent's inserted_at. Order must not depend on where Postgres stores rows.
+    test "comments posted in the same second keep reply order" do
+      %{author: author, review: review} = setup_review!()
+
+      {:ok, %{thread: thread, comment: first}} =
+        Threads.publish_comment(review, author, line_params("first"))
+
+      {:ok, %{comment: second}} =
+        Threads.publish_comment(
+          review,
+          author,
+          line_params("reply") |> Map.put("thread_id", thread.id)
+        )
+
+      Repo.update_all(from(c in Comment, where: c.thread_id == ^thread.id),
+        set: [inserted_at: ~U[2026-01-01 00:00:00Z]]
+      )
+
+      # Rewrite the first row so Postgres stores it after the reply.
+      Repo.update_all(from(c in Comment, where: c.id == ^first.id), set: [body: "first"])
+
+      ids =
+        Threads.list_published_threads(review.id)
+        |> hd()
+        |> Map.get(:comments)
+        |> Enum.map(& &1.id)
+
+      assert ids == [first.id, second.id]
     end
 
     test "rejects false reply IDs with either key type instead of creating a thread" do

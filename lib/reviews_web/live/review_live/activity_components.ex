@@ -124,6 +124,8 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
         type="button"
         class="review-quick-button"
         data-quick-sections
+        aria-expanded="false"
+        aria-controls="review-guide-flyout"
         aria-label="Sections"
         title="Sections"
       >

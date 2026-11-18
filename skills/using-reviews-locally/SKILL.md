@@ -136,6 +136,7 @@ Notes:
 - `reviews threads` can run anonymously against public review JSON.
 - `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` (or `reviews login --token` with an API token).
 - `reviews resolve` and `reviews reopen` work only for the review owner or the thread's author; `reviews section` works only for the review owner. Others get HTTP 403.
+- `reviews delete <slug>` permanently deletes a review you own, with its comments. It shows what goes and asks you to type the slug; `--yes` skips the prompt for scripts. Only the review owner can delete; others get HTTP 403.
 - Thread IDs are accepted bare (`7`) or as printed by the listing (`#7`).
 - `reviews reply` appends to the thread. `reviews comment` always opens a new one.
 - `reviews show --format md` also includes thread IDs and status, which can be used as targets for reply/resolve/reopen.
