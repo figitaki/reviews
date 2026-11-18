@@ -63,8 +63,16 @@ defmodule ReviewsWeb.Api.SectionDecisionControllerTest do
         "status" => "approved"
       })
 
-    assert %{"section_index" => 0, "status" => nil} = json_response(conn, 200)
-    assert [] = PacketSectionDecisions.list_for_review(review, agent)
+    # A retried request keeps the decision instead of toggling it off.
+    assert %{"section_index" => 0, "status" => "approved"} = json_response(conn, 200)
+    assert [%{status: "approved"}] = PacketSectionDecisions.list_for_review(review, agent)
+
+    conn =
+      authenticated_json_conn(raw)
+      |> post(~p"/api/v1/reviews/#{review.slug}/sections/0/decision", %{"status" => "pending"})
+
+    assert %{"status" => "pending"} = json_response(conn, 200)
+    assert [%{status: "pending"}] = PacketSectionDecisions.list_for_review(review, agent)
   end
 
   test "rejects an invalid status", %{conn: conn, raw_token: raw, review: review} do
@@ -94,6 +102,49 @@ defmodule ReviewsWeb.Api.SectionDecisionControllerTest do
       })
 
     assert %{"errors" => %{"detail" => "Invalid section index"}} = json_response(conn, 400)
+  end
+
+  test "the owner's human identity may decide sections too", %{review: review} do
+    owner = Accounts.get_user!(Reviews.Repo.preload(review, :author).author.owner_user_id)
+    {:ok, _token, raw} = Accounts.mint_token(owner, %{name: "human"})
+
+    conn =
+      authenticated_json_conn(raw)
+      |> post(~p"/api/v1/reviews/#{review.slug}/sections/0/decision", %{"status" => "denied"})
+
+    assert %{"status" => "denied"} = json_response(conn, 200)
+  end
+
+  test "other accounts and their agents get 403 and nothing is written", %{review: review} do
+    {:ok, stranger} =
+      Accounts.upsert_from_github(%{
+        github_id: 77_002,
+        username: "stranger",
+        email: "stranger@example.com",
+        avatar_url: nil
+      })
+
+    {:ok, stranger_agent} =
+      Accounts.create_agent_identity(stranger, %{display_name: "Bot", handle: "bot"})
+
+    {:ok, _token, human_raw} = Accounts.mint_token(stranger, %{name: "human"})
+
+    {:ok, _token, agent_raw} =
+      Accounts.mint_token(stranger, %{name: "agent", identity_id: stranger_agent.id})
+
+    for raw <- [human_raw, agent_raw] do
+      conn =
+        authenticated_json_conn(raw)
+        |> post(~p"/api/v1/reviews/#{review.slug}/sections/0/decision", %{
+          "status" => "approved"
+        })
+
+      assert %{"errors" => %{"detail" => "Only the review owner can decide sections"}} =
+               json_response(conn, 403)
+    end
+
+    assert [] = PacketSectionDecisions.list_for_review(review, stranger_agent)
+    assert [] = PacketSectionDecisions.list_for_review(review, stranger)
   end
 
   defp authenticated_json_conn(raw) do

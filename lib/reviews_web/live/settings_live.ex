@@ -101,7 +101,7 @@ defmodule ReviewsWeb.SettingsLive do
         {:noreply, put_flash(socket, :error, "Sign in to manage connected agents.")}
 
       user ->
-        case OAuth.revoke_link(user, id) do
+        case OAuth.revoke_grant(user, id) do
           :ok ->
             {:noreply,
              socket
@@ -110,6 +110,25 @@ defmodule ReviewsWeb.SettingsLive do
 
           {:error, :not_found} ->
             {:noreply, put_flash(socket, :error, "Connected agent not found.")}
+        end
+    end
+  end
+
+  def handle_event("sign_out_cli", %{"id" => id}, socket) do
+    case socket.assigns.current_user do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Sign in to manage CLI sign-ins.")}
+
+      user ->
+        case OAuth.revoke_grant(user, id) do
+          :ok ->
+            {:noreply,
+             socket
+             |> assign_account_data()
+             |> put_flash(:info, "CLI signed out. Run reviews login there to sign in again.")}
+
+          {:error, :not_found} ->
+            {:noreply, put_flash(socket, :error, "CLI sign-in not found.")}
         end
     end
   end
@@ -233,6 +252,52 @@ defmodule ReviewsWeb.SettingsLive do
               </.ds_section>
 
               <.ds_section
+                id="cli-sign-ins"
+                eyebrow="Reviews CLI"
+                title="CLI sign-ins"
+                description="Each reviews login you approved, and the identity it acts as. Signing one out stops its tokens at once."
+              >
+                <div class="design-section-body">
+                  <.ds_card class="ds-settings-card">
+                    <.ds_empty_state
+                      :if={@cli_sessions == []}
+                      icon="hero-command-line"
+                      title="No CLI sign-ins"
+                      body="Run reviews login, then enter the code it shows at /device."
+                    />
+                    <ul :if={@cli_sessions != []} id="cli-sessions-list" class="ds-token-list">
+                      <li
+                        :for={session <- @cli_sessions}
+                        :key={session.id}
+                        id={"cli-session-#{session.id}"}
+                        class="ds-token-row"
+                      >
+                        <span class="ds-token-row-name">Reviews CLI</span>
+                        <span :if={session.identity}>
+                          Acts as {identity_label(session.identity)}.
+                        </span>
+                        <span>
+                          Signed in {format_date(session.inserted_at)}. {last_used_label(
+                            session.last_used_at
+                          )}.
+                        </span>
+                        <.ds_button
+                          id={"sign-out-cli-#{session.id}"}
+                          variant="danger"
+                          phx-click="sign_out_cli"
+                          phx-value-id={session.id}
+                          data-confirm="Sign this CLI out? Its tokens stop working at once."
+                          aria-label={"Sign out the CLI signed in #{format_date(session.inserted_at)}"}
+                        >
+                          Sign out
+                        </.ds_button>
+                      </li>
+                    </ul>
+                  </.ds_card>
+                </div>
+              </.ds_section>
+
+              <.ds_section
                 id="connected-agents"
                 eyebrow="OAuth"
                 title="Connected agents"
@@ -257,7 +322,7 @@ defmodule ReviewsWeb.SettingsLive do
                           {link_label(link)}
                         </span>
                         <span>
-                          Acts as {identity_label(link.identity)}. Calls itself {link.subject_name ||
+                          Acts as {identity_label(link.identity)}. Calls itself {link.client_name ||
                             "(no name)"} (not verified).
                         </span>
                         <span translate="no">{Enum.join(link.scopes, " ")}</span>
@@ -444,6 +509,7 @@ defmodule ReviewsWeb.SettingsLive do
     |> assign(:identity_token_stats, %{})
     |> assign(:tokens, [])
     |> assign(:agent_links, [])
+    |> assign(:cli_sessions, [])
   end
 
   defp assign_account_data(%{assigns: %{current_user: user}} = socket) do
@@ -456,14 +522,24 @@ defmodule ReviewsWeb.SettingsLive do
     |> assign(:agent_identities, Enum.filter(identities, &(&1.kind == "agent")))
     |> assign(:identity_token_stats, Accounts.identity_token_counts(user))
     |> assign(:tokens, Accounts.list_tokens_for(user))
-    |> assign(:agent_links, OAuth.list_links_for(user))
+    |> assign_grants(OAuth.list_grants_for(user))
+  end
+
+  # CLI sign-ins act as the person and get their own section; revoked ones
+  # are gone for good, so only active ones show.
+  defp assign_grants(socket, grants) do
+    {cli, agents} = Enum.split_with(grants, &(&1.client_id == OAuth.CLI.client_id()))
+
+    socket
+    |> assign(:agent_links, agents)
+    |> assign(:cli_sessions, Enum.filter(cli, &is_nil(&1.revoked_at)))
   end
 
   # A registered client has no domain; it goes by the name it gave.
-  defp link_label(%{subject: subject} = link) do
-    case URI.parse(subject) do
+  defp link_label(%{client_id: client_id} = grant) do
+    case URI.parse(client_id) do
       %URI{scheme: "https", host: host} when is_binary(host) -> host
-      _ -> "#{link.subject_name || "Unnamed app"} (registered app)"
+      _ -> "#{grant.client_name || "Unnamed app"} (registered app)"
     end
   end
 

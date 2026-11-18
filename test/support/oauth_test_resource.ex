@@ -2,44 +2,21 @@ defmodule Reviews.OAuthTestResource do
   @moduledoc """
   An `Reviews.OAuth.Resource` for tests at `/api/test`: public clients and
   clients with keys, rotating refresh tokens, and two scopes. A request with
-  no scope gets both.
+  no scope gets both. `config :reviews, Reviews.OAuthTestResource, enabled:
+  false` turns it off.
   """
   @behaviour Reviews.OAuth.Resource
 
-  @scopes %{"test:read" => "Read test things.", "test:write" => "Write test things."}
-  @scope_order ["test:read", "test:write"]
-
   @impl true
-  def provider, do: "test"
-  @impl true
-  def resource, do: Reviews.OAuth.issuer() <> "/api/test"
-  @impl true
-  def enabled?, do: Application.get_env(:reviews, __MODULE__, enabled: true)[:enabled]
-  @impl true
-  def scopes, do: @scopes
-  @impl true
-  def scope_names, do: @scope_order
-  @impl true
-  def client_auth_methods, do: ["none", "private_key_jwt"]
-  @impl true
-  def rotate_refresh_tokens?, do: true
-
-  @impl true
-  def parse_scopes(nil), do: {:ok, @scope_order}
-
-  def parse_scopes(scope) when is_binary(scope) do
-    scopes = scope |> String.split(" ", trim: true) |> Enum.uniq()
-
-    cond do
-      scopes == [] ->
-        {:ok, @scope_order}
-
-      Enum.all?(scopes, &Map.has_key?(@scopes, &1)) ->
-        {:ok, Enum.filter(@scope_order, &(&1 in scopes))}
-
-      true ->
-        :error
-    end
+  def options do
+    [
+      id: Reviews.OAuth.issuer() <> "/api/test",
+      name: "Test API",
+      scopes: [{"test:read", "Read test things."}, {"test:write", "Write test things."}],
+      client_auth_methods: ["none", "private_key_jwt"],
+      rotate_refresh_tokens: true,
+      enabled: Application.get_env(:reviews, __MODULE__, enabled: true)[:enabled]
+    ]
   end
 
   @impl true
@@ -53,9 +30,6 @@ defmodule Reviews.OAuthTestResource do
     }
   end
 
-  @impl true
-  def protected_resource_metadata, do: %{resource_name: "Test API"}
-
   defmodule KeysOnly do
     @moduledoc """
     A second test resource at `/api/keys`: only clients with keys, no
@@ -64,27 +38,15 @@ defmodule Reviews.OAuthTestResource do
     @behaviour Reviews.OAuth.Resource
 
     @impl true
-    def provider, do: "keys"
-    @impl true
-    def resource, do: Reviews.OAuth.issuer() <> "/api/keys"
-    @impl true
-    def enabled?, do: true
-    @impl true
-    def scopes, do: %{"keys:write" => "Write with keys."}
-    @impl true
-    def scope_names, do: ["keys:write"]
-    @impl true
-    def client_auth_methods, do: ["private_key_jwt"]
-    @impl true
-    def rotate_refresh_tokens?, do: false
-
-    @impl true
-    def parse_scopes(scope) when is_binary(scope) do
-      scopes = scope |> String.split(" ", trim: true) |> Enum.uniq()
-      if scopes != [] and scopes -- ["keys:write"] == [], do: {:ok, scopes}, else: :error
+    def options do
+      [
+        id: Reviews.OAuth.issuer() <> "/api/keys",
+        scopes: [{"keys:write", "Write with keys."}],
+        default_scopes: [],
+        client_auth_methods: ["private_key_jwt"],
+        rotate_refresh_tokens: false
+      ]
     end
-
-    def parse_scopes(_), do: :error
 
     @impl true
     def consent_text(client_label) do
