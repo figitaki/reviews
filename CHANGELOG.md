@@ -207,6 +207,9 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 
 ### Changed
 
+- The "Verified agent" Token row for a DPoP-bound comment now reads "Access token
+  bound to agent key (DPoP, RFC 9449)", so it can't be read as the Session JWT's
+  key. The Bearer row is unchanged.
 - Markdown excerpts with missing fence, table or indentation context use Source
   with an explanation. New/deleted documents render in one complete panel.
   Large documents use virtualized Source; smaller previews reuse cached content.
