@@ -13,15 +13,12 @@ defmodule ReviewsWeb.ReviewLive do
     * receives `{:patchset_pushed, n}`, `{:thread_published, thread}`, and
       `{:thread_updated, thread}` — the last also fires for resolve/reopen
       performed over the CLI/API, not just from a browser
+    * receives `{:review_deleted, slug}` and reloads the page, which then
+      shows that the review was deleted
   """
   use ReviewsWeb, :live_view
 
   require Logger
-
-  defmodule NotFoundError do
-    @moduledoc false
-    defexception message: "review not found", plug_status: 404
-  end
 
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
@@ -32,6 +29,7 @@ defmodule ReviewsWeb.ReviewLive do
   alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
+  alias ReviewsWeb.ReviewLive.DeleteReviewComponents
   alias ReviewsWeb.ReviewLive.DiffComponents
   alias ReviewsWeb.ReviewLive.PacketComponents
   alias ReviewsWeb.ReviewLive.RevisionNavComponents
@@ -44,7 +42,9 @@ defmodule ReviewsWeb.ReviewLive do
   def mount(%{"slug" => slug}, session, socket) do
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
-        raise NotFoundError
+        if ReviewsContext.deleted?(slug), do: raise(ReviewsWeb.ReviewDeletedError, slug: slug)
+
+        raise ReviewsWeb.ReviewNotFoundError, slug: slug
 
       review ->
         if connected?(socket) do
@@ -65,6 +65,8 @@ defmodule ReviewsWeb.ReviewLive do
                 :can_decide_sections,
                 Policy.can?(current_identity, :decide_section, snapshot.review)
               )
+              |> assign(:can_delete_review, Policy.can?(current_identity, :delete, review))
+              |> assign(:delete_review, nil)
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
               |> assign(:expanded_hunk_ids, MapSet.new())
@@ -107,6 +109,36 @@ defmodule ReviewsWeb.ReviewLive do
       :error ->
         {:noreply, put_flash(socket, :error, "Patchset not found.")}
     end
+  end
+
+  @impl true
+  def handle_event("reveal_packet_fragment", %{"id" => id}, socket) do
+    packet = socket.assigns.selected_patchset.packet
+
+    case PacketComponents.fragment_target(packet, socket.assigns.hunks_by_path, id) do
+      %{section_index: index, hunk_id: hunk_id, id: target_id}
+      when socket.assigns.live_action != :changes ->
+        socket =
+          socket
+          |> assign(:editing_decision_index, nil)
+          |> assign(:active_outline_section_index, index)
+          |> update(:expanded_section_ids, &MapSet.put(&1, index))
+          |> update(:expanded_hunk_ids, &MapSet.put(&1, hunk_id))
+
+        {:reply, %{id: target_id}, socket}
+
+      _ ->
+        {:reply, %{id: nil}, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("restore_packet_location", %{"thread" => id}, socket) when id in [nil, ""] do
+    handle_event("select_packet_overview", %{}, socket)
+  end
+
+  def handle_event("restore_packet_location", %{"thread" => id}, socket) do
+    {:noreply, reveal_activity_thread(socket, id, &reveal_packet_overview/1)}
   end
 
   @impl true
@@ -241,13 +273,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("select_packet_overview", _params, socket) do
-    socket =
-      socket
-      |> assign(:editing_decision_index, nil)
-      |> assign(:active_outline_section_index, nil)
-      |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
-
-    {:noreply, socket}
+    {:noreply, reveal_packet_overview(socket)}
   end
 
   @impl true
@@ -380,6 +406,60 @@ defmodule ReviewsWeb.ReviewLive do
             {:noreply, put_flash(socket, :error, "Could not update thread.")}
         end
     end
+  end
+
+  def handle_event("open_delete_review", _params, socket) do
+    if socket.assigns.can_delete_review do
+      summary = ReviewsContext.deletion_summary(socket.assigns.review)
+      {:noreply, assign(socket, :delete_review, %{summary: summary, confirm_slug: ""})}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("cancel_delete_review", _params, socket),
+    do: {:noreply, assign(socket, :delete_review, nil)}
+
+  def handle_event("change_delete_review", %{"confirm_slug" => typed}, socket) do
+    {:noreply, update(socket, :delete_review, &(&1 && %{&1 | confirm_slug: typed}))}
+  end
+
+  def handle_event("delete_review", %{"confirm_slug" => typed}, socket) do
+    review = socket.assigns.review
+
+    if String.trim(typed) == review.slug do
+      # This page navigates away itself; it must not also reload on the broadcast.
+      Phoenix.PubSub.unsubscribe(Reviews.PubSub, "review:#{review.slug}")
+
+      case ReviewsContext.delete_review(review, socket.assigns.current_identity) do
+        {:ok, _review} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Deleted review #{review.slug}.")
+           |> push_navigate(to: ~p"/reviews")}
+
+        {:error, :review_deleted} ->
+          {:noreply, redirect(socket, to: socket.assigns.return_to)}
+
+        {:error, reason} ->
+          Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
+
+          message =
+            if reason == :forbidden,
+              do: "Only the review owner can delete it.",
+              else: "Could not delete the review. Nothing was deleted."
+
+          {:noreply, put_flash(socket, :error, message)}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Type the review's slug to confirm.")}
+    end
+  end
+
+  @impl true
+  def handle_info({:review_deleted, _slug}, socket) do
+    # A full page load renders the "This review was deleted" page.
+    {:noreply, redirect(socket, to: socket.assigns.return_to)}
   end
 
   @impl true
@@ -528,9 +608,15 @@ defmodule ReviewsWeb.ReviewLive do
   def render(assigns) do
     ~H"""
     <Layouts.flash_group flash={@flash} />
-    <div class="review-page min-h-screen">
+    <div
+      id="review-page"
+      class="review-page min-h-screen"
+      phx-hook="PacketFragments"
+      data-patchset={@selected_patchset.id}
+    >
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
+          <DeleteReviewComponents.review_menu :if={@can_delete_review} />
           <.user_menu current_user={@current_user} return_to={@return_to} />
         </:actions>
 
@@ -666,6 +752,12 @@ defmodule ReviewsWeb.ReviewLive do
           </div>
         </div>
       </.ds_shell>
+      <DeleteReviewComponents.dialog
+        :if={@delete_review}
+        review={@review}
+        summary={@delete_review.summary}
+        confirm_slug={@delete_review.confirm_slug}
+      />
     </div>
     """
   end
@@ -718,7 +810,14 @@ defmodule ReviewsWeb.ReviewLive do
     """
   end
 
-  defp reveal_activity_thread(socket, id) do
+  defp reveal_packet_overview(socket) do
+    socket
+    |> assign(:editing_decision_index, nil)
+    |> assign(:active_outline_section_index, nil)
+    |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
+  end
+
+  defp reveal_activity_thread(socket, id, on_missing \\ &Function.identity/1) do
     with thread when not is_nil(thread) <-
            Enum.find(socket.assigns.published_threads, &(to_string(&1.id) == id)),
          true <- is_map(thread.anchor),
@@ -755,7 +854,7 @@ defmodule ReviewsWeb.ReviewLive do
           )
       end
     else
-      _ -> socket
+      _ -> on_missing.(socket)
     end
   end
 

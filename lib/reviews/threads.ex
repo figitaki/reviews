@@ -38,12 +38,12 @@ defmodule Reviews.Threads do
   def list_published_threads(review_id) when is_integer(review_id) do
     comments_query =
       from c in Comment,
-        order_by: [asc: c.inserted_at]
+        order_by: [asc: c.inserted_at, asc: c.id]
 
     query =
       from t in Thread,
         where: t.review_id == ^review_id,
-        order_by: [asc: t.inserted_at],
+        order_by: [asc: t.inserted_at, asc: t.id],
         preload: [comments: ^comments_query, author: [], resolved_by: []]
 
     Repo.all(query)
@@ -413,7 +413,7 @@ defmodule Reviews.Threads do
 
   defp comments_query do
     from c in Comment,
-      order_by: [asc: c.inserted_at],
+      order_by: [asc: c.inserted_at, asc: c.id],
       preload: ^@comment_preloads
   end
 

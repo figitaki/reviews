@@ -17,7 +17,6 @@ config :reviews, ReviewsWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [html: ReviewsWeb.ErrorHTML, json: ReviewsWeb.ErrorJSON],
-    root_layout: [html: {ReviewsWeb.Layouts, :root}],
     layout: false
   ],
   pubsub_server: Reviews.PubSub,
