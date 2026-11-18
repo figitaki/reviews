@@ -498,7 +498,9 @@ const attributionListStyle = {
 
 // The verified agent label and its details (issue #154). Only facts the server
 // verified are stated as verified; the agent's own name and Agent ID are shown
-// as its claims, and parties Poppy 1.0 can't establish are named as such.
+// as its claims, and parties Poppy 1.0 can't establish are named as such. A
+// delegation is shown as signed by Turnkey only when the server verified it
+// against Turnkey's poppy-delegation/v1 profile.
 export function attributionDetails(attribution, author) {
   if (!attribution || attribution.provider !== "poppy") return null
   const domain = attribution.client_domain || "unknown agent"
@@ -508,6 +510,7 @@ export function attributionDetails(attribution, author) {
     el("dd", { style: { margin: "0", color: colors.text } }, detail),
   ]
   const claim = (text) => el("span", { style: { color: colors.faint } }, ` (${text})`)
+  const turnkey = attribution.delegation_signed_by === "turnkey"
 
   return el("details", { style: attributionStyle, dataset: { attribution: "poppy" } }, [
     el("summary", { style: attributionSummaryStyle, "aria-label": `Verified agent via ${domain}. Show details.` }, [
@@ -519,10 +522,15 @@ export function attributionDetails(attribution, author) {
       ...row("Acts as", `${handle}, a Reviews agent`),
       ...row("Owner", `@${attribution.owner_username}`, claim(`approved this agent ${formatDate(attribution.approved_at)}`)),
       ...row("Personal Agent", domain, claim("proved by its signing keys")),
+      ...(turnkey
+        ? row("Turnkey agent", `${attribution.turnkey_agent} in organization ${attribution.turnkey_organization_id}`, claim("its identity key is held in Turnkey"))
+        : []),
       ...row("Calls itself", attribution.client_name_claimed || "(no name)", claim("not verified")),
       ...(attribution.agent_id_claimed ? row("Agent ID", "sent", claim("not verified")) : []),
       ...row("Workload", "not established", claim("Poppy 1.0 has no workload proof")),
-      ...row("Delegation", "owner approval in Reviews", claim("no signed delegation chain")),
+      ...(turnkey
+        ? row("Delegation", "signed by Turnkey", claim("verified: the Turnkey-held identity key vouched for this request's session key"))
+        : row("Delegation", "owner approval in Reviews", claim("no signed delegation chain"))),
       ...tokenRow(attribution.token_binding, row, claim),
       ...(attribution.link_revoked ? row("Status", "Disconnected after this comment") : []),
     ]),
