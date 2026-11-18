@@ -7,6 +7,18 @@ defmodule Reviews.CodeStorage.CodeDotStorage.ClientTest do
     %{config: [org: "acme", req_options: [plug: {Req.Test, __MODULE__}]]}
   end
 
+  # Req.Test stubs skip the real HTTP adapter, so this request goes through
+  # Finch to a closed local port with the client's own transport options.
+  test "an unreachable provider is a transport error, not a crash" do
+    {:ok, socket} = :gen_tcp.listen(0, [])
+    {:ok, port} = :inet.port(socket)
+    :ok = :gen_tcp.close(socket)
+
+    config = [org: "acme", api_base_url: "http://127.0.0.1:#{port}/api"]
+
+    assert {:error, {:transport, _}} = Client.create_repo(config, "synthetic", "reviews/abc")
+  end
+
   describe "current provider contract" do
     test "resolves an encoded repository and query ref from nested commit metadata", %{
       config: config

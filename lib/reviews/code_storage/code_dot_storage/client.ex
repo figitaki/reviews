@@ -84,8 +84,9 @@ defmodule Reviews.CodeStorage.CodeDotStorage.Client do
       redirect: false,
       # Reserve and complete run inside CLI requests; a slow provider must
       # fail fast so the push can fall back to diff-only.
-      connect_options: [timeout: 5_000],
-      finch: [pool_timeout: 5_000],
+      # Req 0.7 takes Finch pool and request options together under
+      # `:finch`; it raises if `:finch` is combined with `:connect_options`.
+      finch: [pool_timeout: 5_000, conn_opts: [transport_opts: [timeout: 5_000]]],
       receive_timeout: 15_000
     ]
     |> Keyword.merge(opts)

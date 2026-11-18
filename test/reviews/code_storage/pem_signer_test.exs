@@ -10,11 +10,13 @@ defmodule Reviews.CodeStorage.CodeDotStorage.PemSignerTest do
   end
 
   describe "sign/2" do
-    test "signs named-curve P-256 with actual, escaped, and CRLF newlines", ctx do
+    test "signs named-curve P-256 with actual, escaped, CRLF, and space line breaks", ctx do
       for pem <- [
             ctx.pem,
             String.replace(ctx.pem, "\n", "\\n"),
-            String.replace(ctx.pem, "\n", "\r\n")
+            String.replace(ctx.pem, "\n", "\r\n"),
+            # A single-line secret input stores a pasted PEM this way.
+            ctx.pem |> String.trim_trailing() |> String.replace("\n", " ")
           ] do
         assert {:ok, jwt} = PemSigner.sign(%{"sub" => "synthetic"}, jwt_private_key: pem)
 

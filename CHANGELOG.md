@@ -59,6 +59,13 @@ later fixes continue toward 0.0.2.
 
 - Keep staging code repositories while a snapshot reservation is live or
   provider creation is in flight; recover abandoned creations for cleanup.
+- Accept a code storage PEM key whose line breaks were stored as spaces, as
+  single-line secret inputs do. Before, signing failed and every upload fell
+  back to diff-only.
+- Fix the code.storage client crashing on every request (Req rejected
+  `:finch` together with `:connect_options`); the 5 s connect timeout applies.
+- Code storage errors use the shared `error_code` envelope, and reservation
+  checks push permission through `Reviews.Policy`.
 
 ### Added
 
