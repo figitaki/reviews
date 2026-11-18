@@ -6,6 +6,18 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Sizes follow the reader's browser font size. Space, radius and font-size
+  tokens and every `font-size` in the stylesheets are rem, and buttons,
+  fields and chips take their heights from new `--size-control-*` tokens.
+  Before, someone with a larger default font got larger text crammed into
+  controls that stayed the same size, while chips, small buttons and many
+  labels did not grow at all. At the default size nothing moves. A test now
+  fails on a px font size or a px space, radius or size token.
+
+- A section's review state lines up on phones: when a decision was carried
+  forward or made outdated, the history line sits under the label instead of
+  wrapping back under the status mark, here and in the decision panel.
+
 - Every top bar ends in one account control, `Layouts.account_menu`. Signed
   in, the avatar and name open a menu with Settings and Sign out on Home, the
   review list and Settings too, replacing their Settings link. Signed out, the

@@ -116,6 +116,38 @@ defmodule ReviewsWeb.DesignFixtures do
   end
 
   @doc """
+  A section as its header renders it, in one of the review states a reader
+  sees: decided on this revision, carried forward from an earlier one, or
+  pending again because the section changed.
+  """
+  def section_header(index, state, title) do
+    {status, effective, previous} =
+      case state do
+        :decided -> {"approved", "approved", nil}
+        :carried -> {nil, "approved", nil}
+        :outdated -> {nil, nil, %{status: "approved", patchset_number: 2}}
+        :pending -> {nil, nil, nil}
+      end
+
+    %{
+      index: index,
+      title: title,
+      status: status,
+      effective_status: effective,
+      previous: previous,
+      decision_history: previous && "Previously approved in v2; outdated for v3.",
+      estimate: %{
+        effort: "Small",
+        hunk_count: 3,
+        additions: 24,
+        deletions: 6,
+        time: "5 min",
+        viewed_count: 1
+      }
+    }
+  end
+
+  @doc """
   Applies a `create_comment` payload from the diff to the sample threads, as
   the review page would after saving it: a reply joins its thread, anything
   else starts one.

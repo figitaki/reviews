@@ -184,6 +184,11 @@ defmodule ReviewsWeb.DesignComponentsLive do
           justify-items: start;
         }
 
+        .dcp-section-states {
+          display: grid;
+          gap: var(--space-7);
+        }
+
         .dcp-decisions {
           display: grid;
           gap: var(--space-7);
@@ -433,6 +438,35 @@ defmodule ReviewsWeb.DesignComponentsLive do
             expanded_hunk_ids={@expanded_hunk_ids}
           />
         </section>
+
+        <DesignLive.catalog_section :let={theme} id="dcp-section-states" title="Section review state">
+          <:rules>
+            <li>
+              Each section header says where its decision stands: decided on this revision, carried
+              forward from an earlier one, or pending again because the section changed.
+            </li>
+            <li>
+              A carried-forward decision counts until the section changes. Once it changes, the
+              history line says what the old decision was and that it is outdated.
+            </li>
+            <li>The status mark sits beside the label; the history line lines up under the label.</li>
+          </:rules>
+          <div class="dcp-section-states">
+            <PacketComponents.packet_section_header
+              :for={{state, n} <- Enum.with_index(~w(decided carried outdated pending)a)}
+              :key={state}
+              section={
+                DesignFixtures.section_header(
+                  n + if(theme == "dark", do: 0, else: 4),
+                  state,
+                  "Retry relocation once before marking a thread outdated"
+                )
+              }
+              section_count={8}
+              current_user={@viewer}
+            />
+          </div>
+        </DesignLive.catalog_section>
 
         <DesignLive.catalog_section :let={theme} id="dcp-dialogs" title="Dialogs and menus">
           <:rules>
