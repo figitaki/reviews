@@ -1347,6 +1347,39 @@ details[open] > summary .review-collapse-icon,
   display: none;
 }
 
+/* Expanded, the toggle is a small close button in the bar's top-right
+   corner, out of the bar's flex layout. */
+.review-section-decision.is-editing .review-section-decision-toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--review-muted);
+}
+
+.review-section-decision.is-editing .review-section-decision-toggle:hover {
+  background: var(--review-hover);
+  color: var(--review-text);
+}
+
+.review-section-decision.is-editing .review-section-decision-copy {
+  padding-right: 28px;
+}
+
+.review-section-decision.is-editing .review-section-decision-toggle > span {
+  width: 14px;
+  height: 14px;
+}
+
 /* Above phones the decision collapses to a pill at the right edge of the
    content, like the phone button; its toggle expands the full bar. */
 @media (min-width: 641px) {
@@ -1404,16 +1437,10 @@ details[open] > summary .review-collapse-icon,
     color: var(--review-text);
   }
 
-  .review-section-decision.is-editing .review-section-decision-toggle {
-    order: 3;
-    width: 32px;
-    height: 32px;
-    justify-content: center;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    box-shadow: none;
-    color: var(--review-muted);
+  /* Bottom-aligned actions stay clear of the close button in the corner. */
+  .review-section-decision.is-editing {
+    align-items: flex-end;
+    padding-top: 22px;
   }
 
   .review-section-decision.is-editing .review-packet-section-actions {
@@ -1583,13 +1610,10 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-section-decision.is-editing .review-section-decision-toggle {
-    flex-basis: 44px;
-    width: 44px;
-    height: 44px;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-    color: var(--review-muted);
+    top: 4px;
+    right: 4px;
+    width: 32px;
+    height: 32px;
   }
 
   .review-section-decision.is-editing .review-section-decision-copy {

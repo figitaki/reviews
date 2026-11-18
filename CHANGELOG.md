@@ -18,7 +18,7 @@ later fixes continue toward 0.0.2.
 
 - The section decision collapses on every screen width, as on phones: one
   button shows the current decision (or "Decide") and expands the full bar;
-  Escape or the close button collapses it. Signed-out readers get the same
+  Escape or the small close button in the bar's corner collapses it. Signed-out readers get the same
   control, and expanding it offers "Sign in to decide", which returns to the
   review with that section and its decision open.
 
