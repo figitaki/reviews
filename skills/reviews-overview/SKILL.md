@@ -50,7 +50,7 @@ Typical flow:
 1. Develop with the user or autonomous agent loop.
 2. Stabilize the diff enough for review.
 3. Write or update a review packet that groups the work logically.
-4. Push the diff and packet to Reviews.
+4. Check the packet with `reviews push --dry-run`, then push the diff and packet to Reviews.
 5. Share the review URL with the human reviewer.
 6. Address feedback.
 7. Push another patchset to the same review.
@@ -66,9 +66,9 @@ Reviews can be the review surface of record, or it can be an intermediate review
 - **Section**: a packet `##` grouping with prose and hunk references.
 - **Hunk reference**: a pointer such as `@hunk path/to/file.ex#2` or a slice like `@hunk path/to/file.ex#2:L3-L18`.
 - **Viewed hunk**: explicit reviewer progress; opening a hunk is not the same as marking it viewed.
-- **Section decision**: explicit approve/deny/ignore state for a packet section.
+- **Section decision**: explicit approve/deny/ignore state for a packet section, recorded by the review owner.
 - **Thread**: an inline conversation anchored to a diff line or token range.
-- **Resolved thread**: a thread marked handled by a signed-in user. It remains visible inline with status, but is omitted from the Open threads sidebar.
+- **Resolved thread**: a thread marked handled by the review owner or the thread's author. It remains visible inline with status, but is omitted from the Open threads sidebar.
 
 ## Agent Guidance
 

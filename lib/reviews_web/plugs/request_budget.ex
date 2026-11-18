@@ -1,7 +1,8 @@
 defmodule ReviewsWeb.Plugs.RequestBudget do
   @moduledoc "Cheap admission before Phoenix dispatch, including socket establishment."
   import Plug.Conn
-  alias Reviews.RateLimiter
+  alias Reviews.{Errors, RateLimiter}
+  alias ReviewsWeb.ApiErrors
   @defaults [requests: 300, writes: 60, uploads: 20, sockets: 60, owners: 60]
 
   def init(opts), do: opts
@@ -46,7 +47,7 @@ defmodule ReviewsWeb.Plugs.RequestBudget do
     conn
     |> put_resp_header("retry-after", "60")
     |> put_resp_content_type("application/json")
-    |> send_resp(429, JSON.encode!(%{errors: %{detail: "Too many requests. Retry later."}}))
+    |> send_resp(429, JSON.encode!(ApiErrors.detail(:rate_limited, Errors.detail(:rate_limited))))
     |> halt()
   end
 

@@ -15,7 +15,7 @@ defmodule Reviews.DemoReviewTest do
 
     review
     |> Reviews.Reviews.latest_patchset()
-    |> Patchset.changeset(%{raw_diff: "diff --git a/old b/old\n"})
+    |> Patchset.changeset(%{raw_diff: "diff --git a/old b/old\n", packet: nil})
     |> Repo.update!()
 
     replaced = DemoReview.seed!()

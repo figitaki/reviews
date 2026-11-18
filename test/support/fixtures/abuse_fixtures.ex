@@ -27,7 +27,9 @@ defmodule Reviews.AbuseFixtures do
         format_version: 1,
         title: "Packet",
         summary: String.duplicate("x", 70_000),
-        tour: []
+        sections: [
+          %{title: "Change", rows: [%{kind: "hunk", path: "foo", hunk_index: 1}]}
+        ]
       }
     })
   end

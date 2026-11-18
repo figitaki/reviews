@@ -44,12 +44,15 @@ defmodule ReviewsWeb.Plugs.BodyBudget do
     Plug.Parsers.call(conn, opts)
   end
 
+  # CLI pushes send whole diffs as JSON; MCP pushes carry diffs too, with a
+  # smaller allowance.
   defp limit(conn) do
     limits = Application.get_env(:reviews, __MODULE__, [])
 
-    case RequestBudget.upload?(conn) do
-      true -> Keyword.get(limits, :upload_bytes, 50_000_000)
-      false -> Keyword.get(limits, :small_bytes, 64_000)
+    cond do
+      RequestBudget.upload?(conn) -> Keyword.get(limits, :upload_bytes, 50_000_000)
+      match?(["mcp" | _], conn.path_info) -> Keyword.get(limits, :mcp_bytes, 4_000_000)
+      true -> Keyword.get(limits, :small_bytes, 64_000)
     end
   end
 

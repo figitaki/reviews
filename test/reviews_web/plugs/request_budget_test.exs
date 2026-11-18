@@ -56,6 +56,7 @@ defmodule ReviewsWeb.RequestBudgetTest do
     assert rejected.status == 429
     assert rejected.halted
     assert get_resp_header(rejected, "retry-after") == ["60"]
+    assert %{"error_code" => "rate_limited"} = JSON.decode!(rejected.resp_body)
     assert %Plug.Conn.Unfetched{} = rejected.body_params
   end
 end

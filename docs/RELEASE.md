@@ -26,9 +26,9 @@ You need (one-time):
 
 ## 2. Versioning, tags, and changelog
 
-Reviews starts public release tracking at `0.0.1-alpha.0`. Use semver
-prerelease tags until the CLI contract, hosted service, and install assets are
-stable enough for a non-alpha release.
+Reviews started public release tracking at `0.0.1-alpha.0`. `0.0.1` is the
+first non-alpha release; see [RELEASE_0.0.1.md](RELEASE_0.0.1.md) for its scope
+and known limits. Versions with a `-` suffix publish as GitHub prereleases.
 
 Before cutting a release:
 
@@ -100,13 +100,11 @@ curl -sI https://reviews.figitaki.dev/ | head -1   # expect: HTTP/2 200
 
 1. Open `https://reviews.figitaki.dev/auth/github` in an incognito window.
 2. Authorize the app.
-3. You should land back on the site, signed in. Navigate to `/settings` —
-   you'll see a "Mint API token" control. Mint one to use with the CLI:
+3. You should land back on the site, signed in. Sign the CLI in:
 
    ```sh
-   reviews login
-   # server_url: https://reviews.figitaki.dev
-   # api_token:  <paste from /settings>
+   reviews login --server https://reviews.figitaki.dev
+   # open the printed /device link, enter the code, and allow it
    ```
 
 4. Test a push from any git checkout:
@@ -317,8 +315,9 @@ app is generating. Check:
   `/auth/github/callback` path.
 
 **`reviews push` returns 401:**
-Your API token is wrong, expired, or revoked. Re-mint at
-`https://reviews.figitaki.dev/settings`, then `reviews login` again.
+Your sign-in was signed out in Settings, or your API token is wrong or
+revoked. Run `reviews login` again (or re-mint at
+`https://reviews.figitaki.dev/settings` and use `reviews login --token`).
 
 **Fly deploy succeeds but app boots-and-dies:**
 Likely a missing required env (`SECRET_KEY_BASE`, `DATABASE_URL`). Check

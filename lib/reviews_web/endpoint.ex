@@ -55,6 +55,8 @@ defmodule ReviewsWeb.Endpoint do
   # Redirect legacy hostnames (reviews-dev.fly.dev) to the canonical PHX_HOST.
   plug ReviewsWeb.Plugs.CanonicalHost
 
+  # Authenticates API writes, then parses bodies with per-route limits. See
+  # docs/ABUSE_PROTECTION.md.
   plug ReviewsWeb.Plugs.BodyBudget
 
   plug Plug.MethodOverride

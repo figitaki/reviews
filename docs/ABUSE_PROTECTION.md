@@ -10,7 +10,8 @@ measure normal traffic and memory use, especially large uploads.
 `Endpoint.call/2` runs cheap admission before Phoenix socket dispatch, static
 files, sessions, token queries, and body parsing. Each request consumes the
 all-request budget plus applicable narrower budgets. Rejections are `429` JSON
-with `Retry-After: 60`. Failed authentication also consumes the IP budget.
+with `Retry-After: 60` and `error_code: rate_limited`. Failed authentication
+also consumes the IP budget.
 
 Defaults, per instance and per client bucket over 60 seconds:
 
@@ -28,17 +29,22 @@ legitimate usage. A request rejected by a later budget still consumes earlier
 ones. Authenticated owner limiting happens after the token lookup, but before
 parsing. It does not limit established LiveView write events.
 
-All API write methods authenticate before parsing. A successful authentication
-is stored only in a server-owned `conn.private` entry and reused by the router;
-ordinary `current_user`/`current_identity` assigns do not bypass verification.
+All `/api/v1` write methods authenticate before parsing, with an API token or
+a `reviews login` access token (whose DPoP proof is checked then). A successful
+authentication is stored only in a server-owned `conn.private` entry and reused
+by the router, so a proof is not checked twice; ordinary
+`current_user`/`current_identity`/`current_principal` assigns do not bypass
+verification. Poppy writes and `/mcp` keep their own authentication after
+parsing; they get only the IP budgets and their body limits.
 Bearer credentials remain opaque: seeded preview tokens can have a different
 length or prefix from UI-minted tokens. Empty credentials and malformed
 authorization headers are rejected without a token lookup.
 Route classification decodes segments exactly as Phoenix.Router does.
 
 Authenticated POST review and patchset bodies retain the **50,000,000-byte total
-JSON request** allowance (including JSON wrapping and packet). Other parsed
-bodies, including comments and decisions, are limited to **64,000 bytes**.
+JSON request** allowance (including JSON wrapping and packet). `/mcp` requests
+are limited to **4,000,000 bytes**. Other parsed bodies, including comments,
+decisions, OAuth and device-login forms, are limited to **64,000 bytes**.
 JSON and URL-encoded forms are supported. Multipart and other unsupported media
 return `415`; the product has no multipart upload workflow. Oversized parsed
 bodies return `413`; malformed JSON remains `400`. These parser errors use the
@@ -101,6 +107,7 @@ config :reviews, ReviewsWeb.Plugs.RequestBudget,
 
 config :reviews, ReviewsWeb.Plugs.BodyBudget,
   upload_bytes: 50_000_000,
+  mcp_bytes: 4_000_000,
   small_bytes: 64_000
 ```
 
