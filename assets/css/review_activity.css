@@ -266,6 +266,10 @@
 /* Above phones the sticky section decision bar stops short of the button. */
 @media (min-width: 641px) {
   .review-page:has(.review-activity:not([data-empty])) .review-section-decision { margin-right: 64px; }
+  /* The Guide grid's own bottom padding already clears the button. Padding
+     below the Guide shell ended the sticky Guide rail early, so it jumped up
+     at the bottom of the page over empty space. */
+  .review-page:has(.review-packet-shell.has-outline) .review-workspace-content { padding-bottom: 0; }
 }
 
 @media (min-width: 1200px) {

@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The Guide no longer adds 72px of empty space below the page on wide
+  screens. That space ended the sticky Guide rail early, so it jumped up as
+  you reached the bottom.
+
 - Markdown Preview wraps at the same reading width as Guide prose and lines
   up with it, in Guide and Diff mode. The diff card, Source and code diffs
   stay full width.
