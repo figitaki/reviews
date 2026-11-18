@@ -32,7 +32,7 @@ defmodule ReviewsWeb.DeviceLoginTest do
     %{user: user, human: human}
   end
 
-  defp start(params \\ %{}) do
+  defp start(params) do
     build_conn()
     |> post(~p"/oauth/device_authorization", Map.merge(%{"client_id" => "reviews-cli"}, params))
   end

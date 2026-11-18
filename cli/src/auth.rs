@@ -11,11 +11,18 @@
 //! revokes the whole sign-in when a replaced one is presented, so two
 //! commands must never refresh at once: the refresh holds a lock on
 //! `config.toml.lock` and rereads the config inside it.
+//!
+//! Device codes and refresh tokens go only to HTTPS endpoints, or to plain
+//! HTTP on a loopback host for local development (`secure_endpoint`). That
+//! is checked when the endpoints are discovered and again before each
+//! request, since the saved config can be edited by hand.
 
 use anyhow::{anyhow, bail, Context, Result};
 use reqwest::blocking::Client;
+use reqwest::Url;
 use serde::Deserialize;
 use std::fs::OpenOptions;
+use std::net::IpAddr;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -109,9 +116,38 @@ struct ErrorResponse {
     error: String,
 }
 
+/// `url` parsed, if the CLI may send sign-in secrets to it: HTTPS, or HTTP
+/// on a loopback host (`localhost`, `127.0.0.0/8`, `::1`) for local
+/// development.
+pub fn secure_endpoint(url: &str) -> Result<Url> {
+    let parsed = Url::parse(url).with_context(|| format!("{url} is not a valid URL"))?;
+    match parsed.scheme() {
+        "https" => Ok(parsed),
+        "http" if is_loopback(&parsed) => Ok(parsed),
+        _ => bail!(
+            "refusing to send sign-in secrets to {url}: it isn't HTTPS. \
+             Use an https:// server, or http://localhost for local development."
+        ),
+    }
+}
+
+fn is_loopback(url: &Url) -> bool {
+    match url.host_str() {
+        Some(host) if host.eq_ignore_ascii_case("localhost") => true,
+        Some(host) => host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback()),
+        None => false,
+    }
+}
+
 pub fn refresh(http: &Client, oauth: &OAuthTokens, now: i64) -> Result<OAuthTokens> {
+    let endpoint = secure_endpoint(&oauth.token_endpoint)
+        .context("the saved sign-in has an unsafe token endpoint. Run `reviews login` again")?;
     let resp = http
-        .post(&oauth.token_endpoint)
+        .post(endpoint)
         .form(&[
             ("grant_type", "refresh_token"),
             ("client_id", CLIENT_ID),
@@ -169,8 +205,16 @@ pub fn discover(http: &Client, server_url: &str) -> Result<Endpoints> {
             resp.status()
         );
     }
-    resp.json()
-        .with_context(|| format!("could not parse {url} as JSON"))
+    let endpoints: Endpoints = resp
+        .json()
+        .with_context(|| format!("could not parse {url} as JSON"))?;
+    // The metadata decides where codes and tokens go; refuse to send them in
+    // the clear.
+    secure_endpoint(&endpoints.token_endpoint)?;
+    if let Some(endpoint) = &endpoints.device_authorization_endpoint {
+        secure_endpoint(endpoint)?;
+    }
+    Ok(endpoints)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -195,8 +239,9 @@ pub fn start(http: &Client, server_url: &str, endpoints: &Endpoints) -> Result<D
              Use `reviews login --token` with a token from {server_url}/settings."
         );
     };
+    let url = secure_endpoint(endpoint)?;
     let resp = http
-        .post(endpoint)
+        .post(url)
         .form(&[("client_id", CLIENT_ID), ("scope", SCOPE)])
         .send()
         .with_context(|| format!("could not reach {endpoint}"))?;
@@ -221,6 +266,7 @@ pub fn poll(
     sleep: &mut dyn FnMut(Duration),
     now: &dyn Fn() -> i64,
 ) -> Result<OAuthTokens> {
+    let token_endpoint = secure_endpoint(&endpoints.token_endpoint)?;
     let mut interval = device.interval.max(1);
     let mut waited = 0;
 
@@ -234,7 +280,7 @@ pub fn poll(
         waited += interval;
 
         let resp = match http
-            .post(&endpoints.token_endpoint)
+            .post(token_endpoint.clone())
             .form(&[
                 ("grant_type", DEVICE_GRANT),
                 ("client_id", CLIENT_ID),
@@ -448,6 +494,82 @@ mod tests {
             format!("{err:#}").contains("signed out in Settings"),
             "{err:#}"
         );
+    }
+
+    #[test]
+    fn secrets_go_only_to_https_or_loopback() {
+        for ok in [
+            "https://reviews.example/oauth/token",
+            "http://localhost:4000/oauth/token",
+            "http://LOCALHOST/oauth/token",
+            "http://127.0.0.1:4000/oauth/token",
+            "http://127.1.2.3/oauth/token",
+            "http://[::1]:4000/oauth/token",
+        ] {
+            assert!(secure_endpoint(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "http://reviews.example/oauth/token",
+            "http://localhost.evil.example/oauth/token",
+            "http://127.0.0.1.evil.example/oauth/token",
+            "http://10.0.0.1/oauth/token",
+            "ftp://reviews.example/oauth/token",
+            "not a url",
+        ] {
+            assert!(secure_endpoint(bad).is_err(), "{bad}");
+        }
+    }
+
+    fn metadata(server: &mut Server, body: &str) {
+        server
+            .mock("GET", "/.well-known/oauth-authorization-server")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(body)
+            .create();
+    }
+
+    #[test]
+    fn discovery_refuses_plain_http_endpoints_on_other_hosts() {
+        for body in [
+            r#"{"token_endpoint":"http://reviews.example/oauth/token"}"#,
+            r#"{"token_endpoint":"https://reviews.example/oauth/token","device_authorization_endpoint":"http://reviews.example/oauth/device_authorization"}"#,
+        ] {
+            let mut server = Server::new();
+            metadata(&mut server, body);
+            let err = discover(&http().unwrap(), &server.url()).unwrap_err();
+            assert!(
+                format!("{err:#}").contains("isn't HTTPS"),
+                "{body}: {err:#}"
+            );
+        }
+
+        let mut server = Server::new();
+        metadata(
+            &mut server,
+            r#"{"token_endpoint":"https://reviews.example/oauth/token","device_authorization_endpoint":"https://reviews.example/oauth/device_authorization"}"#,
+        );
+        assert!(discover(&http().unwrap(), &server.url()).is_ok());
+    }
+
+    #[test]
+    fn a_saved_plain_http_token_endpoint_is_never_sent_the_refresh_token() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let cfg = Config::with_oauth(
+            "http://reviews.example".into(),
+            OAuthTokens {
+                access_token: "gka_old".into(),
+                refresh_token: "gkr_old".into(),
+                expires_at: 0,
+                token_endpoint: "http://reviews.example/oauth/token".into(),
+            },
+        );
+        cfg.save_to(&path).unwrap();
+
+        let err = token_at(&path, &cfg, 1_000).unwrap_err();
+        assert!(format!("{err:#}").contains("isn't HTTPS"), "{err:#}");
+        assert!(format!("{err:#}").contains("reviews login"), "{err:#}");
     }
 
     #[test]
