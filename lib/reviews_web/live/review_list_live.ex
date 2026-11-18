@@ -187,7 +187,8 @@ defmodule ReviewsWeb.ReviewListLive do
         padding-left: 32px;
       }
 
-      /* Filters: one row of chips under the header. */
+      /* Filters: one row of chips under the header. It scrolls sideways
+         on phones instead of wrapping. */
       .rl-chips {
         display: flex;
         align-items: center;
@@ -448,15 +449,13 @@ defmodule ReviewsWeb.ReviewListLive do
           flex-basis: 100%;
         }
 
-        /* Chips wrap instead of scrolling, so every selected filter stays
-           in view. */
+        /* The chip row scrolls sideways. A fade at the right edge says
+           there is more, and the .ActiveChip hook keeps a selected chip in
+           view. */
         .rl-chips {
-          flex-wrap: wrap;
-          overflow-x: visible;
-        }
-
-        .rl-chip-sep {
-          display: none;
+          margin-right: calc(-1 * var(--space-7));
+          padding-right: var(--space-10);
+          mask-image: linear-gradient(to right, currentColor calc(100% - 32px), transparent);
         }
 
         .rl-row {
@@ -511,7 +510,7 @@ defmodule ReviewsWeb.ReviewListLive do
         </.form>
       </header>
 
-      <nav id="review-chips" class="rl-chips" aria-label="Filters">
+      <nav id="review-chips" class="rl-chips" aria-label="Filters" phx-hook=".ActiveChip">
         <.chip
           :if={@filters.author}
           id="filter-author"
@@ -547,6 +546,24 @@ defmodule ReviewsWeb.ReviewListLive do
           Clear
         </.link>
       </nav>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".ActiveChip">
+        // On phones the chip row scrolls sideways; bring the last selected
+        // chip into view on load and after each filter change.
+        export default {
+          mounted() { this.reveal() },
+          updated() { this.reveal() },
+          reveal() {
+            const chips = this.el.querySelectorAll(".rl-chip.is-active")
+            const chip = chips[chips.length - 1]
+            if (!chip) return
+            const box = this.el.getBoundingClientRect()
+            const at = chip.getBoundingClientRect()
+            if (at.right > box.right - 32) this.el.scrollLeft += at.right - box.right + 48
+            else if (at.left < box.left) this.el.scrollLeft += at.left - box.left - 8
+          }
+        }
+      </script>
 
       <ul id="review-list" class="rl-list" phx-update="stream" aria-labelledby="reviews-title">
         <li :for={{dom_id, entry} <- @streams.reviews} id={dom_id} class="rl-row">
