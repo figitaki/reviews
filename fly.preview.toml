@@ -28,6 +28,8 @@ kill_signal = 'SIGTERM'
   # Hosted MCP at /mcp (docs/MCP.md). Production leaves both unset (off).
   MCP_ENABLED = 'true'
   MCP_WRITES_ENABLED = 'true'
+  # Design catalog at /design (ReviewsWeb.DesignLive). Production leaves it off.
+  DESIGN_CATALOG = 'true'
 
 [http_service]
   internal_port = 8080

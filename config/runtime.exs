@@ -72,6 +72,8 @@ if config_env() == :prod do
 
   config :reviews, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
+  config :reviews, :design_catalog, System.get_env("DESIGN_CATALOG") in ~w(true 1)
+
   mcp_enabled = System.get_env("MCP_ENABLED") in ~w(true 1)
 
   config :reviews, :mcp,
