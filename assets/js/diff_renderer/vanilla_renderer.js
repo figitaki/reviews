@@ -114,7 +114,7 @@ const REVIEWS_DIFF_HEADER_CSS = `
   [data-diffs-header] {
     position: sticky;
     top: var(--review-main-nav-h, 0px);
-    z-index: 10;
+    z-index: var(--z-sticky);
     min-height: 44px;
     padding-inline: 12px;
     transition: background-color 140ms ease;
