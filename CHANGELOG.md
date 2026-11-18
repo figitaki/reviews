@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Markdown Preview wraps at the same reading width as Guide prose and lines
+  up with it, in Guide and Diff mode. The diff card, Source and code diffs
+  stay full width.
+
 - Sizes follow the reader's browser font size. Space, radius and font-size
   tokens and every `font-size` in the stylesheets are rem, and buttons,
   fields and chips take their heights from new `--size-control-*` tokens.
