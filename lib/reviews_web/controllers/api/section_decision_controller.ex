@@ -33,10 +33,8 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
         |> put_status(:bad_request)
         |> json(ReviewsWeb.ApiErrors.detail(:invalid_section_index, "Invalid section index"))
 
-      {:error, :review_not_found} ->
-        conn
-        |> put_status(:not_found)
-        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
+      {:error, reason} when reason in [:review_not_found, :review_deleted] ->
+        ReviewsWeb.ApiErrors.render(conn, reason)
 
       {:error, :patchset_not_found} ->
         conn
@@ -88,7 +86,7 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
 
   defp fetch_review(slug) do
     case ReviewsContext.get_review_by_slug(slug) do
-      nil -> {:error, :review_not_found}
+      nil -> {:error, ReviewsContext.not_found_reason(slug)}
       review -> {:ok, review}
     end
   end

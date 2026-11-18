@@ -1,5 +1,4 @@
 import { ReviewActivityReadState } from "../lib/review_activity_read_state.js"
-import { WIDE } from "../lib/breakpoints.js"
 
 function storage() {
   try { return window.localStorage } catch { return null }
@@ -18,12 +17,12 @@ export const ReviewActivity = {
     this.details = this.el.querySelector("details")
     this.onClick = event => {
       if (event.target.closest("[data-quick-sections]")) {
-        // The guide's section bar scrolls away on phones; bring it back and
-        // open its map, the same as pressing its menu button.
+        // Sections toggles the guide map, the same as its menu button. The
+        // guide's section bar scrolls away on phones, so opening brings it back.
         const guide = document.getElementById("review-guide-shell")
-        guide?.scrollIntoView({ block: "start" })
         const map = guide?.querySelector("[data-guide-flyout-toggle]")
-        if (map?.getAttribute("aria-expanded") !== "true") map?.click()
+        if (map?.getAttribute("aria-expanded") !== "true") guide?.scrollIntoView({ block: "start" })
+        map?.click()
         return
       }
       if (event.target.closest("[data-activity-mark-all]")) {
@@ -38,8 +37,8 @@ export const ReviewActivity = {
       const thread = this.activity.threads.find(thread => thread.id === threadId)
       if (thread) this.readState.markRead([thread])
       this.renderActivity()
-      // Below wide screens the open log floats over the code; get out of the way.
-      if (!window.matchMedia(WIDE).matches) this.details.open = false
+      // The open log floats over the code; get out of the way.
+      this.details.open = false
       // Navigation owns revealing the section/file, opening the thread and focus.
       window.dispatchEvent(new CustomEvent("reviews:open-thread", {
         detail: { threadId, filePath: button.dataset.filePath },
@@ -51,11 +50,12 @@ export const ReviewActivity = {
       this.readState.refresh()
       this.renderActivity()
     }
-    // Collapsing is remembered in this browser; wide screens start open.
+    // The log floats over the code, so it starts closed; opening it is
+    // remembered in this browser.
     this.openKey = "reviews:activity-open"
     let savedOpen = null
     try { savedOpen = window.localStorage.getItem(this.openKey) } catch { /* optional */ }
-    this.details.open = savedOpen === null ? window.matchMedia(WIDE).matches : savedOpen === "true"
+    this.details.open = savedOpen === "true"
     this.details.addEventListener("toggle", () => {
       try { window.localStorage.setItem(this.openKey, String(this.details.open)) } catch { /* optional */ }
       if (this.details.open) this.scrollLogToEnd()
@@ -64,11 +64,10 @@ export const ReviewActivity = {
     // they leave the server data, and new ones append.
     this.log = new Map()
     this.onOpen = event => this.pushEvent("open_activity_thread", { thread_id: event.detail.threadId })
-    // Below wide screens the open log floats over the code, so a tap
-    // elsewhere closes it. Escape closes it everywhere.
-    const floating = () => !window.matchMedia(WIDE).matches
+    // The open log floats over the code, so a tap elsewhere or Escape
+    // closes it.
     this.onOutside = event => {
-      if (!this.el.contains(event.target) && this.details.open && floating()) this.details.open = false
+      if (!this.el.contains(event.target) && this.details.open) this.details.open = false
     }
     this.onKeydown = event => {
       if (event.key !== "Escape" || !this.details.open) return

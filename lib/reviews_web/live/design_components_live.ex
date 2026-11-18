@@ -456,7 +456,7 @@ defmodule ReviewsWeb.DesignComponentsLive do
               <figure>
                 <PacketComponents.packet_section_decision
                   section={DesignFixtures.section(index, @decisions[index].status, "Retry once")}
-                  current_user={who != :signed_out && @viewer}
+                  current_user={if who != :signed_out, do: @viewer}
                   can_decide={who == :owner}
                   editing={@decisions[index].editing}
                   return_to="/design/components"

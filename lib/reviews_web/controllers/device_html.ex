@@ -40,7 +40,7 @@ defmodule ReviewsWeb.DeviceHTML do
           <.ds_page_header
             eyebrow="Reviews CLI"
             title="Enter the code from your terminal"
-            description="reviews login shows an 8-letter code in your terminal. Enter it here, then choose who the CLI acts as."
+            description="reviews login shows an 8-letter code in your terminal. Type or paste it here, then choose who the CLI acts as."
             class="is-compact"
           />
 
@@ -51,22 +51,40 @@ defmodule ReviewsWeb.DeviceHTML do
 
             <form id="device-entry-form" action={~p"/device"} method="post" class="ds-settings-form">
               <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-              <div>
-                <label for="device-user-code">Code</label>
-                <input
-                  id="device-user-code"
-                  name="user_code"
-                  type="text"
-                  class="ds-input"
-                  placeholder="WDJB-MJHT"
-                  autocomplete="off"
-                  autocapitalize="characters"
-                  spellcheck="false"
-                  maxlength="20"
-                  required
-                  autofocus
-                />
-              </div>
+              <fieldset
+                id="device-user-code"
+                class="device-code"
+                data-device-code
+                data-alphabet={@alphabet}
+              >
+                <legend>Code</legend>
+                <div class="device-code-boxes">
+                  <%!-- No maxlength: a paste or autofill reaches the script whole, and
+                  without JavaScript the server joins whatever the boxes hold. --%>
+                  <%= for index <- 0..7 do %>
+                    <span :if={index == 4} class="device-code-dash" aria-hidden="true">–</span>
+                    <input
+                      id={"device-user-code-#{index}"}
+                      name="user_code[]"
+                      type="text"
+                      class="ds-input device-code-box"
+                      aria-label={"Letter #{index + 1} of 8"}
+                      inputmode="text"
+                      autocomplete={if(index == 0, do: "one-time-code", else: "off")}
+                      autocapitalize="characters"
+                      autocorrect="off"
+                      spellcheck="false"
+                      enterkeyhint={if(index == 7, do: "go", else: "next")}
+                      required
+                      autofocus={index == 0}
+                    />
+                  <% end %>
+                </div>
+              </fieldset>
+              <p id="device-entry-expiry" class="poppy-consent-note">
+                Codes expire {@ttl_minutes} minutes after <code>reviews login</code>
+                shows them. If yours has, run it again for a new one.
+              </p>
               <.ds_button
                 id="device-entry-submit"
                 type="submit"
@@ -105,6 +123,22 @@ defmodule ReviewsWeb.DeviceHTML do
                 </dd>
               </div>
             </dl>
+
+            <p
+              id="device-confirm-expiry"
+              class="device-expiry"
+              role="timer"
+              aria-live="off"
+              data-device-expiry
+              data-seconds-left={@seconds_left}
+              data-expired-id="device-confirm-expired"
+              data-approve-id="device-approve"
+            >
+              This code expires in <strong data-countdown translate="no">{format_left(@seconds_left)}</strong>.
+            </p>
+            <p id="device-confirm-expired" class="device-expiry is-expired" role="alert" hidden>
+              {error_text(:expired_user_code)}
+            </p>
 
             <p id="device-confirm-warning" class="poppy-consent-note">
               Check that this code matches the one in your terminal. Allow it only if you ran
@@ -189,6 +223,11 @@ defmodule ReviewsWeb.DeviceHTML do
     </Layouts.app>
     """
   end
+
+  # "9:05" for 545 seconds, as the page's script counts.
+  defp format_left(seconds),
+    do:
+      "#{div(seconds, 60)}:#{seconds |> rem(60) |> Integer.to_string() |> String.pad_leading(2, "0")}"
 
   defp error_text(:expired_user_code),
     do: "That code expired. Run reviews login again for a new one."

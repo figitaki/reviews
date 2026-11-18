@@ -79,11 +79,20 @@ defmodule ReviewsWeb.DeviceLoginTest do
     html = user |> signed_in() |> get(~p"/device?#{[user_code: user_code]}") |> html_response(200)
     assert html =~ ~s(id="device-confirm-code")
     assert html =~ user_code
+    # The countdown starts near the code's 10 minutes.
+    [_, left] = Regex.run(~r/id="device-confirm-expiry"[^>]*data-seconds-left="(\d+)"/, html)
+    assert String.to_integer(left) in 590..600
     wait()
     assert error(poll(device_code)) == {400, "authorization_pending"}
 
-    # Typed the way people type it.
-    typed = user_code |> String.downcase() |> String.replace("-", "")
+    # The entry form has a box per letter, accepting only the code's letters.
+    html = user |> signed_in() |> get(~p"/device") |> html_response(200)
+    assert html =~ ~s(data-alphabet="BCDFGHJKLMNPQRSTVWXZ")
+    assert length(Regex.scan(~r/id="device-user-code-\d"/, html)) == 8
+    assert html =~ "Codes expire 10 minutes after"
+
+    # Typed into the boxes, the way people type it.
+    typed = user_code |> String.downcase() |> String.replace("-", "") |> String.graphemes()
     html = user |> signed_in() |> post(~p"/device", %{"user_code" => typed}) |> html_response(200)
     assert html =~ ~s(id="device-confirm-form")
     # The picker offers the human identity first, chosen by default.

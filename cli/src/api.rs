@@ -9,6 +9,8 @@
 //!   POST /api/v1/reviews/:slug/comments (new thread or reply)
 //!   PATCH /api/v1/reviews/:slug/threads/:thread_id
 //!   POST /api/v1/reviews/:slug/sections/:section_index/decision
+//!   GET  /api/v1/reviews/:slug/deletion
+//!   DELETE /api/v1/reviews/:slug
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::blocking::{Client, RequestBuilder, Response};
@@ -120,6 +122,18 @@ pub struct SectionDecisionResponse {
     pub patchset_number: i64,
     pub section_index: i64,
     pub status: Option<String>,
+}
+
+/// What deleting a review would remove (`GET /api/v1/reviews/:slug/deletion`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeletionPreview {
+    pub slug: String,
+    pub title: String,
+    pub patchsets: i64,
+    pub threads: i64,
+    pub comments: i64,
+    pub other_comments: i64,
+    pub other_authors: Vec<String>,
 }
 
 /// Filters for `GET /api/v1/reviews`. `None` fields are left out of the query.
@@ -297,6 +311,29 @@ impl ApiClient {
         resp.json::<SectionDecisionResponse>()
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
+
+    pub fn deletion_preview(&self, slug: &str) -> Result<DeletionPreview> {
+        let path = format!("/api/v1/reviews/{slug}/deletion");
+        let _ = self.require_token(&format!("GET {path}"))?;
+        let resp = self
+            .auth(self.http.get(self.url(&path)))
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<DeletionPreview>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
+    pub fn delete_review(&self, slug: &str) -> Result<()> {
+        let path = format!("/api/v1/reviews/{slug}");
+        let _ = self.require_token(&format!("DELETE {path}"))?;
+        let resp = self
+            .auth(self.http.delete(self.url(&path)))
+            .send()
+            .with_context(|| format!("could not reach server for DELETE {path}"))?;
+        check_status(resp, &format!("DELETE {path}"))?;
+        Ok(())
+    }
 }
 
 fn check_status(resp: Response, what: &str) -> Result<Response> {
@@ -313,12 +350,13 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
     let hint = match code {
         Some("invalid_anchor") => " — choose a line or token selection in the selected revision.",
         Some("patchset_not_found") => " — select a revision that belongs to this review.",
+        Some("review_deleted") => " — this review was deleted.",
         _ => match status {
         StatusCode::UNAUTHORIZED => {
             " — the server rejected your sign-in. Run `reviews login` again."
         }
         StatusCode::FORBIDDEN => {
-            " — this identity is not allowed to do that on this review. Only the review owner can push revisions or decide sections; the owner or the thread's author can resolve or reopen a thread."
+            " — this identity is not allowed to do that on this review. Only the review owner can push revisions, decide sections or delete the review; the owner or the thread's author can resolve or reopen a thread."
         }
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",

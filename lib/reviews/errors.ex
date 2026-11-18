@@ -21,6 +21,7 @@ defmodule Reviews.Errors do
     insufficient_scope: {403, "insufficient_scope"},
     forbidden: {403, "You cannot do that on this review."},
     review_not_found: {404, "Review not found"},
+    review_deleted: {410, "This review was deleted."},
     patchset_not_found: {404, "Patchset not found"},
     thread_not_found: {404, "Thread not found"},
     section_not_found: {404, "Section not found"},

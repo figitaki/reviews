@@ -46,6 +46,7 @@ and passes it to the context functions:
 | Push a patchset | The review owner. |
 | Resolve or reopen a thread | The review owner or the thread's author. |
 | Decide a packet section | The review owner. Explicitly added reviewers will join once that feature exists. |
+| Delete the review | The review owner. |
 
 "Owner" and "author" mean the GitHub account: its human identity and all of
 its agent identities share its permissions. Anyone else gets `403` with
@@ -200,7 +201,54 @@ originating in later patchsets are omitted. `line_hint` is null when the code
 cannot be located unambiguously in the selected diff; the thread and comments
 remain visible and its open/resolved status is unchanged.
 
-Unknown slug or patchset number → `404`.
+Unknown slug or patchset number → `404`. A deleted review's slug → `410`
+with `error_code` `review_deleted`.
+
+### `GET /api/v1/reviews/:slug/deletion`
+
+Owner only. Says what deleting the review would remove, so a client can warn
+before it deletes. Powers the confirmation of `reviews delete`. Response
+`200`:
+
+```json
+{
+  "slug": "k7m2qz",
+  "title": "Make the user lookup faster",
+  "patchsets": 2,
+  "threads": 3,
+  "comments": 7,
+  "other_comments": 4,
+  "other_authors": ["dana", "helper"]
+}
+```
+
+`other_comments` counts comments by identities of other accounts (people and
+their agents); the owner's own agent identities are not "others".
+`other_authors` lists those identities' handles.
+
+### `DELETE /api/v1/reviews/:slug`
+
+Owner only. Permanently deletes the review and everything it owns: patchsets
+(with their files and packets), threads and every comment on them, including
+other people's, section decisions, and viewed-hunk state. It cannot be undone.
+The server keeps only the slug and the deletion time, so the link can say the
+review was deleted. The request has no body; clients confirm before sending
+it (the CLI and the review page ask the owner to type the slug). Response
+`200`:
+
+```json
+{ "slug": "k7m2qz", "deleted": true }
+```
+
+Errors: no token → `401`; a token whose account does not own the review →
+`403` `forbidden` ("Only the review owner can delete it."); unknown slug →
+`404` `review_not_found`; already deleted → `410` `review_deleted`.
+
+After a deletion, every `/api/v1/reviews/:slug...` endpoint that looks the
+review up by slug (show, comments, patchsets, thread status, section
+decisions) answers `410` `review_deleted` instead of `404`; the bounded
+`files`/`threads`/`comments` pages still answer `404`. The web page
+`/r/:slug` answers `410` with a "This review was deleted" page.
 
 ### `POST /api/v1/reviews/:slug/comments`
 
@@ -519,7 +567,7 @@ Replies require only `{thread_id, body}` and preserve the thread's file, side, a
 
 REST and Poppy application errors add `error_code` and `error_detail` alongside the existing `errors` fields. Poppy authentication retains the protocol-required string `error` and challenge headers and adds the same code/detail fields. Clients should branch on the code, not the prose; field-validation messages remain in `errors`. This is additive rather than replacing the published v1 envelope.
 
-Codes include `review_not_found`, `thread_not_found`, `patchset_not_found`, `section_not_found`, `forbidden`, `unauthorized`, `invalid_request`, `invalid_status`, `invalid_section_index`, `invalid_anchor`, `invalid_side`, `invalid_file_path`, `empty_body`, `unknown_granularity`, `validation_failed` and `write_failed`. Poppy authentication uses its existing protocol codes (`invalid_session`, `session_ended`, `version_unsupported`, `invalid_token`, `invalid_dpop_proof`, `insufficient_scope`). Both thread and section-decision requests with missing status return 422. Malformed section indices retain their existing 400 response.
+Codes include `review_not_found`, `review_deleted` (410), `thread_not_found`, `patchset_not_found`, `section_not_found`, `forbidden`, `unauthorized`, `invalid_request`, `invalid_status`, `invalid_section_index`, `invalid_anchor`, `invalid_side`, `invalid_file_path`, `empty_body`, `unknown_granularity`, `validation_failed` and `write_failed`. Poppy authentication uses its existing protocol codes (`invalid_session`, `session_ended`, `version_unsupported`, `invalid_token`, `invalid_dpop_proof`, `insufficient_scope`). Both thread and section-decision requests with missing status return 422. Malformed section indices retain their existing 400 response.
 
 `Reviews.Errors` is the one list of codes, with one HTTP status and one default detail each. REST, Poppy and MCP (`structuredContent.error.code`) all map domain reasons through it, so the same failure has the same code on every surface; an unknown reason is sent as `write_failed`, never as its internal name. It adds `invalid_pagination` (bad cursor, `limit` or `max_bytes` on paged reads) and `invalid_packet` (a packet that fails validation; field messages stay in `errors.packet`).
 
@@ -551,3 +599,22 @@ Pages return `slug`, `revision`, `next_cursor` (null at the end), and `files`, `
 REST and Poppy use `Reviews.Paging` for cursor encoding and page limits. Pass opaque `next_cursor` unchanged with the same endpoint, review, revision, thread and filters; a cursor from another query is rejected. Page sizes may change between calls. REST and Poppy share a cursor scope; MCP uses a distinct scope because comment position semantics differ. Cursors are query-tagged positions, not authorization tokens; every request retains its normal access checks. Legacy untagged cursors are rejected; restart from the first page. Revision numbers must be integers from 1 through 2147483647, independently of page-size limits. The first request may omit `revision` to select latest; all continuation requests must include the returned revision. Revision selection pins diff projection, not a database snapshot: new comments and thread status changes can appear while paging. Comments carry stable IDs, `offset` (UTF-8 byte offset), `body` (one chunk), and `complete`; concatenate chunks for the same comment until complete. A page can stop before `limit` to fit its byte budget. If metadata alone cannot fit, retry with a larger budget. Invalid limits, cursors, offsets or missing continuation revision return 422 with `error_code: invalid_pagination`; missing/foreign/future threads and missing revisions return 404 with `error_code: resource_not_found`. Both retain `errors.detail` and expose the same prose as `error_detail`.
 
 These endpoints use bounded domain page queries rather than loading the full review snapshot. Poppy OpenAPI documents their parameters and response envelopes, which are checked against actual endpoint results.
+
+### Packet hunk fragments
+
+Guide URLs accept packet hunk fragments, including rendered `-summary` and
+`-diff` IDs and packet row IDs (`#packet-section-N-row-M`). Rows grouped into
+one card resolve to that card. Include `?patchset=N` to link to a historical
+revision; targets are always resolved against the selected revision, never a
+different patchset. Unknown targets leave the current section unchanged.
+
+The `PacketFragments` hook sends `reveal_packet_fragment` with `{id}` after
+connection, hash changes, repeated same-fragment clicks, and revision changes.
+The server validates the ID against rendered packet units, reveals the section,
+expands its card, and replies with `{id: canonical_dom_id}` (or `{id: null}` for
+an unknown target). The client focuses and scrolls after the patch is applied.
+Native anchor navigation owns URL/history; returning to an empty fragment sends
+`restore_packet_location` with the URL's `thread` value. It restores that
+discussion when present, or Overview otherwise. Modified clicks, external links,
+and different URLs retain native browser behavior. This does not enable packet fragments on the raw
+`/changes` view or make hunk IDs stable across changed packet contents.
