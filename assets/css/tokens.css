@@ -210,6 +210,7 @@
   --radius-xs: 4px;   /* inline code, status letter tile */
   --radius-sm: 6px;   /* chips, buttons */
   --radius-md: 8px;   /* cards, panels, banners, modals */
+  --radius-lg: 14px;  /* floating action buttons */
   --radius-pill: 999px;
 
   /* Border — Reviews uses 1px for content, the daisyUI plugin sets 1.5px
@@ -222,6 +223,26 @@
   --shadow-toast:      0 12px 28px rgba(0, 0, 0, 0.45);
   --shadow-modal:      0 24px 80px rgb(0 0 0 / 0.6);
   --shadow-principles: 0 24px 80px rgb(0 0 0 / 0.3);
+  --shadow-float:      0 4px 12px rgb(0 0 0 / 0.18);  /* floating buttons */
+  --shadow-panel:      0 8px 28px rgb(0 0 0 / 0.2);   /* floating panels */
+
+  /* Stacking layers, lowest first. The section decision and the Comments
+     button float above diff content and its sticky headers. */
+  --z-float:    5;   /* gutter thread markers inside Pierre's diff */
+  --z-sticky:   10;  /* sticky diff file headers, Markdown sticky header */
+  --z-decision: 20;  /* sticky section decision bar */
+  --z-fab:      25;  /* Comments button and log, phone floating buttons */
+  --z-guide:    30;  /* guide shell */
+  --z-toolbar:  40;  /* review toolbar */
+
+  /* Breakpoints. CSS @media cannot read custom properties, so these are
+     listed here and exported for JS from assets/js/lib/breakpoints.js:
+       PHONE   (max-width: 640px)
+       COMPACT (max-width: 768px)
+       WIDE    (min-width: 1200px)
+       COARSE  (pointer: coarse)
+     Narrow phones (max-width: 480px) only collapse the topbar brand and
+     reorder the section header, where 640px still has room for both. */
 
   /* Header heights (used in sticky offsets) */
   --review-main-nav-h:      64px;

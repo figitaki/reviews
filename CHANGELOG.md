@@ -2,22 +2,148 @@
 
 All notable changes to Reviews will be tracked here.
 
-Reviews uses semver with prerelease tags while the CLI and hosted service are
-still stabilizing.
+Reviews uses semantic versioning. The first non-alpha release is 0.0.1;
+later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- Add stable API and MCP error codes while retaining legacy fields and Poppy authentication responses; teach the CLI to read them.
+
+- Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.
+
+- Validate packet shape, hunk references, slices and changed-line coverage in the domain layer for all revision uploads.
+
+- Keep empty hunk rows when validating and rendering packet slices, matching the CLI; no-newline markers stay attached to their preceding row.
+
+- Add bounded REST and Poppy file, thread and comment pages with pinned revisions, query-bound cursors and UTF-8-safe comment continuation. REST/Poppy use the shared `Reviews.Paging` limits and codec with scopes distinct from MCP.
+
+- Expose comment IDs, safe verification attribution and projected anchor state consistently across API readers.
+
+### Security
+
+- Plug 1.20.4 fixes EEF-CVE-2026-120287: the multipart `:length` limit did not
+  count part and header framing. It was taken one day after release, as an
+  approved exception to the seven-day dependency rule.
+- Only the review owner or a thread's author can resolve or reopen a thread,
+  and only the review owner can decide packet sections. Before, any signed-in
+  identity could do both on any review through the API (#176). Anyone else now
+  gets a 403, the review page hides those controls from them, and the CLI
+  explains the refusal. Commenting is unchanged: anyone signed in with the
+  link can comment. The rules live in `Reviews.Policy` and apply to every
+  surface.
+
+### Changed
+
+- Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI).
+  Elixir 1.20.4 includes the fix for CVE-2026-75758.
+- Phoenix 1.8.15, LiveView 1.2.12, Tailwind CLI 4.3.3, esbuild 0.28.2 and
+  other dependency updates. Diff rendering moves to @pierre/diffs 1.6.4 and
+  packet navigation to @pierre/trees 1.0.0.
+- Comments start from Pierre Diffs' gutter button beside the line number,
+  replacing the row-end comment button. Selected text within the line still
+  becomes the comment's anchor. Threads are more compact, with Resolve at the
+  right of the header. The collapsed comments rail is an icon with the comment
+  count, left out when there are none, and a blue outline while comments are
+  unread; the open rail shows a close mark. On phones, threads no
+  longer break up the diff: a line with threads shows a comment button beside
+  its line number, with a badge counting its comments and a keyboard focus
+  ring, and tapping it shows them under the highlighted line. Phones hide line
+  numbers, so the gutter only holds the change bar and the comment buttons. The
+  composer stays inline under its line instead of a floating panel, inputs use
+  16px text so focusing them does not zoom the page, and keyboard hints are
+  hidden. Opening a composer in a large virtualized file keeps your place.
+- On phones, Guide prose keeps a 16px inset from the screen edge while diffs
+  stay full width.
+- On wide screens, comments are a chat-style activity log pinned to the lower
+  right, beside the code: recent comments oldest first and newest at the
+  bottom, each with its author, time, file:line, the first two lines of the
+  comment fading out, and a one-line quote of the comment a reply answers.
+  Unread comments are marked. Clicking an entry opens its thread. New comments
+  append while you are on the page, and the log keeps its entries for the
+  visit. It collapses to an icon, remembers that in this browser, and renders
+  nothing when a review has no comments.
+- The Comments button is a small button fixed in the bottom-right corner at
+  every width, floating over the content. Opening it no longer grows the
+  button: the log opens as a separate panel above it with a short transition.
+  On phones the Comments button stays visible with no comments, and the log
+  closes on a tap outside it. The section decision bar and the Comments button
+  now stack above sticky diff file headers, using named z-index layers in
+  `tokens.css`.
+- The OAuth issuer runs on [gatekeep](https://github.com/figitaki/gatekeep)
+  (`Reviews.OAuth`). Endpoints, metadata, scopes, the agents-only rule,
+  refresh rotation, DPoP, and Settings → Connected agents work as before, and
+  a migration copies existing grants, tokens, and registered clients into
+  gatekeep's tables, so no one signs in again. New codes and tokens start with
+  `gkc_code_`, `gka_`, and `gkr_` instead of `ppc_`, `ppa_`, and `ppr_`.
+  Issuer metadata adds `response_modes_supported`, and resource metadata adds
+  `bearer_methods_supported`.
+  Revoking an access token at `/oauth/revoke` now revokes only that token, not
+  its grant; revoking the refresh token still ends the grant. The old OAuth
+  tables stay for one release.
+
+- One error vocabulary, `Reviews.Errors`, gives every surface the same
+  codes, statuses and safe default details. MCP error results use it as
+  REST and Poppy do; unknown reasons become `write_failed`. It adds
+  `invalid_pagination` and `invalid_packet`.
+
+- Section decisions belong to the account, not one identity: a person and
+  their agent identities share one decision per section, and each decision
+  records which identity made it. A migration merges existing decisions,
+  keeping each account's most recent one. `POST .../decision` now sets the
+  status explicitly and accepts `"pending"`; posting the same status again
+  no longer clears it, so retries are safe. `reviews section` accepts
+  `pending`. Decision writes lock the patchset row and load their own state.
+
+- MCP follows the same permission rules as the web page, REST and Poppy. Any
+  token can now read and comment on a review it has the link to, as on the web.
+  Pushing revisions and resolving threads still need the review owner (or, to
+  resolve, the thread's author). Every surface now passes a `Reviews.Principal`
+  to the domain, and `Reviews.Policy` checks reads, comments and OAuth scopes
+  too. The unchecked `Reviews.append_patchset/2` is renamed
+  `append_patchset_unchecked/2`.
+
 ### Added
+
+- `reviews login` signs in from the browser on any device with the OAuth
+  device authorization grant (RFC 8628): it shows a code, you enter it at
+  `/device`, and the CLI stores tokens that refresh themselves. It works over
+  SSH and in containers. On `/device` you choose who the tokens act as:
+  you, like API tokens, or one of your agent identities.
+  Settings → CLI sign-ins signs them out. `reviews login --token` keeps the
+  old way, an API token pasted from Settings, and `--server` picks the server.
 
 - The OAuth consent page can create a new agent identity for the connecting
   app, with a name and handle suggested from the app. Owners with no agents
   can now allow without leaving the page.
+
 - Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with
   an existing API token and can read reviews, packet sections, diffs and
   threads, and post comments, resolve threads, and push reviews and revisions
   for reviews their account owns. See `docs/MCP.md`.
 
+### Changed
+
+- MCP cursors now name the call they continue. A cursor sent with another
+  filter, thread, section or revision is refused as invalid instead of
+  skipping or repeating items. The cursor format and page limits moved to
+  `Reviews.Paging`, which the REST and Poppy page endpoints will share.
+
+### Fixed
+
+- The REST and Poppy comment endpoints no longer return database error text.
+  A `file_path` over 255 characters is now a `422` validation error.
+
+- A review title, `base_sha`, `branch_name` or diff file path over 255
+  characters is now a `422` validation error instead of a server error.
+
+- `reviews whoami` works for GitHub accounts without a public email.
+
 ## [0.0.1] - 2026-11-16
+
+The first non-alpha release promotes the existing hosted workflow: a settled
+review packet contract and working comments, replies, resolution and reopening.
+It does not require existing hosted users to migrate their CLI configuration.
+See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 
 ### Security
 
@@ -95,6 +221,19 @@ still stabilizing.
   visible viewport. Empty comments cannot be submitted.
 - Reseeding keeps the real demo review and its comments unless its bundled
   fixture changes.
+- On phones, two icon-only floating buttons stacked above the section decision
+  button replace the comments row above the section navigation: Sections, in
+  the Guide only, opens the Guide map below the toolbar, and Comments, always
+  shown with the comment count as a badge and a blue outline while comments are
+  unread, floats the unread list above the code. A tap outside or Escape closes
+  the list. The decision button
+  now stays fixed to the screen inside open Guide sections.
+- Section decisions keep a floating island on desktop and use a compact
+  floating action button on phones, including before sign-in. After voting,
+  only the selected outcome stays labeled; alternatives reveal their labels
+  on hover or keyboard focus.
+- The Guide map separates from the reading surface without a shadow, and
+  compact section numbers stay aligned regardless of their decision state.
 - Section diffs and the Changes view open without line-count or file-count
   limits. Large diffs use the existing virtualized renderer; manual collapse
   controls remain available.
@@ -123,7 +262,7 @@ still stabilizing.
   topbar controls are at least 44px tall.
 - Toolchain moved to Elixir 1.20.2 / Erlang 28.5 (Dockerfile, CI). `mix.exs`
   now requires Elixir `~> 1.20`.
-- Phoenix 1.8.13, LiveView 1.2.11, Phoenix LiveDashboard 0.9.1, Bandit 1.12.5,
+- Phoenix 1.8.13, LiveView 1.2.11, Phoenix LiveDashboard 0.9.1, Bandit 1.14.1,
   Ecto SQL 3.14, Tailwind CLI 4.3.0 and other dependency updates.
 - JSON encoding uses Elixir's built-in `JSON` module instead of Jason for
   Phoenix, Postgrex (`jsonb` columns) and Ueberauth. The `jason` package stays
@@ -163,6 +302,14 @@ still stabilizing.
   and mobile page height uses the stable small viewport.
 - Diff file headers toggle across the whole row with a rotating chevron.
   Viewed state uses one independent toggle.
+- On phones, the open comments list keeps its height while the browser's
+  toolbars collapse and expand.
+- On phones, lockfiles such as `mix.lock` and `package-lock.json` scroll
+  sideways instead of wrapping, so each entry stays one row. Opening a thread
+  in one keeps the start of each line in view.
+- Brave on iPhone no longer brings its toolbars back each time a scroll
+  stops. The page now saves its scroll position for back and forward
+  only when it leaves the page, not after every scroll.
 
 ## [0.0.1-alpha.2] - 2026-05-21
 

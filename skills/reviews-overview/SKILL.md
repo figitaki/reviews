@@ -66,9 +66,9 @@ Reviews can be the review surface of record, or it can be an intermediate review
 - **Section**: a packet `##` grouping with prose and hunk references.
 - **Hunk reference**: a pointer such as `@hunk path/to/file.ex#2` or a slice like `@hunk path/to/file.ex#2:L3-L18`.
 - **Viewed hunk**: explicit reviewer progress; opening a hunk is not the same as marking it viewed.
-- **Section decision**: explicit approve/deny/ignore state for a packet section.
+- **Section decision**: explicit approve/deny/ignore state for a packet section, recorded by the review owner.
 - **Thread**: an inline conversation anchored to a diff line or token range.
-- **Resolved thread**: a thread marked handled by a signed-in user. It remains visible inline with status, but is omitted from the Open threads sidebar.
+- **Resolved thread**: a thread marked handled by the review owner or the thread's author. It remains visible inline with status, but is omitted from the Open threads sidebar.
 
 ## Agent Guidance
 

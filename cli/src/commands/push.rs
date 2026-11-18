@@ -4,7 +4,8 @@ use std::env;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use crate::api::{ApiClient, CreatePatchsetRequest, CreateReviewRequest};
+use crate::api::{CreatePatchsetRequest, CreateReviewRequest};
+use crate::auth;
 use crate::config::Config;
 use crate::git::{self, CapturedDiff};
 use crate::packet::{self, plural, PacketCheck};
@@ -72,7 +73,7 @@ pub fn run(args: PushArgs) -> Result<()> {
         return Err(anyhow!("{}", problems.join("\n")));
     }
     let packet = check.map(PacketCheck::into_packet).transpose()?;
-    let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
+    let client = auth::client(&cfg)?;
 
     eprintln!(
         "Captured diff: {} on branch {} (base {}).",

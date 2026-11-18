@@ -119,6 +119,45 @@ defmodule ReviewsWeb.Api.ThreadControllerTest do
       assert %{"errors" => %{"detail" => "Thread not found"}} = json_response(conn, 404)
     end
 
+    test "the thread's author may resolve and reopen on someone else's review", %{
+      review: review
+    } do
+      {commenter, commenter_raw} = account_with_token("commenter")
+      {_agent, agent_raw} = agent_token(commenter)
+
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, commenter, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "mine",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      for {raw, status} <- [{commenter_raw, "resolved"}, {agent_raw, "open"}] do
+        conn = patch_status(raw, review, thread, status)
+        assert %{"status" => ^status} = json_response(conn, 200)
+      end
+    end
+
+    test "other accounts get 403 and the thread is unchanged", %{review: review, thread: thread} do
+      {stranger, stranger_raw} = account_with_token("stranger")
+      {_agent, agent_raw} = agent_token(stranger)
+
+      for raw <- [stranger_raw, agent_raw], status <- ["resolved", "open"] do
+        conn = patch_status(raw, review, thread, status)
+
+        assert %{
+                 "error_code" => "forbidden",
+                 "error_detail" => detail,
+                 "errors" => %{"detail" => detail}
+               } = json_response(conn, 403)
+
+        assert detail =~ "review owner or the thread's author"
+      end
+
+      assert [%{status: "open", resolved_by_id: nil}] = Threads.list_published_threads(review.id)
+    end
+
     test "requires a bearer token", %{conn: conn, review: review, thread: thread} do
       conn =
         conn
@@ -129,5 +168,38 @@ defmodule ReviewsWeb.Api.ThreadControllerTest do
 
       assert %{"errors" => %{"detail" => "Unauthorized"}} = json_response(conn, 401)
     end
+  end
+
+  defp patch_status(raw, review, thread, status) do
+    build_conn()
+    |> put_req_header("authorization", "Bearer #{raw}")
+    |> put_req_header("content-type", "application/json")
+    |> patch(~p"/api/v1/reviews/#{review.slug}/threads/#{thread.id}", %{"status" => status})
+  end
+
+  defp account_with_token(name) do
+    {:ok, user} =
+      Accounts.upsert_from_github(%{
+        github_id: 209_001 + System.unique_integer([:positive]),
+        username: "#{name}-#{System.unique_integer([:positive])}",
+        email: "#{name}@example.com",
+        avatar_url: nil
+      })
+
+    {:ok, _token, raw} = Accounts.mint_token(user, %{"name" => "human"})
+    {user, raw}
+  end
+
+  defp agent_token(user) do
+    {:ok, agent} =
+      Accounts.create_agent_identity(user, %{
+        handle: "agent-#{System.unique_integer([:positive])}",
+        display_name: "Agent"
+      })
+
+    {:ok, _token, raw} =
+      Accounts.mint_token(user, %{"name" => "agent", "identity_id" => agent.id})
+
+    {agent, raw}
   end
 end

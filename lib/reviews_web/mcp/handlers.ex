@@ -4,9 +4,10 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   Every handler resolves the caller from the request's verified principal,
   which `ReviewsWeb.MCP.Server.authenticate/2` derives from an existing Reviews
-  API token. Reviews are scoped to the caller's account: the author's human
-  identity and its sibling agent identities. Unknown and foreign reviews get
-  the same not-found result.
+  API token, as a `Reviews.Principal`. Reviews are found by link, as on REST
+  and the web page: anyone signed in can read any review whose slug or URL
+  they have. Writes go through the context functions, so `Reviews.Policy`
+  decides them the same way for every surface.
 
   Every read fits in `max_bytes`, counting metadata and both encodings of the
   result (see `ReviewsWeb.MCP.Budget`). Lists and long text continue with
@@ -15,18 +16,12 @@ defmodule ReviewsWeb.MCP.Handlers do
   """
 
   alias FastestMCP.Tools.Result
-  alias Reviews.{Accounts, Anchoring, ReviewHunks, ReviewPacket, ReviewView}
-  alias Reviews.Accounts.Identity
+  alias Reviews.{Accounts, Paging, Principal, ReviewHunks, ReviewPacket, ReviewView}
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
   alias Reviews.Threads
   alias ReviewsWeb.MCP.Budget
 
-  @default_max_bytes 40_000
-  @min_max_bytes 2_000
-  @max_bytes_limit 120_000
-  @default_thread_limit 25
-  @thread_limit 100
   @title_cap 500
   @line_text_cap 500
   @listed_comments 3
@@ -40,16 +35,10 @@ defmodule ReviewsWeb.MCP.Handlers do
   @bad_cursor "Invalid cursor. Pass next_cursor from the previous page unchanged."
   @too_small "max_bytes is too small for the next item. Call again with a larger max_bytes."
 
-  def default_max_bytes, do: @default_max_bytes
-  def min_max_bytes, do: @min_max_bytes
-  def max_bytes_limit, do: @max_bytes_limit
-  def thread_limit, do: @thread_limit
-
   ## Reads
 
   def whoami(_args, ctx) do
-    identity = current_identity!(ctx)
-    owner = Accounts.get_user!(identity.owner_user_id)
+    %Principal{identity: identity, user: owner} = current_principal!(ctx)
 
     %{
       identity: identity_payload(identity),
@@ -61,9 +50,10 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def get_review(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      with {:ok, cursor} <- parse_review_cursor(args["cursor"]),
-           :ok <- require_pinned_revision(args, args["cursor"]),
-           {:ok, revisions, selected} <- select_revision(review, args) do
+      with :ok <- require_pinned_revision(args, args["cursor"]),
+           {:ok, revisions, selected} <- select_revision(review, args),
+           {:ok, cursor} <- decode_cursor(args, {:review, review.id, selected.number}) do
+        cursor = review_position(cursor)
         packet = ReviewsContext.get_packet(selected)
         counts = Threads.count_by_status(review)
 
@@ -97,9 +87,10 @@ defmodule ReviewsWeb.MCP.Handlers do
         left = room!(args, header)
         {body, next} = review_page(cursor, data, left, %{})
 
-        if next && next == encode_review_cursor(cursor) do
+        if next && next == cursor do
           error_result(@too_small)
         else
+          next = Paging.encode({:review, review.id, selected.number}, next)
           header |> Map.merge(body) |> Map.put(:next_cursor, next) |> with_hint(next)
         end
       end
@@ -108,10 +99,12 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def get_packet_section(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      with {:ok, cursor} <- parse_pair_cursor(args["cursor"]),
-           :ok <- require_pinned_revision(args, args["cursor"]),
+      scope = &{:section, review.id, &1.number, args["section_index"]}
+
+      with :ok <- require_pinned_revision(args, args["cursor"]),
            {:ok, _revisions, selected} <- select_revision(review, args),
-           {:ok, section, count} <- fetch_section(selected, args["section_index"]) do
+           {:ok, section, count} <- fetch_section(selected, args["section_index"]),
+           {:ok, cursor} <- decode_cursor(args, scope.(selected)) do
         paths =
           for row <- section.rows,
               ReviewPacket.text(row, "kind") == "hunk",
@@ -130,7 +123,7 @@ defmodule ReviewsWeb.MCP.Handlers do
           next_cursor: nil
         }
 
-        start = cursor || {0, 0}
+        start = pair(cursor)
         left = room!(args, header)
 
         {rows, next} =
@@ -145,7 +138,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         if rows == [] and next != nil do
           error_result(@too_small)
         else
-          next_cursor = encode_pair(next)
+          next_cursor = encode_pair(scope.(selected), next)
           %{header | next_cursor: next_cursor} |> Map.put(:rows, rows) |> with_hint(next_cursor)
         end
       end
@@ -154,10 +147,10 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def list_files(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      with {:ok, offset} <- parse_int_cursor(args["cursor"]),
-           :ok <- require_pinned_revision(args, args["cursor"]),
-           {:ok, _revisions, selected} <- select_revision(review, args) do
-        offset = offset || 0
+      with :ok <- require_pinned_revision(args, args["cursor"]),
+           {:ok, _revisions, selected} <- select_revision(review, args),
+           {:ok, cursor} <- decode_cursor(args, {:files, review.id, selected.number}) do
+        {offset, _} = pair(cursor)
         fetched = ReviewsContext.list_file_summaries(selected, offset, @page_fetch + 1)
         open = Threads.open_counts_by_path(review, Enum.map(fetched, & &1.path))
 
@@ -187,7 +180,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             error_result(@too_small)
 
           count < length(fetched) ->
-            next = encode_int(offset + count)
+            next = encode_pair({:files, review.id, selected.number}, {offset + count, 0})
             %{header | next_cursor: next} |> Map.put(:files, files) |> with_hint(next)
 
           true ->
@@ -227,19 +220,22 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def list_threads(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      limit = args["limit"] || @default_thread_limit
       status = args["status"] || "open"
+      scope = &{:threads, review.id, &1.number, status, args["path"]}
 
-      with {:ok, after_id} <- parse_int_cursor(args["cursor"]),
+      with {:ok, limit} <- page_limit(args["limit"]),
            :ok <- require_pinned_revision(args, args["cursor"]),
-           {:ok, revisions, selected} <- select_revision(review, args) do
+           {:ok, revisions, selected} <- select_revision(review, args),
+           {:ok, cursor} <- decode_cursor(args, scope.(selected)) do
+        {after_id, _} = pair(cursor)
+
         filters = [
           max_origin_number: selected.number,
           status: if(status != "all", do: status),
           path: args["path"]
         ]
 
-        page = Threads.list_thread_page(review, filters, after_id || 0, limit + 1)
+        page = Threads.list_thread_page(review, filters, after_id, limit + 1)
         shown = Enum.take(page, limit)
         projected = ReviewView.project_threads(review, revisions, selected, shown)
         comment_counts = Threads.comment_counts(Enum.map(shown, & &1.id))
@@ -260,7 +256,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             error_result(@too_small)
 
           count < length(page) ->
-            next = encode_int(Enum.at(projected, count - 1).id)
+            next = encode_pair(scope.(selected), {Enum.at(projected, count - 1).id, 0})
             %{header | next_cursor: next} |> Map.put(:threads, threads) |> with_hint(next)
 
           true ->
@@ -272,12 +268,13 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def get_thread(args, ctx) do
     with_review(args, ctx, fn review, _identity ->
-      with {:ok, cursor} <- parse_pair_cursor(args["cursor"]),
-           :ok <- require_pinned_revision(args, args["cursor"]),
+      with :ok <- require_pinned_revision(args, args["cursor"]),
            {:ok, revisions, selected} <- select_revision(review, args),
            {:ok, thread} <- review_thread(review, args["thread_id"]),
-           [projected] <- ReviewView.project_threads(review, revisions, selected, [thread]) do
-        {start_id, _offset} = start = cursor || {0, 0}
+           [projected] <- ReviewView.project_threads(review, revisions, selected, [thread]),
+           {:ok, cursor} <-
+             decode_cursor(args, {:thread, review.id, selected.number, thread.id}) do
+        {start_id, _offset} = start = pair(cursor)
         comments = Threads.list_comment_page(thread.id, start_id - 1, @page_fetch)
 
         header =
@@ -303,7 +300,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         if page == [] and comments != [] do
           error_result(@too_small)
         else
-          next_cursor = encode_pair(next)
+          next_cursor = encode_pair({:thread, review.id, selected.number, thread.id}, next)
 
           %{header | next_cursor: next_cursor}
           |> Map.put(:comments, page)
@@ -320,7 +317,7 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   def create_review(args, ctx) do
     ensure_writes_enabled!()
-    identity = current_identity!(ctx)
+    %Principal{identity: identity} = current_principal!(ctx)
 
     with :ok <- validate_diff_and_packet(args["raw_diff"], args["packet"]),
          {:ok, %{review: review, patchset: ps}} <-
@@ -335,9 +332,9 @@ defmodule ReviewsWeb.MCP.Handlers do
   def append_revision(args, ctx) do
     ensure_writes_enabled!()
 
-    with_review(args, ctx, fn review, identity ->
+    with_review(args, ctx, fn review, principal ->
       with :ok <- validate_diff_and_packet(args["raw_diff"], args["packet"]),
-           {:ok, ps} <- ReviewsContext.append_patchset(review, identity, push_attrs(args)) do
+           {:ok, ps} <- ReviewsContext.append_patchset(review, principal, push_attrs(args)) do
         %{slug: review.slug, url: review_url(review), revision: ps.number}
       else
         other -> write_error(other)
@@ -348,10 +345,10 @@ defmodule ReviewsWeb.MCP.Handlers do
   def post_comment(args, ctx) do
     ensure_writes_enabled!()
 
-    with_review(args, ctx, fn review, identity ->
+    with_review(args, ctx, fn review, principal ->
       with {:ok, params} <- comment_params(review, args),
            {:ok, %{thread: thread, comment: comment}} <-
-             Threads.publish_comment(review, identity, params) do
+             Threads.publish_comment(review, principal, params) do
         %{
           slug: review.slug,
           thread_id: thread.id,
@@ -363,7 +360,10 @@ defmodule ReviewsWeb.MCP.Handlers do
         }
       else
         {:error, :thread_not_found} ->
-          error_result("No thread #{args["thread_id"]} on this review. List threads first.")
+          error_result(
+            "No thread #{args["thread_id"]} on this review. List threads first.",
+            :thread_not_found
+          )
 
         other ->
           write_error(other)
@@ -374,8 +374,8 @@ defmodule ReviewsWeb.MCP.Handlers do
   def update_thread_status(args, ctx) do
     ensure_writes_enabled!()
 
-    with_review(args, ctx, fn review, identity ->
-      case Threads.update_status(review, args["thread_id"], identity, args["status"]) do
+    with_review(args, ctx, fn review, principal ->
+      case Threads.update_status(review, args["thread_id"], principal, args["status"]) do
         {:ok, thread} ->
           %{
             slug: review.slug,
@@ -385,7 +385,10 @@ defmodule ReviewsWeb.MCP.Handlers do
           }
 
         {:error, :not_found} ->
-          error_result("No thread #{args["thread_id"]} on this review. List threads first.")
+          error_result(
+            "No thread #{args["thread_id"]} on this review. List threads first.",
+            :thread_not_found
+          )
 
         other ->
           write_error(other)
@@ -396,9 +399,9 @@ defmodule ReviewsWeb.MCP.Handlers do
   ## Resources and prompts
 
   def feedback_markdown(%{"slug" => slug}, ctx) do
-    identity = current_identity!(ctx)
+    _ = current_principal!(ctx)
 
-    with {:ok, review} <- owned_review(slug, identity),
+    with {:ok, review} <- find_review(slug),
          {:ok, revisions, latest} <- select_revision(review, %{}) do
       FastestMCP.Resources.Text.new(render_feedback(review, revisions, latest),
         mime_type: "text/markdown"
@@ -431,36 +434,42 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   ## Caller and review resolution
 
-  defp current_identity!(%{principal: %{"identity_id" => id}}) when is_integer(id) do
-    Accounts.get_identity!(id)
+  # API tokens carry every scope; the verified principal names the identity.
+  defp current_principal!(%{principal: %{"identity_id" => id}}) when is_integer(id) do
+    identity = Accounts.get_identity!(id)
+    Principal.new(identity, :mcp, Accounts.get_user!(identity.owner_user_id))
   end
 
   defp with_review(args, ctx, fun) do
-    identity = current_identity!(ctx)
+    principal = current_principal!(ctx)
 
-    case owned_review(args["review"], identity) do
+    case find_review(args["review"]) do
       {:ok, review} ->
         try do
-          fun.(review, identity) |> unwrap()
+          fun.(review, principal) |> unwrap()
         catch
           :too_small -> error_result(@too_small)
+          :bad_cursor -> error_result(@bad_cursor)
         end
 
       {:error, :not_found} ->
-        error_result(not_found_message(args["review"]))
+        error_result(not_found_message(args["review"]), :review_not_found)
     end
   end
 
   defp unwrap({:error, %Result{} = result}), do: result
   defp unwrap(%Result{} = result), do: result
-  defp unwrap({:error, :patchset_not_found}), do: error_result("That revision does not exist.")
+
+  defp unwrap({:error, :patchset_not_found}),
+    do: error_result("That revision does not exist.", :patchset_not_found)
+
   defp unwrap({:error, message}) when is_binary(message), do: error_result(message)
   defp unwrap(value), do: value
 
-  defp owned_review(ref, %Identity{} = identity) do
+  defp find_review(ref) do
     with {:ok, slug} <- parse_review_ref(ref),
          %Review{} = review <- ReviewsContext.get_review_by_slug(slug),
-         true <- ReviewsContext.owned_by?(review, identity) do
+         true <- Reviews.Policy.can?(nil, :read, review) do
       {:ok, review}
     else
       _ -> {:error, :not_found}
@@ -483,8 +492,7 @@ defmodule ReviewsWeb.MCP.Handlers do
   defp parse_review_ref(_), do: :error
 
   defp not_found_message(ref) do
-    "No review matching #{inspect(ref)} is owned by this account. MCP access covers reviews " <>
-      "pushed by you or your agent identities; check the slug or URL."
+    "No review matching #{inspect(ref)}. Check the slug or URL."
   end
 
   # Revision summaries carry no diffs, so picking a revision costs one query
@@ -520,13 +528,20 @@ defmodule ReviewsWeb.MCP.Handlers do
     cond do
       not ReviewPacket.present?(packet) ->
         {:error,
-         "Revision #{selected.number} has no packet. Use reviews_list_files and reviews_get_file_diff."}
+         error_result(
+           "Revision #{selected.number} has no packet. Use reviews_list_files and reviews_get_file_diff.",
+           :section_not_found
+         )}
 
       section = Enum.find(sections, &(&1.index == index)) ->
         {:ok, section, length(sections)}
 
       true ->
-        {:error, "No packet section #{index}. Section indexes start at 0."}
+        {:error,
+         error_result(
+           "No packet section #{index}. Section indexes start at 0.",
+           :section_not_found
+         )}
     end
   end
 
@@ -539,8 +554,11 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   defp review_thread(review, thread_id) do
     case Threads.get_review_thread(review, thread_id) do
-      {:ok, thread} -> {:ok, thread}
-      {:error, :not_found} -> {:error, "No thread #{thread_id} on this review."}
+      {:ok, thread} ->
+        {:ok, thread}
+
+      {:error, :not_found} ->
+        {:error, error_result("No thread #{thread_id} on this review.", :thread_not_found)}
     end
   end
 
@@ -558,7 +576,20 @@ defmodule ReviewsWeb.MCP.Handlers do
     end
   end
 
-  defp max_bytes(args), do: args["max_bytes"] || @default_max_bytes
+  # The tool schemas already bound max_bytes and limit; Paging owns the bounds.
+  defp max_bytes(args) do
+    case Paging.max_bytes(args["max_bytes"]) do
+      {:ok, max_bytes} -> max_bytes
+      {:error, _} -> throw(:too_small)
+    end
+  end
+
+  defp page_limit(limit) do
+    case Paging.limit(limit) do
+      {:ok, limit} -> {:ok, limit}
+      {:error, _} -> {:error, "limit must be between 1 and #{Paging.max_limit()}."}
+    end
+  end
 
   # Bytes left after the page header, or a "too small" error when the header
   # alone does not fit, such as a thread with a long path and anchor.
@@ -569,50 +600,27 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   ## Cursors
 
-  # Every cursor starts with a letter, so no client can read one as a number
-  # (the MCP Inspector CLI turns "12" or "0.8892" into JSON numbers).
+  # Cursor grammar and query binding live in `Reviews.Paging`.
 
-  defp parse_int_cursor(nil), do: {:ok, nil}
-
-  defp parse_int_cursor(cursor) when is_binary(cursor) do
-    case Regex.run(~r/\Ac(\d{1,18})\z/, cursor) do
-      [_, n] -> {:ok, String.to_integer(n)}
-      _ -> {:error, @bad_cursor}
+  defp decode_cursor(args, scope) do
+    case Paging.decode(args["cursor"], scope) do
+      {:ok, position} -> {:ok, position}
+      {:error, :invalid_cursor} -> {:error, @bad_cursor}
     end
   end
 
-  defp parse_int_cursor(_), do: {:error, @bad_cursor}
+  # A plain list position as `{a, b}`, starting at `{0, 0}`.
+  defp pair(nil), do: {0, 0}
+  defp pair({:position, a, b}), do: {a, b}
+  defp pair(_other), do: throw(:bad_cursor)
 
-  defp encode_int(n), do: "c#{n}"
+  defp encode_pair(_scope, nil), do: nil
+  defp encode_pair(scope, {a, b}), do: Paging.encode(scope, {:position, a, b})
 
-  defp parse_pair_cursor(nil), do: {:ok, nil}
-
-  defp parse_pair_cursor(cursor) when is_binary(cursor) do
-    case Regex.run(~r/\Ac(\d{1,18})\.(\d{1,18})\z/, cursor) do
-      [_, a, b] -> {:ok, {String.to_integer(a), String.to_integer(b)}}
-      _ -> {:error, @bad_cursor}
-    end
-  end
-
-  defp parse_pair_cursor(_), do: {:error, @bad_cursor}
-
-  defp encode_pair(nil), do: nil
-  defp encode_pair({a, b}), do: "c#{a}.#{b}"
-
-  defp parse_review_cursor(nil), do: {:ok, {:fields, 0, 0}}
-
-  defp parse_review_cursor(cursor) when is_binary(cursor) do
-    case Regex.run(~r/\A([fsr])(\d{1,18})(?:\.(\d{1,18}))?\z/, cursor) do
-      [_, "f", i, o] -> {:ok, {:fields, String.to_integer(i), String.to_integer(o)}}
-      [_, "s", i] -> {:ok, {:sections, String.to_integer(i)}}
-      [_, "r", i] -> {:ok, {:revisions, String.to_integer(i)}}
-      _ -> {:error, @bad_cursor}
-    end
-  end
-
-  defp encode_review_cursor({:fields, i, o}), do: "f#{i}.#{o}"
-  defp encode_review_cursor({:sections, i}), do: "s#{i}"
-  defp encode_review_cursor({:revisions, i}), do: "r#{i}"
+  # get_review pages through phases; a plain position is not one of them.
+  defp review_position(nil), do: {:fields, 0, 0}
+  defp review_position({:position, _a, _b}), do: throw(:bad_cursor)
+  defp review_position(position), do: position
 
   defp with_hint(payload, nil), do: payload
 
@@ -625,12 +633,12 @@ defmodule ReviewsWeb.MCP.Handlers do
   # then the revisions, newest first.
   defp review_page({:fields, index, offset}, data, left, acc) do
     case stream_fields(data.fields, index, offset, left) do
-      {out, left, nil} -> review_page({:sections, 0}, data, left, Map.merge(acc, out))
-      {out, _left, next} -> {Map.merge(acc, out), encode_review_cursor(next)}
+      {out, left, nil} -> review_page({:sections, 0, 0}, data, left, Map.merge(acc, out))
+      {out, _left, next} -> {Map.merge(acc, out), next}
     end
   end
 
-  defp review_page({:sections, index}, data, left, acc) do
+  defp review_page({:sections, index, _}, data, left, acc) do
     rest = Enum.drop(data.sections, index)
 
     {sections, left, count} =
@@ -645,11 +653,11 @@ defmodule ReviewsWeb.MCP.Handlers do
     acc = Map.put(acc, :sections, sections)
 
     if count < length(rest),
-      do: {acc, encode_review_cursor({:sections, index + count})},
-      else: review_page({:revisions, 0}, data, left, acc)
+      do: {acc, {:sections, index + count, 0}},
+      else: review_page({:revisions, 0, 0}, data, left, acc)
   end
 
-  defp review_page({:revisions, index}, data, left, acc) do
+  defp review_page({:revisions, index, _}, data, left, acc) do
     rest = Enum.drop(data.revisions, index)
 
     {revisions, _left, count} =
@@ -660,7 +668,7 @@ defmodule ReviewsWeb.MCP.Handlers do
       end)
 
     acc = Map.put(acc, :revisions, revisions)
-    {acc, if(count < length(rest), do: encode_review_cursor({:revisions, index + count}))}
+    {acc, if(count < length(rest), do: {:revisions, index + count, 0})}
   end
 
   defp stream_fields(fields, start, offset, left) do
@@ -761,28 +769,20 @@ defmodule ReviewsWeb.MCP.Handlers do
   end
 
   defp comment_parts(comment) do
-    meta = %{
-      id: comment.id,
-      author: identity_payload(comment.author),
-      inserted_at: comment.inserted_at
-    }
+    meta = comment |> ReviewsWeb.Payloads.comment(:compact) |> Map.delete(:body)
 
     {meta, :body, comment.body || ""}
   end
 
   defp thread_summary(thread, comment_count) do
-    %{
-      id: thread.id,
-      path: thread.file_path,
-      side: thread.side,
-      line: thread.anchor && thread.anchor["line_number_hint"],
+    thread
+    |> ReviewsWeb.Payloads.thread()
+    |> Map.take([:id, :path, :side, :line, :anchor_status, :originating_revision, :status])
+    |> Map.merge(%{
       line_text: Budget.cap(thread.original_anchor["line_text"], @line_text_cap),
-      anchor_status: thread.anchor_status,
-      originating_revision: thread.originating_patchset_number,
-      status: thread.status,
       resolved_by: identity_payload(thread.resolved_by),
       comment_count: comment_count
-    }
+    })
   end
 
   # Threads go in whole while they fit. A first thread too big for the page
@@ -812,13 +812,12 @@ defmodule ReviewsWeb.MCP.Handlers do
       thread.id
       |> Threads.list_comment_page(0, previews)
       |> Enum.map(fn comment ->
-        %{
-          id: comment.id,
-          author: identity_payload(comment.author),
+        comment
+        |> ReviewsWeb.Payloads.comment(:compact)
+        |> Map.merge(%{
           body: Budget.cap(comment.body, @listed_comment_cap),
-          body_truncated: byte_size(comment.body || "") > @listed_comment_cap,
-          inserted_at: comment.inserted_at
-        }
+          body_truncated: byte_size(comment.body || "") > @listed_comment_cap
+        })
       end)
 
     complete =
@@ -829,16 +828,7 @@ defmodule ReviewsWeb.MCP.Handlers do
     |> Map.merge(%{comments: comments, comments_complete: complete})
   end
 
-  defp identity_payload(%Identity{} = identity) do
-    %{
-      id: identity.id,
-      kind: identity.kind,
-      handle: identity.handle,
-      display_name: identity.display_name
-    }
-  end
-
-  defp identity_payload(_), do: nil
+  defp identity_payload(identity), do: ReviewsWeb.Payloads.identity(identity, :compact)
 
   defp review_url(review), do: ReviewsWeb.Endpoint.url() <> "/r/" <> review.slug
 
@@ -933,136 +923,16 @@ defmodule ReviewsWeb.MCP.Handlers do
     }
   end
 
-  # The CLI checks packets before upload; MCP callers send the JSON directly,
-  # so apply the same hunk and slice rules here (cli/src/packet.rs).
-  defp validate_diff_and_packet(raw_diff, packet) do
-    files = ReviewsContext.parse_diff_files(raw_diff)
-
-    cond do
-      files == [] ->
-        {:error, "raw_diff has no files. Send the output of `git diff`."}
-
-      is_nil(packet) ->
-        :ok
-
-      true ->
-        hunks_by_path = ReviewHunks.for_files(files)
-
-        problems =
-          for section <- ReviewPacket.sections(packet),
-              row <- section.rows,
-              ReviewPacket.text(row, "kind") == "hunk",
-              problem = hunk_row_problem(hunks_by_path, row),
-              problem != nil,
-              do: problem
-
-        problems = problems ++ coverage_problems(packet, hunks_by_path)
-
-        if problems == [],
-          do: :ok,
-          else: {:error, "Invalid packet: " <> Enum.join(Enum.take(problems, 10), "; ")}
+  # Keep the MCP empty-diff guard; packet rules belong to the domain layer.
+  defp validate_diff_and_packet(raw_diff, _packet) do
+    case ReviewsContext.parse_diff_files(raw_diff) do
+      [] -> {:error, "raw_diff has no files. Send the output of `git diff`."}
+      _ -> :ok
     end
   end
-
-  defp hunk_row_problem(hunks_by_path, row) do
-    path = ReviewPacket.text(row, "path")
-    hunk_index = ReviewPacket.int(row, "hunk_index")
-    ref = "#{path}##{hunk_index}"
-
-    case ReviewHunks.find(hunks_by_path, path, hunk_index) do
-      nil ->
-        "#{ref} is not a hunk in raw_diff"
-
-      hunk ->
-        rows = hunk_row_count(hunk)
-
-        case {ReviewPacket.int(row, "line_start"), ReviewPacket.int(row, "line_end")} do
-          {nil, nil} ->
-            nil
-
-          {first, last} when is_nil(first) or is_nil(last) ->
-            "#{ref} needs both line_start and line_end, or neither"
-
-          {first, last} when first >= 1 and first <= last and last <= rows ->
-            nil
-
-          {first, last} ->
-            "#{ref}:L#{first}-L#{last} is outside the hunk, which has #{rows} rows"
-        end
-    end
-  end
-
-  defp hunk_row_count(hunk), do: length(hunk_rows(hunk))
-
-  # Rows after the @@ header, numbered as the CLI numbers them: empty strings
-  # and "\\ No newline" markers are not rows.
-  defp hunk_rows(hunk) do
-    hunk.raw_diff
-    |> String.split("\n")
-    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
-    |> Enum.drop(1)
-    |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "\\")))
-  end
-
-  # Every changed row must be covered exactly once, as the CLI requires, so
-  # the packet view never drops or repeats a change. Rows with other problems
-  # are reported above and skipped here.
-  defp coverage_problems(packet, hunks_by_path) do
-    expected =
-      for {path, hunks} <- hunks_by_path,
-          hunk <- hunks,
-          {line, row} <- Enum.with_index(hunk_rows(hunk), 1),
-          changed_line?(line),
-          into: MapSet.new(),
-          do: {path, hunk.hunk_index, row}
-
-    covered =
-      for section <- ReviewPacket.sections(packet),
-          row <- section.rows,
-          ReviewPacket.text(row, "kind") == "hunk",
-          is_nil(hunk_row_problem(hunks_by_path, row)),
-          path = ReviewPacket.text(row, "path"),
-          hunk_index = ReviewPacket.int(row, "hunk_index"),
-          hunk = ReviewHunks.find(hunks_by_path, path, hunk_index),
-          first = ReviewPacket.int(row, "line_start") || 1,
-          last = ReviewPacket.int(row, "line_end") || hunk_row_count(hunk),
-          n <- first..last//1,
-          MapSet.member?(expected, {path, hunk_index, n}),
-          reduce: %{} do
-        acc -> Map.update(acc, {path, hunk_index, n}, 1, &(&1 + 1))
-      end
-
-    missing =
-      expected
-      |> Enum.reject(&Map.has_key?(covered, &1))
-      |> Enum.sort()
-      |> Enum.map(fn {path, i, n} -> "changed line #{path}##{i}:L#{n} is not in any hunk row" end)
-
-    repeated =
-      covered
-      |> Enum.filter(fn {_, count} -> count > 1 end)
-      |> Enum.sort()
-      |> Enum.map(fn {{path, i, n}, count} ->
-        "changed line #{path}##{i}:L#{n} is covered #{count} times"
-      end)
-
-    missing ++ repeated
-  end
-
-  # Hunk-body rows only, so "+++" and "---" are changes here, not file headers.
-  defp changed_line?(line), do: String.starts_with?(line, ["+", "-"])
 
   defp comment_params(_review, %{"thread_id" => thread_id} = args) when not is_nil(thread_id) do
-    # A reply keeps its thread's file, side, anchor, and revision.
-    # publish_comment validates these placeholders but does not store them.
-    {:ok,
-     %{
-       "thread_id" => thread_id,
-       "body" => args["body"],
-       "file_path" => "(reply)",
-       "side" => "new",
-       "thread_anchor" => %{"granularity" => "line"}
-     }}
+    {:ok, %{"thread_id" => thread_id, "body" => args["body"]}}
   end
 
   defp comment_params(review, args) do
@@ -1070,8 +940,7 @@ defmodule ReviewsWeb.MCP.Handlers do
 
     with {:path, path} when is_binary(path) <- {:path, args["path"]},
          {:line, line} when is_integer(line) <- {:line, args["line"]},
-         {:ok, _revisions, selected} <- select_revision(review, args),
-         {:ok, text} <- line_text(selected, path, side, line) do
+         {:ok, _revisions, selected} <- select_revision(review, args) do
       {:ok,
        %{
          "body" => args["body"],
@@ -1080,8 +949,7 @@ defmodule ReviewsWeb.MCP.Handlers do
          "originating_patchset_id" => selected.id,
          "thread_anchor" => %{
            "granularity" => "line",
-           "line_number_hint" => line,
-           "line_text" => text
+           "line_number_hint" => line
          }
        }}
     else
@@ -1091,44 +959,57 @@ defmodule ReviewsWeb.MCP.Handlers do
     end
   end
 
-  defp line_text(selected, path, side, line) do
-    text =
-      case ReviewsContext.get_file(selected, path) do
-        nil -> nil
-        file -> file |> Anchoring.index() |> Map.get({path, side}, %{}) |> Map.get(line)
-      end
-
-    if is_binary(text) do
-      {:ok, text}
-    else
-      {:error,
-       "Line #{line} on the #{side} side of #{path} is not in revision #{selected.number}'s diff. " <>
-         "Comment on a changed or context line."}
-    end
-  end
-
   defp write_error({:error, %Result{} = result}), do: result
   defp write_error({:error, message}) when is_binary(message), do: error_result(message)
 
   defp write_error({:error, :patchset_not_found}),
-    do: error_result("That revision does not exist.")
+    do: error_result("That revision does not exist.", :patchset_not_found)
 
-  defp write_error({:error, :forbidden}), do: error_result("Only the review's owner can do that.")
-  defp write_error({:error, :empty_body}), do: error_result("body cannot be empty.")
+  defp write_error({:error, :invalid_anchor}),
+    do:
+      error_result(
+        "The anchor is not in the selected revision's diff. Comment on a changed or context line.",
+        :invalid_anchor
+      )
+
+  defp write_error({:error, :forbidden}),
+    do:
+      error_result(
+        "You cannot do that on this review. Only its owner can push revisions, and only " <>
+          "its owner or a thread's author can resolve or reopen that thread.",
+        :forbidden
+      )
+
+  defp write_error({:error, :invalid_file_path}),
+    do: error_result("file_path is required", :invalid_file_path)
+
+  defp write_error({:error, :empty_body}), do: error_result("body cannot be empty.", :empty_body)
 
   defp write_error({:error, :invalid_status}),
-    do: error_result("status must be open or resolved.")
+    do: error_result("status must be open or resolved.", :invalid_status)
 
   defp write_error({:error, %Ecto.Changeset{} = changeset}), do: changeset_result(changeset)
-  defp write_error({:error, _other}), do: error_result("The write failed. Nothing was saved.")
+
+  defp write_error({:error, _other}),
+    do: error_result("The write failed. Nothing was saved.", :write_failed)
 
   defp changeset_result(changeset) do
     errors =
-      Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
+      Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+        Keyword.get(opts, :detail, message)
+      end)
       |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
 
-    error_result("Invalid input: #{errors}")
+    error_result("Invalid input: #{errors}", changeset)
   end
 
-  defp error_result(message), do: Result.new(message, is_error: true)
+  # Codes come from the shared vocabulary (`Reviews.Errors`), as on REST.
+  defp error_result(message, reason \\ :invalid_request),
+    do:
+      Result.new(message,
+        is_error: true,
+        structured_content: %{
+          error: %{code: to_string(Reviews.Errors.code(reason)), detail: message}
+        }
+      )
 end

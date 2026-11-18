@@ -14,7 +14,10 @@ defmodule Reviews.Application do
       {Phoenix.PubSub, name: Reviews.PubSub},
       # Before the endpoint, so /mcp never sees a stopped server.
       ReviewsWeb.MCP.Server,
-      Reviews.OAuth.Clients,
+      # The OAuth issuer's client metadata cache, after the repo.
+      Reviews.OAuth.Issuer,
+      # Wrong-code counts for the CLI sign-in page (/device).
+      Reviews.OAuth.DeviceAttempts,
       # Start to serve requests, typically the last entry
       ReviewsWeb.Endpoint
     ]
