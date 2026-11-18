@@ -1,19 +1,16 @@
 defmodule ReviewsWeb.MCPOAuthTest do
   @moduledoc """
-  OAuth for `/mcp` over HTTP (issue #109): discovery from a 401, sign-in with
-  a client metadata document (Claude), dynamic registration, and
-  `private_key_jwt` (ChatGPT), then tool calls as the chosen identity. Most
-  tests are the cases that must fail.
+  OAuth for `/mcp` over HTTP (issue #109), on the gatekeep issuer: discovery
+  from a 401, sign-in with a client metadata document (Claude) and with
+  `private_key_jwt` (ChatGPT), then tool calls as the chosen agent, limited to
+  the granted scopes. The issuer itself is tested in `ReviewsWeb.OAuthTest`;
+  these tests cover what `/mcp` adds. Most are cases that must fail.
   """
   use ReviewsWeb.ConnCase, async: true
 
-  import Ecto.Query
-
   alias Reviews.Accounts
-  alias Reviews.Accounts.IdentityLink
   alias Reviews.OAuth
-  alias Reviews.OAuth.{AccessToken, AuthorizationCode, Clients}
-  alias Reviews.OAuthTestClient, as: Agent
+  alias Reviews.OAuthTestClient, as: Client
   alias Reviews.OAuthTestClient.Fetcher
   alias Reviews.Repo
   alias Reviews.Reviews, as: ReviewsContext
@@ -21,7 +18,8 @@ defmodule ReviewsWeb.MCPOAuthTest do
   @issuer "https://reviews.test"
   @resource "https://reviews.test/mcp"
   @metadata_url "https://reviews.test/.well-known/oauth-protected-resource/mcp"
-  @all_scopes ["reviews:read", "reviews:write", "threads:write"]
+  @all_scopes ["reviews:read", "reviews:write", "comments:write", "threads:write"]
+  @test_resource "https://reviews.test/api/test"
   @diff "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
 
   setup do
@@ -88,7 +86,7 @@ defmodule ReviewsWeb.MCPOAuthTest do
 
   # The owner approves on the consent page. Returns the redirect's query.
   defp approve(client, user, identity, extra \\ %{}, granted \\ @all_scopes) do
-    {verifier, challenge} = Agent.pkce()
+    {verifier, challenge} = Client.pkce()
 
     conn =
       build_conn()
@@ -178,16 +176,25 @@ defmodule ReviewsWeb.MCPOAuthTest do
     value
   end
 
+  defp comment_on(token, review, body \\ "Please rename this") do
+    call_tool(token, "reviews_post_comment", %{
+      "review" => review.slug,
+      "body" => body,
+      "path" => "foo",
+      "line" => 1
+    })
+  end
+
   describe "discovery" do
     test "a 401 from /mcp names the protected resource metadata and the scopes" do
       conn = mcp(nil, "tools/list")
       assert conn.status == 401
       value = challenge(conn)
       assert value =~ ~r/^Bearer resource_metadata="#{Regex.escape(@metadata_url)}"/
-      assert value =~ ~s(scope="reviews:read reviews:write threads:write")
+      assert value =~ ~s(scope="#{Enum.join(@all_scopes, " ")}")
       refute value =~ "error="
 
-      conn = mcp("ppa_not-a-token", "tools/list")
+      conn = mcp("gka_not-a-token", "tools/list")
       assert conn.status == 401
       assert challenge(conn) =~ ~s(resource_metadata="#{@metadata_url}")
       assert challenge(conn) =~ ~s(error="invalid_token")
@@ -201,73 +208,48 @@ defmodule ReviewsWeb.MCPOAuthTest do
       assert resource["authorization_servers"] == [@issuer]
       assert resource["scopes_supported"] == @all_scopes
 
-      assert get_resp_header(build_conn() |> get(@metadata_url), "access-control-allow-origin") ==
-               ["*"]
-
       issuer =
         build_conn() |> get("/.well-known/oauth-authorization-server") |> json_response(200)
 
       assert issuer["issuer"] == @issuer
       assert issuer["code_challenge_methods_supported"] == ["S256"]
-      assert issuer["token_endpoint_auth_methods_supported"] == ["none", "private_key_jwt"]
+      # Claude picks client metadata documents only when `none` is listed too.
+      assert "none" in issuer["token_endpoint_auth_methods_supported"]
+      assert "private_key_jwt" in issuer["token_endpoint_auth_methods_supported"]
       assert issuer["client_id_metadata_document_supported"] == true
       assert issuer["authorization_response_iss_parameter_supported"] == true
       assert issuer["registration_endpoint"] == @issuer <> "/oauth/register"
       assert Enum.all?(@all_scopes, &(&1 in issuer["scopes_supported"]))
       assert @resource in issuer["protected_resources"]
     end
-
-    test "a browser client's preflight to the token endpoint is answered" do
-      conn = build_conn() |> options("/oauth/token")
-      assert conn.status == 204
-      assert get_resp_header(conn, "access-control-allow-origin") == ["*"]
-    end
   end
 
   describe "sign-in with a client metadata document" do
-    test "the consent page names the verified domain and offers only the owner's agents", ctx do
-      {_verifier, challenge} = Agent.pkce()
+    test "the consent page shows the connector text and offers only the owner's agents", ctx do
+      {_verifier, challenge} = Client.pkce()
 
-      html =
+      doc =
         build_conn()
         |> init_test_session(current_user_id: ctx.owner.id)
         |> get(~p"/oauth/authorize", authorize_params(ctx.claude, challenge))
         |> html_response(200)
+        |> LazyHTML.from_document()
 
-      doc = LazyHTML.from_document(html)
-      host = URI.parse(ctx.claude.client_id).host
-
-      assert doc |> LazyHTML.query("#poppy-consent-client") |> LazyHTML.text() =~ host
+      assert LazyHTML.text(doc) =~ "never as you"
       human = Accounts.human_identity_for(ctx.owner)
-
-      offered =
-        doc
-        |> LazyHTML.query("#poppy-consent-identity input[name=identity_id]")
-        |> Enum.map(&(&1 |> LazyHTML.attribute("value") |> hd()))
-
-      assert offered == [to_string(ctx.agent.id)]
-      refute doc |> LazyHTML.query("#poppy-identity-#{human.id}") |> Enum.any?()
-
-      scopes =
-        doc
-        |> LazyHTML.query("#poppy-consent-scopes input")
-        |> Enum.map(&(&1 |> LazyHTML.attribute("value") |> hd()))
-
-      assert scopes == @all_scopes
+      refute doc |> LazyHTML.query("input[value='#{human.id}'][name=identity_id]") |> Enum.any?()
 
       assert doc
-             |> LazyHTML.query("input[name=resource]")
-             |> LazyHTML.attribute("value") == [@resource]
+             |> LazyHTML.query("input[value='#{ctx.agent.id}'][name=identity_id]")
+             |> Enum.any?()
     end
 
-    test "the connector acts as the identity the owner chose, with the scopes granted", ctx do
+    test "the connector acts as the agent the owner chose, with the scopes granted", ctx do
       {query, verifier} = approve(ctx.claude, ctx.owner, ctx.agent)
       assert %{"code" => code, "state" => "st_9", "iss" => @issuer} = query
 
       body = exchange(ctx.claude, code, verifier) |> json_response(200)
-
-      assert %{"token_type" => "Bearer", "expires_in" => 3600, "refresh_token" => _} = body
-      assert body["scope"] == Enum.join(@all_scopes, " ")
+      assert %{"token_type" => "Bearer", "refresh_token" => _} = body
 
       result = whoami(body["access_token"]) |> json_response(200)
 
@@ -276,11 +258,42 @@ defmodule ReviewsWeb.MCPOAuthTest do
 
       assert result["result"]["structuredContent"]["scopes"] == @all_scopes
 
-      [link] = OAuth.list_links_for(ctx.owner)
-      assert link.provider == "mcp"
-      assert link.subject == ctx.claude.client_id
+      [grant] = OAuth.list_grants_for(ctx.owner)
+      assert grant.resource == @resource
+      assert grant.client_id == ctx.claude.client_id
     end
 
+    test "refresh tokens rotate", ctx do
+      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
+      fresh = refresh(ctx.claude, tokens["refresh_token"]) |> json_response(200)
+      refute fresh["refresh_token"] == tokens["refresh_token"]
+
+      assert %{"error" => "invalid_grant"} =
+               refresh(ctx.claude, tokens["refresh_token"]) |> json_response(400)
+    end
+
+    test "an identity_id past the database's range gets the consent page, not a 500", ctx do
+      {_verifier, challenge} = Client.pkce()
+
+      conn =
+        build_conn()
+        |> init_test_session(current_user_id: ctx.owner.id)
+        |> post(
+          ~p"/oauth/authorize",
+          authorize_params(ctx.claude, challenge)
+          |> Map.merge(%{
+            "decision" => "approve",
+            "identity_id" => "99999999999999999999",
+            "granted_scopes" => @all_scopes
+          })
+        )
+
+      assert conn.status == 200
+      assert Repo.aggregate("gatekeep_codes", :count) == 0
+    end
+  end
+
+  describe "scopes at /mcp" do
     test "a read-only grant hides and refuses the write tools", ctx do
       tokens = sign_in(ctx.claude, ctx.owner, ctx.agent, ["reviews:read"])
 
@@ -289,21 +302,52 @@ defmodule ReviewsWeb.MCPOAuthTest do
       assert "reviews_get_review" in names
       refute "reviews_post_comment" in names
 
-      conn =
-        call_tool(tokens["access_token"], "reviews_post_comment", %{
-          "review" => ctx.review.slug,
-          "body" => "hi",
-          "path" => "foo",
-          "line" => 1
-        })
-
+      conn = comment_on(tokens["access_token"], ctx.review)
       assert conn.status == 403
       assert challenge(conn) =~ ~s(error="insufficient_scope")
       assert challenge(conn) =~ ~s(resource_metadata="#{@metadata_url}")
+      assert challenge(conn) =~ ~s(scope="comments:write")
+    end
+
+    test "comments:write lets a connector comment, recorded with its app, but not resolve", ctx do
+      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent, ["reviews:read", "comments:write"])
+
+      result = comment_on(tokens["access_token"], ctx.review) |> json_response(200)
+      refute result["result"]["isError"]
+
+      [comment] = Repo.all(Reviews.Threads.Comment)
+      assert comment.author_id == ctx.agent.id
+      assert comment.attribution["provider"] == "mcp"
+      assert comment.attribution["client_id"] == ctx.claude.client_id
+      [grant] = OAuth.list_grants_for(ctx.owner)
+      assert comment.oauth_grant_id == grant.id
+
+      conn =
+        call_tool(tokens["access_token"], "reviews_update_thread_status", %{
+          "review" => ctx.review.slug,
+          "thread_id" => comment.thread_id,
+          "status" => "resolved"
+        })
+
+      assert conn.status == 403
       assert challenge(conn) =~ ~s(scope="threads:write")
     end
 
-    test "an access token reads only the reviews its account owns", ctx do
+    test "Policy refuses a delegated write its scopes don't name, even past the transport", ctx do
+      identity = ctx.agent
+      principal = Reviews.Principal.delegated(identity, ctx.owner, ["comments:write"], nil, :mcp)
+      refute Reviews.Policy.can?(principal, :push, ctx.review)
+
+      thread = %{author: identity}
+      refute Reviews.Policy.can?(principal, {:update_thread_status, thread}, ctx.review)
+
+      full = Reviews.Principal.delegated(identity, ctx.owner, @all_scopes, nil, :mcp)
+      assert Reviews.Policy.can?(full, :push, ctx.review)
+    end
+  end
+
+  describe "access tokens at /mcp" do
+    test "fetch reads any review by link; search stays within the account", ctx do
       stranger = user_fixture("stranger")
 
       {:ok, %{review: foreign}} =
@@ -312,18 +356,12 @@ defmodule ReviewsWeb.MCPOAuthTest do
           raw_diff: @diff
         })
 
-      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
-
-      result =
-        call_tool(tokens["access_token"], "reviews_get_review", %{"review" => foreign.slug})
-        |> json_response(200)
-
-      assert result["result"]["isError"] == true
+      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent, ["reviews:read"])
 
       fetched =
         call_tool(tokens["access_token"], "fetch", %{"id" => foreign.slug}) |> json_response(200)
 
-      assert fetched["result"]["isError"] == true
+      assert fetched["result"]["structuredContent"]["title"] == "Not yours"
 
       search =
         call_tool(tokens["access_token"], "search", %{"query" => ""}) |> json_response(200)
@@ -331,6 +369,102 @@ defmodule ReviewsWeb.MCPOAuthTest do
       ids = Enum.map(search["result"]["structuredContent"]["results"], & &1["id"])
       assert ctx.review.slug in ids
       refute foreign.slug in ids
+    end
+
+    test "disconnecting in Settings stops the token on its next call", ctx do
+      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
+      assert whoami(tokens["access_token"]).status == 200
+
+      [grant] = OAuth.list_grants_for(ctx.owner)
+      :ok = OAuth.revoke_grant(ctx.owner, grant.id)
+
+      conn = whoami(tokens["access_token"])
+      assert conn.status == 401
+      assert challenge(conn) =~ ~s(resource_metadata="#{@metadata_url}")
+    end
+
+    test "another API's token is refused at /mcp, and an MCP token at the other API", ctx do
+      {%{"code" => code}, verifier} =
+        approve(ctx.claude, ctx.owner, ctx.agent, %{"resource" => @test_resource}, [
+          "test:read"
+        ])
+
+      other =
+        exchange(ctx.claude, code, verifier, %{"resource" => @test_resource})
+        |> json_response(200)
+
+      assert whoami(other["access_token"]).status == 401
+
+      mcp_tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
+
+      assert {:error, _} =
+               OAuth.authenticate_access_token(@test_resource, %{
+                 authorization: "Bearer " <> mcp_tokens["access_token"],
+                 dpop: [],
+                 method: "GET",
+                 path: "/api/test"
+               })
+    end
+
+    test "a GitHub browser session alone is not MCP access", ctx do
+      conn =
+        %{build_conn() | host: "localhost"}
+        |> init_test_session(current_user_id: ctx.owner.id)
+        |> put_req_header("accept", "application/json, text/event-stream")
+        |> put_req_header("content-type", "application/json")
+        |> post("/mcp", JSON.encode!(%{"jsonrpc" => "2.0", "id" => 1, "method" => "tools/list"}))
+
+      assert conn.status == 401
+    end
+
+    test "Reviews API tokens keep working beside OAuth, with every scope", ctx do
+      {:ok, _token, raw} = Accounts.mint_token(ctx.owner, %{"name" => "cli"})
+      result = whoami(raw) |> json_response(200)
+      assert result["result"]["structuredContent"]["scopes"] == @all_scopes
+    end
+  end
+
+  describe "private_key_jwt clients, as ChatGPT signs in" do
+    # ChatGPT's client ID, with an RS256 key; the fetcher serves it in tests.
+    defp keyed_client(base) do
+      rsa = Client.rsa_key("rsa-#{System.unique_integer([:positive])}", "RS256")
+      client = %{Client.new(base: base) | rsa: rsa}
+
+      Client.publish(
+        client,
+        %{"token_endpoint_auth_methods_supported" => ["none", "private_key_jwt"]},
+        [rsa.public]
+      )
+    end
+
+    defp keyed_exchange(client, code, verifier, aud) do
+      Client.client_auth(client, rsa: true, aud: aud)
+      |> Map.merge(%{
+        "grant_type" => "authorization_code",
+        "code" => code,
+        "redirect_uri" => client.redirect_uri,
+        "code_verifier" => verifier,
+        "resource" => @resource
+      })
+      |> token()
+    end
+
+    test "ChatGPT's assertion addressed to the token endpoint signs in", ctx do
+      chatgpt = keyed_client("https://chatgpt.com/oauth")
+      assert chatgpt.client_id == "https://chatgpt.com/oauth/client.json"
+
+      {%{"code" => code}, verifier} = approve(chatgpt, ctx.owner, ctx.agent)
+      tokens = keyed_exchange(chatgpt, code, verifier, @issuer <> "/oauth/token")
+      assert whoami(json_response(tokens, 200)["access_token"]).status == 200
+    end
+
+    test "another client may not address the token endpoint", ctx do
+      other = keyed_client("https://other#{System.unique_integer([:positive])}.example")
+      {%{"code" => code}, verifier} = approve(other, ctx.owner, ctx.agent)
+
+      assert %{"error" => "invalid_client"} =
+               keyed_exchange(other, code, verifier, @issuer <> "/oauth/token")
+               |> json_response(401)
     end
   end
 
@@ -439,579 +573,5 @@ defmodule ReviewsWeb.MCPOAuthTest do
       assert by_name["fetch"]["readOnlyHint"] == true
       assert by_name["reviews_post_comment"]["readOnlyHint"] == false
     end
-  end
-
-  describe "refresh tokens" do
-    test "rotate, and presenting a replaced one revokes the grant", ctx do
-      first = sign_in(ctx.claude, ctx.owner, ctx.agent)
-
-      second = refresh(ctx.claude, first["refresh_token"]) |> json_response(200)
-      assert second["refresh_token"] != first["refresh_token"]
-      assert whoami(second["access_token"]).status == 200
-
-      # The replaced token is refused and ends the grant, so the stolen copy
-      # and the legitimate one both stop working.
-      assert %{"error" => "invalid_grant"} =
-               refresh(ctx.claude, first["refresh_token"]) |> json_response(400)
-
-      assert whoami(second["access_token"]).status == 401
-
-      assert %{"error" => "invalid_grant"} =
-               refresh(ctx.claude, second["refresh_token"]) |> json_response(400)
-    end
-
-    test "presenting any earlier one revokes the grant, not only the last", ctx do
-      r0 = sign_in(ctx.claude, ctx.owner, ctx.agent)
-      r1 = refresh(ctx.claude, r0["refresh_token"]) |> json_response(200)
-      r2 = refresh(ctx.claude, r1["refresh_token"]) |> json_response(200)
-
-      assert %{"error" => "invalid_grant"} =
-               refresh(ctx.claude, r0["refresh_token"]) |> json_response(400)
-
-      assert whoami(r2["access_token"]).status == 401
-
-      assert %{"error" => "invalid_grant"} =
-               refresh(ctx.claude, r2["refresh_token"]) |> json_response(400)
-    end
-
-    test "can narrow scopes but never widen them", ctx do
-      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent, ["reviews:read"])
-
-      assert %{"error" => "invalid_scope"} =
-               token(%{
-                 "grant_type" => "refresh_token",
-                 "client_id" => ctx.claude.client_id,
-                 "refresh_token" => tokens["refresh_token"],
-                 "scope" => "reviews:read threads:write"
-               })
-               |> json_response(400)
-    end
-
-    test "belong to the client they were issued to", ctx do
-      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
-      other = claude_client()
-
-      assert %{"error" => "invalid_grant"} =
-               refresh(other, tokens["refresh_token"]) |> json_response(400)
-    end
-  end
-
-  describe "rejected authorization requests" do
-    test "an unregistered redirect URI gets an error page, not a redirect", ctx do
-      {_verifier, challenge} = Agent.pkce()
-
-      for uri <- ["https://evil.example/cb", ctx.claude.redirect_uri <> "/extra"] do
-        conn =
-          build_conn()
-          |> init_test_session(current_user_id: ctx.owner.id)
-          |> get(
-            ~p"/oauth/authorize",
-            authorize_params(ctx.claude, challenge, %{"redirect_uri" => uri})
-          )
-
-        assert html_response(conn, 400) =~ "didn&#39;t register"
-      end
-    end
-
-    test "another resource, an unknown scope, or no PKCE redirect with an error and iss", ctx do
-      {_verifier, challenge} = Agent.pkce()
-
-      cases = [
-        {%{"resource" => "https://evil.example/mcp"}, "invalid_target"},
-        {%{"scope" => "reviews:read admin"}, "invalid_scope"},
-        {%{"code_challenge_method" => "plain"}, "invalid_request"},
-        # A public client can't get tokens for an API that needs keys.
-        {%{"resource" => nil, "scope" => "keys:write"}, "unauthorized_client"}
-      ]
-
-      for {extra, error} <- cases do
-        params =
-          authorize_params(ctx.claude, challenge, extra) |> Map.reject(&is_nil(elem(&1, 1)))
-
-        conn =
-          build_conn()
-          |> init_test_session(current_user_id: ctx.owner.id)
-          |> get(~p"/oauth/authorize", params)
-
-        assert %{"error" => ^error, "iss" => @issuer, "state" => "st_9"} = redirect_query(conn)
-      end
-    end
-
-    test "an identity of another account is refused", ctx do
-      stranger = user_fixture("stranger")
-      {:ok, theirs} = Accounts.create_agent_identity(stranger, %{display_name: "X", handle: "x"})
-      {_verifier, challenge} = Agent.pkce()
-
-      conn =
-        build_conn()
-        |> init_test_session(current_user_id: ctx.owner.id)
-        |> post(
-          ~p"/oauth/authorize",
-          authorize_params(ctx.claude, challenge)
-          |> Map.merge(%{
-            "decision" => "approve",
-            "identity_id" => to_string(theirs.id),
-            "granted_scopes" => @all_scopes
-          })
-        )
-
-      assert html_response(conn, 200) =~ "Choose one of your"
-      assert Repo.aggregate(IdentityLink, :count) == 0
-    end
-
-    test "an identity_id past the database's range gets the consent page, not a 500", ctx do
-      {_verifier, challenge} = Agent.pkce()
-
-      conn =
-        build_conn()
-        |> init_test_session(current_user_id: ctx.owner.id)
-        |> post(
-          ~p"/oauth/authorize",
-          authorize_params(ctx.claude, challenge)
-          |> Map.merge(%{
-            "decision" => "approve",
-            "identity_id" => "99999999999999999999",
-            "granted_scopes" => @all_scopes
-          })
-        )
-
-      assert html_response(conn, 200) =~ "Choose one of your agent identities"
-      assert Repo.aggregate(AuthorizationCode, :count) == 0
-    end
-
-    test "the owner's own human identity is refused, even posted by hand", ctx do
-      human = Accounts.human_identity_for(ctx.owner)
-      {_verifier, challenge} = Agent.pkce()
-
-      conn =
-        build_conn()
-        |> init_test_session(current_user_id: ctx.owner.id)
-        |> post(
-          ~p"/oauth/authorize",
-          authorize_params(ctx.claude, challenge)
-          |> Map.merge(%{
-            "decision" => "approve",
-            "identity_id" => to_string(human.id),
-            "granted_scopes" => @all_scopes
-          })
-        )
-
-      assert html_response(conn, 200) =~ "Choose one of your agent identities"
-      assert get_resp_header(conn, "location") == []
-      assert Repo.aggregate(AuthorizationCode, :count) == 0
-    end
-
-    test "an owner with no agents is asked to create one instead of approving", ctx do
-      owner = user_fixture("no-agents")
-      {_verifier, challenge} = Agent.pkce()
-
-      doc =
-        build_conn()
-        |> init_test_session(current_user_id: owner.id)
-        |> get(~p"/oauth/authorize", authorize_params(ctx.claude, challenge))
-        |> html_response(200)
-        |> LazyHTML.from_document()
-
-      assert doc |> LazyHTML.query("#poppy-consent-no-agents") |> Enum.any?()
-      refute doc |> LazyHTML.query("#poppy-consent-form") |> Enum.any?()
-    end
-
-    test "denying sends access_denied back", ctx do
-      {_verifier, challenge} = Agent.pkce()
-
-      conn =
-        build_conn()
-        |> init_test_session(current_user_id: ctx.owner.id)
-        |> post(
-          ~p"/oauth/authorize",
-          Map.put(authorize_params(ctx.claude, challenge), "decision", "deny")
-        )
-
-      assert %{"error" => "access_denied", "iss" => @issuer} = redirect_query(conn)
-    end
-  end
-
-  describe "rejected token requests" do
-    test "a wrong PKCE verifier", ctx do
-      {%{"code" => code}, _verifier} = approve(ctx.claude, ctx.owner, ctx.agent)
-      {other_verifier, _} = Agent.pkce()
-
-      assert %{"error" => "invalid_grant"} =
-               exchange(ctx.claude, code, other_verifier) |> json_response(400)
-    end
-
-    test "a reused code, which also revokes the tokens the first use got", ctx do
-      {%{"code" => code}, verifier} = approve(ctx.claude, ctx.owner, ctx.agent)
-      tokens = exchange(ctx.claude, code, verifier) |> json_response(200)
-
-      assert %{"error" => "invalid_grant"} =
-               exchange(ctx.claude, code, verifier) |> json_response(400)
-
-      assert whoami(tokens["access_token"]).status == 401
-    end
-
-    test "a code redeemed by another client, or at another redirect URI", ctx do
-      {%{"code" => code}, verifier} = approve(ctx.claude, ctx.owner, ctx.agent)
-      other = claude_client()
-
-      assert %{"error" => "invalid_grant"} = exchange(other, code, verifier) |> json_response(400)
-
-      {%{"code" => code}, verifier} = approve(ctx.claude, ctx.owner, ctx.agent)
-
-      assert %{"error" => "invalid_grant"} =
-               exchange(ctx.claude, code, verifier, %{
-                 "redirect_uri" => ctx.claude.redirect_uri <> "x"
-               })
-               |> json_response(400)
-    end
-
-    test "another resource than the code's", ctx do
-      {%{"code" => code}, verifier} = approve(ctx.claude, ctx.owner, ctx.agent)
-
-      assert %{"error" => "invalid_target"} =
-               exchange(ctx.claude, code, verifier, %{"resource" => @issuer})
-               |> json_response(400)
-    end
-
-    test "client authentication the client can't use", ctx do
-      {%{"code" => code}, verifier} = approve(ctx.claude, ctx.owner, ctx.agent)
-
-      # Reviews issues no secrets, an unknown client is unknown, and a client
-      # whose metadata requires private_key_jwt must send an assertion.
-      keyed_client = Agent.new()
-
-      for extra <- [
-            %{"client_secret" => "guess"},
-            %{"client_id" => "rvc_unknown"},
-            %{"client_id" => keyed_client.client_id}
-          ] do
-        assert %{"error" => "invalid_client"} =
-                 exchange(ctx.claude, code, verifier, extra) |> json_response(401)
-      end
-
-      # None of those used up the code.
-      assert exchange(ctx.claude, code, verifier) |> json_response(200)
-    end
-  end
-
-  describe "access tokens at /mcp" do
-    test "an expired token is refused with a challenge", ctx do
-      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
-      Repo.update_all(AccessToken, set: [expires_at: ~U[2020-01-01 00:00:00Z]])
-
-      conn = whoami(tokens["access_token"])
-      assert conn.status == 401
-      assert challenge(conn) =~ ~s(error="invalid_token")
-    end
-
-    test "disconnecting in Settings stops the token on its next call", ctx do
-      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
-      assert whoami(tokens["access_token"]).status == 200
-
-      [link] = OAuth.list_links_for(ctx.owner)
-      :ok = OAuth.revoke_link(ctx.owner, link.id)
-
-      assert whoami(tokens["access_token"]).status == 401
-      assert refresh(ctx.claude, tokens["refresh_token"]) |> json_response(400)
-    end
-
-    test "revoking the refresh token at the revocation endpoint ends the grant", ctx do
-      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
-
-      conn =
-        build_conn()
-        |> post(~p"/oauth/revoke", %{
-          "client_id" => ctx.claude.client_id,
-          "token" => tokens["refresh_token"]
-        })
-
-      assert conn.status == 200
-      assert whoami(tokens["access_token"]).status == 401
-    end
-
-    test "another API's token is refused at /mcp, and an MCP token at the other API", ctx do
-      keyed_client = Agent.new()
-      {verifier, challenge} = Agent.pkce()
-
-      conn =
-        build_conn()
-        |> init_test_session(current_user_id: ctx.owner.id)
-        |> post(~p"/oauth/authorize", %{
-          "response_type" => "code",
-          "client_id" => keyed_client.client_id,
-          "redirect_uri" => keyed_client.redirect_uri,
-          "scope" => "keys:write",
-          "code_challenge" => challenge,
-          "code_challenge_method" => "S256",
-          "decision" => "approve",
-          "identity_id" => to_string(ctx.agent.id),
-          "granted_scopes" => ["keys:write"]
-        })
-
-      %{"code" => code} = redirect_query(conn)
-
-      keys_tokens =
-        token(
-          Map.merge(Agent.client_auth(keyed_client), %{
-            "grant_type" => "authorization_code",
-            "code" => code,
-            "redirect_uri" => keyed_client.redirect_uri,
-            "code_verifier" => verifier
-          })
-        )
-        |> json_response(200)
-
-      assert whoami(keys_tokens["access_token"]).status == 401
-
-      mcp_tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
-
-      assert {:error, :invalid_token} =
-               OAuth.authenticate_access_token(mcp_tokens["access_token"], "keys")
-    end
-
-    test "blocking the client stops its access tokens at once", ctx do
-      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
-      assert whoami(tokens["access_token"]).status == 200
-
-      # Only this test's unique client ID is added, so other tests are unaffected.
-      previous = Application.get_env(:reviews, OAuth)
-      on_exit(fn -> Application.put_env(:reviews, OAuth, previous) end)
-
-      Application.put_env(
-        :reviews,
-        OAuth,
-        Keyword.put(previous, :blocked_clients, [ctx.claude.client_id])
-      )
-
-      assert whoami(tokens["access_token"]).status == 401
-    end
-
-    test "a resource with a trailing slash is accepted at authorize and at token", ctx do
-      keyed_client = Agent.new()
-      {verifier, challenge} = Agent.pkce()
-
-      conn =
-        build_conn()
-        |> init_test_session(current_user_id: ctx.owner.id)
-        |> post(~p"/oauth/authorize", %{
-          "response_type" => "code",
-          "client_id" => keyed_client.client_id,
-          "redirect_uri" => keyed_client.redirect_uri,
-          "scope" => "keys:write",
-          "resource" => @issuer <> "/api/keys/",
-          "code_challenge" => challenge,
-          "code_challenge_method" => "S256",
-          "decision" => "approve",
-          "identity_id" => to_string(ctx.agent.id),
-          "granted_scopes" => ["keys:write"]
-        })
-
-      %{"code" => code} = redirect_query(conn)
-
-      assert token(
-               Map.merge(Agent.client_auth(keyed_client), %{
-                 "grant_type" => "authorization_code",
-                 "code" => code,
-                 "redirect_uri" => keyed_client.redirect_uri,
-                 "code_verifier" => verifier,
-                 "resource" => @issuer <> "/api/keys/"
-               })
-             )
-             |> json_response(200)
-    end
-
-    test "a GitHub browser session alone is not MCP access", ctx do
-      conn =
-        %{build_conn() | host: "localhost"}
-        |> init_test_session(current_user_id: ctx.owner.id)
-        |> put_req_header("accept", "application/json, text/event-stream")
-        |> put_req_header("content-type", "application/json")
-        |> post("/mcp", JSON.encode!(%{"jsonrpc" => "2.0", "id" => 1, "method" => "tools/list"}))
-
-      assert conn.status == 401
-    end
-
-    test "Reviews API tokens keep working beside OAuth", ctx do
-      {:ok, _token, raw} = Accounts.mint_token(ctx.owner, %{"name" => "cli"})
-      result = whoami(raw) |> json_response(200)
-      assert result["result"]["structuredContent"]["scopes"] == @all_scopes
-    end
-  end
-
-  describe "dynamic client registration" do
-    test "registers a public client that signs in like any other", ctx do
-      body =
-        build_conn()
-        |> put_req_header("content-type", "application/json")
-        |> post(
-          ~p"/oauth/register",
-          JSON.encode!(%{
-            "client_name" => "MCP Inspector",
-            "redirect_uris" => ["http://localhost:6274/oauth/callback"],
-            "grant_types" => ["authorization_code", "refresh_token"],
-            "token_endpoint_auth_method" => "none"
-          })
-        )
-        |> json_response(201)
-
-      assert %{"client_id" => "rvc_" <> _, "token_endpoint_auth_method" => "none"} = body
-
-      client = %{
-        client_id: body["client_id"],
-        redirect_uri: "http://localhost:6274/oauth/callback"
-      }
-
-      # The page can't vouch for a registered client, and warns about loopback.
-      {_verifier, challenge} = Agent.pkce()
-
-      html =
-        build_conn()
-        |> init_test_session(current_user_id: ctx.owner.id)
-        |> get(~p"/oauth/authorize", authorize_params(client, challenge))
-        |> html_response(200)
-
-      assert html =~ "This app registered itself"
-      assert html =~ ~s(id="poppy-consent-loopback")
-
-      # A bad request from a registered client gets a page, not a redirect: anyone
-      # can register any redirect URI, so a redirect here would be an open one.
-      conn =
-        build_conn()
-        |> init_test_session(current_user_id: ctx.owner.id)
-        |> get(~p"/oauth/authorize", authorize_params(client, challenge, %{"scope" => "admin"}))
-
-      assert html_response(conn, 400) =~ "can&#39;t accept"
-
-      # Loopback redirects match on any port (RFC 8252 §7.3).
-      on_other_port = %{client | redirect_uri: "http://localhost:51234/oauth/callback"}
-      tokens = sign_in(on_other_port, ctx.owner, ctx.agent)
-      assert whoami(tokens["access_token"]).status == 200
-    end
-
-    test "refuses redirect URIs a browser could be tricked by, and confidential clients" do
-      register = fn body ->
-        build_conn()
-        |> put_req_header("content-type", "application/json")
-        |> post(~p"/oauth/register", JSON.encode!(body))
-      end
-
-      for uri <- [
-            "javascript:alert(1)",
-            "http://evil.example/cb",
-            "https://ok.example/cb#frag",
-            "data:text/html,hi"
-          ] do
-        assert %{"error" => "invalid_redirect_uri"} =
-                 register.(%{"redirect_uris" => [uri]}) |> json_response(400)
-      end
-
-      assert %{"error" => "invalid_redirect_uri"} = register.(%{}) |> json_response(400)
-
-      assert %{"error" => "invalid_client_metadata"} =
-               register.(%{
-                 "redirect_uris" => ["https://ok.example/cb"],
-                 "token_endpoint_auth_method" => "client_secret_basic"
-               })
-               |> json_response(400)
-
-      # An app's private-use scheme is fine (RFC 8252 §7.1).
-      assert register.(%{"redirect_uris" => ["cursor://anysphere.cursor/oauth/callback"]})
-             |> json_response(201)
-    end
-  end
-
-  describe "private_key_jwt clients, as ChatGPT signs in" do
-    setup do
-      client_id = "https://chatgpt.com/oauth/client.json"
-      Clients.forget(client_id)
-      rsa = Agent.rsa_key("cimd-test")
-      rsa = %{rsa | alg: "RS256", public: Map.put(rsa.public, "alg", "RS256")}
-
-      agent = %Agent{
-        client_id: client_id,
-        jwks_uri: "https://chatgpt.com/oauth/jwks.json",
-        redirect_uri: "https://chatgpt.com/connector_platform_oauth_redirect",
-        root: rsa,
-        rsa: rsa
-      }
-
-      Fetcher.put(client_id, %{
-        "client_id" => client_id,
-        "client_name" => "ChatGPT",
-        "redirect_uris" => [agent.redirect_uri],
-        "token_endpoint_auth_method" => "private_key_jwt",
-        "token_endpoint_auth_methods_supported" => ["none", "private_key_jwt"],
-        "token_endpoint_auth_signing_alg" => "RS256",
-        "jwks_uri" => agent.jwks_uri
-      })
-
-      Fetcher.put(agent.jwks_uri, %{"keys" => [rsa.public]})
-      on_exit(fn -> Clients.forget(client_id) end)
-      %{chatgpt: agent}
-    end
-
-    test "an RS256 assertion addressed to the token endpoint signs in", ctx do
-      {%{"code" => code}, verifier} = approve(ctx.chatgpt, ctx.owner, ctx.agent)
-
-      params =
-        Map.merge(Agent.client_auth(ctx.chatgpt, aud: @issuer <> "/oauth/token"), %{
-          "grant_type" => "authorization_code",
-          "code" => code,
-          "redirect_uri" => ctx.chatgpt.redirect_uri,
-          "code_verifier" => verifier,
-          "resource" => @resource
-        })
-
-      tokens = token(params) |> json_response(200)
-      assert whoami(tokens["access_token"]).status == 200
-    end
-
-    test "a bad signature is refused", ctx do
-      {%{"code" => code}, verifier} = approve(ctx.chatgpt, ctx.owner, ctx.agent)
-
-      params =
-        ctx.chatgpt
-        |> Agent.client_auth(aud: @issuer <> "/oauth/token")
-        |> Map.update!("client_assertion", &tamper/1)
-        |> Map.merge(%{
-          "grant_type" => "authorization_code",
-          "code" => code,
-          "redirect_uri" => ctx.chatgpt.redirect_uri,
-          "code_verifier" => verifier
-        })
-
-      assert %{"error" => "invalid_client"} = token(params) |> json_response(401)
-    end
-  end
-
-  test "only clients on the list may address the token endpoint" do
-    agent = Agent.new()
-
-    assert {:error, :wrong_audience} =
-             Reviews.OAuth.Tokens.verify_client_assertion(
-               Agent.client_auth(agent, aud: @issuer <> "/oauth/token")
-             )
-  end
-
-  defp tamper(jwt) do
-    [header, claims, sig] = String.split(jwt, ".")
-    {:ok, bytes} = Base.url_decode64(sig, padding: false)
-    <<first, rest::binary>> = bytes
-
-    Enum.join(
-      [
-        header,
-        claims,
-        Base.url_encode64(<<Bitwise.bxor(first, 1), rest::binary>>, padding: false)
-      ],
-      "."
-    )
-  end
-
-  test "codes and refresh tokens are stored only as hashes", ctx do
-    tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
-    [link] = Repo.all(from l in IdentityLink, where: l.provider == "mcp")
-    refute link.refresh_token_hash == tokens["refresh_token"]
-    assert link.refresh_token_hash == :crypto.hash(:sha256, tokens["refresh_token"])
   end
 end

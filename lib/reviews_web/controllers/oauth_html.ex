@@ -16,7 +16,7 @@ defmodule ReviewsWeb.OAuthHTML do
   def sign_in(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="poppy-sign-in" class="l-page design-page">
+      <div id="poppy-sign-in" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow={eyebrow(@request)}
@@ -35,7 +35,7 @@ defmodule ReviewsWeb.OAuthHTML do
             </:actions>
           </.ds_page_header>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
@@ -43,7 +43,7 @@ defmodule ReviewsWeb.OAuthHTML do
   def consent(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="poppy-consent" class="l-page design-page">
+      <div id="poppy-consent" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow={eyebrow(@request)}
@@ -55,11 +55,11 @@ defmodule ReviewsWeb.OAuthHTML do
 
           <.ds_card class="ds-settings-card">
             <dl id="poppy-consent-client" class="poppy-facts">
-              <div :if={!@request.client.registered}>
+              <div :if={!registered?(@request.client)}>
                 <dt>Verified domain</dt>
                 <dd translate="no">{client_host(@request.client)}</dd>
               </div>
-              <div :if={@request.client.registered}>
+              <div :if={registered?(@request.client)}>
                 <dt>Verified domain</dt>
                 <dd>
                   None. This app registered itself, so Reviews can't tell who runs it.
@@ -86,7 +86,7 @@ defmodule ReviewsWeb.OAuthHTML do
             </dl>
 
             <p
-              :if={Reviews.OAuth.Clients.loopback_redirect?(@request.redirect_uri)}
+              :if={Gatekeep.Clients.loopback_redirect?(@request.redirect_uri)}
               id="poppy-consent-loopback"
               class="poppy-consent-note"
             >
@@ -101,12 +101,11 @@ defmodule ReviewsWeb.OAuthHTML do
             >
               <.icon name="hero-cpu-chip" class="size-4" />
               <span>
-                You have no agent identities yet. <.link href={~p"/settings#identities"}>Create one in Settings</.link>, then open the sign-in link again.
+                You have no agent identities yet. Allowing creates one for this app.
               </span>
             </div>
 
             <form
-              :if={@identities != []}
               id="poppy-consent-form"
               action={~p"/oauth/authorize"}
               method="post"
@@ -123,16 +122,45 @@ defmodule ReviewsWeb.OAuthHTML do
 
               <fieldset id="poppy-consent-identity">
                 <legend>Act as</legend>
-                <label :for={{identity, index} <- Enum.with_index(@identities)} :key={identity.id}>
+                <label :for={identity <- @identities} :key={identity.id}>
                   <input
                     type="radio"
                     name="identity_id"
                     value={identity.id}
-                    checked={index == 0}
+                    checked={@selected == to_string(identity.id)}
                     id={"poppy-identity-#{identity.id}"}
                   />
                   {identity.display_name} <span translate="no">(@{identity.handle})</span>
                 </label>
+                <label for="poppy-identity-new">
+                  <input
+                    type="radio"
+                    name="identity_id"
+                    value="new"
+                    checked={@selected == "new"}
+                    id="poppy-identity-new"
+                  /> New agent identity
+                </label>
+                <div id="poppy-new-identity" class="poppy-new-identity">
+                  <.input
+                    field={@new_identity[:display_name]}
+                    id="poppy-new-identity-name"
+                    type="text"
+                    label="Agent name"
+                    autocomplete="off"
+                    class="ds-input"
+                  />
+                  <.input
+                    field={@new_identity[:handle]}
+                    id="poppy-new-identity-handle"
+                    type="text"
+                    label="Handle"
+                    autocomplete="off"
+                    autocapitalize="none"
+                    spellcheck="false"
+                    class="ds-input"
+                  />
+                </div>
               </fieldset>
 
               <fieldset id="poppy-consent-scopes">
@@ -168,7 +196,7 @@ defmodule ReviewsWeb.OAuthHTML do
             </form>
           </.ds_card>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
@@ -176,7 +204,7 @@ defmodule ReviewsWeb.OAuthHTML do
   def invalid_request(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="poppy-invalid-request" class="l-page design-page">
+      <div id="poppy-invalid-request" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_empty_state
             icon="hero-exclamation-triangle"
@@ -184,7 +212,7 @@ defmodule ReviewsWeb.OAuthHTML do
             body={reason_text(@reason)}
           />
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
@@ -194,22 +222,24 @@ defmodule ReviewsWeb.OAuthHTML do
 
   defp reason_text(:signed_out), do: "Your Reviews session ended. Open the sign-in link again."
 
-  defp reason_text(:bad_request),
+  defp reason_text(:invalid_request),
     do: "The app sent a sign-in request Reviews can't accept. Nothing was shared."
 
   defp reason_text(_),
     do: "Reviews couldn't verify the agent that sent this link. Nothing was shared."
 
   defp text(request),
-    do: Reviews.OAuth.resource_for(request.provider).consent_text(client_label(request.client))
+    do: Reviews.OAuth.resource_module(request.resource).consent_text(client_label(request.client))
 
   defp sign_in_text(request), do: text(request).sign_in
   defp eyebrow(request), do: text(request).eyebrow
   defp consent_title(request), do: text(request).title
   defp consent_text(request), do: text(request).description
 
+  defp registered?(client), do: client.kind == :registered
+
   # A registered client has no verified domain; name it by where it sends you.
-  defp client_label(%{registered: true} = client),
+  defp client_label(%{kind: :registered} = client),
     do: "An app that calls itself #{client.client_name || "(no name)"}"
 
   defp client_label(client), do: client_host(client)

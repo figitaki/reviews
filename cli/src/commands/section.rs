@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Result};
 use clap::Args;
 
-use crate::api::{ApiClient, SectionDecisionRequest};
+use crate::api::SectionDecisionRequest;
+use crate::auth;
 use crate::config::Config;
 
 #[derive(Args, Debug)]
@@ -12,8 +13,9 @@ pub struct SectionArgs {
     /// Zero-based packet section index.
     pub section_index: i64,
 
-    /// Decision to apply to the section.
-    #[arg(value_parser = ["approved", "denied", "ignored"])]
+    /// Decision to set on the section. Setting the status it already has
+    /// changes nothing; `pending` resets it to undecided.
+    #[arg(value_parser = ["approved", "denied", "ignored", "pending"])]
     pub status: String,
 }
 
@@ -23,7 +25,7 @@ pub fn run(args: SectionArgs) -> Result<()> {
     }
 
     let cfg = Config::load()?;
-    let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
+    let client = auth::client(&cfg)?;
     let resp = client.set_section_decision(
         &args.slug,
         args.section_index,
@@ -42,6 +44,7 @@ fn decision_message(resp: &crate::api::SectionDecisionResponse) -> String {
             "Section {} on {} marked {} in patchset {}.",
             resp.section_index, resp.review, status, resp.patchset_number
         ),
+        // Servers before decisions became explicit toggled them off and sent null.
         None => format!(
             "Section {} on {} cleared to pending in patchset {}.",
             resp.section_index, resp.review, resp.patchset_number

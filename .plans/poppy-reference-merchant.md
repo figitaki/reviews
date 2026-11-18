@@ -56,5 +56,5 @@ other versions or domains, and conversation, feedback, or browser endpoints.
 
 `Reviews.ExternalIdentity` is the adapter boundary. A Turnkey-issued delegation or DPoP key, or a
 did:web whose `authentication` key signs the challenge, becomes another adapter that resolves to an
-`identity_links` row with its own `provider`. Comments then record that adapter's `attribution`.
+owner-approved grant of one agent identity. Comments then record that adapter's `attribution`.
 Signed section decisions (#106) remain separate evidence. A Poppy login is not a signed decision.

@@ -1,7 +1,8 @@
 defmodule Reviews.Poppy.TokensTest do
   use Reviews.DataCase, async: true
 
-  alias Reviews.OAuth.{Clients, JOSE}
+  alias Gatekeep.Clients
+  alias Reviews.OAuth
   alias Reviews.Poppy.Tokens
   alias Reviews.PoppyTestAgent, as: Agent
 
@@ -60,7 +61,7 @@ defmodule Reviews.Poppy.TokensTest do
         }
 
         assert {:ok, %{client_id: "https://kit-agent.example/agent.json"}} =
-                 Reviews.OAuth.Tokens.verify_client_assertion(params, now: now),
+                 Gatekeep.ClientAuth.verify_client_assertion(OAuth.config(), params, now: now),
                name
       end
     end
@@ -183,7 +184,7 @@ defmodule Reviews.Poppy.TokensTest do
       assert {:ok, _} = verify(Agent.session_jwt(agent, "GET", @url))
 
       Agent.publish(agent, %{}, [agent.rsa.public])
-      Clients.forget(agent.client_id)
+      Clients.forget(OAuth.config(), agent.client_id)
 
       assert {:error, :unknown_delegation_key} = verify(Agent.session_jwt(agent, "GET", @url))
     end
@@ -195,9 +196,10 @@ defmodule Reviews.Poppy.TokensTest do
     end
   end
 
-  describe "verify_dpop_proof/3" do
+  # DPoP proofs are gatekeep's (`Gatekeep.DPoP`); these check it with Reviews'
+  # settings: ES256 only, and 60 seconds plus 30 of skew.
+  describe "DPoP proofs" do
     @token_url "https://reviews.test/oauth/token"
-    @client_id "https://agent.example/agent.json"
 
     setup do
       %{key: Agent.ec_key(nil)}
@@ -207,11 +209,10 @@ defmodule Reviews.Poppy.TokensTest do
       request = %{
         method: Keyword.get(opts, :method, "POST"),
         url: Keyword.get(opts, :url, @token_url),
-        access_token: opts[:access_token],
-        client_id: @client_id
+        access_token: opts[:access_token]
       }
 
-      Tokens.verify_dpop_proof(List.wrap(proofs), request, Keyword.take(opts, [:now]))
+      Gatekeep.DPoP.verify(List.wrap(proofs), request, OAuth.config(), Keyword.take(opts, [:now]))
     end
 
     # Replay is checked with fresh proofs below: these proofs are from 2019, so
@@ -266,7 +267,7 @@ defmodule Reviews.Poppy.TokensTest do
     test "covers the access token with ath at a protected resource", %{key: key} do
       opts = [method: "GET", url: @url, access_token: "ppa_token"]
 
-      assert {:error, :ath_mismatch} = verify_proof(Agent.dpop_proof(key, "GET", @url), opts)
+      assert {:error, :missing_ath} = verify_proof(Agent.dpop_proof(key, "GET", @url), opts)
 
       assert {:error, :ath_mismatch} =
                verify_proof(Agent.dpop_proof(key, "GET", @url, access_token: "ppa_other"), opts)

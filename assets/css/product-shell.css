@@ -287,7 +287,7 @@
 .ds-input{
   width: 100%;
   min-height: 40px;
-  border: 1px solid var(--ds-line-strong);
+  border: 1px solid var(--ds-line-input);
   border-radius: 6px;
   background: var(--ds-panel);
   color: var(--ds-text);
@@ -426,6 +426,34 @@ textarea.ds-input{
   gap: 8px;
   align-items: baseline;
   color: var(--ds-text);
+}
+
+.poppy-new-identity{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-left: 21px;
+}
+
+.poppy-new-identity .fieldset{
+  margin: 0;
+}
+
+.poppy-consent-form .poppy-new-identity label{
+  display: grid;
+  gap: 4px;
+  color: var(--ds-muted);
+}
+
+/* The fields show only while "New agent identity" is chosen. */
+#poppy-consent-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity{
+  display: none;
+}
+
+@media (max-width: 640px){
+  .poppy-new-identity{
+    grid-template-columns: 1fr;
+  }
 }
 
 .poppy-consent-note{
@@ -716,7 +744,8 @@ textarea.ds-input{
 /* Narrow phones (#6): keep the topbar on one row down to 320px. The brand
    collapses to its mark (the link keeps its aria-label), the actions may
    shrink, and a long account name truncates instead of pushing the row
-   past the right edge. DOM order, and so focus order, does not change. */
+   past the right edge. DOM order, and so focus order, does not change.
+   480px, not 640px: above it the full brand label still fits (tokens.css). */
 @media (max-width: 480px) {
   .ds-shell-topbar{
     gap: 8px;

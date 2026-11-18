@@ -10,9 +10,8 @@ defmodule ReviewsWeb.OAuthTest do
   import Ecto.Query
 
   alias Reviews.Accounts
-  alias Reviews.Accounts.IdentityLink
   alias Reviews.OAuth
-  alias Reviews.OAuth.{AccessToken, AuthorizationCode}
+  alias Reviews.OAuth.Grant
   alias Reviews.OAuthTestClient, as: Client
   alias Reviews.OAuthTestClient.Fetcher
   alias Reviews.Repo
@@ -134,9 +133,15 @@ defmodule ReviewsWeb.OAuthTest do
     })
   end
 
-  # Whether the resource `provider` names accepts the access token.
-  defp valid?(token, provider \\ "test"),
-    do: match?({:ok, _}, OAuth.authenticate_access_token(token, provider))
+  # Whether `resource` accepts the access token as a Bearer token.
+  defp valid?(token, resource \\ @resource),
+    do: match?({:ok, _}, OAuth.authenticate_access_token(resource, bearer(token)))
+
+  defp bearer(token),
+    do: %{authorization: "Bearer " <> token, dpop: [], method: "GET", path: "/api/test"}
+
+  # Gatekeep's tables (`Gatekeep.Storage.Ecto`), for the cases that need a row changed or counted.
+  defp code_count, do: Repo.aggregate("gatekeep_codes", :count)
 
   # A client with keys signs in to the keys-only resource at the issuer's root.
   defp keys_sign_in(client, user, identity, extra \\ %{}) do
@@ -220,7 +225,7 @@ defmodule ReviewsWeb.OAuthTest do
       assert issuer["keys_resource_extra"] == true
     end
 
-    test "with no resource taking public clients, the issuer offers no public clients or registration" do
+    test "with only the CLI taking a public client, the issuer offers no registration" do
       previous = Application.get_env(:reviews, Reviews.OAuthTestResource)
 
       on_exit(fn ->
@@ -237,7 +242,8 @@ defmodule ReviewsWeb.OAuthTest do
       issuer =
         build_conn() |> get("/.well-known/oauth-authorization-server") |> json_response(200)
 
-      assert issuer["token_endpoint_auth_methods_supported"] == ["private_key_jwt"]
+      # "none" is the Reviews CLI's own client; no other client can use it.
+      assert issuer["token_endpoint_auth_methods_supported"] == ["private_key_jwt", "none"]
       refute Map.has_key?(issuer, "registration_endpoint")
       refute @resource in issuer["protected_resources"]
 
@@ -283,7 +289,7 @@ defmodule ReviewsWeb.OAuthTest do
         |> LazyHTML.query("#poppy-consent-identity input[name=identity_id]")
         |> Enum.map(&(&1 |> LazyHTML.attribute("value") |> hd()))
 
-      assert offered == [to_string(ctx.agent.id)]
+      assert offered == [to_string(ctx.agent.id), "new"]
       refute doc |> LazyHTML.query("#poppy-identity-#{human.id}") |> Enum.any?()
 
       scopes =
@@ -324,14 +330,15 @@ defmodule ReviewsWeb.OAuthTest do
       assert body["scope"] == "test:read"
       assert get_resp_header(exchange(ctx.app, "x", verifier), "cache-control") == ["no-store"]
 
-      assert {:ok, %{link: link, scopes: ["test:read"]}} =
-               OAuth.authenticate_access_token(body["access_token"], "test")
+      assert {:ok, %{grant: grant, token: %{scopes: ["test:read"]}}} =
+               OAuth.authenticate_access_token(@resource, bearer(body["access_token"]))
 
-      assert link.identity_id == ctx.agent.id
-      assert link.provider == "test"
-      assert link.subject == ctx.app.client_id
-      assert [%{id: id}] = OAuth.list_links_for(ctx.owner)
-      assert id == link.id
+      assert grant.identity.id == ctx.agent.id
+      assert grant.approved_by_user.id == ctx.owner.id
+      assert grant.resource == @resource
+      assert grant.client_id == ctx.app.client_id
+      assert [%{id: id}] = OAuth.list_grants_for(ctx.owner)
+      assert id == grant.id
     end
   end
 
@@ -376,10 +383,10 @@ defmodule ReviewsWeb.OAuthTest do
 
       second = token(Map.merge(Client.client_auth(client), params)) |> json_response(200)
       refute Map.has_key?(second, "refresh_token")
-      assert valid?(second["access_token"], "keys")
+      assert valid?(second["access_token"], @keys_resource)
 
       assert token(Map.merge(Client.client_auth(client), params)) |> json_response(200)
-      assert valid?(second["access_token"], "keys")
+      assert valid?(second["access_token"], @keys_resource)
     end
 
     test "can narrow scopes but never widen them", ctx do
@@ -505,7 +512,7 @@ defmodule ReviewsWeb.OAuthTest do
         )
 
       assert html_response(conn, 200) =~ "Choose one of your"
-      assert Repo.aggregate(IdentityLink, :count) == 0
+      assert Repo.aggregate(Grant, :count) == 0
     end
 
     test "a missing or malformed identity is refused, not a crash", ctx do
@@ -525,7 +532,7 @@ defmodule ReviewsWeb.OAuthTest do
         assert html_response(conn, 200) =~ "Choose one of your"
       end
 
-      assert Repo.aggregate(AuthorizationCode, :count) == 0
+      assert code_count() == 0
     end
 
     test "the owner's own human identity is refused, even posted by hand", ctx do
@@ -547,7 +554,7 @@ defmodule ReviewsWeb.OAuthTest do
 
       assert html_response(conn, 200) =~ "Choose one of your agent identities"
       assert get_resp_header(conn, "location") == []
-      assert Repo.aggregate(AuthorizationCode, :count) == 0
+      assert code_count() == 0
     end
 
     test "no granted scope, or only ones the request lacks, is refused", ctx do
@@ -570,22 +577,7 @@ defmodule ReviewsWeb.OAuthTest do
         assert html_response(conn, 200) =~ "at least one permission"
       end
 
-      assert Repo.aggregate(AuthorizationCode, :count) == 0
-    end
-
-    test "an owner with no agents is asked to create one instead of approving", ctx do
-      owner = user_fixture("no-agents")
-      {_verifier, challenge} = Client.pkce()
-
-      doc =
-        build_conn()
-        |> init_test_session(current_user_id: owner.id)
-        |> get(~p"/oauth/authorize", authorize_params(ctx.app, challenge))
-        |> html_response(200)
-        |> LazyHTML.from_document()
-
-      assert doc |> LazyHTML.query("#poppy-consent-no-agents") |> Enum.any?()
-      refute doc |> LazyHTML.query("#poppy-consent-form") |> Enum.any?()
+      assert code_count() == 0
     end
 
     test "approving signed out is refused", ctx do
@@ -617,6 +609,183 @@ defmodule ReviewsWeb.OAuthTest do
     end
   end
 
+  describe "creating an agent identity on the consent page" do
+    # The owner picks "New agent identity" and allows. Returns the conn.
+    defp approve_new(client, user, new_identity, extra \\ %{}, granted \\ @all_scopes) do
+      {verifier, challenge} = Client.pkce()
+
+      conn =
+        build_conn()
+        |> init_test_session(current_user_id: user.id)
+        |> post(
+          ~p"/oauth/authorize",
+          authorize_params(client, challenge)
+          |> Map.merge(%{
+            "decision" => "approve",
+            "identity_id" => "new",
+            "new_identity" => new_identity,
+            "granted_scopes" => granted
+          })
+          |> Map.merge(extra)
+        )
+
+      {conn, verifier}
+    end
+
+    defp agent_count(user), do: length(Accounts.list_agent_identities_for(user))
+
+    test "suggests a name and handle from the client, and the app acts as the new agent", ctx do
+      client_id = "https://muse.ai/oauth/client-metadata"
+      muse = %{client_id: client_id, redirect_uri: "https://muse.ai/callback"}
+
+      Fetcher.put(client_id, %{
+        "client_id" => client_id,
+        "redirect_uris" => [muse.redirect_uri],
+        "token_endpoint_auth_method" => "none"
+      })
+
+      {_verifier, challenge} = Client.pkce()
+
+      doc =
+        build_conn()
+        |> init_test_session(current_user_id: ctx.owner.id)
+        |> get(~p"/oauth/authorize", authorize_params(muse, challenge))
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      value = fn selector -> doc |> LazyHTML.query(selector) |> LazyHTML.attribute("value") end
+      assert value.("#poppy-new-identity-name") == ["Muse"]
+      assert value.("#poppy-new-identity-handle") == ["muse"]
+      # An existing agent stays the default choice.
+      assert doc |> LazyHTML.query("#poppy-identity-#{ctx.agent.id}[checked]") |> Enum.any?()
+      refute doc |> LazyHTML.query("#poppy-identity-new[checked]") |> Enum.any?()
+
+      {conn, verifier} =
+        approve_new(muse, ctx.owner, %{"display_name" => "Muse Bot", "handle" => "@muse-bot"})
+
+      assert %{"code" => code, "state" => "st_9", "iss" => @issuer} = redirect_query(conn)
+      body = exchange(muse, code, verifier) |> json_response(200)
+
+      assert {:ok, %{grant: grant}} =
+               OAuth.authenticate_access_token(@resource, bearer(body["access_token"]))
+
+      identity = Accounts.get_identity!(grant.identity.id)
+      assert %{kind: "agent", handle: "muse-bot", display_name: "Muse Bot"} = identity
+      assert identity.owner_user_id == ctx.owner.id
+      assert agent_count(ctx.owner) == 2
+    end
+
+    test "a taken or invalid handle shows an inline error and keeps what was typed", ctx do
+      for {handle, error} <- [
+            {"Claude", "has already been taken"},
+            {"no spaces", "has invalid format"},
+            {"", "can't be blank"}
+          ] do
+        {conn, _verifier} =
+          approve_new(ctx.app, ctx.owner, %{"display_name" => "Typed", "handle" => handle})
+
+        doc = conn |> html_response(200) |> LazyHTML.from_document()
+        assert doc |> LazyHTML.query("#poppy-identity-new[checked]") |> Enum.any?()
+        assert doc |> LazyHTML.query("#poppy-new-identity") |> LazyHTML.text() =~ error
+
+        assert doc |> LazyHTML.query("#poppy-new-identity-name") |> LazyHTML.attribute("value") ==
+                 ["Typed"]
+      end
+
+      assert agent_count(ctx.owner) == 1
+      assert code_count() == 0
+    end
+
+    test "an owner with no agents gets the new agent fields and can allow", ctx do
+      owner = user_fixture("no-agents")
+      {_verifier, challenge} = Client.pkce()
+
+      doc =
+        build_conn()
+        |> init_test_session(current_user_id: owner.id)
+        |> get(~p"/oauth/authorize", authorize_params(ctx.app, challenge))
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert doc |> LazyHTML.query("#poppy-consent-no-agents") |> Enum.any?()
+      assert doc |> LazyHTML.query("#poppy-consent-form #poppy-consent-approve") |> Enum.any?()
+      assert doc |> LazyHTML.query("#poppy-identity-new[checked]") |> Enum.any?()
+
+      {conn, _verifier} =
+        approve_new(ctx.app, owner, %{"display_name" => "App", "handle" => "app"})
+
+      assert %{"code" => _} = redirect_query(conn)
+      assert [%{handle: "app"}] = Accounts.list_agent_identities_for(owner)
+    end
+
+    test "a forged request can't create an identity under another account", ctx do
+      stranger = user_fixture("stranger")
+
+      {conn, verifier} =
+        approve_new(
+          ctx.app,
+          ctx.owner,
+          %{
+            "display_name" => "Sneaky",
+            "handle" => "sneaky",
+            "owner_user_id" => to_string(stranger.id),
+            "kind" => "human"
+          },
+          %{"owner_user_id" => to_string(stranger.id), "user_id" => to_string(stranger.id)}
+        )
+
+      %{"code" => code} = redirect_query(conn)
+      body = exchange(ctx.app, code, verifier) |> json_response(200)
+
+      {:ok, %{grant: grant}} =
+        OAuth.authenticate_access_token(@resource, bearer(body["access_token"]))
+
+      assert %{kind: "agent", owner_user_id: owner_id} = Accounts.get_identity!(grant.identity.id)
+      assert owner_id == ctx.owner.id
+      assert grant.approved_by_user.id == ctx.owner.id
+      assert Accounts.list_agent_identities_for(stranger) == []
+    end
+
+    test "signed out, nothing is created", ctx do
+      {_verifier, challenge} = Client.pkce()
+
+      conn =
+        build_conn()
+        |> post(
+          ~p"/oauth/authorize",
+          authorize_params(ctx.app, challenge)
+          |> Map.merge(%{
+            "decision" => "approve",
+            "identity_id" => "new",
+            "new_identity" => %{"display_name" => "X", "handle" => "x-new"}
+          })
+        )
+
+      assert html_response(conn, 401) =~ "session ended"
+
+      assert Repo.aggregate(
+               from(i in Reviews.Accounts.Identity, where: i.handle == "x-new"),
+               :count
+             ) == 0
+    end
+
+    test "when the approval fails, the new identity is rolled back", ctx do
+      {conn, _verifier} =
+        approve_new(ctx.app, ctx.owner, %{"display_name" => "Muse", "handle" => "muse"}, %{}, [])
+
+      doc = conn |> html_response(200) |> LazyHTML.from_document()
+      assert LazyHTML.text(doc) =~ "at least one permission"
+      assert doc |> LazyHTML.query("#poppy-identity-new[checked]") |> Enum.any?()
+
+      assert doc |> LazyHTML.query("#poppy-new-identity-handle") |> LazyHTML.attribute("value") ==
+               ["muse"]
+
+      assert agent_count(ctx.owner) == 1
+      assert code_count() == 0
+      assert Repo.aggregate(Grant, :count) == 0
+    end
+  end
+
   describe "rejected token requests" do
     test "a wrong PKCE verifier", ctx do
       {%{"code" => code}, _verifier} = approve(ctx.app, ctx.owner, ctx.agent)
@@ -644,7 +813,7 @@ defmodule ReviewsWeb.OAuthTest do
 
     test "an expired code", ctx do
       {%{"code" => code}, verifier} = approve(ctx.app, ctx.owner, ctx.agent)
-      Repo.update_all(AuthorizationCode, set: [expires_at: ~U[2020-01-01 00:00:00Z]])
+      Repo.update_all("gatekeep_codes", set: [expires_at: ~U[2020-01-01 00:00:00Z]])
 
       assert %{"error" => "invalid_grant"} =
                exchange(ctx.app, code, verifier) |> json_response(400)
@@ -705,7 +874,7 @@ defmodule ReviewsWeb.OAuthTest do
   describe "access tokens" do
     test "an expired token is refused", ctx do
       tokens = sign_in(ctx.app, ctx.owner, ctx.agent)
-      Repo.update_all(AccessToken, set: [expires_at: ~U[2020-01-01 00:00:00Z]])
+      Repo.update_all("gatekeep_access_tokens", set: [expires_at: ~U[2020-01-01 00:00:00Z]])
 
       refute valid?(tokens["access_token"])
     end
@@ -714,9 +883,9 @@ defmodule ReviewsWeb.OAuthTest do
       tokens = sign_in(ctx.app, ctx.owner, ctx.agent)
       assert valid?(tokens["access_token"])
 
-      [link] = OAuth.list_links_for(ctx.owner)
-      assert {:error, :not_found} = OAuth.revoke_link(user_fixture("other"), link.id)
-      :ok = OAuth.revoke_link(ctx.owner, link.id)
+      [grant] = OAuth.list_grants_for(ctx.owner)
+      assert {:error, :not_found} = OAuth.revoke_grant(user_fixture("other"), grant.id)
+      :ok = OAuth.revoke_grant(ctx.owner, grant.id)
 
       refute valid?(tokens["access_token"])
       assert refresh(ctx.app, tokens["refresh_token"]) |> json_response(400)
@@ -750,12 +919,12 @@ defmodule ReviewsWeb.OAuthTest do
 
     test "a token issued for one resource is refused by another", ctx do
       tokens = sign_in(ctx.app, ctx.owner, ctx.agent)
-      assert valid?(tokens["access_token"], "test")
-      refute valid?(tokens["access_token"], "keys")
+      assert valid?(tokens["access_token"], @resource)
+      refute valid?(tokens["access_token"], @keys_resource)
 
       keys = keys_sign_in(Client.new(), ctx.owner, ctx.agent) |> json_response(200)
-      assert valid?(keys["access_token"], "keys")
-      refute valid?(keys["access_token"], "test")
+      assert valid?(keys["access_token"], @keys_resource)
+      refute valid?(keys["access_token"], @resource)
     end
 
     test "blocking the client stops its access tokens at once", ctx do
@@ -948,8 +1117,13 @@ defmodule ReviewsWeb.OAuthTest do
 
   test "codes and refresh tokens are stored only as hashes", ctx do
     tokens = sign_in(ctx.app, ctx.owner, ctx.agent)
-    [link] = Repo.all(from l in IdentityLink, where: l.provider == "test")
-    refute link.refresh_token_hash == tokens["refresh_token"]
-    assert link.refresh_token_hash == :crypto.hash(:sha256, tokens["refresh_token"])
+
+    [hash] =
+      Repo.all(
+        from g in "gatekeep_grants", where: g.resource == @resource, select: g.refresh_token_hash
+      )
+
+    refute hash == tokens["refresh_token"]
+    assert hash == :crypto.hash(:sha256, tokens["refresh_token"])
   end
 end

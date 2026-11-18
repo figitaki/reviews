@@ -23,10 +23,10 @@ defmodule ReviewsWeb.MCP.Server do
   use FastestMCP.ServerModule, otp_app: :reviews
 
   alias FastestMCP.Authorization
-  alias Reviews.{Accounts, MCPAuth, OAuth}
+  alias Reviews.{Accounts, MCPAuth, OAuth, Paging}
   alias ReviewsWeb.MCP.Handlers
 
-  @scopes ["reviews:read", "reviews:write", "threads:write"]
+  @scopes ["reviews:read", "reviews:write", "comments:write", "threads:write"]
 
   @instructions """
   Reviews hosts code reviews: a diff plus a packet that orders hunks into narrated sections, \
@@ -55,20 +55,32 @@ defmodule ReviewsWeb.MCP.Server do
     end
   end
 
+  # The principal is plain data; `ReviewsWeb.MCP.Handlers` turns it into a
+  # `Reviews.Principal`. An OAuth token also names its grant and client, so
+  # its writes are limited to its scopes and recorded with attribution.
   defp authenticate_bearer(token) do
     case Accounts.authenticate_token(token) do
       {:ok, %{user: user, identity: identity}} ->
         {:ok, %{"identity_id" => identity.id, "user_id" => user.id}, @scopes}
 
       {:error, _} ->
-        case OAuth.authenticate_access_token(token, MCPAuth.provider()) do
-          {:ok, %{link: link, scopes: scopes}} ->
+        request = %{
+          authorization: "Bearer " <> token,
+          dpop: [],
+          method: "POST",
+          path: "/mcp"
+        }
+
+        case OAuth.authenticate_access_token(MCPAuth.resource(), request) do
+          {:ok, %{grant: grant, token: oauth_token}} ->
             {:ok,
              %{
-               "identity_id" => link.identity_id,
-               "user_id" => link.identity.owner_user_id,
-               "client_id" => link.subject
-             }, scopes}
+               "identity_id" => grant.identity.id,
+               "user_id" => grant.approved_by_user.id,
+               "grant_id" => grant.id,
+               "client_id" => oauth_token.client_id,
+               "scopes" => oauth_token.scopes
+             }, oauth_token.scopes}
 
           {:error, _} ->
             :error
@@ -321,7 +333,7 @@ defmodule ReviewsWeb.MCP.Server do
             "limit" => %{
               "type" => "integer",
               "minimum" => 1,
-              "maximum" => Handlers.thread_limit()
+              "maximum" => Paging.max_limit()
             },
             "cursor" => cursor_prop(),
             "max_bytes" => max_bytes_prop()
@@ -431,7 +443,7 @@ defmodule ReviewsWeb.MCP.Server do
             },
             ["review", "body"]
           )
-      ] ++ write.("threads:write", false)
+      ] ++ write.("comments:write", false)
     )
     |> FastestMCP.add_tool(
       "reviews_update_thread_status",
@@ -492,10 +504,10 @@ defmodule ReviewsWeb.MCP.Server do
   defp max_bytes_prop do
     %{
       "type" => "integer",
-      "minimum" => Handlers.min_max_bytes(),
-      "maximum" => Handlers.max_bytes_limit(),
+      "minimum" => Paging.min_max_bytes(),
+      "maximum" => Paging.max_bytes_limit(),
       "description" =>
-        "Most bytes this result may take, metadata included. Default #{Handlers.default_max_bytes()}."
+        "Most bytes this result may take, metadata included. Default #{Paging.default_max_bytes()}."
     }
   end
 

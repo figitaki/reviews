@@ -58,11 +58,14 @@ config :phoenix,
 config :reviews, Reviews.OAuth,
   issuer: "https://reviews.test",
   fetcher: Reviews.OAuthTestClient.Fetcher,
+  # Public clients first, so the metadata lists `none` first, as it did
+  # before gatekeep.
   resources: [
-    Reviews.Poppy,
-    Reviews.MCPAuth,
+    Reviews.OAuthTestResource,
     Reviews.OAuthTestResource.KeysOnly,
-    Reviews.OAuthTestResource
+    Reviews.Poppy,
+    Reviews.OAuth.CLI,
+    Reviews.MCPAuth
   ],
   token_endpoint_audience_clients: ["https://chatgpt.com/oauth/client.json"],
   default_resource: Reviews.Poppy

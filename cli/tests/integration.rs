@@ -397,3 +397,62 @@ mod dry_run {
         create.assert();
     }
 }
+
+#[test]
+fn comments_pin_revisions_and_replies_do_not_fetch_snapshots() {
+    let mut server = mockito::Server::new();
+    let config_home = tempfile::tempdir().unwrap();
+    let config_dir = config_home.path().join(".config/reviews");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("config.toml"),
+        format!(
+            "[default]\nserver_url = {:?}\napi_token = \"test-token\"\n",
+            server.url()
+        ),
+    )
+    .unwrap();
+    let no_get = server.mock("GET", mockito::Matcher::Any).expect(0).create();
+    let response = r#"{"thread_id":7,"comment_id":8,"url":"http://localhost/r/slug"}"#;
+    let comment = server
+        .mock("POST", "/api/v1/reviews/slug/comments")
+        .match_body(mockito::Matcher::Json(serde_json::json!({
+            "file_path":"foo", "side":"new", "body":"comment", "revision":2,
+            "thread_anchor":{"granularity":"line", "line_number_hint":1}
+        })))
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(response)
+        .create();
+    let reply = server
+        .mock("POST", "/api/v1/reviews/slug/comments")
+        .match_body(mockito::Matcher::Json(
+            serde_json::json!({"thread_id":7, "body":"reply"}),
+        ))
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(response)
+        .create();
+    for args in [
+        vec![
+            "comment",
+            "slug",
+            "foo:1",
+            "--revision",
+            "2",
+            "--body",
+            "comment",
+        ],
+        vec!["reply", "slug", "7", "--body", "reply"],
+    ] {
+        let output = bin()
+            .args(args)
+            .env("HOME", config_home.path())
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+    }
+    comment.assert();
+    reply.assert();
+    no_get.assert();
+}
