@@ -28,6 +28,7 @@ defmodule ReviewsWeb.ReviewListLive do
      |> assign(:now, DateTime.utc_now())
      |> assign(:filters, %{})
      |> assign(:return_to, ~p"/reviews")
+     |> assign(:demo_slug, Reviews.DemoReview.slug())
      |> assign(:filter_form, to_form(%{}, as: :filters))
      |> stream_configure(:reviews, dom_id: &"review-#{&1.review.id}")
      |> stream(:reviews, [])}
@@ -66,7 +67,12 @@ defmodule ReviewsWeb.ReviewListLive do
 
   @impl true
   def handle_event("filter", %{"filters" => params}, socket) do
-    {:noreply, push_patch(socket, to: list_path(Map.take(params, @filter_keys)))}
+    filters =
+      socket.assigns.filters
+      |> Map.new(fn {k, v} -> {to_string(k), v} end)
+      |> Map.merge(Map.take(params, @filter_keys))
+
+    {:noreply, push_patch(socket, to: list_path(filters))}
   end
 
   def handle_event("clear_filters", _params, socket) do
@@ -77,21 +83,15 @@ defmodule ReviewsWeb.ReviewListLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="reviews-index" class="l-page design-page">
+      <div id="reviews-index" class="l-page design-page">
         <Layouts.landing_topbar
           current_user={@current_user}
           active={:reviews}
           return_to={@return_to}
+          show_workflow_anchor={false}
         />
 
-        <div class="design-main is-settings">
-          <.ds_page_header
-            eyebrow="Reviews"
-            title="Your reviews"
-            description="Reviews you wrote or took part in, newest first."
-            class="is-compact"
-          />
-
+        <div class="design-main rl-main">
           <%= if @current_user do %>
             <.review_list
               streams={@streams}
@@ -101,9 +101,10 @@ defmodule ReviewsWeb.ReviewListLive do
               offset={@offset}
               next_offset={@next_offset}
               now={@now}
+              demo_slug={@demo_slug}
             />
           <% else %>
-            <div class="design-state-focus">
+            <div class="design-state-focus is-compact">
               <.ds_empty_state
                 icon="hero-queue-list"
                 title="Sign in to see your reviews"
@@ -122,7 +123,7 @@ defmodule ReviewsWeb.ReviewListLive do
             </div>
           <% end %>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
@@ -134,137 +135,243 @@ defmodule ReviewsWeb.ReviewListLive do
   attr :offset, :integer, required: true
   attr :next_offset, :integer, default: nil
   attr :now, :any, required: true
+  attr :demo_slug, :string, required: true
 
   defp review_list(assigns) do
     ~H"""
     <style :type={ReviewsWeb.ColocatedCSS}>
+      .rl-main {
+        padding-top: var(--space-10);
+      }
+
       .rl-layout {
         display: grid;
-        gap: 16px;
-        width: min(1040px, 100%);
+        gap: var(--space-5);
+        width: min(880px, 100%);
         margin: 0 auto;
       }
 
-      .rl-filters {
-        display: grid;
-        grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto;
-        gap: 10px;
-        align-items: end;
+      /* Header: the page title and the one search field share a row. */
+      .rl-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-5);
       }
 
-      .rl-filters .fieldset {
+      .rl-header h1 {
         margin: 0;
-        padding: 0;
+        color: var(--ds-text);
+        font-size: var(--font-section-size);
+        font-weight: var(--font-section-weight);
+        line-height: var(--font-section-leading);
       }
 
-      .rl-filters .label {
+      .rl-search {
+        position: relative;
+        flex: 0 1 320px;
+        min-width: 0;
+      }
+
+      .rl-search .hero-magnifying-glass {
+        position: absolute;
+        top: 50%;
+        left: var(--space-4);
+        color: var(--ds-faint);
+        transform: translateY(-50%);
+        pointer-events: none;
+      }
+
+      .rl-search .ds-input {
+        min-height: 36px;
+        padding-left: 32px;
+      }
+
+      /* Filters: one row of chips under the header. */
+      .rl-chips {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin: 0 calc(-1 * var(--space-1));
+        padding: var(--space-1);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .rl-chips::-webkit-scrollbar {
+        display: none;
+      }
+
+      .rl-chip {
+        display: inline-flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: var(--space-1);
+        min-height: 28px;
+        border: var(--border-hair) solid var(--ds-line);
+        border-radius: var(--radius-pill);
+        background: var(--ds-panel);
         color: var(--ds-muted);
-        font-size: 12px;
-        font-weight: 650;
+        padding: 0 var(--space-4);
+        font-size: var(--font-size-xs);
+        font-weight: var(--weight-medium);
+        text-decoration: none;
+        white-space: nowrap;
       }
 
-      .rl-clear {
-        min-height: 40px;
-        margin-bottom: 8px;
+      .rl-chip:hover {
+        border-color: var(--ds-line-strong);
+        color: var(--ds-text);
       }
 
+      .rl-chip:focus-visible {
+        outline: 2px solid var(--ds-focus);
+        outline-offset: 2px;
+      }
+
+      .rl-chip.is-active {
+        border-color: var(--ds-text);
+        background: var(--ds-text);
+        color: var(--ds-bg);
+      }
+
+      .rl-chip-sep {
+        flex-shrink: 0;
+        width: var(--border-hair);
+        height: 16px;
+        background: var(--ds-line);
+      }
+
+      .rl-chip-clear {
+        border-color: transparent;
+        background: transparent;
+      }
+
+      /* The list: one panel with divided rows. The title link covers the
+         whole row, so the row is the tap target. */
       .rl-list {
-        display: grid;
-        gap: 8px;
         margin: 0;
         padding: 0;
+        border: var(--border-hair) solid var(--ds-line);
+        border-radius: var(--radius-md);
+        background: var(--ds-panel);
         list-style: none;
+        overflow: hidden;
+      }
+
+      .rl-list:empty {
+        display: none;
       }
 
       .rl-row {
+        position: relative;
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        gap: 6px 16px;
-        border: 1px solid var(--ds-line);
-        border-radius: 8px;
-        background: var(--ds-panel);
-        padding: 12px 14px;
-        transition: border-color 160ms ease, background-color 160ms ease;
+        gap: var(--space-1) var(--space-5);
+        align-items: center;
+        padding: var(--space-5) var(--space-6);
+        transition: background-color 160ms ease;
+      }
+
+      .rl-row + .rl-row {
+        border-top: var(--border-hair) solid var(--ds-line);
       }
 
       .rl-row:hover,
       .rl-row:focus-within {
-        border-color: var(--ds-line-strong);
-        background: var(--ds-panel-raised);
+        background: var(--ds-hover);
       }
 
       .rl-title {
-        display: flex;
         min-width: 0;
-        flex-wrap: wrap;
-        align-items: baseline;
-        gap: 4px 10px;
         margin: 0;
-        font-size: 14px;
-        font-weight: 720;
-        line-height: 1.3;
+        font-size: var(--font-ui-size);
+        font-weight: var(--weight-semi);
+        line-height: var(--leading-snug);
       }
 
       .rl-title a {
-        min-width: 0;
-        overflow-wrap: anywhere;
         color: var(--ds-text);
+        overflow-wrap: anywhere;
         text-decoration: none;
       }
 
-      .rl-title a:hover {
-        text-decoration: underline;
+      .rl-title a::after {
+        content: "";
+        position: absolute;
+        inset: 0;
       }
 
       .rl-title a:focus-visible {
-        outline: 2px solid var(--ds-text);
-        outline-offset: 2px;
-        border-radius: 2px;
+        outline: none;
       }
 
-      .rl-slug {
-        color: var(--ds-faint);
-        font-family: var(--font-mono);
-        font-size: 12px;
-        font-weight: 500;
+      .rl-row:has(.rl-title a:focus-visible) {
+        outline: 2px solid var(--ds-focus);
+        outline-offset: -2px;
       }
 
-      .rl-badges {
+      .rl-status {
         display: flex;
+        grid-row: 1 / span 2;
+        grid-column: 2;
         flex-wrap: wrap;
         justify-content: flex-end;
-        gap: 6px;
+        gap: var(--space-2);
       }
 
-      .rl-badge-new {
+      .ds-badge.rl-badge-new {
         border-color: color-mix(in srgb, var(--ds-blue) 45%, var(--ds-line));
         color: var(--ds-blue);
       }
 
-      .rl-badge-open {
+      .ds-badge.rl-badge-open {
         border-color: color-mix(in srgb, var(--ds-warn) 45%, var(--ds-line));
         color: var(--ds-warn);
       }
 
       .rl-meta {
         display: flex;
-        grid-column: 1 / -1;
+        min-width: 0;
         flex-wrap: wrap;
         align-items: center;
-        gap: 4px 14px;
+        gap: 0 var(--space-2);
         margin: 0;
         color: var(--ds-muted);
-        font-size: 12px;
+        font-size: var(--font-meta-size);
+        line-height: var(--font-meta-leading);
       }
 
-      /* Agent handles can be 80 characters with no break; keep them inside
-         the row on phones instead of clipping. */
+      .rl-meta > span + span::before {
+        content: "·";
+        margin-right: var(--space-2);
+        color: var(--ds-faint);
+      }
+
+      /* The author link sits above the row link and filters by author.
+         Agent handles can be 80 characters with no break; they wrap inside
+         the row instead of clipping. */
       .rl-author {
+        position: relative;
+        z-index: 1;
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: var(--space-2);
         min-width: 0;
         max-width: 100%;
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .rl-author:hover {
+        color: var(--ds-text);
+        text-decoration: underline;
+      }
+
+      .rl-author:focus-visible {
+        outline: 2px solid var(--ds-focus);
+        outline-offset: 2px;
+        border-radius: var(--radius-xs);
       }
 
       .rl-author > span {
@@ -272,172 +379,246 @@ defmodule ReviewsWeb.ReviewListLive do
         overflow-wrap: anywhere;
       }
 
-      .rl-author > span + span {
-        flex-shrink: 0;
-      }
-
       .rl-author img {
         flex-shrink: 0;
-        width: 18px;
-        height: 18px;
-        border: 1px solid var(--ds-line);
-        border-radius: 999px;
+        width: 16px;
+        height: 16px;
+        border-radius: var(--radius-pill);
         object-fit: cover;
+      }
+
+      .rl-empty {
+        display: grid;
+        place-items: center;
+        border: var(--border-hair) dashed var(--ds-line-strong);
+        border-radius: var(--radius-md);
+        padding: var(--space-12) var(--space-7);
+      }
+
+      .rl-empty .ds-empty-actions {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .rl-empty-command {
+        flex-basis: 100%;
+        margin: 0;
+        color: var(--ds-muted);
+        font-size: var(--font-meta-size);
+      }
+
+      .rl-empty-command code {
+        border-radius: var(--radius-xs);
+        background: var(--ds-hover);
+        color: var(--ds-text);
+        padding: 2px var(--space-2);
+        font-family: var(--font-mono);
+        font-size: var(--font-code-size);
       }
 
       .rl-pager {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
+        gap: var(--space-5);
         color: var(--ds-muted);
-        font-size: 12px;
+        font-size: var(--font-meta-size);
       }
 
       .rl-pager-links {
         display: flex;
-        gap: 8px;
+        gap: var(--space-3);
+        margin-left: auto;
       }
 
-      @media (max-width: 860px) {
-        .rl-filters {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+      /* PHONE (tokens.css): search takes the header's full width under the
+         title, and status badges move under the meta line. */
+      @media (max-width: 640px) {
+        .rl-main {
+          padding-top: var(--space-7);
         }
 
-        .rl-filters .rl-search {
-          grid-column: 1 / -1;
+        .rl-header {
+          flex-wrap: wrap;
+          gap: var(--space-3);
         }
 
-        .rl-clear {
-          margin-bottom: 0;
+        .rl-search {
+          flex-basis: 100%;
         }
-      }
 
-      @media (max-width: 520px) {
+        /* Chips wrap instead of scrolling, so every selected filter stays
+           in view. */
+        .rl-chips {
+          flex-wrap: wrap;
+          overflow-x: visible;
+        }
+
+        .rl-chip-sep {
+          display: none;
+        }
+
         .rl-row {
           grid-template-columns: minmax(0, 1fr);
+          padding: var(--space-5);
         }
 
-        .rl-badges {
+        .rl-status {
+          grid-row: auto;
+          grid-column: 1;
           justify-content: flex-start;
+        }
+      }
+
+      /* COARSE (tokens.css): 44px tap targets for chips and the search field. */
+      @media (pointer: coarse) {
+        .rl-chip,
+        .rl-search .ds-input {
+          min-height: 44px;
+        }
+
+        /* 16px text keeps iOS Safari from zooming into the field. */
+        .rl-search .ds-input {
+          font-size: 16px;
         }
       }
     </style>
 
     <div class="rl-layout">
-      <.form
-        for={@filter_form}
-        id="review-filters"
-        class="rl-filters"
-        phx-change="filter"
-        phx-submit="filter"
-        role="search"
-      >
-        <div class="rl-search">
-          <.input
-            field={@filter_form[:q]}
-            id="filter-q"
+      <header class="rl-header">
+        <h1 id="reviews-title">Reviews</h1>
+        <.form
+          for={@filter_form}
+          id="review-filters"
+          class="rl-search"
+          phx-change="filter"
+          phx-submit="filter"
+          role="search"
+        >
+          <.icon name="hero-magnifying-glass" class="size-4" />
+          <label for="filter-q" class="sr-only">Search reviews</label>
+          <input
             type="search"
-            label="Search"
-            placeholder="Title or slug"
+            id="filter-q"
+            name={@filter_form[:q].name}
+            value={@filter_form[:q].value}
+            placeholder="Search titles and slugs"
             autocomplete="off"
             phx-debounce="300"
             class="ds-input"
           />
-        </div>
-        <.input
-          field={@filter_form[:role]}
-          id="filter-role"
-          type="select"
-          label="Role"
-          options={[{"All", "all"}, {"I wrote", "authored"}, {"I took part", "involved"}]}
-          class="ds-input"
-        />
-        <.input
-          field={@filter_form[:status]}
-          id="filter-status"
-          type="select"
-          label="Status"
-          options={[
-            {"All", "all"},
-            {"Has open threads", "open"},
-            {"New patchset for me", "updated"}
-          ]}
-          class="ds-input"
-        />
-        <.input
-          field={@filter_form[:author]}
+        </.form>
+      </header>
+
+      <nav id="review-chips" class="rl-chips" aria-label="Filters">
+        <.chip
+          :if={@filters.author}
           id="filter-author"
-          type="text"
-          label="Author"
-          placeholder="handle"
-          autocomplete="off"
-          phx-debounce="300"
-          class="ds-input"
-        />
-        <.ds_button
+          active
+          patch={list_path(%{@filters | author: nil})}
+          aria-label={"Remove author filter @#{@filters.author}"}
+        >
+          @{@filters.author} <.icon name="hero-x-mark-mini" class="size-3" />
+        </.chip>
+        <.chip
+          :for={{value, label} <- [{"all", "All"}, {"authored", "Mine"}, {"involved", "Taking part"}]}
+          id={"filter-role-#{value}"}
+          active={@filters.role == value}
+          patch={list_path(%{@filters | role: value})}
+        >
+          {label}
+        </.chip>
+        <span class="rl-chip-sep" aria-hidden="true"></span>
+        <.chip
+          :for={{value, label} <- [{"open", "Open threads"}, {"updated", "New patchset"}]}
+          id={"filter-status-#{value}"}
+          active={@filters.status == value}
+          patch={list_path(%{@filters | status: toggle(@filters.status, value)})}
+        >
+          {label}
+        </.chip>
+        <.link
           :if={filters_active?(@filters)}
           id="clear-filters"
-          variant="ghost"
-          class="rl-clear"
-          phx-click="clear_filters"
+          patch={~p"/reviews"}
+          class="rl-chip rl-chip-clear"
         >
           Clear
-        </.ds_button>
-      </.form>
+        </.link>
+      </nav>
 
-      <ul id="review-list" class="rl-list" phx-update="stream" aria-label="Reviews">
-        <li
-          :for={{dom_id, entry} <- @streams.reviews}
-          id={dom_id}
-          class="rl-row"
-        >
+      <ul id="review-list" class="rl-list" phx-update="stream" aria-labelledby="reviews-title">
+        <li :for={{dom_id, entry} <- @streams.reviews} id={dom_id} class="rl-row">
           <h2 class="rl-title">
             <.link navigate={~p"/r/#{entry.review.slug}"}>{entry.review.title}</.link>
-            <span class="rl-slug" translate="no">{entry.review.slug}</span>
           </h2>
-          <div class="rl-badges">
-            <span :if={entry.has_new_patchset} class="ds-badge rl-badge-new">New patchset</span>
-            <span :if={entry.open_thread_count > 0} class="ds-badge rl-badge-open">
-              {entry.open_thread_count} open
-            </span>
-            <span class="ds-badge">{role_label(entry.role)}</span>
-          </div>
           <p class="rl-meta">
-            <span class="rl-author">
-              <img
-                :if={entry.review.author.avatar_url}
-                src={entry.review.author.avatar_url}
-                alt=""
-                width="18"
-                height="18"
-                loading="lazy"
-              />
-              <span translate="no">@{entry.review.author.handle}</span>
-              <span :if={entry.review.author.kind == "agent"}>(agent)</span>
+            <span>
+              <.link
+                patch={list_path(%{@filters | author: entry.review.author.handle})}
+                class="rl-author"
+                title={"Show reviews by @#{entry.review.author.handle}"}
+              >
+                <img
+                  :if={entry.review.author.avatar_url}
+                  src={entry.review.author.avatar_url}
+                  alt=""
+                  width="16"
+                  height="16"
+                  loading="lazy"
+                />
+                <span translate="no">
+                  @{entry.review.author.handle}{if entry.review.author.kind == "agent",
+                    do: " (agent)"}
+                </span>
+              </.link>
             </span>
             <span>
-              {entry.patchset_count} {plural(entry.patchset_count, "patchset")}
-            </span>
-            <span>
-              {entry.thread_count} {plural(entry.thread_count, "thread")}
-            </span>
-            <span>
-              Updated
               <time datetime={DateTime.to_iso8601(entry.updated_at)}>
                 {relative_time(entry.updated_at, @now)}
               </time>
             </span>
+            <span>{entry.patchset_count} {plural(entry.patchset_count, "patchset")}</span>
           </p>
+          <div :if={entry.has_new_patchset or entry.open_thread_count > 0} class="rl-status">
+            <span :if={entry.has_new_patchset} class="ds-badge rl-badge-new">New patchset</span>
+            <span :if={entry.open_thread_count > 0} class="ds-badge rl-badge-open">
+              {entry.open_thread_count} open
+            </span>
+          </div>
         </li>
       </ul>
 
-      <div :if={@count == 0} id="reviews-empty">
+      <div :if={@count == 0} id="reviews-empty" class="rl-empty">
         <.ds_empty_state
-          icon="hero-queue-list"
+          icon={empty_icon(@filters, @offset)}
           title={empty_title(@filters, @offset)}
           body={empty_body(@filters, @offset)}
-        />
+        >
+          <:actions>
+            <%= cond do %>
+              <% @offset > 0 -> %>
+                <.link id="empty-first-page" patch={list_path(@filters)} class="ds-button">
+                  Go to the first page
+                </.link>
+              <% filters_active?(@filters) -> %>
+                <.link id="empty-clear" patch={~p"/reviews"} class="ds-button">
+                  Clear filters
+                </.link>
+              <% true -> %>
+                <p class="rl-empty-command">
+                  Run <code translate="no">reviews push</code> in a checkout.
+                </p>
+                <.link
+                  id="empty-demo"
+                  navigate={~p"/r/#{@demo_slug}"}
+                  class="ds-button"
+                >
+                  Open the demo review
+                </.link>
+            <% end %>
+          </:actions>
+        </.ds_empty_state>
       </div>
 
       <nav
@@ -470,6 +651,30 @@ defmodule ReviewsWeb.ReviewListLive do
     """
   end
 
+  attr :id, :string, required: true
+  attr :active, :boolean, default: false
+  attr :patch, :string, required: true
+  attr :rest, :global, include: ~w(aria-label)
+  slot :inner_block, required: true
+
+  defp chip(assigns) do
+    ~H"""
+    <.link
+      id={@id}
+      patch={@patch}
+      class={["rl-chip", @active && "is-active"]}
+      aria-current={@active && "true"}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </.link>
+    """
+  end
+
+  # A second tap on the selected status chip turns that filter off.
+  defp toggle(value, value), do: "all"
+  defp toggle(_current, value), do: value
+
   defp list_path(filters, offset \\ 0) do
     params =
       filters
@@ -497,22 +702,25 @@ defmodule ReviewsWeb.ReviewListLive do
   defp newer_offset(_offset, 0, _limit), do: 0
   defp newer_offset(offset, _count, limit), do: max(offset - limit, 0)
 
+  defp empty_icon(filters, offset) do
+    if offset > 0 or filters_active?(filters),
+      do: "hero-magnifying-glass",
+      else: "hero-inbox"
+  end
+
   defp empty_title(_filters, offset) when offset > 0, do: "No reviews on this page"
 
   defp empty_title(filters, _offset),
-    do: if(filters_active?(filters), do: "No reviews match", else: "No reviews yet")
+    do: if(filters_active?(filters), do: "No reviews match", else: "Nothing here yet")
 
   defp empty_body(_filters, offset) when offset > 0,
-    do: "This page is past the end of the list. Go back to the first page."
+    do: "This page is past the end of the list."
 
   defp empty_body(filters, _offset) do
     if filters_active?(filters),
-      do: "Change or clear the filters to see more reviews.",
-      else: "Push a diff with reviews push, or comment on a review. It then shows up here."
+      do: "Try another search, or clear the filters to see all your reviews.",
+      else: "Reviews you push, and reviews you comment on, show up here."
   end
-
-  defp role_label("authored"), do: "You wrote it"
-  defp role_label(_role), do: "You took part"
 
   defp plural(1, word), do: word
   defp plural(_count, word), do: word <> "s"
