@@ -111,13 +111,13 @@ defmodule ReviewsWeb.ReviewListLive do
                 body="Your list has the reviews you wrote or took part in. Review links still work without signing in."
               >
                 <:actions>
-                  <.link
+                  <.ds_button
                     id="reviews-sign-in"
                     href={~p"/auth/github?#{[return_to: @return_to]}"}
-                    class="ds-button is-primary"
+                    variant="primary"
                   >
                     Sign in with GitHub
-                  </.link>
+                  </.ds_button>
                 </:actions>
               </.ds_empty_state>
             </div>
@@ -604,24 +604,23 @@ defmodule ReviewsWeb.ReviewListLive do
           <:actions>
             <%= cond do %>
               <% @offset > 0 -> %>
-                <.link id="empty-first-page" patch={list_path(@filters)} class="ds-button">
+                <.ds_button id="empty-first-page" patch={list_path(@filters)}>
                   Go to the first page
-                </.link>
+                </.ds_button>
               <% filters_active?(@filters) -> %>
-                <.link id="empty-clear" patch={~p"/reviews"} class="ds-button">
+                <.ds_button id="empty-clear" patch={~p"/reviews"}>
                   Clear filters
-                </.link>
+                </.ds_button>
               <% true -> %>
                 <p class="rl-empty-command">
                   Run <code translate="no">reviews push</code> in a checkout.
                 </p>
-                <.link
+                <.ds_button
                   id="empty-demo"
                   navigate={~p"/r/#{@demo_slug}"}
-                  class="ds-button"
                 >
                   Open the demo review
-                </.link>
+                </.ds_button>
             <% end %>
           </:actions>
         </.ds_empty_state>
@@ -635,22 +634,20 @@ defmodule ReviewsWeb.ReviewListLive do
       >
         <span :if={@count > 0} id="pager-range">Showing {@offset + 1} to {@offset + @count}</span>
         <span class="rl-pager-links">
-          <.link
+          <.ds_button
             :if={@offset > 0}
             id="pager-newer"
             patch={list_path(@filters, newer_offset(@offset, @count, @filters.limit))}
-            class="ds-button"
           >
             Newer
-          </.link>
-          <.link
+          </.ds_button>
+          <.ds_button
             :if={@next_offset}
             id="pager-older"
             patch={list_path(@filters, @next_offset)}
-            class="ds-button"
           >
             Older
-          </.link>
+          </.ds_button>
         </span>
       </nav>
     </div>

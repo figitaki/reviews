@@ -60,9 +60,6 @@
 }
 .l-nav-signin {
   margin-left: 4px;
-  height: 32px;
-  padding: 0 14px;
-  font-size: 13px;
 }
 
 /* Only the account link gives up width; a long name truncates instead of
@@ -178,11 +175,6 @@
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 28px;
-}
-.home-actions .r-button {
-  min-height: 44px;
-  padding-inline: 18px;
-  text-decoration: none;
 }
 .home-demo-note {
   margin: 14px 0 0;

@@ -19,10 +19,45 @@ defmodule ReviewsWeb.DesignLiveTest do
     assert has_element?(view, "#dc-space .dc-name", "--radius-pill")
   end
 
+  test "documents button and field states with the shared components", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/design")
+
+    assert has_element?(view, "#dc-buttons [data-theme=dark] button.ds-button.is-ghost:disabled")
+    # A ds_button with navigate is a link styled the same.
+    assert has_element?(view, "#dc-buttons [data-theme=light] a.ds-button.is-primary[href]")
+    # <.input> with errors marks the field and says what to do.
+    assert has_element?(view, "#dc-field-error-dark.ds-input.is-error[aria-invalid=true]")
+    assert has_element?(view, "#dc-fields [data-theme=dark] .ds-field-error", "Pick another")
+  end
+
+  test "the playground mounts sample threads and the floating buttons", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/design/components")
+
+    threads =
+      view
+      |> element("#dcp-threads-light")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("data-threads")
+      |> hd()
+      |> JSON.decode!()
+
+    assert Enum.map(threads, & &1["status"]) == ["open", "resolved", "open"]
+    assert has_element?(view, "#dcp-phone-frame[src='/design/components/phone']")
+
+    {:ok, phone, _html} = live(conn, ~p"/design/components/phone")
+    assert has_element?(phone, "#review-activity .review-quick-button")
+
+    # The Comments log asks the page to open a thread; the frame says which.
+    render_hook(phone, "open_activity_thread", %{"thread_id" => "101"})
+    assert has_element?(phone, "#dcp-opened", "thread 101")
+  end
+
   test "returns 404 when the catalog is off", %{conn: conn} do
     Application.put_env(:reviews, :design_catalog, false)
     on_exit(fn -> Application.put_env(:reviews, :design_catalog, true) end)
 
     assert_error_sent 404, fn -> get(conn, ~p"/design") end
+    assert_error_sent 404, fn -> get(conn, ~p"/design/components") end
   end
 end

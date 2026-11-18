@@ -34,6 +34,16 @@ later fixes continue toward 0.0.2.
 
 ### Changed
 
+- `<.ds_button>` is the one button. It renders a link when given `navigate`,
+  `patch` or `href`, comes in `sm` (28px), `md` (32px) and `lg` (40px, the
+  height of a field), no longer lifts on hover, and keeps a 44px tap target on
+  touch screens. The `.r-button` styles are gone.
+
+- `<.input>` styles every field with the design system: a label above, 40px
+  fields with 14px text (16px on touch screens, so iOS no longer zooms in), a
+  readable placeholder, and a red border, `aria-invalid` and message on errors.
+  Callers no longer pass `class="ds-input"`.
+
 - Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI).
   Elixir 1.20.4 includes the fix for CVE-2026-75758.
 - Phoenix 1.8.15, LiveView 1.2.12, Tailwind CLI 4.3.3, esbuild 0.28.2 and
@@ -108,6 +118,12 @@ later fixes continue toward 0.0.2.
   dark and light themes side by side, with every pill style in use. It is on
   in dev and on preview apps, and off in production. A new `<.ds_chip>`
   component gives filters and toggles one shared pill style.
+
+- A component playground at `/design/components` mounts the review page's
+  comment thread, composer and floating buttons from their real code with
+  sample data, in both themes and in phone and tablet frames. Replies and
+  resolving work there but save nothing. `/design` now also shows every
+  button and field state and says how each one behaves.
 
 - Review list (#47). `/reviews` on the web, `GET /api/v1/reviews` in the API,
   and `reviews list` in the CLI. The list has only reviews you wrote or took
