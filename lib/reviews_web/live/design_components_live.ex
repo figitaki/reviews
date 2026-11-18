@@ -157,6 +157,24 @@ defmodule ReviewsWeb.DesignComponentsLive do
           min-height: 0;
         }
 
+        /* The sample frame draws the border. The bar rounds with it rather
+           than painting square corners over it, and drops its own bottom
+           border. Not overflow: hidden, which would clip the account menu. */
+        .dcp-shells .ds-shell-topbar {
+          border-bottom: 0;
+          border-radius: inherit;
+        }
+
+        /* Each bar's backdrop blur makes it its own layer, so an open account
+           menu would sit under the next sample. Lift the sample in use. */
+        .dcp-shells figure {
+          position: relative;
+        }
+
+        .dcp-shells figure:focus-within {
+          z-index: 1;
+        }
+
         .dcp-shells .l-wrap {
           width: auto;
           padding-inline: var(--space-7);
