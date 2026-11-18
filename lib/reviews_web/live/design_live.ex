@@ -90,8 +90,11 @@ defmodule ReviewsWeb.DesignLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <style :type={ReviewsWeb.ColocatedCSS}>
+        /* minmax(0, 1fr): a wide sample (the button matrix) scrolls inside
+           its section instead of widening the page. */
         .dc-page {
           display: grid;
+          grid-template-columns: minmax(0, 1fr);
           gap: var(--space-10);
           width: min(1200px, 100%);
           margin: 0 auto;
@@ -194,8 +197,8 @@ defmodule ReviewsWeb.DesignLive do
         .dc-anchor {
           position: relative;
           display: inline-block;
-          width: 36px;
-          height: 36px;
+          width: 2.25rem;
+          height: 2.25rem;
           border: var(--border-hair) dashed var(--ds-line-strong);
           border-radius: var(--radius-lg);
         }
@@ -207,7 +210,10 @@ defmodule ReviewsWeb.DesignLive do
           background: var(--ds-panel-raised);
         }
 
+        /* max-width: at large text sizes on a phone the longest bars would
+           widen the page. */
         .dc-bar {
+          max-width: 100%;
           height: 12px;
           border-radius: var(--radius-xs);
           background: var(--ds-blue);
@@ -265,6 +271,7 @@ defmodule ReviewsWeb.DesignLive do
 
         .dc-nav {
           display: flex;
+          flex-wrap: wrap;
           gap: var(--space-3);
           margin-bottom: var(--space-5);
         }
@@ -293,7 +300,7 @@ defmodule ReviewsWeb.DesignLive do
 
         .dc-matrix {
           display: grid;
-          grid-template-columns: 64px repeat(4, max-content);
+          grid-template-columns: 4rem repeat(4, max-content);
           align-items: center;
           gap: var(--space-4) var(--space-3);
           overflow-x: auto;
@@ -324,9 +331,15 @@ defmodule ReviewsWeb.DesignLive do
 
         .dc-scale {
           display: grid;
-          grid-template-columns: 150px minmax(0, 1fr);
+          grid-template-columns: minmax(0, 9.375rem) minmax(0, 1fr);
           align-items: center;
           gap: var(--space-2) var(--space-3);
+        }
+
+        /* Large type samples wrap instead of widening the panel. */
+        .dc-scale > span {
+          min-width: 0;
+          overflow-wrap: anywhere;
         }
 
         .dc-elev {

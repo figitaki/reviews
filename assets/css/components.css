@@ -14,7 +14,7 @@
   align-items: center;
   gap: 9px;
   color: var(--ds-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-decoration: none;
 }
@@ -32,7 +32,7 @@
   background: #101012;
   color: var(--ds-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
 }
 [data-theme="light"] .r-status-icon { background: var(--ds-panel-raised); }
@@ -49,7 +49,7 @@
   border-radius: 999px;
   padding: 2px 7px;
   color: var(--ds-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 750;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -111,7 +111,7 @@
   background: transparent;
   color: var(--ds-muted);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
@@ -141,7 +141,7 @@
   align-items: baseline;
   gap: 5px;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -174,7 +174,7 @@
   align-items: baseline;
   gap: 7px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
@@ -196,7 +196,7 @@
 .r-diff {
   border-top: 1px solid var(--ds-line);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   line-height: 1.55;
   background: var(--ds-panel);
 }
@@ -245,7 +245,7 @@
   color: var(--ds-muted);
   padding: 0 10px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-decoration: none;
   background: transparent;

@@ -117,7 +117,7 @@
   border-top: 1px solid var(--ds-line);
   padding: 28px 0;
   color: var(--ds-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .l-footer-inner {
   display: flex;
@@ -142,7 +142,7 @@
 .home-hero { padding-block: 80px 48px; }
 .home-hero h1 {
   margin: 0;
-  font-size: clamp(40px, 5vw, 64px);
+  font-size: clamp(2.5rem, 5vw, 4rem);
   font-weight: 600;
   line-height: 1.08;
   letter-spacing: var(--tracking-flat);

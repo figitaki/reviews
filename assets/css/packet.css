@@ -34,11 +34,12 @@
 }
 
 .review-page {
-  --review-app-nav-h: 64px;
-  --review-toolbar-h: 64px;
+  /* Sticky offsets, in rem to track the bars as text grows. */
+  --review-app-nav-h: 4rem;
+  --review-toolbar-h: 4rem;
   --rev-header-h: calc(var(--review-app-nav-h) + var(--review-toolbar-h));
   --review-main-nav-h: var(--rev-header-h);
-  --review-section-sticky-h: 46px;
+  --review-section-sticky-h: 2.875rem;
 
   color-scheme: light;
   background: var(--review-bg);
@@ -82,7 +83,7 @@
 }
 
 .review-header.is-guide-compact .review-title.is-packet-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 650;
   line-height: 1.35;
 }
@@ -90,14 +91,14 @@
 .review-title {
   margin: 0;
   color: var(--review-text);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   line-height: 1.35;
 }
 
 .review-title.is-packet-title {
   max-width: 920px;
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 760;
   letter-spacing: 0;
   line-height: 1.12;
@@ -107,7 +108,7 @@
 .review-label,
 .rev-empty {
   color: var(--review-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -115,7 +116,7 @@
   margin-top: 8px;
   max-width: 76ch;
   color: color-mix(in srgb, var(--review-text) 72%, var(--review-muted));
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.48;
   overflow-wrap: anywhere;
 }
@@ -241,7 +242,7 @@
 .review-toolbar .review-title,
 .review-toolbar .review-header .review-title.is-packet-title {
   max-width: none;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
@@ -527,7 +528,7 @@
   background: var(--review-panel-raised);
   color: var(--review-text);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.4;
 }
 
@@ -602,7 +603,7 @@
 
 .review-banner {
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-packet {
@@ -660,7 +661,7 @@
   border-bottom: 1px solid var(--review-line);
   padding: 8px 10px;
   color: var(--review-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -694,7 +695,7 @@
   margin: 0;
   padding: 12px;
   color: var(--review-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-packet-nav-list {
@@ -737,7 +738,7 @@
   display: block;
   margin-bottom: 10px;
   color: var(--review-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -784,7 +785,7 @@
   border-radius: 999px;
   padding: 2px 7px;
   color: var(--review-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 750;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -905,7 +906,7 @@ details[open] > summary .review-collapse-icon,
   align-items: center;
   gap: 8px;
   color: var(--review-faint);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 650;
   line-height: 1.25;
   white-space: nowrap;
@@ -937,7 +938,7 @@ details[open] > summary .review-collapse-icon,
   max-width: 74ch;
   margin: 8px 0 0;
   color: var(--review-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 450;
   line-height: 1.45;
 }
@@ -1018,7 +1019,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-section-state-history {
   color: var(--review-warn);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-section-state-icon {
@@ -1568,7 +1569,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-section-summary-status {
   color: var(--review-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -1620,7 +1621,7 @@ details[open] > summary .review-collapse-icon,
   border-radius: 999px;
   background: var(--review-panel-raised);
   color: var(--review-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 750;
   line-height: 1;
 }
@@ -1793,7 +1794,7 @@ details[open] > summary .review-collapse-icon,
   padding: 7px 10px;
   color: var(--review-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
   transition: border-color 120ms ease, background 120ms ease;
 }
@@ -2050,7 +2051,7 @@ details[open] > summary .review-collapse-icon,
   padding: 2px 7px;
   color: var(--review-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .review-modal {
@@ -2058,14 +2059,14 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-modal-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.3;
 }
 
 .review-draft-item {
   padding: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-textarea {
@@ -2078,7 +2079,7 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-text);
   padding: 10px 12px;
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-textarea::placeholder {
@@ -2092,14 +2093,14 @@ details[open] > summary .review-collapse-icon,
 
 .ds-page-header.is-review-header h1 {
   max-width: 920px;
-  font-size: clamp(30px, 4vw, 56px);
+  font-size: clamp(1.875rem, 4vw, 3.5rem);
   line-height: 1;
 }
 
 .ds-page-header.is-review-header .design-hero-copy {
   max-width: 720px;
   margin-top: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .ds-page-header.is-review-header .ds-page-header-actions {
@@ -2220,7 +2221,7 @@ details[open] > summary .review-collapse-icon,
   padding-block: 3px;
   color: var(--review-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 740;
   line-height: 1;
   transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
@@ -2331,7 +2332,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-flyout-heading {
   margin: 0;
   color: var(--review-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 720;
   line-height: 1.2;
 }
@@ -2367,7 +2368,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-flyout-label {
   margin-bottom: 8px;
   color: var(--review-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 760;
   letter-spacing: 0.08em;
   line-height: 1;
@@ -2394,7 +2395,7 @@ details[open] > summary .review-collapse-icon,
   gap: 10px;
   border-radius: 6px;
   color: var(--review-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 650;
   padding: 6px 8px;
 }
@@ -2412,7 +2413,7 @@ details[open] > summary .review-collapse-icon,
   flex: 0 0 auto;
   color: var(--review-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 720;
 }
 
@@ -2438,7 +2439,7 @@ details[open] > summary .review-collapse-icon,
   border-radius: 4px;
   color: var(--review-muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.2;
   padding: 4px 6px;
   text-overflow: ellipsis;
@@ -2475,7 +2476,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-panel-title {
   margin: 18px 0 0;
   color: var(--review-text);
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 780;
   letter-spacing: 0;
   line-height: 1.1;
@@ -2485,7 +2486,7 @@ details[open] > summary .review-collapse-icon,
   margin-top: 24px;
   max-width: 58ch;
   color: color-mix(in srgb, var(--review-text) 82%, var(--review-muted));
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1.58;
 }
 
@@ -2505,7 +2506,7 @@ details[open] > summary .review-collapse-icon,
   gap: 12px;
   margin-top: 26px;
   color: var(--review-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 680;
 }
 
@@ -2538,7 +2539,7 @@ details[open] > summary .review-collapse-icon,
   border-radius: 6px;
   background: var(--review-text);
   color: var(--review-bg);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 720;
   line-height: 1;
   padding: 0 14px;
@@ -2556,7 +2557,7 @@ details[open] > summary .review-collapse-icon,
   gap: 10px;
   margin-bottom: 10px;
   color: var(--review-faint);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 760;
   letter-spacing: 0.08em;
   line-height: 1;
@@ -2616,7 +2617,7 @@ details[open] > summary .review-collapse-icon,
   overflow: hidden;
   color: var(--review-text);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 650;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -2629,7 +2630,7 @@ details[open] > summary .review-collapse-icon,
   overflow: hidden;
   color: var(--review-faint);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2647,7 +2648,7 @@ details[open] > summary .review-collapse-icon,
   justify-self: end;
   gap: 4px;
   color: var(--review-faint);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 680;
   line-height: 1;
   white-space: nowrap;
@@ -2768,14 +2769,14 @@ details[open] > summary .review-collapse-icon,
   align-items: center;
   padding: 0 56px 0 18px;
   color: var(--review-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .rev-file-path {
   min-width: 0;
   color: var(--review-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
@@ -2785,7 +2786,7 @@ details[open] > summary .review-collapse-icon,
   align-items: center;
   gap: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2804,7 +2805,7 @@ details[open] > summary .review-collapse-icon,
   background: var(--review-panel-raised);
   color: var(--review-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
 }
 
@@ -2823,7 +2824,7 @@ details[open] > summary .review-collapse-icon,
 .rev-open-threads-heading {
   padding: 0 8px 6px;
   color: var(--ds-muted, #a3a3a3);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2837,7 +2838,7 @@ details[open] > summary .review-collapse-icon,
   gap: 6px;
   padding: 4px 8px;
   color: var(--ds-text, #f5f5f5);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 .rev-open-thread-entry {
@@ -2867,14 +2868,14 @@ details[open] > summary .review-collapse-icon,
 }
 .rev-open-thread-path {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--ds-muted, #a3a3a3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .rev-open-thread-snippet {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--ds-text, #f5f5f5);
   overflow: hidden;
   display: -webkit-box;
@@ -2890,7 +2891,7 @@ details[open] > summary .review-collapse-icon,
 
   .review-page .ds-shell-topbar {
     position: static;
-    min-height: 48px;
+    min-height: 3rem;
     gap: 8px;
     background: var(--review-bg);
     padding-inline: 12px;
@@ -2920,7 +2921,7 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-toolbar {
-    min-height: 48px;
+    min-height: 3rem;
     flex-wrap: nowrap;
     gap: 8px;
     padding: 0 12px;
@@ -2940,7 +2941,7 @@ details[open] > summary .review-collapse-icon,
   .review-toolbar .review-title,
   .review-toolbar .review-header .review-title.is-packet-title {
     overflow: hidden;
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 20px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -3026,7 +3027,7 @@ details[open] > summary .review-collapse-icon,
     background: var(--review-panel);
     padding-inline: 6px;
     color: var(--review-text);
-    font-size: 16px;
+    font-size: 1rem;
     cursor: pointer;
   }
 
@@ -3131,11 +3132,11 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-guide-panel-title {
-    font-size: 26px;
+    font-size: 1.625rem;
   }
 
   .review-guide-panel-prose {
-    font-size: 16px;
+    font-size: 1rem;
   }
 
   .review-hunk-line-stat {
@@ -3214,7 +3215,7 @@ details[open] > summary .review-collapse-icon,
 
   .review-section-header-title {
     order: 1;
-    font-size: clamp(22px, 6.4vw, 26px);
+    font-size: clamp(1.375rem, 6.4vw, 1.625rem);
     line-height: 1.2;
   }
 

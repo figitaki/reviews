@@ -63,6 +63,14 @@ later fixes continue toward 0.0.2.
   New `--size-fab` (3rem) and `--size-fab-icon` (1.375rem) tokens size all
   three floating buttons.
 
+- Sizes follow the reader's browser font size. Space, radius and font-size
+  tokens and every `font-size` in the stylesheets are rem, and buttons,
+  fields and chips take their heights from new `--size-control-*` tokens.
+  Before, someone with a larger default font got larger text crammed into
+  controls that stayed the same size, while chips, small buttons and many
+  labels did not grow at all. At the default size nothing moves. A test now
+  fails on a px font size or a px space, radius or size token.
+
 - Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI).
   Elixir 1.20.4 includes the fix for CVE-2026-75758.
 - Phoenix 1.8.15, LiveView 1.2.12, Tailwind CLI 4.3.3, esbuild 0.28.2 and
