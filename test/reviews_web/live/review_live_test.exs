@@ -1778,7 +1778,11 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       view |> element("#packet-section-0-decision-toggle") |> render_click()
-      view |> element("#packet-section-0-decision-controls button", "Request changes") |> render_click()
+
+      view
+      |> element("#packet-section-0-decision-controls button", "Request changes")
+      |> render_click()
+
       assert has_element?(view, "#packet-section-0-decision.is-denied", "Changes requested")
 
       assert has_element?(
@@ -1867,7 +1871,10 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(latest_view, "#packet-section-0.is-open")
 
       latest_view |> element("#packet-section-0-decision-toggle") |> render_click()
-      latest_view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
+
+      latest_view
+      |> element("#packet-section-0-decision-controls button", "Skip")
+      |> render_click()
 
       assert has_element?(
                latest_view,
@@ -1933,7 +1940,11 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       carried_view |> element("#packet-section-0-decision-toggle") |> render_click()
-      carried_view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
+
+      carried_view
+      |> element("#packet-section-0-decision-controls button", "Skip")
+      |> render_click()
+
       refute has_element?(carried_view, "#packet-section-0 .review-section-action.is-active")
     end
   end
