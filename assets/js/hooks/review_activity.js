@@ -1,4 +1,5 @@
 import { ReviewActivityReadState } from "../lib/review_activity_read_state.js"
+import { PHONE } from "../lib/breakpoints.js"
 
 function storage() {
   try { return window.localStorage } catch { return null }
@@ -16,6 +17,15 @@ export const ReviewActivity = {
     this.states = new Map()
     this.details = this.el.querySelector("details")
     this.onClick = event => {
+      if (event.target.closest("[data-quick-sections]")) {
+        // The guide's section bar scrolls away on phones; bring it back and
+        // open its map, the same as pressing its menu button.
+        const guide = document.getElementById("review-guide-shell")
+        guide?.scrollIntoView({ block: "start" })
+        const map = guide?.querySelector("[data-guide-flyout-toggle]")
+        if (map?.getAttribute("aria-expanded") !== "true") map?.click()
+        return
+      }
       if (event.target.closest("[data-activity-mark-all]")) {
         this.readState.markRead(this.activity.threads)
         this.renderActivity()
@@ -28,6 +38,8 @@ export const ReviewActivity = {
       if (!thread) return
       this.readState.markRead([thread])
       this.renderActivity()
+      // On phones the open list floats over the code; get out of the way.
+      if (window.matchMedia(PHONE).matches) this.details.open = false
       // Navigation owns revealing the section/file, opening the thread and focus.
       window.dispatchEvent(new CustomEvent("reviews:open-thread", {
         detail: { threadId: thread.id, filePath: thread.filePath },
@@ -40,7 +52,20 @@ export const ReviewActivity = {
       this.renderActivity()
     }
     this.onOpen = event => this.pushEvent("open_activity_thread", { thread_id: event.detail.threadId })
+    // On phones the open list floats over the code; a tap elsewhere or
+    // Escape closes it.
+    const phone = () => window.matchMedia(PHONE).matches
+    this.onOutside = event => {
+      if (!this.el.contains(event.target) && this.details.open && phone()) this.details.open = false
+    }
+    this.onKeydown = event => {
+      if (event.key !== "Escape" || !this.details.open || !phone()) return
+      this.details.open = false
+      this.details.querySelector("summary").focus()
+    }
     this.el.addEventListener("click", this.onClick)
+    this.el.addEventListener("keydown", this.onKeydown)
+    document.addEventListener("pointerdown", this.onOutside)
     window.addEventListener("reviews:open-thread", this.onOpen)
     window.addEventListener("storage", this.onStorage)
     this.updateActivity()
@@ -116,6 +141,8 @@ export const ReviewActivity = {
 
   destroyed() {
     this.el.removeEventListener("click", this.onClick)
+    this.el.removeEventListener("keydown", this.onKeydown)
+    document.removeEventListener("pointerdown", this.onOutside)
     window.removeEventListener("storage", this.onStorage)
     window.removeEventListener("reviews:open-thread", this.onOpen)
   },

@@ -67,6 +67,19 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
       phx-update="ignore"
       data-activity={JSON.encode!(@activity_data)}
     >
+      <%!-- Phones: icon buttons stacked above the section decision button.
+           Sections shows only in the Guide; the comments summary below is the
+           Comments button. Hidden on wider screens. --%>
+      <button
+        id={"#{@id}-sections"}
+        type="button"
+        class="review-quick-button"
+        data-quick-sections
+        aria-label="Sections"
+        title="Sections"
+      >
+        <.icon name="hero-bars-3" class="review-quick-icon" />
+      </button>
       <details id={"#{@id}-panel"} class="review-activity-panel">
         <summary id={"#{@id}-summary"} class="review-activity-summary">
           <svg class="review-activity-icon" viewBox="0 0 24 24" aria-hidden="true">
