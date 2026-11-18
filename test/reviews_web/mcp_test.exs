@@ -306,6 +306,12 @@ defmodule ReviewsWeb.MCPTest do
              |> mcp_request("tools/call", %{"name" => "reviews_whoami", "pad" => medium})
              |> Map.fetch!(:status) == 200
 
+      # An encoded path does not reach the MCP server, so it keeps the small limit.
+      assert build_conn()
+             |> auth(token)
+             |> mcp_request("tools/list", %{}, "localhost", "/%6dcp")
+             |> Map.fetch!(:status) == 404
+
       big = String.duplicate("x", 4_100_000)
 
       assert_error_sent 413, fn ->
@@ -1192,7 +1198,7 @@ defmodule ReviewsWeb.MCPTest do
 
   # One request of MCP protocol version 2026-07-28, as FastestMCP's Phoenix
   # guide sends it.
-  defp mcp_request(conn, method, params \\ %{}, host \\ "localhost") do
+  defp mcp_request(conn, method, params \\ %{}, host \\ "localhost", path \\ "/mcp") do
     meta = %{
       "io.modelcontextprotocol/protocolVersion" => "2026-07-28",
       "io.modelcontextprotocol/clientCapabilities" => %{}
@@ -1213,6 +1219,6 @@ defmodule ReviewsWeb.MCPTest do
     |> put_req_header("content-type", "application/json")
     |> put_req_header("mcp-protocol-version", "2026-07-28")
     |> put_req_header("mcp-method", method)
-    |> post("/mcp", JSON.encode!(body))
+    |> post(path, JSON.encode!(body))
   end
 end

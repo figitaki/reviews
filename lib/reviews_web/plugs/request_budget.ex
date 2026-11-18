@@ -45,6 +45,7 @@ defmodule ReviewsWeb.Plugs.RequestBudget do
 
   def reject(conn) do
     conn
+    |> put_oauth_cors()
     |> put_resp_header("retry-after", "60")
     |> put_resp_content_type("application/json")
     |> send_resp(429, JSON.encode!(ApiErrors.detail(:rate_limited, Errors.detail(:rate_limited))))
@@ -55,6 +56,20 @@ defmodule ReviewsWeb.Plugs.RequestBudget do
   def upload?(conn), do: upload_path?(decoded_path(conn))
   def api_write?(conn), do: api_write_path?(decoded_path(conn))
   defp decoded_path(conn), do: %{conn | path_info: Enum.map(conn.path_info, &URI.decode/1)}
+
+  # The router allows cross-origin reads of OAuth endpoints, but this response
+  # is sent before it runs; match it so browser clients can read the 429.
+  defp put_oauth_cors(conn) do
+    case decoded_path(conn).path_info do
+      [first | _] when first in ["oauth", ".well-known"] ->
+        conn
+        |> put_resp_header("access-control-allow-origin", "*")
+        |> put_resp_header("access-control-expose-headers", "retry-after")
+
+      _ ->
+        conn
+    end
+  end
 
   defp upload_path?(%{method: "POST", path_info: ["api", "v1", "reviews"]}), do: true
 

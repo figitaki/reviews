@@ -58,5 +58,18 @@ defmodule ReviewsWeb.RequestBudgetTest do
     assert get_resp_header(rejected, "retry-after") == ["60"]
     assert %{"error_code" => "rate_limited"} = JSON.decode!(rejected.resp_body)
     assert %Plug.Conn.Unfetched{} = rejected.body_params
+    assert get_resp_header(rejected, "access-control-allow-origin") == []
+  end
+
+  test "an OAuth 429 keeps the router's CORS policy so browser clients can read it", %{
+    table: table
+  } do
+    opts = [table: table, limits: [requests: 1]]
+    RequestBudget.call(conn(:post, "/oauth/token"), opts)
+    rejected = RequestBudget.call(conn(:post, "/oauth/token"), opts)
+
+    assert rejected.status == 429
+    assert get_resp_header(rejected, "access-control-allow-origin") == ["*"]
+    assert get_resp_header(rejected, "access-control-expose-headers") == ["retry-after"]
   end
 end

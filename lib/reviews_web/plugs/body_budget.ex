@@ -51,6 +51,7 @@ defmodule ReviewsWeb.Plugs.BodyBudget do
 
     cond do
       RequestBudget.upload?(conn) -> Keyword.get(limits, :upload_bytes, 50_000_000)
+      # Matches the raw path: an encoded `/mcp` does not reach the MCP server.
       match?(["mcp" | _], conn.path_info) -> Keyword.get(limits, :mcp_bytes, 4_000_000)
       true -> Keyword.get(limits, :small_bytes, 64_000)
     end

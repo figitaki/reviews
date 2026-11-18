@@ -25,8 +25,10 @@ later fixes continue toward 0.0.2.
   authenticate API writes before body parsing, and limit small bodies to 64KB
   while keeping authenticated 50MB review/patchset uploads and 4MB MCP
   requests. A rejected request gets `429` with `error_code: rate_limited`.
-  Unsupported multipart bodies now return 415. See `docs/ABUSE_PROTECTION.md`
-  for the Fly client-IP trust prerequisite and remaining limits.
+  Unsupported multipart bodies now return 415. A 429 from an OAuth endpoint
+  keeps its CORS headers and exposes `Retry-After`, and `reviews login` waits
+  out a 429 and keeps polling. See `docs/ABUSE_PROTECTION.md` for the Fly
+  client-IP trust prerequisite and remaining limits.
 - Plug 1.20.4 fixes EEF-CVE-2026-120287: the multipart `:length` limit did not
   count part and header framing. It was taken one day after release, as an
   approved exception to the seven-day dependency rule.

@@ -294,6 +294,23 @@ pub fn poll(
         };
 
         let status = resp.status();
+        // The server's request budget turned this poll away, not the sign-in:
+        // wait as long as it asks, then keep polling until the code expires.
+        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let retry_after = resp
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.trim().parse::<u64>().ok())
+                .unwrap_or(interval)
+                .min(device.expires_in);
+            let extra = retry_after.saturating_sub(interval);
+            if extra > 0 {
+                sleep(Duration::from_secs(extra));
+                waited += extra;
+            }
+            continue;
+        }
         if status.is_success() {
             let body: TokenResponse = resp
                 .json()
@@ -397,6 +414,40 @@ mod tests {
             tokens.token_endpoint,
             format!("{}/oauth/token", server.url())
         );
+    }
+
+    #[test]
+    fn poll_waits_out_a_rate_limit_and_keeps_polling() {
+        let mut server = Server::new();
+        let limited = server
+            .mock("POST", "/oauth/token")
+            .with_status(429)
+            .with_header("retry-after", "60")
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"errors":{"detail":"Too many requests. Retry later."}}"#)
+            .expect(1)
+            .create();
+        let ok = poll_mock(
+            &mut server,
+            200,
+            r#"{"access_token":"gka_1","refresh_token":"gkr_1","expires_in":3600,"token_type":"Bearer"}"#,
+        );
+
+        let mut sleeps = vec![];
+        let tokens = poll(
+            &http().unwrap(),
+            &endpoints(&server),
+            &device(5),
+            &mut |d| sleeps.push(d.as_secs()),
+            &|| 0,
+        )
+        .unwrap();
+
+        limited.assert();
+        ok.assert();
+        // 5 before the first poll, 55 more to make up Retry-After's 60, then 5.
+        assert_eq!(sleeps, vec![5, 55, 5]);
+        assert_eq!(tokens.access_token, "gka_1");
     }
 
     #[test]

@@ -10,8 +10,11 @@ measure normal traffic and memory use, especially large uploads.
 `Endpoint.call/2` runs cheap admission before Phoenix socket dispatch, static
 files, sessions, token queries, and body parsing. Each request consumes the
 all-request budget plus applicable narrower budgets. Rejections are `429` JSON
-with `Retry-After: 60` and `error_code: rate_limited`. Failed authentication
-also consumes the IP budget.
+with `Retry-After: 60` and `error_code: rate_limited`. Rejections on `/oauth/*`
+and `/.well-known/*` carry the router's `Access-Control-Allow-Origin: *` and
+expose `Retry-After`, so browser OAuth clients can read them. `reviews login`
+waits out a 429 while polling for its token and keeps polling until the code
+expires. Failed authentication also consumes the IP budget.
 
 Defaults, per instance and per client bucket over 60 seconds:
 
