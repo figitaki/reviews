@@ -302,8 +302,11 @@ pub fn poll(
                 .get(reqwest::header::RETRY_AFTER)
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.trim().parse::<u64>().ok())
-                .unwrap_or(interval)
-                .min(device.expires_in);
+                .unwrap_or(interval);
+            // Stop if the next poll it allows would come after the code expires.
+            if waited + retry_after.max(interval) >= device.expires_in {
+                bail!("the sign-in code expired. Run `reviews login` again.");
+            }
             let extra = retry_after.saturating_sub(interval);
             if extra > 0 {
                 sleep(Duration::from_secs(extra));
@@ -448,6 +451,31 @@ mod tests {
         // 5 before the first poll, 55 more to make up Retry-After's 60, then 5.
         assert_eq!(sleeps, vec![5, 55, 5]);
         assert_eq!(tokens.access_token, "gka_1");
+    }
+
+    #[test]
+    fn poll_stops_when_rate_limits_outlast_the_code() {
+        let mut server = Server::new();
+        server
+            .mock("POST", "/oauth/token")
+            .with_status(429)
+            .with_header("retry-after", "60")
+            .expect_at_least(1)
+            .create();
+
+        let mut slept = 0;
+        let err = poll(
+            &http().unwrap(),
+            &endpoints(&server),
+            &device(5),
+            &mut |d| slept += d.as_secs(),
+            &|| 0,
+        )
+        .unwrap_err();
+
+        assert!(format!("{err:#}").contains("expired"), "{err:#}");
+        // The code lasts 600 seconds; it never polls at or after that.
+        assert_eq!(slept, 545);
     }
 
     #[test]
