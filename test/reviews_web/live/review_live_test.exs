@@ -930,7 +930,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> render_click()
 
       assert has_element?(view, ".review-packet-shell.has-outline")
-      assert has_element?(view, ~s|#review-guide-shell[phx-hook$=".GuideFlyout"]|)
+      assert has_element?(view, ~s|#review-guide-shell[phx-hook="GuideFlyout"]|)
       assert has_element?(view, "#review-guide-tick-0.is-active")
       refute has_element?(view, "#review-split-inline-overview")
 
@@ -1746,6 +1746,14 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(
                view,
                ~s|#review-guide-tick-0-state[role="img"][aria-label="Decision: Approved"]|
+             )
+
+      # The guide map shows the decision as a fixed badge; the label is for
+      # screen readers only.
+      assert has_element?(
+               view,
+               "#review-guide-flyout-state-0.review-section-state-mark.is-approved .sr-only",
+               "Approved"
              )
 
       assert has_element?(

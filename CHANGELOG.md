@@ -7,6 +7,15 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- On phones, the Guide map shows each section's decision as a small fixed-width
+  badge after the title (its label is for screen readers), so long titles
+  truncate the same way on every row and nothing wraps. The Sections button
+  toggles the map open and closed and reports `aria-expanded`. The map now
+  starts closed on every review and closes when you move to another page,
+  including LiveView navigation and back or forward; wide screens still
+  remember the sidebar choice. Diffs on phones show line numbers again, in a
+  compact gutter.
+
 - The `/device` page takes the CLI's code in one box per letter, accepting only the code's letters; typing moves forward, backspace moves back, and pasting the whole code fills every box. The confirmation counts down to the code's expiry and turns off Allow when it runs out.
 
 - Add stable API and MCP error codes while retaining legacy fields and Poppy authentication responses; teach the CLI to read them.

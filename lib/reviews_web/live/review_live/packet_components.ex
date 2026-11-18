@@ -182,7 +182,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     <aside
       id="review-guide-shell"
       class="review-guide-shell is-packet-guide"
-      phx-hook=".GuideFlyout"
+      phx-hook="GuideFlyout"
       aria-label="Review guide"
     >
       <nav id="review-edge-rail" class="review-edge-rail" aria-label="Review sections">
@@ -304,11 +304,18 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             >
               <span class="review-guide-flyout-num">{pad2(section.index + 1)}</span>
               <span class="review-guide-flyout-title">{section.title}</span>
-              <span
-                :if={section.effective_status}
-                class={["review-guide-flyout-state", "is-#{section.effective_status}"]}
-              >
-                <.section_status_icon status={section.effective_status} /> {section.status_label}
+              <%!-- A fixed slot on every row, so titles line up whether or not
+                   the section has a decision. --%>
+              <span class="review-guide-flyout-state">
+                <span
+                  :if={section.effective_status}
+                  id={"review-guide-flyout-state-#{section.index}"}
+                  class={["review-section-state-mark", "is-#{section.effective_status}"]}
+                  title={section.status_label}
+                >
+                  <.section_status_icon status={section.effective_status} />
+                  <span class="sr-only">{section.status_label}</span>
+                </span>
               </span>
             </button>
 
@@ -334,79 +341,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </div>
       </div>
     </aside>
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".GuideFlyout">
-      export default {
-        mounted() {
-          const savedOpen = localStorage.getItem("reviews:guide-map-open")
-          this.open = savedOpen === null
-            ? window.matchMedia("(min-width: 769px)").matches
-            : savedOpen === "true"
-          this.toggle = this.el.querySelector("[data-guide-flyout-toggle]")
-          this.panel = this.el.querySelector("[data-guide-flyout-panel]")
-          this.ticks = this.el.querySelector(".review-edge-rail-ticks")
-
-          // Reveal the rail before restoring focus to its menu button.
-          this.setOpen = (open, {focusToggle = false} = {}) => {
-            if (open === this.open) return
-            this.open = open
-            localStorage.setItem("reviews:guide-map-open", String(open))
-            this.sync()
-            if (!open && focusToggle) this.toggle?.focus({preventScroll: true})
-          }
-
-          this.onToggle = event => {
-            event.preventDefault()
-            this.setOpen(!this.open)
-            if (!this.open) return
-            // Inert is lifted in this same task; focus after the next frame so
-            // the browser sees the panel as focusable again.
-            window.requestAnimationFrame(() => {
-              if (!this.open) return
-              const first =
-                this.panel?.querySelector(".review-guide-flyout-section") ||
-                this.panel?.querySelector("[data-guide-flyout-close]")
-              first?.focus({preventScroll: true})
-            })
-          }
-
-          this.onKeyDown = event => {
-            if (event.key !== "Escape" || !this.open) return
-            this.setOpen(false, {focusToggle: true})
-          }
-
-          this.onPanelClick = event => {
-            if (event.target.closest("[data-guide-flyout-close]")) {
-              this.setOpen(false, {focusToggle: true})
-            }
-          }
-
-          this.toggle?.addEventListener("click", this.onToggle)
-          this.panel?.addEventListener("click", this.onPanelClick)
-          window.addEventListener("keydown", this.onKeyDown)
-          this.sync()
-        },
-
-        updated() {
-          // LiveView patches reset the server-rendered attributes; reapply.
-          this.sync()
-        },
-
-        destroyed() {
-          this.toggle?.removeEventListener("click", this.onToggle)
-          this.panel?.removeEventListener("click", this.onPanelClick)
-          window.removeEventListener("keydown", this.onKeyDown)
-        },
-
-        sync() {
-          const open = this.open
-          this.el.classList.toggle("is-flyout-open", open)
-          if (this.panel) this.panel.inert = !open
-          if (this.ticks) this.ticks.inert = open
-          this.toggle?.setAttribute("aria-expanded", open ? "true" : "false")
-          this.toggle?.setAttribute("aria-label", open ? "Close guide map" : "Open guide map")
-        },
-      }
-    </script>
     """
   end
 
