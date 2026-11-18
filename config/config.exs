@@ -70,6 +70,8 @@ config :phoenix, :filter_parameters, [
   "client_assertion",
   "code",
   "code_verifier",
+  "device_code",
+  "user_code",
   "refresh_token",
   "token"
 ]
@@ -80,8 +82,11 @@ config :phoenix, :filter_parameters, [
 # Gatekeep.Config options. Registered clients keep the `rvc_` IDs Reviews
 # handed out before gatekeep, and DPoP proofs use ES256, as Session JWTs do.
 config :reviews, Reviews.OAuth,
-  resources: [Reviews.Poppy],
+  # Reviews.OAuth.CLI is `reviews login`: the device authorization grant,
+  # approved at /device, for the CLI's own client only.
+  resources: [Reviews.Poppy, Reviews.OAuth.CLI],
   default_resource: Reviews.Poppy,
+  device_verification_uri: "/device",
   storage: {Gatekeep.Storage.Ecto, repo: Reviews.Repo},
   consent: ReviewsWeb.OAuthController,
   registered_client_prefix: "rvc_",

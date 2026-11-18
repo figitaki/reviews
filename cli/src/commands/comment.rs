@@ -2,7 +2,8 @@ use anyhow::{anyhow, Context, Result};
 use clap::Args;
 use serde_json::json;
 
-use crate::api::{ApiClient, CreateCommentRequest};
+use crate::api::CreateCommentRequest;
+use crate::auth;
 use crate::config::Config;
 
 #[derive(Args, Debug)]
@@ -33,7 +34,7 @@ pub struct CommentArgs {
 
 pub fn run(args: CommentArgs) -> Result<()> {
     let cfg = Config::load()?;
-    let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
+    let client = auth::client(&cfg)?;
 
     let (file_path, line_number) = parse_location(&args.location)?;
     let body = resolve_body(args.body.as_deref())?;
