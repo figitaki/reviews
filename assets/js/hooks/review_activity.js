@@ -16,6 +16,15 @@ export const ReviewActivity = {
     this.states = new Map()
     this.details = this.el.querySelector("details")
     this.onClick = event => {
+      if (event.target.closest("[data-quick-sections]")) {
+        // Sections toggles the guide map, the same as its menu button. The
+        // guide's section bar scrolls away on phones, so opening brings it back.
+        const guide = document.getElementById("review-guide-shell")
+        const map = guide?.querySelector("[data-guide-flyout-toggle]")
+        if (map?.getAttribute("aria-expanded") !== "true") guide?.scrollIntoView({ block: "start" })
+        map?.click()
+        return
+      }
       if (event.target.closest("[data-activity-mark-all]")) {
         this.readState.markRead(this.activity.threads)
         this.renderActivity()
@@ -24,13 +33,15 @@ export const ReviewActivity = {
       const button = event.target.closest("[data-activity-thread]")
       if (!button || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
       event.preventDefault()
-      const thread = this.activity.threads.find(thread => thread.id === button.dataset.activityThread)
-      if (!thread) return
-      this.readState.markRead([thread])
+      const threadId = button.dataset.activityThread
+      const thread = this.activity.threads.find(thread => thread.id === threadId)
+      if (thread) this.readState.markRead([thread])
       this.renderActivity()
+      // The open log floats over the code; get out of the way.
+      this.details.open = false
       // Navigation owns revealing the section/file, opening the thread and focus.
       window.dispatchEvent(new CustomEvent("reviews:open-thread", {
-        detail: { threadId: thread.id, filePath: thread.filePath },
+        detail: { threadId, filePath: button.dataset.filePath },
       }))
     }
     this.onStorage = event => {
@@ -39,8 +50,33 @@ export const ReviewActivity = {
       this.readState.refresh()
       this.renderActivity()
     }
+    // The log floats over the code, so it starts closed; opening it is
+    // remembered in this browser.
+    this.openKey = "reviews:activity-open"
+    let savedOpen = null
+    try { savedOpen = window.localStorage.getItem(this.openKey) } catch { /* optional */ }
+    this.details.open = savedOpen === "true"
+    this.details.addEventListener("toggle", () => {
+      try { window.localStorage.setItem(this.openKey, String(this.details.open)) } catch { /* optional */ }
+      if (this.details.open) this.scrollLogToEnd()
+    })
+    // The log is a running record of this visit: comments stay in it after
+    // they leave the server data, and new ones append.
+    this.log = new Map()
     this.onOpen = event => this.pushEvent("open_activity_thread", { thread_id: event.detail.threadId })
+    // The open log floats over the code, so a tap elsewhere or Escape
+    // closes it.
+    this.onOutside = event => {
+      if (!this.el.contains(event.target) && this.details.open) this.details.open = false
+    }
+    this.onKeydown = event => {
+      if (event.key !== "Escape" || !this.details.open) return
+      this.details.open = false
+      this.details.querySelector("summary").focus()
+    }
     this.el.addEventListener("click", this.onClick)
+    this.el.addEventListener("keydown", this.onKeydown)
+    document.addEventListener("pointerdown", this.onOutside)
     window.addEventListener("reviews:open-thread", this.onOpen)
     window.addEventListener("storage", this.onStorage)
     this.updateActivity()
@@ -65,53 +101,91 @@ export const ReviewActivity = {
     const total = threads.reduce((sum, thread) => sum + this.readState.unread(thread, identityId), 0)
     const unreadThreads = threads.filter(thread => this.readState.unread(thread, identityId) > 0)
     const count = this.el.querySelector("[data-activity-count]")
-    count.textContent = String(total)
-    count.setAttribute("aria-label", `${total} unread comments`)
-    this.el.querySelector("[data-activity-empty]").hidden = total > 0
+    // No count at all beats a "0".
+    count.textContent = this.activity.commentCount ? String(this.activity.commentCount) : ""
+    count.setAttribute("aria-label", this.activity.commentCount
+      ? `${this.activity.commentCount} comments, ${total} unread`
+      : "No comments")
+    this.details.dataset.unread = String(total > 0)
     this.el.querySelector("[data-activity-status]").textContent = `${total} unread comments in ${unreadThreads.length} threads.`
     this.el.querySelector("[data-activity-storage]").textContent = this.readState.persistent
       ? "Read state is saved in this browser, not your account."
       : "Browser storage is unavailable. Read state lasts only while this page is open."
     this.el.querySelector("[data-activity-mark-all]").disabled = total === 0
 
+    for (const entry of this.activity.log || []) this.log.set(entry.id, entry)
+    // No activity renders nothing: no empty panel, no "0".
+    this.el.toggleAttribute("data-empty", this.log.size === 0)
+    this.renderLog()
+  },
+
+  renderLog() {
+    const { identityId } = this.activity
     const list = this.el.querySelector("[data-activity-list]")
-    const focusedId = document.activeElement?.dataset.activityThread
-    const existing = new Map([...list.children].map(item => [item.dataset.threadId, item]))
-    const keep = new Set(unreadThreads.map(thread => thread.id))
-    for (const [id, item] of existing) if (!keep.has(id)) item.remove()
-    for (const [index, thread] of unreadThreads.entries()) {
-      const unread = this.readState.unread(thread, identityId)
-      let item = existing.get(thread.id)
+    const atEnd = list.scrollHeight - list.scrollTop - list.clientHeight < 24
+    const entries = [...this.log.values()].sort((a, b) =>
+      a.insertedAt.localeCompare(b.insertedAt) || Number(a.id) - Number(b.id))
+    const existing = new Map([...list.children].map(item => [item.dataset.commentId, item]))
+    let added = false
+    for (const [index, entry] of entries.entries()) {
+      let item = existing.get(entry.id)
       if (!item) {
-        item = document.createElement("li")
-        item.dataset.threadId = thread.id
-        const button = document.createElement("a")
-        button.id = `${this.el.id}-thread-${thread.id}`
-        button.className = "review-activity-entry"
-        button.dataset.activityThread = thread.id
-        item.append(button)
+        item = this.logItem(entry)
+        added = true
       }
-      const button = item.firstElementChild
-      button.href = thread.href
-      button.title = thread.filePath
-      const location = thread.line == null ? "Thread" : `${thread.side === "old" ? "−" : "+"}${thread.line}`
-      button.setAttribute("aria-label", `${thread.filePath}, line ${location}, ${unread} unread comments${thread.earlierRevision ? ", earlier revision" : ""}`)
-      button.replaceChildren(
-        textElement("span", "review-activity-file", thread.filePath),
-        textElement("span", "review-activity-location", `${location}${thread.earlierRevision ? " (earlier)" : ""}`),
-        textElement("span", "review-activity-read", String(unread)),
-      )
+      const own = identityId != null && entry.authorId === String(identityId)
+      const unread = !own && this.readState.unread({ comments: [entry] }, identityId) > 0
+      item.classList.toggle("is-unread", unread)
+      item.classList.toggle("is-own", own)
       if (list.children[index] !== item) list.insertBefore(item, list.children[index] || null)
     }
-    // Moving an existing item in response to a reply can otherwise drop focus.
-    if (focusedId) {
-      const focused = [...list.querySelectorAll("a")].find(button => button.dataset.activityThread === focusedId)
-      ;(focused || this.details.querySelector("summary")).focus({ preventScroll: true })
+    // Follow new comments the way a chat does, unless the reader scrolled up.
+    if (added && (atEnd || !this.logRendered)) this.scrollLogToEnd()
+    this.logRendered = true
+  },
+
+  logItem(entry) {
+    const item = document.createElement("li")
+    item.dataset.commentId = entry.id
+    const link = document.createElement("a")
+    link.className = "review-activity-entry"
+    link.href = entry.href
+    link.dataset.activityThread = entry.threadId
+    link.dataset.filePath = entry.filePath
+    const file = entry.filePath.split("/").pop()
+    const where = entry.line == null ? file : `${file}:${entry.side === "old" ? "−" : "+"}${entry.line}`
+    const time = new Date(entry.insertedAt)
+    const sameDay = time.toDateString() === new Date().toDateString()
+    const stamp = textElement("time", "review-activity-time", time.toLocaleString([], sameDay
+      ? { hour: "numeric", minute: "2-digit" }
+      : { month: "short", day: "numeric" }))
+    stamp.dateTime = entry.insertedAt
+    stamp.title = time.toLocaleString()
+    const anchor = textElement("span", "review-activity-anchor", where)
+    anchor.title = entry.line == null ? entry.filePath : `${entry.filePath}, line ${entry.line}`
+    const meta = document.createElement("span")
+    meta.className = "review-activity-meta"
+    meta.append(textElement("span", "review-activity-author", entry.author), stamp, anchor)
+    link.append(meta)
+    if (entry.replyTo) {
+      const quote = textElement("span", "review-activity-quote", `${entry.replyTo.author}: ${entry.replyTo.body}`)
+      link.append(quote)
     }
+    link.append(textElement("span", "review-activity-body-text", entry.body))
+    link.setAttribute("aria-label", `${entry.author}${entry.replyTo ? ` replied to ${entry.replyTo.author}` : ""} on ${anchor.title}: ${entry.body}`)
+    item.append(link)
+    return item
+  },
+
+  scrollLogToEnd() {
+    const list = this.el.querySelector("[data-activity-list]")
+    list.scrollTop = list.scrollHeight
   },
 
   destroyed() {
     this.el.removeEventListener("click", this.onClick)
+    this.el.removeEventListener("keydown", this.onKeydown)
+    document.removeEventListener("pointerdown", this.onOutside)
     window.removeEventListener("storage", this.onStorage)
     window.removeEventListener("reviews:open-thread", this.onOpen)
   },

@@ -2,109 +2,152 @@
 
 All notable changes to Reviews will be tracked here.
 
-Reviews uses semantic versioning. The first non-alpha release is 0.0.1;
-later fixes continue toward 0.0.2.
+Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
-- Keep comments and threads in posting order when two share a timestamp second. Order used to depend on how Postgres stored the rows, which made `threads_test.exs` flaky.
+- Comments and threads keep their posting order when two share a timestamp
+  second. Order used to depend on how Postgres stored the rows.
 
-- Add stable API and MCP error codes while retaining legacy fields and Poppy authentication responses; teach the CLI to read them.
+- The review page is full width at every screen width. On wide screens the
+  Comments button no longer reserves a column beside the content: it floats
+  in the bottom-right corner with its log above it, as on tablets. The log
+  starts closed (an open choice is still remembered in this browser) and
+  closes on a tap outside it, and the section decision bar stops short of the
+  button above 640px. Guide diffs span the content width; the Guide no longer
+  pads its right side to balance the section rail. Prose keeps its reading
+  width.
 
-- Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.
+- The section decision collapses on every screen width, as on phones: one
+  button shows the current decision (or "Decide") and expands the full bar;
+  Escape or the small close button in the bar's corner collapses it.
+  Signed-out readers get the same control, and expanding it offers "Sign in
+  to decide", which returns to the review with that section and its decision
+  open.
 
-- Validate packet shape, hunk references, slices and changed-line coverage in the domain layer for all revision uploads.
+## [0.0.2] - 2026-11-18
 
-- Keep empty hunk rows when validating and rendering packet slices, matching the CLI; no-newline markers stay attached to their preceding row.
-
-- Add bounded REST and Poppy file, thread and comment pages with pinned revisions, query-bound cursors and UTF-8-safe comment continuation. REST/Poppy use the shared `Reviews.Paging` limits and codec with scopes distinct from MCP.
-
-- Expose comment IDs, safe verification attribution and projected anchor state consistently across API readers.
-
-### Security
-
-- Plug 1.20.4 fixes EEF-CVE-2026-120287: the multipart `:length` limit did not
-  count part and header framing. It was taken one day after release, as an
-  approved exception to the seven-day dependency rule.
-- Only the review owner or a thread's author can resolve or reopen a thread,
-  and only the review owner can decide packet sections. Before, any signed-in
-  identity could do both on any review through the API (#176). Anyone else now
-  gets a 403, the review page hides those controls from them, and the CLI
-  explains the refusal. Commenting is unchanged: anyone signed in with the
-  link can comment. The rules live in `Reviews.Policy` and apply to every
-  surface.
-
-### Changed
-
-- Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI).
-  Elixir 1.20.4 includes the fix for CVE-2026-75758.
-- Phoenix 1.8.15, LiveView 1.2.12, Tailwind CLI 4.3.3, esbuild 0.28.2 and
-  other dependency updates. Diff rendering moves to @pierre/diffs 1.6.4 and
-  packet navigation to @pierre/trees 1.0.0.
-- The OAuth issuer runs on [gatekeep](https://github.com/figitaki/gatekeep)
-  (`Reviews.OAuth`). Endpoints, metadata, scopes, the agents-only rule,
-  refresh rotation, DPoP, and Settings → Connected agents work as before, and
-  a migration copies existing grants, tokens, and registered clients into
-  gatekeep's tables, so no one signs in again. New codes and tokens start with
-  `gkc_code_`, `gka_`, and `gkr_` instead of `ppc_`, `ppa_`, and `ppr_`.
-  Issuer metadata adds `response_modes_supported`, and resource metadata adds
-  `bearer_methods_supported`.
-  Revoking an access token at `/oauth/revoke` now revokes only that token, not
-  its grant; revoking the refresh token still ends the grant. The old OAuth
-  tables stay for one release.
-
-- One error vocabulary, `Reviews.Errors`, gives every surface the same
-  codes, statuses and safe default details. MCP error results use it as
-  REST and Poppy do; unknown reasons become `write_failed`. It adds
-  `invalid_pagination` and `invalid_packet`.
-
-- Section decisions belong to the account, not one identity: a person and
-  their agent identities share one decision per section, and each decision
-  records which identity made it. A migration merges existing decisions,
-  keeping each account's most recent one. `POST .../decision` now sets the
-  status explicitly and accepts `"pending"`; posting the same status again
-  no longer clears it, so retries are safe. `reviews section` accepts
-  `pending`. Decision writes lock the patchset row and load their own state.
-
-- MCP follows the same permission rules as the web page, REST and Poppy. Any
-  token can now read and comment on a review it has the link to, as on the web.
-  Pushing revisions and resolving threads still need the review owner (or, to
-  resolve, the thread's author). Every surface now passes a `Reviews.Principal`
-  to the domain, and `Reviews.Policy` checks reads, comments and OAuth scopes
-  too. The unchecked `Reviews.append_patchset/2` is renamed
-  `append_patchset_unchecked/2`.
+Sign in to the CLI from any browser, see every review you are part of in one
+list, and connect agents without leaving the consent page. Review decisions
+and thread actions are now limited to the people who should make them, and
+every API speaks one set of error codes. Existing CLI configs, API tokens and
+connected agents keep working.
 
 ### Added
 
-- `reviews login` signs in from the browser on any device with the OAuth
-  device authorization grant (RFC 8628): it shows a code, you enter it at
-  `/device`, and the CLI stores tokens that refresh themselves. It works over
-  SSH and in containers. On `/device` you choose who the tokens act as:
-  you, like API tokens, or one of your agent identities.
-  Settings → CLI sign-ins signs them out. `reviews login --token` keeps the
-  old way, an API token pasted from Settings, and `--server` picks the server.
-
-- Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with
-  an existing API token and can read reviews, packet sections, diffs and
-  threads, and post comments, resolve threads, and push reviews and revisions
-  for reviews their account owns. See `docs/MCP.md`.
+- **Sign in to the CLI from any browser.** `reviews login` shows a short
+  code; enter it at `/device` on any device, including your phone, and the
+  CLI stores tokens that refresh themselves. It works over SSH and in
+  containers. On `/device` you choose who the CLI acts as: you, or one of
+  your agent identities. The page takes the code in one box per letter,
+  accepts a pasted code, and counts down to its expiry. Settings → CLI
+  sign-ins lists them and signs them out. `reviews login --token` still
+  takes an API token pasted from Settings.
+- **Your reviews in one list** (#47). `/reviews` lists the reviews you wrote
+  or took part in, with one search field for title or slug and filter chips
+  for role, status and author (tap an author's name to filter by them).
+  Signed in, `/` takes you to the list. The same list is
+  `reviews list` in the CLI and `GET /api/v1/reviews` in the API; a token for
+  an agent identity lists only that agent's reviews.
+- **Create an agent identity while connecting an app.** The OAuth consent
+  page can create a new agent identity for the app, with a name and handle
+  suggested from it, so an owner with no agents can allow it without leaving
+  the page.
 
 ### Changed
 
-- MCP cursors now name the call they continue. A cursor sent with another
-  filter, thread, section or revision is refused as invalid instead of
-  skipping or repeating items. The cursor format and page limits moved to
-  `Reviews.Paging`, which the REST and Poppy page endpoints will share.
+- **Comments, redone.** Start a comment from the button beside the line
+  number; text you select in the line becomes its anchor. Threads are more
+  compact, with Resolve in the header.
+  - On wide screens, comments are a chat-style log in the lower right:
+    newest at the bottom, each with its author, time, file and line, and a
+    quote of the comment it answers. Unread comments are marked, clicking
+    one opens its thread, and new comments appear as they are posted.
+  - On phones, threads no longer break up the diff: a line with comments
+    shows a button with a count beside its line number, and tapping it
+    shows them under the line. The composer stays under its line and
+    focusing it no longer zooms the page.
+  - The Comments button floats in the bottom-right corner at every width
+    and opens its log above it. On phones it sits with the Sections and
+    section decision buttons.
+- **Section decisions belong to your account.** You and your agent identities
+  share one decision per section, and each decision records which identity
+  made it; existing decisions were merged, keeping the most recent. Choosing
+  the same decision again through the API or `reviews section` no longer
+  clears it, so retries are safe, and `pending` resets a section.
+- **One set of error codes everywhere.** The REST API, Poppy and the CLI
+  return the same stable error codes, statuses and safe messages, with the
+  old fields kept. The CLI explains errors using them.
+- **Paged lists in the API.** File, thread and comment lists in the REST and
+  Poppy APIs come in bounded pages with cursors pinned to one revision, so
+  long reviews load predictably. A cursor sent with different filters is
+  refused instead of skipping or repeating items.
+- **Comments are pinned to the revision they were left on**, from the web,
+  the API, Poppy and the CLI. Replies no longer need a placeholder location.
+  API readers return comment IDs, safe verification details for agent
+  comments, and whether a comment's anchor is still current.
+- Every revision upload is checked on the server for packet shape, hunk
+  references, slices and changed-line coverage, the same checks the CLI runs.
+  Packet slices keep empty rows, matching the CLI.
+- On phones, Guide prose keeps a 16px inset while diffs stay full width.
+- Updated to Elixir 1.20.4, Erlang 28.5, Phoenix 1.8.15 and LiveView 1.2.12.
+  Diffs render with @pierre/diffs 1.6.4 and packet navigation uses
+  @pierre/trees 1.0.0.
 
 ### Fixed
 
-- The REST and Poppy comment endpoints no longer return database error text.
-  A `file_path` over 255 characters is now a `422` validation error.
-
-- A review title, `base_sha`, `branch_name` or diff file path over 255
-  characters is now a `422` validation error instead of a server error.
-
+- On phones, the Guide map shows each section's decision as a small badge
+  after its title, so long titles cut off in the same place and rows no
+  longer wrap. The Sections button opens and closes the map, and the map
+  closes when you go to another page. Diffs on phones show line numbers again,
+  in a compact gutter.
+- Faint text, additions and deletions meet WCAG AA contrast (4.5:1) in both
+  themes, and form-field borders meet 3:1.
+- Screen readers find one main region on home, Settings, device login and the
+  sign-in pages, and the skip link lands on it.
+- On iPhone browsers, the toolbars no longer reappear each time a review stops
+  scrolling, and the floating buttons stay pinned to the bottom of the screen.
+  Lockfiles scroll sideways on phones instead of wrapping.
+- Titles, branch names, base SHAs and file paths over 255 characters are a
+  `422` validation error instead of a server error, and comment endpoints no
+  longer return database error text.
 - `reviews whoami` works for GitHub accounts without a public email.
+
+### Security
+
+- Only the review owner can decide packet sections, and only the owner or a
+  thread's author can resolve or reopen it (#176). Before, any signed-in
+  identity could do both on any review through the API. Others now get a 403,
+  the review page hides those controls from them, and the CLI explains why.
+  Anyone signed in with the link can still comment. The same rules apply on
+  the web, REST, Poppy and the CLI.
+- Plug 1.20.4 fixes EEF-CVE-2026-120287, where the multipart size limit did
+  not count part and header framing. It was taken one day after release, as
+  an approved exception to the seven-day dependency rule.
+- Elixir 1.20.4 includes the fix for CVE-2026-75758.
+
+### For integrators
+
+- The OAuth issuer now runs on [gatekeep](https://github.com/figitaki/gatekeep).
+  Endpoints, scopes, DPoP, refresh rotation and Settings → Connected agents
+  work as before, and existing grants, tokens and clients were migrated, so
+  no one signs in again. New codes and tokens start with `gkc_code_`, `gka_`
+  and `gkr_` instead of `ppc_`, `ppa_` and `ppr_`. Revoking an access token
+  at `/oauth/revoke` now revokes only that token; revoking the refresh token
+  still ends the grant. Issuer metadata adds `response_modes_supported` and
+  resource metadata adds `bearer_methods_supported`. The old OAuth tables
+  stay for one more release.
+- `POST .../decision` sets the status you send and accepts `"pending"`.
+- New error codes `invalid_pagination` and `invalid_packet`.
+
+### Not yet live
+
+These ship in the code but are off on reviews.figitaki.dev:
+
+- A prototype hosted MCP endpoint at `/mcp`, off unless `MCP_ENABLED` is set.
+  It follows the same permission rules and error codes as the other APIs.
+  See `docs/MCP.md`.
+- A design catalog at `/design`, on in development and on preview apps only.
 
 ## [0.0.1] - 2026-11-16
 
@@ -189,6 +232,19 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
   visible viewport. Empty comments cannot be submitted.
 - Reseeding keeps the real demo review and its comments unless its bundled
   fixture changes.
+- On phones, two icon-only floating buttons stacked above the section decision
+  button replace the comments row above the section navigation: Sections, in
+  the Guide only, opens the Guide map below the toolbar, and Comments, always
+  shown with the comment count as a badge and a blue outline while comments are
+  unread, floats the unread list above the code. A tap outside or Escape closes
+  the list. The decision button
+  now stays fixed to the screen inside open Guide sections.
+- Section decisions keep a floating island on desktop and use a compact
+  floating action button on phones, including before sign-in. After voting,
+  only the selected outcome stays labeled; alternatives reveal their labels
+  on hover or keyboard focus.
+- The Guide map separates from the reading surface without a shadow, and
+  compact section numbers stay aligned regardless of their decision state.
 - Section diffs and the Changes view open without line-count or file-count
   limits. Large diffs use the existing virtualized renderer; manual collapse
   controls remain available.
@@ -257,6 +313,14 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
   and mobile page height uses the stable small viewport.
 - Diff file headers toggle across the whole row with a rotating chevron.
   Viewed state uses one independent toggle.
+- On phones, the open comments list keeps its height while the browser's
+  toolbars collapse and expand.
+- On phones, lockfiles such as `mix.lock` and `package-lock.json` scroll
+  sideways instead of wrapping, so each entry stays one row. Opening a thread
+  in one keeps the start of each line in view.
+- Brave on iPhone no longer brings its toolbars back each time a scroll
+  stops. The page now saves its scroll position for back and forward
+  only when it leaves the page, not after every scroll.
 
 ## [0.0.1-alpha.2] - 2026-05-21
 

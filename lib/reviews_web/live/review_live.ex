@@ -67,6 +67,7 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:diff_style, "split")
               |> assign(:expanded_hunk_ids, MapSet.new())
               |> assign(:expanded_section_ids, MapSet.new())
+              |> assign(:editing_decision_index, nil)
               |> assign(:active_outline_section_index, nil)
               |> assign(:changes_default_expanded_patchset_ids, MapSet.new())
               |> assign(:show_packet_outline, packet_outline_visible?(current_user))
@@ -92,7 +93,10 @@ defmodule ReviewsWeb.ReviewLive do
       {:ok, patchset_number} ->
         case refresh_snapshot(socket, patchset_number: patchset_number) do
           {:ok, socket} ->
-            {:noreply, reveal_activity_thread(socket, params["thread"])}
+            {:noreply,
+             socket
+             |> reveal_activity_thread(params["thread"])
+             |> reveal_packet_section(params["section"])}
 
           {:error, :patchset_not_found} ->
             {:noreply, put_flash(socket, :error, "Patchset not found.")}
@@ -118,6 +122,20 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("toggle_section_decision", %{"section_index" => index}, socket) do
+    with %{} = patchset <- socket.assigns.selected_patchset,
+         {section_index, ""} <- Integer.parse(to_string(index)),
+         %{} <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
+      editing =
+        if socket.assigns.editing_decision_index == section_index, do: nil, else: section_index
+
+      {:noreply, assign(socket, :editing_decision_index, editing)}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
       when status in ["approved", "denied", "ignored"] do
     with %{} = identity <- socket.assigns.current_identity,
@@ -128,6 +146,7 @@ defmodule ReviewsWeb.ReviewLive do
       {:noreply,
        socket
        |> refresh_snapshot!()
+       |> assign(:editing_decision_index, nil)
        |> collapse_packet_section(section_index)}
     else
       nil ->
@@ -222,6 +241,7 @@ defmodule ReviewsWeb.ReviewLive do
   def handle_event("select_packet_overview", _params, socket) do
     socket =
       socket
+      |> assign(:editing_decision_index, nil)
       |> assign(:active_outline_section_index, nil)
       |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
 
@@ -234,6 +254,7 @@ defmodule ReviewsWeb.ReviewLive do
       case parse_int(section_index) do
         index when is_integer(index) ->
           socket
+          |> assign(:editing_decision_index, nil)
           |> assign(:active_outline_section_index, index)
           |> assign(:expanded_section_ids, MapSet.put(socket.assigns.expanded_section_ids, index))
           |> auto_open_section_hunks(index)
@@ -613,6 +634,7 @@ defmodule ReviewsWeb.ReviewLive do
                 selected_patchset={@selected_patchset}
                 published_threads={@published_threads}
                 current_user={@current_user}
+                editing_decision_index={@editing_decision_index}
                 can_decide_sections={@can_decide_sections}
                 return_to={@return_to}
                 diff_style={@diff_style}
@@ -730,6 +752,24 @@ defmodule ReviewsWeb.ReviewLive do
               ~p"/r/#{socket.assigns.review.slug}/changes?#{[patchset: socket.assigns.selected_patchset.number, thread: thread.id]}"
           )
       end
+    else
+      _ -> socket
+    end
+  end
+
+  # `?section=N` (the section sign-in link's return path) opens that section
+  # with its decision expanded.
+  defp reveal_packet_section(socket, index) do
+    with :show <- socket.assigns.live_action,
+         section_index when is_integer(section_index) <- parse_int(index),
+         %{} <-
+           ReviewPacket.section_at(socket.assigns.selected_patchset.packet || %{}, section_index) do
+      socket
+      |> assign(:active_outline_section_index, section_index)
+      |> assign(:editing_decision_index, section_index)
+      |> update(:expanded_section_ids, &MapSet.put(&1, section_index))
+      |> auto_open_section_hunks(section_index)
+      |> push_event("packet_nav_jump", %{id: "packet-section-#{section_index}-decision"})
     else
       _ -> socket
     end
@@ -1048,6 +1088,10 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:review, snapshot.review)
     |> assign(:patchsets, snapshot.patchsets)
     |> assign(:selected_patchset, snapshot.selected_patchset)
+    |> assign(
+      :editing_decision_index,
+      if(previous_patchset_id == next_patchset_id, do: socket.assigns[:editing_decision_index])
+    )
     |> assign(:files, snapshot.files)
     |> assign(:file_diffs, snapshot.file_diffs)
     |> assign(:hunks_by_path, snapshot.hunks_by_path)

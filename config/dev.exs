@@ -124,3 +124,5 @@ config :reviews, Reviews.OAuth,
   issuer: System.get_env("OAUTH_ISSUER"),
   allow_private_hosts:
     String.split(System.get_env("OAUTH_ALLOW_PRIVATE_HOSTS", ""), ",", trim: true)
+
+config :reviews, :design_catalog, true

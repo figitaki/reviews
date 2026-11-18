@@ -26,6 +26,10 @@ config :reviews, ReviewsWeb.Endpoint,
 # it, and prod reads MCP_ENABLED / MCP_WRITES_ENABLED in runtime.exs.
 config :reviews, :mcp, enabled: false, writes_enabled: false, allowed_hosts: :localhost
 
+# Design catalog at /design (ReviewsWeb.DesignLive). Off unless enabled; dev
+# and test enable it, and prod reads DESIGN_CATALOG in runtime.exs.
+config :reviews, :design_catalog, false
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.28.2",

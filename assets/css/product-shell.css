@@ -287,7 +287,7 @@
 .ds-input{
   width: 100%;
   min-height: 40px;
-  border: 1px solid var(--ds-line-strong);
+  border: 1px solid var(--ds-line-input);
   border-radius: 6px;
   background: var(--ds-panel);
   color: var(--ds-text);
@@ -371,6 +371,54 @@ textarea.ds-input{
   font-weight: 700;
 }
 
+/* Filter and toggle chips (<.ds_chip>). Same family as .ds-badge: a
+   pill with a hairline border, but interactive and a little larger. */
+.ds-chip{
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  border: var(--border-hair) solid var(--ds-line);
+  border-radius: var(--radius-pill);
+  background: var(--ds-panel);
+  color: var(--ds-muted);
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.ds-chip:hover{
+  border-color: var(--ds-line-strong);
+  background: var(--ds-hover);
+  color: var(--ds-text);
+}
+
+.ds-chip:focus-visible{
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+.ds-chip.is-selected{
+  border-color: var(--ds-text);
+  background: var(--ds-text);
+  color: var(--ds-bg);
+}
+
+/* COARSE (tokens.css): a 44px tap target around the 28px pill. */
+@media (pointer: coarse) {
+  .ds-chip::after{
+    content: "";
+    position: absolute;
+    inset: -8px 0;
+  }
+}
+
 /* OAuth consent page (ReviewsWeb.OAuthHTML). */
 .poppy-facts{
   display: grid;
@@ -428,10 +476,90 @@ textarea.ds-input{
   color: var(--ds-text);
 }
 
+.poppy-new-identity{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-left: 21px;
+}
+
+.poppy-new-identity .fieldset{
+  margin: 0;
+}
+
+.poppy-consent-form .poppy-new-identity label{
+  display: grid;
+  gap: 4px;
+  color: var(--ds-muted);
+}
+
+/* The fields show only while "New agent identity" is chosen. */
+#poppy-consent-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity{
+  display: none;
+}
+
+@media (max-width: 640px){
+  .poppy-new-identity{
+    grid-template-columns: 1fr;
+  }
+}
+
 .poppy-consent-note{
   margin: 0;
   color: var(--ds-muted);
   font-size: 13px;
+}
+
+/* CLI sign-in page (ReviewsWeb.DeviceHTML): one box per letter, 4-4. */
+.device-code{
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.device-code legend{
+  margin-bottom: 8px;
+  color: var(--ds-text);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.device-code-boxes{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 44px)) 12px repeat(4, minmax(0, 44px));
+  gap: 6px;
+  align-items: center;
+}
+
+.device-code-dash{
+  color: var(--ds-muted);
+  text-align: center;
+}
+
+.device-code-box{
+  min-height: 52px;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 650;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.device-expiry{
+  margin: 14px 0 10px;
+  color: var(--ds-muted);
+  font-size: 13px;
+}
+
+.device-expiry strong{
+  color: var(--ds-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.device-expiry.is-urgent strong,
+.device-expiry.is-expired{
+  color: var(--ds-warn);
 }
 
 .poppy-consent-actions{
@@ -716,7 +844,8 @@ textarea.ds-input{
 /* Narrow phones (#6): keep the topbar on one row down to 320px. The brand
    collapses to its mark (the link keeps its aria-label), the actions may
    shrink, and a long account name truncates instead of pushing the row
-   past the right edge. DOM order, and so focus order, does not change. */
+   past the right edge. DOM order, and so focus order, does not change.
+   480px, not 640px: above it the full brand label still fits (tokens.css). */
 @media (max-width: 480px) {
   .ds-shell-topbar{
     gap: 8px;
