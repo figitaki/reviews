@@ -163,6 +163,13 @@ defmodule ReviewsWeb.PoppyTest do
     payload.token_binding
   end
 
+  # The attribution the review page gets for the latest comment on "foo".
+  defp comment_payload(review) do
+    {:ok, snapshot} = Reviews.ReviewView.snapshot(review, nil)
+    [%{comments: comments}] = Reviews.ReviewView.thread_payloads_for_file(snapshot, "foo")
+    List.last(comments).attribution
+  end
+
   describe "discovery" do
     test "poppy.json, protected resource, and issuer metadata point at one another", %{conn: conn} do
       poppy = conn |> get("/.well-known/poppy.json") |> json_response(200)
@@ -273,7 +280,10 @@ defmodule ReviewsWeb.PoppyTest do
                owner_username: ctx.owner.username,
                approved_at: comment.attribution["approved_at"],
                link_revoked: false,
-               token_binding: "bearer"
+               token_binding: "bearer",
+               delegation_signed_by: nil,
+               turnkey_organization_id: nil,
+               turnkey_agent: nil
              }
 
       [link] = OAuth.list_grants_for(ctx.owner)
@@ -1213,6 +1223,117 @@ defmodule ReviewsWeb.PoppyTest do
       comment = Repo.get!(Comment, json_response(conn, 201)["comment_id"])
       assert comment.author_id == ctx.identity.id
       assert comment.attribution["client_name_claimed"] == ctx.owner.username <> " (verified)"
+    end
+  end
+
+  # Agents shaped like Turnkey's draft Personal Agent Protocol guide, with
+  # locally signed tokens. See Reviews.Turnkey for what is provisional.
+  describe "Turnkey-held identity key" do
+    setup do
+      %{tk: Agent.turnkey()}
+    end
+
+    test "a Turnkey-signed delegation shows as signed by Turnkey, as the same actor", ctx do
+      tokens = sign_in(ctx.tk, ctx.owner, ctx.identity)
+      conn = post_comment(ctx.tk, ctx.review, access_token: tokens["access_token"])
+      comment = Repo.get!(Comment, json_response(conn, 201)["comment_id"])
+
+      assert comment.author_id == ctx.identity.id
+      {:ok, %{organization_id: org}} = Reviews.Turnkey.hosted_agent(ctx.tk.client_id)
+
+      assert %{
+               "provider" => "poppy",
+               "delegation_signed_by" => "turnkey",
+               "delegation_profile" => "turnkey.io/poppy-delegation/v1",
+               "turnkey_organization_id" => ^org,
+               "turnkey_agent" => "shopper",
+               "turnkey_identity_key" => identity_key,
+               "identity_handle" => "claude"
+             } = comment.attribution
+
+      assert identity_key == ctx.tk.root.kid
+
+      assert %{delegation_signed_by: "turnkey", turnkey_agent: "shopper"} =
+               comment_payload(ctx.review)
+    end
+
+    test "a delegation that isn't the profile's shape posts, but not as signed by Turnkey",
+         ctx do
+      tokens = sign_in(ctx.tk, ctx.owner, ctx.identity)
+      dlg = Agent.delegation(ctx.tk, claims: %{"sub" => "someone"})
+
+      conn =
+        post_comment(ctx.tk, ctx.review, access_token: tokens["access_token"], delegation: dlg)
+
+      comment = Repo.get!(Comment, json_response(conn, 201)["comment_id"])
+      assert comment.attribution["delegation_signed_by"] == nil
+      assert comment.attribution["turnkey_delegation_problem"] == "unexpected_claims"
+      assert %{delegation_signed_by: nil} = comment_payload(ctx.review)
+    end
+
+    test "an agent elsewhere gets no Turnkey attribution", ctx do
+      tokens = sign_in(ctx.agent, ctx.owner, ctx.identity)
+      conn = post_comment(ctx.agent, ctx.review, access_token: tokens["access_token"])
+      comment = Repo.get!(Comment, json_response(conn, 201)["comment_id"])
+
+      refute Map.has_key?(comment.attribution, "delegation_signed_by")
+      assert %{delegation_signed_by: nil} = comment_payload(ctx.review)
+    end
+
+    test "Poppy still refuses a Turnkey agent's bad delegation or wrong audience", ctx do
+      tokens = sign_in(ctx.tk, ctx.owner, ctx.identity)
+      other = Agent.turnkey()
+      now = Agent.now()
+
+      for opts <- [
+            [delegation: Agent.delegation(ctx.tk, signer: other.root, kid: ctx.tk.root.kid)],
+            [delegation: Agent.delegation(ctx.tk, iat: now - 7200, exp: now - 60)],
+            [delegation: Agent.delegation(ctx.tk, iss: other.client_id)],
+            [delegation: Agent.delegation(ctx.tk, delegated: Agent.ec_key(nil))],
+            [aud: "https://auth.example.com"]
+          ] do
+        conn = post_comment(ctx.tk, ctx.review, [access_token: tokens["access_token"]] ++ opts)
+        assert %{"error" => "invalid_session"} = json_response(conn, 400)
+      end
+
+      assert comment_count() == 0
+    end
+
+    test "client assertions of the profile's shape sign in, and the wrong audience doesn't",
+         ctx do
+      {%{"code" => code}, verifier} = get_code(ctx.tk, ctx.owner, ctx.identity)
+
+      assert %{"error" => "invalid_client"} =
+               exchange(ctx.tk, code, verifier, aud: "https://auth.example.com")
+               |> json_response(401)
+
+      # The profile allows a 256-character jti.
+      assert %{"access_token" => _} =
+               exchange(ctx.tk, code, verifier, jti: String.duplicate("a", 256))
+               |> json_response(200)
+    end
+
+    test "a headless agent with no redirect URIs can read signed out, but can't sign in",
+         ctx do
+      tk = Agent.turnkey(redirect_uris: [])
+      path = "/api/poppy/v1/reviews/#{ctx.review.slug}"
+
+      conn =
+        Enum.reduce(Agent.headers(tk, "GET", path), build_conn(), fn {k, v}, c ->
+          put_req_header(c, k, v)
+        end)
+        |> get(path)
+
+      assert json_response(conn, 200)["slug"] == ctx.review.slug
+
+      {_verifier, challenge} = Agent.pkce()
+
+      conn =
+        build_conn()
+        |> init_test_session(current_user_id: ctx.owner.id)
+        |> get(~p"/oauth/authorize?#{authorize_params(tk, challenge)}")
+
+      assert html_response(conn, 400) =~ "poppy-invalid-request"
     end
   end
 end
