@@ -216,6 +216,11 @@
   --radius-lg: 14px;  /* floating action buttons */
   --radius-pill: 999px;
 
+  /* Floating buttons (Sections, Comments, the section decision): one size,
+     in rem so they follow the root font size. */
+  --size-fab: 3rem;          /* 48px */
+  --size-fab-icon: 1.375rem; /* 22px */
+
   /* Border — Reviews uses 1px for content, the daisyUI plugin sets 1.5px
      for form/button surfaces; we expose both. */
   --border-hair: 1px;

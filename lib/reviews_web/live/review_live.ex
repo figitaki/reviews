@@ -617,7 +617,7 @@ defmodule ReviewsWeb.ReviewLive do
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
           <DeleteReviewComponents.review_menu :if={@can_delete_review} />
-          <.user_menu current_user={@current_user} return_to={@return_to} />
+          <Layouts.account_menu current_user={@current_user} return_to={@return_to} />
         </:actions>
 
         <% packet = @selected_patchset && @selected_patchset.packet %>
@@ -758,55 +758,6 @@ defmodule ReviewsWeb.ReviewLive do
         summary={@delete_review.summary}
         confirm_slug={@delete_review.confirm_slug}
       />
-    </div>
-    """
-  end
-
-  attr :current_user, :any, default: nil
-  attr :return_to, :string, default: "/"
-
-  # Public for the design catalog (/design/components).
-  def user_menu(%{current_user: nil} = assigns) do
-    ~H"""
-    <a
-      href={~p"/auth/github?#{[return_to: @return_to]}"}
-      class="review-button review-button-secondary"
-    >
-      <.github_mark /> Sign in
-    </a>
-    """
-  end
-
-  def user_menu(assigns) do
-    ~H"""
-    <div class="dropdown dropdown-end">
-      <button
-        tabindex="0"
-        type="button"
-        class="review-button review-button-secondary gap-2"
-        aria-label={"Account menu for #{@current_user.username}"}
-      >
-        <img
-          :if={@current_user.avatar_url}
-          src={@current_user.avatar_url}
-          alt=""
-          width="24"
-          height="24"
-          class="size-6 rounded-full"
-        />
-        <span class="text-sm">{@current_user.username}</span>
-      </button>
-      <ul
-        tabindex="0"
-        class="dropdown-content menu menu-sm review-menu z-20 mt-2 w-44 p-2"
-      >
-        <li>
-          <.link navigate={~p"/settings"}>Settings</.link>
-        </li>
-        <li>
-          <.link href={~p"/auth/logout"} method="delete">Sign out</.link>
-        </li>
-      </ul>
     </div>
     """
   end

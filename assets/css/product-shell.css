@@ -1021,3 +1021,29 @@ textarea.ds-input{
     min-width: 44px;
   }
 }
+
+/* Layouts.account_menu: the one account control in every top bar. A long
+   name truncates instead of widening the bar. */
+.account-menu {
+  min-width: 0;
+}
+
+.account-menu-button {
+  gap: 8px;
+  max-width: 100%;
+}
+
+.account-menu-avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+}
+
+.account-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

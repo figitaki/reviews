@@ -172,8 +172,8 @@
    above it. */
 .review-activity-panel {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: var(--size-fab);
+  height: var(--size-fab);
   box-sizing: border-box;
   border: 1px solid var(--review-line-strong, var(--ds-line));
   border-radius: var(--radius-lg);
@@ -279,11 +279,11 @@
 .review-quick-button { display: none; }
 
 /* Phones: icon-only floating buttons, Sections (Guide only) above Comments,
-   stacked above the section decision button and centred on it. */
+   stacked above the section decision button, all three --size-fab. */
 @media (max-width: 640px) {
   .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
-    --review-quick-right: calc(16px + 4px + env(safe-area-inset-right));
-    --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
+    --review-quick-right: calc(16px + env(safe-area-inset-right));
+    --review-quick-bottom: calc(16px + var(--size-fab) + 12px + env(safe-area-inset-bottom));
   }
   /* Sections scrolls the Guide map in below the sticky review toolbar, so its
      close button stays visible. */
@@ -299,8 +299,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 48px;
-    height: 48px;
+    width: var(--size-fab);
+    height: var(--size-fab);
     padding: 0;
     border: 1px solid var(--review-line-strong, var(--ds-line));
     border-radius: var(--radius-lg);
@@ -310,7 +310,7 @@
     cursor: pointer;
   }
   .review-page:not(:has([data-guide-flyout-toggle])) .review-quick-button { display: none; }
-  .review-quick-icon { width: 22px; height: 22px; }
+  .review-quick-icon { width: var(--size-fab-icon); height: var(--size-fab-icon); }
   .review-quick-button:focus-visible {
     outline: 2px solid var(--ds-focus);
     outline-offset: 2px;

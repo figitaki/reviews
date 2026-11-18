@@ -6,6 +6,17 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Every top bar ends in one account control, `Layouts.account_menu`. Signed
+  in, the avatar and name open a menu with Settings and Sign out on Home, the
+  review list and Settings too, replacing their Settings link. Signed out, the
+  review page's Sign in is text only like the other pages.
+
+- The closed section decision on phones is a 48px floating button like
+  Sections and Comments, and the decision panel uses the same `--radius-lg`
+  and `--shadow-float` tokens instead of its own radius and two-layer shadow.
+  New `--size-fab` (3rem) and `--size-fab-icon` (1.375rem) tokens size all
+  three floating buttons.
+
 - Every "Sign in with GitHub" control shows the GitHub mark, as GitHub's brand
   rules ask, through a new `<.ds_github_button>`; the comment composer's
   sign-in prompt and the section-decision sign-in button show it too. The top

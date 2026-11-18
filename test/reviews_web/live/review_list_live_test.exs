@@ -37,6 +37,10 @@ defmodule ReviewsWeb.ReviewListLiveTest do
     {:ok, view, _html} = conn |> sign_in(carey) |> live(~p"/reviews")
 
     assert has_element?(view, "#nav-reviews[aria-current=page]")
+    # One account control: a menu with Settings and Sign out, not a Settings link.
+    assert has_element?(view, ".l-nav .account-menu button[aria-label='Account menu for carey']")
+    assert has_element?(view, ".l-nav .account-menu a[href='/settings']", "Settings")
+    assert has_element?(view, ".l-nav .account-menu a[href='/auth/logout']", "Sign out")
     assert has_element?(view, "#review-#{mine.id} a[href='/r/#{mine.slug}']", "Speed up lookup")
     refute has_element?(view, "#review-#{mine.id}", "patchset")
     assert has_element?(view, "#review-#{involved.id} .rl-author", "@conner")
