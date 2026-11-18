@@ -121,9 +121,9 @@ DPoP.
   offer PAR, so it has no pushed request to bind the code from (spec 4.2, RFC 9449 §10.1).
 - **Attribution.** Comments posted with a DPoP-bound token record the key's thumbprint in
   `attribution["access_token_dpop_key"]`. It's `nil` for Bearer tokens. The review page shows only
-  which kind it was: the "Verified agent" details have a Token row, "Access token bound to agent key
-  (DPoP, RFC 9449)" or "Bearer (not bound to a key)". It reflects only the access token's binding,
-  never the Session JWT's key. Comments recorded before Reviews kept the binding have no row.
+  which kind it was: the "Verified agent" details have a Token row, "Access token bound to agent key"
+  or "Bearer (not bound to a key)". It reflects only the access token's binding, never the Session JWT's
+  key. Comments recorded before Reviews kept the binding have no row.
 
 ## Revocation
 
