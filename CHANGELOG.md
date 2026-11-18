@@ -6,6 +6,22 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The review page is full width at every screen width. On wide screens the
+  Comments button no longer reserves a column beside the content: it floats
+  in the bottom-right corner with its log above it, as on tablets. The log
+  starts closed (an open choice is still remembered in this browser) and
+  closes on a tap outside it, and the section decision bar stops short of the
+  button above 640px. Guide diffs span the content width; the Guide no longer
+  pads its right side to balance the section rail. Prose keeps its reading
+  width.
+
+- The section decision collapses on every screen width, as on phones: one
+  button shows the current decision (or "Decide") and expands the full bar;
+  Escape or the small close button in the bar's corner collapses it.
+  Signed-out readers get the same control, and expanding it offers "Sign in
+  to decide", which returns to the review with that section and its decision
+  open.
+
 ## [0.0.2] - 2026-11-18
 
 Sign in to the CLI from any browser, see every review you are part of in one
