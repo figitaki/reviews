@@ -7,7 +7,7 @@ The app is Phoenix 1.8 + LiveView, with diffs rendered by vanilla
 `@pierre/diffs` from a LiveView hook, and a Rust CLI (`reviews push`) for
 uploading diffs.
 
-Current version: `0.0.1`.
+Current version: `0.0.2`.
 
 ## What It Provides
 
@@ -188,6 +188,16 @@ claude mcp add --transport http reviews http://localhost:4000/mcp \
 ```
 
 See [docs/MCP.md](docs/MCP.md) for the tools, access rules, and other clients.
+
+List the reviews you wrote or took part in:
+
+```sh
+reviews list
+reviews list --status updated      # a newer patchset since your last action
+reviews list --role involved -q billing --json
+```
+
+The same list is on the web at `/reviews`.
 
 ## Layout
 

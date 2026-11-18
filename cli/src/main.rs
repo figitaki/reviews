@@ -34,6 +34,9 @@ enum Command {
     /// Preview the diff that would be pushed, without uploading
     Diff(commands::diff::DiffArgs),
 
+    /// List reviews you wrote or took part in (requires `reviews login`)
+    List(commands::list::ListArgs),
+
     /// Fetch a review by slug as JSON or Markdown
     Show(commands::show::ShowArgs),
 
@@ -70,6 +73,7 @@ fn run() -> Result<()> {
         Command::Whoami => commands::whoami::run(),
         Command::Push(args) => commands::push::run(args),
         Command::Diff(args) => commands::diff::run(args),
+        Command::List(args) => commands::list::run(args),
         Command::Show(args) => commands::show::run(args),
         Command::Comment(args) => commands::comment::run(args),
         Command::Threads(args) => commands::threads::run(args),
