@@ -18,13 +18,12 @@ defmodule ReviewsWeb.DeviceHTML do
             class="is-compact"
           >
             <:actions>
-              <.ds_button
+              <.ds_github_button
                 id="device-sign-in-github"
                 href={~p"/auth/github?#{[return_to: @return_to]}"}
-                variant="primary"
               >
                 Sign in with GitHub
-              </.ds_button>
+              </.ds_github_button>
             </:actions>
           </.ds_page_header>
         </div>
@@ -86,7 +85,13 @@ defmodule ReviewsWeb.DeviceHTML do
                 Codes expire {@ttl_minutes} minutes after <code>reviews login</code>
                 shows them. If yours has, run it again for a new one.
               </p>
-              <.ds_button id="device-entry-submit" type="submit" variant="primary" size="lg">
+              <.ds_button
+                id="device-entry-submit"
+                type="submit"
+                variant="primary"
+                size="lg"
+                icon="hero-arrow-right"
+              >
                 Continue
               </.ds_button>
             </form>
@@ -172,10 +177,17 @@ defmodule ReviewsWeb.DeviceHTML do
                   name="decision"
                   value="approve"
                   variant="primary"
+                  icon="hero-check"
                 >
                   Allow
                 </.ds_button>
-                <.ds_button id="device-deny" type="submit" name="decision" value="deny">
+                <.ds_button
+                  id="device-deny"
+                  type="submit"
+                  name="decision"
+                  value="deny"
+                  icon="hero-x-mark"
+                >
                   Deny
                 </.ds_button>
               </div>

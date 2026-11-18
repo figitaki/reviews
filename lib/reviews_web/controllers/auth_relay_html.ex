@@ -21,7 +21,7 @@ defmodule ReviewsWeb.AuthRelayHTML do
               <.form for={%{}} action={~p"/auth/relay"} method="post">
                 <input type="hidden" name="host" value={@host} />
                 <input type="hidden" name="state" value={@state} />
-                <.ds_button type="submit" variant="primary">Continue with GitHub</.ds_button>
+                <.ds_github_button type="submit">Continue with GitHub</.ds_github_button>
               </.form>
             </:actions>
           </.ds_page_header>

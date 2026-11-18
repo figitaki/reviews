@@ -111,13 +111,12 @@ defmodule ReviewsWeb.ReviewListLive do
                 body="Your list has the reviews you wrote or took part in. Review links still work without signing in."
               >
                 <:actions>
-                  <.ds_button
+                  <.ds_github_button
                     id="reviews-sign-in"
                     href={~p"/auth/github?#{[return_to: @return_to]}"}
-                    variant="primary"
                   >
                     Sign in with GitHub
-                  </.ds_button>
+                  </.ds_github_button>
                 </:actions>
               </.ds_empty_state>
             </div>
@@ -604,11 +603,15 @@ defmodule ReviewsWeb.ReviewListLive do
           <:actions>
             <%= cond do %>
               <% @offset > 0 -> %>
-                <.ds_button id="empty-first-page" patch={list_path(@filters)}>
+                <.ds_button
+                  id="empty-first-page"
+                  patch={list_path(@filters)}
+                  icon="hero-arrow-uturn-left"
+                >
                   Go to the first page
                 </.ds_button>
               <% filters_active?(@filters) -> %>
-                <.ds_button id="empty-clear" patch={~p"/reviews"}>
+                <.ds_button id="empty-clear" patch={~p"/reviews"} icon="hero-x-mark">
                   Clear filters
                 </.ds_button>
               <% true -> %>
@@ -618,6 +621,7 @@ defmodule ReviewsWeb.ReviewListLive do
                 <.ds_button
                   id="empty-demo"
                   navigate={~p"/r/#{@demo_slug}"}
+                  icon="hero-book-open"
                 >
                   Open the demo review
                 </.ds_button>
@@ -638,6 +642,7 @@ defmodule ReviewsWeb.ReviewListLive do
             :if={@offset > 0}
             id="pager-newer"
             patch={list_path(@filters, newer_offset(@offset, @count, @filters.limit))}
+            icon="hero-chevron-left"
           >
             Newer
           </.ds_button>
@@ -646,7 +651,7 @@ defmodule ReviewsWeb.ReviewListLive do
             id="pager-older"
             patch={list_path(@filters, @next_offset)}
           >
-            Older
+            Older <.icon name="hero-chevron-right" class="ds-button-icon" />
           </.ds_button>
         </span>
       </nav>

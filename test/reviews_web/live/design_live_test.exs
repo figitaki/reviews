@@ -30,6 +30,22 @@ defmodule ReviewsWeb.DesignLiveTest do
     assert has_element?(view, "#dc-fields [data-theme=dark] .ds-field-error", "Pick another")
   end
 
+  test "lists the icons in use and the GitHub sign-in button", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/design")
+
+    assert has_element?(view, "#dc-icons [data-theme=dark] .dc-name", "hero-no-symbol")
+    assert has_element?(view, "#dc-icons [data-theme=light] svg.ds-github-mark")
+
+    assert has_element?(
+             view,
+             "#dc-icons [data-theme=dark] a.ds-button.is-primary svg.ds-github-mark"
+           )
+
+    assert has_element?(view, "#dc-icons [data-theme=dark] a.ds-button", "Sign in with GitHub")
+
+    assert has_element?(view, "#dc-icons button.ds-button .ds-button-icon.hero-check")
+  end
+
   test "the playground mounts sample threads and the floating buttons", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/design/components")
 

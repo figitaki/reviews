@@ -6,6 +6,13 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Every "Sign in with GitHub" control shows the GitHub mark, as GitHub's brand
+  rules ask, through a new `<.ds_github_button>`; the comment composer's
+  sign-in prompt and the section-decision sign-in button show it too. The top
+  bar's primary Sign in stays text only. Buttons take an `icon` attribute, and
+  confirm, deny, create, revoke, copy and paging controls now have icons.
+  `/design` lists the icons in use and what each means.
+
 - The design catalog also shows the app shell (both top bars and the account
   menu), the Pierre diff with comments, the section decision panel in each
   state, and the phone floating buttons with the decision button. A new

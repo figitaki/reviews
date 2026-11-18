@@ -740,6 +740,25 @@ textarea.ds-input{
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
+/* Icons inside buttons, from the icon attr or <.github_mark>. */
+.ds-github-mark{
+  width:1em;
+  height:1em;
+  flex:none;
+  vertical-align:-0.125em;
+}
+
+.ds-button-icon{
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.ds-button.is-sm .ds-button-icon{
+  width: 14px;
+  height: 14px;
+}
+
 .ds-button.is-sm{
   min-height: 28px;
   padding: 0 var(--space-4);

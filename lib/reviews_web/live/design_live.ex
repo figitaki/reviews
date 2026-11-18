@@ -46,6 +46,24 @@ defmodule ReviewsWeb.DesignLive do
   @radii tokens.("radius-")
   @shadows tokens.("shadow-") |> Enum.map(&elem(&1, 0))
 
+  # Icons used on controls, with the one thing each means.
+  @icons [
+    {"hero-check", "Allow, approve"},
+    {"hero-x-mark", "Deny, clear, close"},
+    {"hero-plus", "Create"},
+    {"hero-key", "Token"},
+    {"hero-no-symbol", "Revoke"},
+    {"hero-link-slash", "Disconnect"},
+    {"hero-arrow-right-start-on-rectangle", "Sign out"},
+    {"hero-arrow-right", "Continue"},
+    {"hero-chevron-left", "Newer, back"},
+    {"hero-chevron-right", "Older, forward"},
+    {"hero-arrow-uturn-left", "Back to the start"},
+    {"hero-clipboard-document", "Copy"},
+    {"hero-command-line", "CLI"},
+    {"hero-book-open", "Demo, docs"}
+  ]
+
   @impl true
   def mount(_params, _session, socket) do
     unless enabled?(), do: raise(Disabled)
@@ -60,7 +78,8 @@ defmodule ReviewsWeb.DesignLive do
        type_roles: @type_roles,
        spaces: @spaces,
        radii: @radii,
-       shadows: @shadows
+       shadows: @shadows,
+       icons: @icons
      )}
   end
 
@@ -192,6 +211,39 @@ defmodule ReviewsWeb.DesignLive do
           height: 12px;
           border-radius: var(--radius-xs);
           background: var(--ds-blue);
+        }
+
+        .dc-icons {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+          gap: var(--space-4) var(--space-3);
+        }
+
+        .dc-icon {
+          display: grid;
+          grid-template-columns: 20px minmax(0, 1fr);
+          column-gap: var(--space-2);
+          align-items: center;
+        }
+
+        .dc-icon-glyph {
+          grid-row: span 2;
+          width: 20px;
+          height: 20px;
+        }
+
+        .dc-icon .dc-name {
+          overflow-wrap: anywhere;
+        }
+
+        .dc-icon-meaning {
+          color: var(--ds-muted);
+          font-size: var(--font-meta-size);
+        }
+
+        /* Buttons with icons are wider than the default specimen column. */
+        .dc-specimens.is-wide {
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
         }
 
         .dc-rules {
@@ -394,6 +446,53 @@ defmodule ReviewsWeb.DesignLive do
             </.specimen>
             <.specimen name="navigate=…">
               <.ds_button navigate="#" variant="primary">Link</.ds_button>
+            </.specimen>
+          </div>
+        </.catalog_section>
+
+        <.catalog_section id="dc-icons" title="Icons">
+          <:rules>
+            <li>
+              Icons are Heroicons outline, through <code>&lt;.icon name="hero-…"&gt;</code>. They
+              take the text colour and are hidden from screen readers; the label says what the
+              control does.
+            </li>
+            <li>
+              Put an icon on a button with <code>icon="hero-…"</code>. Use one when it makes the
+              action quicker to find: confirm, deny, add, copy, revoke, move between pages. Leave
+              plain text buttons alone when no icon fits.
+            </li>
+            <li>One meaning per icon. Reuse the names below before adding a new one.</li>
+            <li>
+              Sign in with GitHub always uses <code>&lt;.ds_github_button&gt;</code>, which shows
+              the GitHub mark. Keep the mark unchanged and in one colour with high contrast, as
+              GitHub's brand rules ask. The top bar's primary Sign in stays text only.
+            </li>
+          </:rules>
+          <div class="dc-icons">
+            <div :for={{name, meaning} <- @icons} :key={name} class="dc-icon">
+              <.icon name={name} class="dc-icon-glyph" />
+              <span class="dc-name">{name}</span>
+              <span class="dc-icon-meaning">{meaning}</span>
+            </div>
+            <div class="dc-icon">
+              <.github_mark class="dc-icon-glyph" />
+              <span class="dc-name">&lt;.github_mark&gt;</span>
+              <span class="dc-icon-meaning">GitHub sign-in only</span>
+            </div>
+          </div>
+          <div class="dc-specimens is-wide">
+            <.specimen name="<.ds_github_button>">
+              <.ds_github_button href="#" />
+            </.specimen>
+            <.specimen name={~s(variant="secondary" size="sm")}>
+              <.ds_github_button href="#" variant="secondary" size="sm">Sign in</.ds_github_button>
+            </.specimen>
+            <.specimen name={~s(icon="hero-check")}>
+              <.ds_button variant="primary" icon="hero-check">Allow</.ds_button>
+            </.specimen>
+            <.specimen name={~s(icon="hero-no-symbol")}>
+              <.ds_button variant="danger" size="sm" icon="hero-no-symbol">Revoke</.ds_button>
             </.specimen>
           </div>
         </.catalog_section>

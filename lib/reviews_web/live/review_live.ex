@@ -772,7 +772,7 @@ defmodule ReviewsWeb.ReviewLive do
       href={~p"/auth/github?#{[return_to: @return_to]}"}
       class="review-button review-button-secondary"
     >
-      Sign in
+      <.github_mark /> Sign in
     </a>
     """
   end

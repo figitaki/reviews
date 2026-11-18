@@ -20,8 +20,10 @@ defmodule ReviewsWeb.ReviewListLiveTest do
     {:ok, view, _html} = live(conn, ~p"/reviews?status=open")
 
     sign_in = ~p"/auth/github?#{[return_to: "/reviews?status=open"]}"
-    assert has_element?(view, "#reviews-sign-in[href='#{sign_in}']")
+    assert has_element?(view, "#reviews-sign-in[href='#{sign_in}'] svg.ds-github-mark")
     assert has_element?(view, ".l-nav-signin[href='#{sign_in}']")
+    # The top bar's call to action is text only.
+    refute has_element?(view, ".l-nav-signin svg")
   end
 
   test "signed-in user sees their reviews and a nav link", %{conn: conn} do
