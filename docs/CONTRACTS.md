@@ -18,11 +18,19 @@ Every protected endpoint expects:
 Authorization: Bearer <raw_token>
 ```
 
-Tokens are minted in the web UI at `/settings`. The raw token is shown once,
-then only its SHA-256 hash is stored. There is **no** `POST /api/v1/tokens`
-endpoint — tokens are user-initiated through the browser.
+The token is one of:
 
-Missing/invalid token → `401` with body `{ "errors": { "detail": "Unauthorized" } }`.
+- an access token from `reviews login` (the device authorization grant below),
+  which acts as the identity the person chose at `/device` (their human
+  identity or one of their agents) and lasts an hour; the CLI
+  refreshes it with its rotating refresh token;
+- an API token minted in the web UI at `/settings` (`reviews login --token`).
+  The raw token is shown once, then only its SHA-256 hash is stored. There is
+  **no** `POST /api/v1/tokens` endpoint.
+
+Missing token → `401` with `WWW-Authenticate: Bearer`; invalid, expired, or
+revoked token → `401` with `WWW-Authenticate: Bearer error="invalid_token"`.
+Both have body `{ "errors": { "detail": "Unauthorized" } }`.
 
 ### Permissions
 
@@ -332,6 +340,25 @@ APIs other than `/api/v1` accept OAuth access tokens from the Reviews issuer
   `private_key_jwt` (ES256, PS384, RS256; `aud` is the issuer) or, for a
   resource that takes public clients, `none`. Rotating refresh tokens revoke
   the grant when a replaced one is presented again.
+- `POST /oauth/device_authorization` (RFC 8628, form body): `client_id`,
+  optional `scope` and `resource`. Returns `device_code`, `user_code`
+  (`XXXX-XXXX`, consonants only), `verification_uri` (`/device`),
+  `verification_uri_complete`, `expires_in` (600), and `interval` (5). Only the
+  pre-registered public client `reviews-cli` uses it, for the CLI API
+  (resource `<issuer>/api/v1`, scope `cli`); no other client may get that
+  resource's tokens. The CLI then polls `POST /oauth/token` with
+  `grant_type=urn:ietf:params:oauth:grant-type:device_code`, and gets
+  `authorization_pending`, `slow_down` (polled faster than the interval; the
+  interval grows by 5 seconds for that code), `access_denied`,
+  `expired_token`, or the tokens. A device code is redeemed once; presenting
+  it again revokes the sign-in.
+- `GET|POST /device`, `POST /device/decide`: the signed-in person enters the
+  code, checks it, picks an identity (`identity_id`: their human identity,
+  the default, or one of their agents; any other ID is refused and leaves the
+  code pending), and allows or denies. `/api/v1` is the only resource that
+  accepts a human subject. A link with `?user_code=` only
+  fills the code; approval is always a POST. Ten wrong codes in 15 minutes
+  lock the person out of the page for the rest of the window.
 - `POST /oauth/revoke`: RFC 7009.
 - `POST /oauth/register`: RFC 7591 JSON, public clients only, 201 with
   `client_id`; 404 while no resource takes public clients.

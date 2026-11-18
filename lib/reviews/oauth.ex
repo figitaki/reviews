@@ -17,6 +17,11 @@ defmodule Reviews.OAuth do
     * The APIs that accept these tokens are `Reviews.OAuth.Resource`
       modules, listed in `config :reviews, Reviews.OAuth, resources: [...]`.
       A token issued for one resource is refused by every other.
+    * The one exception is the Reviews CLI (`Reviews.OAuth.CLI`): its own
+      client signs in with the device authorization grant, the person
+      approves it at `/device` (`approve_device/3`), choosing which of their
+      identities it acts as: their human identity, as API tokens do, or one
+      of their agents. Only the CLI resource accepts a human subject.
 
   `config/0` builds the gatekeep config from `config :reviews, Reviews.OAuth`
   on every call, because the issuer defaults to the endpoint's public URL and
@@ -24,10 +29,10 @@ defmodule Reviews.OAuth do
   `:default_resource` (modules here), the keys are `Gatekeep.Config` options.
   """
 
-  alias Gatekeep.{Authorization, Config, Metadata, Resource, Token}
+  alias Gatekeep.{Authorization, Config, DeviceAuthorization, Metadata, Resource, Token}
   alias Reviews.Accounts
   alias Reviews.Accounts.{Identity, User}
-  alias Reviews.OAuth.{Grant, Issuer}
+  alias Reviews.OAuth.{CLI, Grant, Issuer}
   alias Reviews.Repo
 
   @doc """
@@ -41,12 +46,16 @@ defmodule Reviews.OAuth do
     {modules, env} = Keyword.pop(env, :resources, [])
     {default, env} = Keyword.pop(env, :default_resource)
 
+    # The CLI resource brings its own client.
+    clients = Keyword.get(env, :clients, []) ++ if(CLI in modules, do: [CLI.client()], else: [])
+
     env
     |> Keyword.merge(
       name: Issuer,
       issuer: issuer(),
       resources: Enum.map(modules, & &1.options()),
-      default_resource: default && default.options()[:id]
+      default_resource: default && default.options()[:id],
+      clients: clients
     )
     |> Config.new!()
   end
@@ -99,6 +108,69 @@ defmodule Reviews.OAuth do
     end
   end
 
+  ## Device sign-in (the Reviews CLI)
+
+  @doc """
+  The pending CLI sign-in with `user_code`, for `/device`. Only requests for
+  the CLI resource can be approved here; any other is `:invalid_user_code`.
+  """
+  @spec lookup_device(term()) ::
+          {:ok, DeviceAuthorization.request()} | {:error, :invalid_user_code | :expired_user_code}
+  def lookup_device(user_code) do
+    with {:ok, request} <- DeviceAuthorization.lookup(config(), user_code) do
+      if Gatekeep.Util.same_url?(request.resource.id, CLI.id()),
+        do: {:ok, request},
+        else: {:error, :invalid_user_code}
+    end
+  end
+
+  @doc """
+  `user` approves the CLI sign-in with `user_code`, acting as `identity_id`:
+  the user's human identity or one of their agents. Any other ID is
+  `:invalid_identity`. The user owns the grant.
+  """
+  @spec approve_device(User.t(), term(), term()) ::
+          :ok | {:error, :invalid_user_code | :expired_user_code | :invalid_identity}
+  def approve_device(%User{} = user, user_code, identity_id) do
+    with {:ok, _request} <- lookup_device(user_code),
+         {:ok, identity} <- owned_identity(user, identity_id) do
+      case DeviceAuthorization.approve(config(), user_code, subject: identity.id, owner: user.id) do
+        {:error, :invalid_scopes} -> {:error, :invalid_user_code}
+        result -> result
+      end
+    end
+  end
+
+  defp owned_identity(user, identity_id) do
+    with {:ok, id} when is_integer(id) <- Ecto.Type.cast(:id, identity_id),
+         %Identity{} = identity <- Accounts.get_owned_identity(user, id) do
+      {:ok, identity}
+    else
+      _ -> {:error, :invalid_identity}
+    end
+  end
+
+  @doc "`user` denies the CLI sign-in with `user_code`; the CLI stops waiting."
+  @spec deny_device(term()) :: :ok | {:error, :invalid_user_code | :expired_user_code}
+  def deny_device(user_code) do
+    with {:ok, _request} <- lookup_device(user_code) do
+      DeviceAuthorization.deny(config(), user_code)
+    end
+  end
+
+  @doc """
+  Authenticates a CLI access token at `/api/v1`. Returns the person and the
+  identity they chose at `/device`, as `Reviews.Accounts.authenticate_token/1`
+  does for API tokens.
+  """
+  @spec authenticate_cli_token(Token.request()) ::
+          {:ok, %{user: User.t(), identity: Identity.t()}} | {:error, atom()}
+  def authenticate_cli_token(request) do
+    with {:ok, %{grant: grant}} <- authenticate_access_token(CLI.id(), request) do
+      {:ok, %{user: grant.approved_by_user, identity: grant.identity}}
+    end
+  end
+
   ## Protected resources
 
   @doc """
@@ -108,16 +180,24 @@ defmodule Reviews.OAuth do
   proof from its key. `request` holds the `:authorization` header, every
   `:dpop` header value, the `:method`, and the `:path`.
 
-  Returns the grant, with the agent identity it acts as and the person who
-  approved it, and the token.
+  Returns the grant, with the identity it acts as and the person who
+  approved it, and the token. The identity belongs to that person; it may be
+  their human identity only at the CLI resource, and is one of their agents
+  everywhere else.
   """
   @spec authenticate_access_token(String.t(), Token.request()) ::
           {:ok, %{grant: Grant.t(), token: Token.t()}}
           | {:error, :missing_token | :invalid_token | :invalid_dpop_proof}
   def authenticate_access_token(resource_id, request) do
     with {:ok, token} <- Token.authenticate(config(), resource_id, request) do
+      human_ok? = Gatekeep.Util.same_url?(token.resource, CLI.id())
+
       case token.grant_id && Repo.get(Grant, token.grant_id) |> with_people() do
-        %Grant{identity: %Identity{}, approved_by_user: %User{}} = grant ->
+        %Grant{
+          identity: %Identity{kind: kind, owner_user_id: user_id},
+          approved_by_user: %User{id: user_id}
+        } = grant
+        when kind == "agent" or (kind == "human" and human_ok?) ->
           {:ok, %{grant: grant, token: token}}
 
         _ ->

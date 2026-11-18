@@ -8,6 +8,7 @@ use crate::api::{
     api_error_code, ApiClient, Capabilities, CodeSnapshotResult, CreatePatchsetRequest,
     CreateReviewRequest, ReserveSnapshotRequest,
 };
+use crate::auth;
 use crate::config::Config;
 use crate::git::{self, CapturedDiff};
 use crate::packet::{self, plural, PacketCheck};
@@ -126,7 +127,7 @@ pub fn run(args: PushArgs) -> Result<()> {
         return Err(anyhow!("{}", problems.join("\n")));
     }
     let packet = check.map(PacketCheck::into_packet).transpose()?;
-    let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
+    let client = auth::client(&cfg)?;
 
     eprintln!(
         "Captured diff: {} on branch {} (base {}).",

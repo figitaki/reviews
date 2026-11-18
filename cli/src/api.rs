@@ -269,7 +269,7 @@ impl ApiClient {
     fn require_token(&self, what: &str) -> Result<&str> {
         self.token
             .as_deref()
-            .ok_or_else(|| anyhow!("{what} requires an API token. Run `reviews login` first."))
+            .ok_or_else(|| anyhow!("{what} requires you to sign in. Run `reviews login` first."))
     }
 
     /// Probe server capabilities. `Ok(None)` means an older server without
@@ -442,7 +442,7 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
         Some("patchset_not_found") => " — select a revision that belongs to this review.",
         _ => match status {
         StatusCode::UNAUTHORIZED => {
-            " — your API token was rejected. Mint a new one in /settings and run `reviews login`."
+            " — the server rejected your sign-in. Run `reviews login` again."
         }
         StatusCode::FORBIDDEN => {
             " — this identity is not allowed to do that on this review. Only the review owner can push revisions or decide sections; the owner or the thread's author can resolve or reopen a thread."
