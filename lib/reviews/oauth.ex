@@ -163,6 +163,28 @@ defmodule Reviews.OAuth do
     end
   end
 
+  @doc "Creates an owned agent and approves the CLI sign-in atomically."
+  @spec approve_device_new_agent(User.t(), term(), map()) ::
+          :ok | {:error, term()}
+  def approve_device_new_agent(%User{} = user, user_code, attrs) when is_map(attrs) do
+    Ecto.Multi.new()
+    |> Ecto.Multi.run(:request, fn _repo, _changes -> lookup_device(user_code) end)
+    |> Ecto.Multi.run(:identity, fn _repo, _changes ->
+      Accounts.create_agent_identity(user, Map.take(attrs, ["handle", "display_name"]))
+    end)
+    |> Ecto.Multi.run(:approval, fn _repo, %{identity: identity} ->
+      case approve_device(user, user_code, identity.id) do
+        :ok -> {:ok, :approved}
+        {:error, reason} -> {:error, reason}
+      end
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, _changes} -> :ok
+      {:error, _step, reason, _changes} -> {:error, reason}
+    end
+  end
+
   defp owned_identity(user, identity_id) do
     with {:ok, id} when is_integer(id) <- Ecto.Type.cast(:id, identity_id),
          %Identity{} = identity <- Accounts.get_owned_identity(user, id) do

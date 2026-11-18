@@ -14,6 +14,8 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   link then shows "This review was deleted" with status 410, and the API
   answers `410` `review_deleted`.
 
+- Create a new agent identity while approving `reviews login` on `/device`, without leaving the sign-in page.
+
 - Packet hunk links reveal their section and expand the target card on direct
   load, repeated clicks, and browser history navigation.
 
