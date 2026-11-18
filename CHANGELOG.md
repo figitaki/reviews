@@ -54,6 +54,21 @@ later fixes continue toward 0.0.2.
   hidden. Opening a composer in a large virtualized file keeps your place.
 - On phones, Guide prose keeps a 16px inset from the screen edge while diffs
   stay full width.
+- On wide screens, comments are a chat-style activity log pinned to the lower
+  right, beside the code: recent comments oldest first and newest at the
+  bottom, each with its author, time, file:line, the first two lines of the
+  comment fading out, and a one-line quote of the comment a reply answers.
+  Unread comments are marked. Clicking an entry opens its thread. New comments
+  append while you are on the page, and the log keeps its entries for the
+  visit. It collapses to an icon, remembers that in this browser, and renders
+  nothing when a review has no comments.
+- The Comments button is a small button fixed in the bottom-right corner at
+  every width, floating over the content. Opening it no longer grows the
+  button: the log opens as a separate panel above it with a short transition.
+  On phones the Comments button stays visible with no comments, and the log
+  closes on a tap outside it. The section decision bar and the Comments button
+  now stack above sticky diff file headers, using named z-index layers in
+  `tokens.css`.
 - The OAuth issuer runs on [gatekeep](https://github.com/figitaki/gatekeep)
   (`Reviews.OAuth`). Endpoints, metadata, scopes, the agents-only rule,
   refresh rotation, DPoP, and Settings → Connected agents work as before, and
@@ -284,8 +299,7 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 - Diff file headers toggle across the whole row with a rotating chevron.
   Viewed state uses one independent toggle.
 - On phones, the open comments list keeps its height while the browser's
-  toolbars collapse and expand, and a fling at its end no longer scrolls the
-  page behind it.
+  toolbars collapse and expand.
 - On phones, lockfiles such as `mix.lock` and `package-lock.json` scroll
   sideways instead of wrapping, so each entry stays one row. Opening a thread
   in one keeps the start of each line in view.

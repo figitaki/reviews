@@ -226,10 +226,14 @@
   --shadow-float:      0 4px 12px rgb(0 0 0 / 0.18);  /* floating buttons */
   --shadow-panel:      0 8px 28px rgb(0 0 0 / 0.2);   /* floating panels */
 
-  /* Stacking layers. Existing fixed values, lowest first: section decision 8,
-     Markdown sticky header 10, guide shell 30, toolbar 40. */
-  --z-float: 5;  /* gutter thread markers, the pinned activity log */
-  --z-fab:   9;  /* phone floating buttons, above the section decision */
+  /* Stacking layers, lowest first. The section decision and the Comments
+     button float above diff content and its sticky headers. */
+  --z-float:    5;   /* gutter thread markers inside Pierre's diff */
+  --z-sticky:   10;  /* sticky diff file headers, Markdown sticky header */
+  --z-decision: 20;  /* sticky section decision bar */
+  --z-fab:      25;  /* Comments button and log, phone floating buttons */
+  --z-guide:    30;  /* guide shell */
+  --z-toolbar:  40;  /* review toolbar */
 
   /* Breakpoints. CSS @media cannot read custom properties, so these are
      listed here and exported for JS from assets/js/lib/breakpoints.js:
