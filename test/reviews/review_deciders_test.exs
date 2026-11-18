@@ -270,6 +270,24 @@ defmodule Reviews.ReviewDecidersTest do
     assert %{decision: "pending", approved: 0} = by_handle(deciders(review))["repinned"]
   end
 
+  test "a revision without a packet shows reviewers as commented" do
+    author = user!("author")
+    %{review: review, patchset: ps1} = packet_review!(author)
+
+    talker = identity!(user!("talker"))
+    quiet = identity!(user!("quiet"))
+    decide!(review, ps1, talker, 0, "approved")
+    decide!(review, ps1, quiet, 0, "approved")
+    comment!(review, talker, "still reading")
+
+    {:ok, _ps2} = ReviewsContext.append_patchset_unchecked(review, %{raw_diff: @diff_v1})
+
+    deciders = by_handle(deciders(review))
+
+    assert %{decision: "commented", section_count: 0, comment_count: 1} = deciders["talker"]
+    refute Map.has_key?(deciders, "quiet")
+  end
+
   test "carries decisions forward to unchanged sections and marks stale ones pending" do
     author = user!("author")
     %{review: review, patchset: ps1} = packet_review!(author)

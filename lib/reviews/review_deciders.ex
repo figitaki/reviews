@@ -146,6 +146,9 @@ defmodule Reviews.ReviewDeciders do
   defp packet_sections(nil), do: []
   defp packet_sections(%Patchset{packet: packet}), do: ReviewPacket.sections(packet || %{})
 
+  # A revision without a packet has no sections to decide.
+  defp decision([], _author_decisions), do: "commented"
+
   defp decision(statuses, author_decisions) do
     decided = Enum.reject(statuses, &is_nil/1)
 

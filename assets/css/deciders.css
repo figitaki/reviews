@@ -65,7 +65,16 @@
 .rev-decider:hover,
 .rev-decider:focus-visible {
   z-index: 2;
+}
+
+/* Focus does not lift: a transform would trap the phone focus label below. */
+.rev-decider:hover {
   transform: translateY(-1px);
+}
+
+/* Its label must paint over the sticky review toolbar below the top bar. */
+.rev-decider:focus-visible {
+  z-index: calc(var(--z-toolbar) + 1);
 }
 
 .rev-decider:focus-visible {
@@ -86,8 +95,29 @@
   color: var(--ds-bg);
   font-size: var(--font-size-xs);
   font-weight: var(--weight-medium);
-  white-space: nowrap;
+  line-height: var(--font-ui-leading);
+  /* Wraps and stays on screen: the stack sits at the right edge. */
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2 * var(--space-7)));
+  white-space: normal;
+  overflow-wrap: anywhere;
   pointer-events: none;
+}
+
+/* PHONE: the stack is not at the screen edge, so pin the label across the
+   viewport, just below the avatar (its bottom edge, moved down by its height). */
+@media (max-width: 640px) {
+  .rev-decider[data-label]:focus-visible::after {
+    position: fixed;
+    top: auto;
+    right: var(--space-7);
+    left: var(--space-7);
+    align-self: flex-end;
+    width: auto;
+    max-width: none;
+    margin-top: var(--space-2);
+    transform: translateY(calc(100% + var(--space-2)));
+  }
 }
 
 .rev-decider-avatar,
@@ -139,8 +169,9 @@
   --decider-color: var(--ds-warn);
 }
 
+/* Muted, not the divider color, so the clock badge keeps 3:1 contrast. */
 .rev-decider.is-pending {
-  --decider-color: var(--ds-line-strong);
+  --decider-color: var(--ds-muted);
 }
 
 .rev-decider.is-commented {
