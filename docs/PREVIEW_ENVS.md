@@ -275,9 +275,7 @@ the `PREVIEW_API_TOKEN` secret above.
 To use it:
 
 ```sh
-reviews login
-# server_url: https://reviews-pr-42.fly.dev
-# api_token:  <the same string you put in PREVIEW_API_TOKEN>
+echo "$PREVIEW_API_TOKEN" | reviews login --server https://reviews-pr-42.fly.dev --token
 
 reviews push
 ```

@@ -14,6 +14,9 @@ defmodule ReviewsWeb.OAuthController do
       `private_key_jwt` client assertion; public clients send `client_id`
       and no assertion and rely on PKCE. A `DPoP` proof binds the tokens to
       its key (Poppy spec 4.5).
+    * `POST /oauth/device_authorization` - the device authorization grant
+      (RFC 8628) for `reviews login`; the person approves at `/device`
+      (`ReviewsWeb.DeviceController`), and the CLI polls `/oauth/token`.
     * `POST /oauth/revoke` - RFC 7009 revocation.
     * `POST /oauth/register` - dynamic client registration (RFC 7591) for
       clients that don't use a client metadata document.
@@ -24,7 +27,7 @@ defmodule ReviewsWeb.OAuthController do
 
   @behaviour Gatekeep.Consent
 
-  alias Gatekeep.{Authorization, Registration, TokenEndpoint}
+  alias Gatekeep.{Authorization, DeviceAuthorization, Registration, TokenEndpoint}
   alias Reviews.Accounts
   alias Reviews.OAuth
 
@@ -104,6 +107,15 @@ defmodule ReviewsWeb.OAuthController do
   def token(conn, params) do
     case TokenEndpoint.token(OAuth.config(), params, http(conn)) do
       {:ok, body} -> conn |> no_store() |> json(body)
+      {:error, :invalid_client} -> oauth_error(conn, 401, :invalid_client)
+      {:error, error} -> oauth_error(conn, 400, error)
+    end
+  end
+
+  def device_authorization(conn, params) do
+    case DeviceAuthorization.authorize(OAuth.config(), params, http(conn)) do
+      {:ok, body} -> conn |> no_store() |> json(body)
+      {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "not_found"})
       {:error, :invalid_client} -> oauth_error(conn, 401, :invalid_client)
       {:error, error} -> oauth_error(conn, 400, error)
     end
