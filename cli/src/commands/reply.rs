@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Args;
 
-use crate::api::{ApiClient, CreateCommentRequest};
+use crate::api::CreateCommentRequest;
+use crate::auth;
 use crate::commands::parse_thread_id;
 use crate::config::Config;
 
@@ -21,7 +22,7 @@ pub struct ReplyArgs {
 
 pub fn run(args: ReplyArgs) -> Result<()> {
     let cfg = Config::load()?;
-    let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
+    let client = auth::client(&cfg)?;
 
     let body = resolve_body(args.body.as_deref())?;
     let body = body.trim();

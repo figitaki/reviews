@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod api;
+mod auth;
 mod commands;
 mod config;
 mod git;
@@ -20,8 +21,9 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Save server URL + API token to ~/.config/reviews/config.toml
-    Login,
+    /// Sign in from the browser on any device, or with --token, and save
+    /// to ~/.config/reviews/config.toml
+    Login(commands::login::LoginArgs),
 
     /// Print the currently logged-in user
     Whoami,
@@ -64,7 +66,7 @@ fn main() {
 fn run() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Login => commands::login::run(),
+        Command::Login(args) => commands::login::run(args),
         Command::Whoami => commands::whoami::run(),
         Command::Push(args) => commands::push::run(args),
         Command::Diff(args) => commands::diff::run(args),

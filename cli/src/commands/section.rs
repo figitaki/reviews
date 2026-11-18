@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Result};
 use clap::Args;
 
-use crate::api::{ApiClient, SectionDecisionRequest};
+use crate::api::SectionDecisionRequest;
+use crate::auth;
 use crate::config::Config;
 
 #[derive(Args, Debug)]
@@ -24,7 +25,7 @@ pub fn run(args: SectionArgs) -> Result<()> {
     }
 
     let cfg = Config::load()?;
-    let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
+    let client = auth::client(&cfg)?;
     let resp = client.set_section_decision(
         &args.slug,
         args.section_index,

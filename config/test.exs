@@ -60,7 +60,12 @@ config :reviews, Reviews.OAuth,
   fetcher: Reviews.OAuthTestClient.Fetcher,
   # Public clients first, so the metadata lists `none` first, as it did
   # before gatekeep.
-  resources: [Reviews.OAuthTestResource, Reviews.OAuthTestResource.KeysOnly, Reviews.Poppy],
+  resources: [
+    Reviews.OAuthTestResource,
+    Reviews.OAuthTestResource.KeysOnly,
+    Reviews.Poppy,
+    Reviews.OAuth.CLI
+  ],
   default_resource: Reviews.Poppy
 
 # Raise on LiveView test-time template problems instead of warning.

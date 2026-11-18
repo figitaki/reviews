@@ -101,12 +101,22 @@ defmodule ReviewsWeb.Router do
     post "/authorize", OAuthController, :approve
   end
 
+  # CLI sign-in (RFC 8628): the person enters the code `reviews login` shows.
+  scope "/device", ReviewsWeb do
+    pipe_through :browser
+
+    get "/", DeviceController, :show
+    post "/", DeviceController, :lookup
+    post "/decide", DeviceController, :decide
+  end
+
   scope "/oauth", ReviewsWeb do
     pipe_through :oauth_endpoint
 
     post "/token", OAuthController, :token
     post "/revoke", OAuthController, :revoke
     post "/register", OAuthController, :register
+    post "/device_authorization", OAuthController, :device_authorization
     options "/:endpoint", OAuthController, :token
   end
 
