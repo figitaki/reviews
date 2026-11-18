@@ -392,7 +392,6 @@ defmodule ReviewsWeb.ReviewLiveTest do
       section_sign_in_href =
         ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}?#{[section: 0]}"]}"
 
-      refute has_element?(view, "#packet-section-0-decision.is-readonly")
       assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
       view |> element("#packet-section-0-decision-toggle") |> render_click()
       assert has_element?(view, "#packet-section-0-decision.is-editing")
@@ -2098,9 +2097,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
       view |> element("#review-guide-tick-0") |> render_click()
 
-      assert has_element?(view, "#packet-section-0-decision.is-readonly")
+      # A non-owner can expand the decision to read the owner-only note and
+      # collapse it again, but gets no decision buttons.
+      toggle = "#packet-section-0-decision-toggle"
+      assert has_element?(view, "#{toggle}[aria-expanded=false]")
+      view |> element(toggle) |> render_click()
+
+      assert has_element?(
+               view,
+               "#{toggle}[aria-expanded=true][aria-label='Close decision controls']"
+             )
+
       assert has_element?(view, "#packet-section-0-decision-owner-only", "Only the review owner")
-      refute has_element?(view, "#packet-section-0-decision button")
+      refute has_element?(view, "#packet-section-0-decision [aria-pressed]")
+      view |> element(toggle) |> render_click()
+      assert has_element?(view, "#{toggle}[aria-expanded=false]")
 
       assert render_hook(view, "set_section_status", %{
                "section_index" => "0",

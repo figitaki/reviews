@@ -449,10 +449,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   # Public for the component playground (/design/components).
   def packet_section_decision(assigns) do
-    # Signed-out readers get the same collapsible control, with a sign-in CTA.
+    # Every reader gets the same collapsible control: owners decide, other
+    # signed-in readers see the owner-only note, signed-out readers sign in.
     assigns =
       assigns
-      |> assign(:collapsible, assigns.can_decide or is_nil(assigns.current_user))
       |> assign(:sign_in_return_to, section_return_to(assigns.return_to, assigns.section.index))
 
     ~H"""
@@ -461,8 +461,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       class={[
         "review-section-decision",
         "is-#{@section.effective_status || "pending"}",
-        @editing && "is-editing",
-        !@collapsible && "is-readonly"
+        @editing && "is-editing"
       ]}
       phx-hook=".SectionDecision"
       data-editing={to_string(@editing)}
@@ -478,7 +477,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </p>
       </div>
       <button
-        :if={@collapsible}
         id={"packet-section-#{@section.index}-decision-toggle"}
         type="button"
         class="review-section-decision-toggle"
@@ -486,6 +484,9 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           cond do
             @editing ->
               "Close decision controls"
+
+            !@can_decide ->
+              "Show section decision"
 
             @section.effective_status in ~w(approved denied ignored) ->
               "Change decision: #{section_decision_state_label(@section)}"

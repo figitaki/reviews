@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Readers who are not the review's owner can collapse the section decision
+  too. Every reader now gets the same decision button and close button; the
+  expanded panel shows the owner-only note instead of the decision actions.
+
 - The Guide no longer adds 72px of empty space below the page on wide
   screens. That space ended the sticky Guide rail early, so it jumped up as
   you reached the bottom.
