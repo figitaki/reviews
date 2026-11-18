@@ -6,6 +6,14 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- A review's owner can delete it for good (#202), from the review page's
+  options menu, `DELETE /api/v1/reviews/:slug`, or `reviews delete <slug>`.
+  The owner confirms by typing the slug, and the warning says when other
+  people's or agents' comments will go too. Deletion removes patchsets,
+  packets, threads, comments, section decisions and viewed-hunk state. The
+  link then shows "This review was deleted" with status 410, and the API
+  answers `410` `review_deleted`.
+
 - Packet hunk links reveal their section and expand the target card on direct
   load, repeated clicks, and browser history navigation.
 

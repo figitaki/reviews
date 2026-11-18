@@ -184,6 +184,23 @@
   padding-inline: 18px;
   text-decoration: none;
 }
+/* Error pages a visitor should understand (ReviewsWeb.ErrorHTML.status_page). */
+.l-status { padding-block: 96px 72px; }
+.l-status h1 {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: var(--tracking-flat);
+}
+.l-status-message {
+  max-width: 58ch;
+  margin: 20px 0 0;
+  color: var(--ds-muted);
+  font-size: var(--font-prose-size);
+  line-height: var(--font-prose-leading);
+  text-wrap: pretty;
+}
 .home-demo-note {
   margin: 14px 0 0;
   color: var(--ds-muted);
