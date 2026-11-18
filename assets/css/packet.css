@@ -2487,10 +2487,21 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-guide-flyout-title {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Decision status: a fixed-width trailing badge (label for screen readers
+   only), so long titles truncate the same way on every row. */
+.review-guide-flyout-state {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
 }
 
 .review-guide-flyout-files {

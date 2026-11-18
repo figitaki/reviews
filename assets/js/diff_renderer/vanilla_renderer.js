@@ -38,13 +38,24 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     [data-utility-button]::before,
     .reviews-thread-marker::before { inset: -6px -12px; }
   }
-  /* Phones hide line numbers. The gutter keeps the change bar and is just
-     wide enough for Pierre's comment button (at left: 6px) and our badge. */
-  [data-disable-line-numbers] :is([data-column-number], [data-gutter-buffer]) {
-    min-width: calc(1lh + 14px);
+  /* Phones keep line numbers in a compact gutter: smaller digits and tighter
+     padding, still clear of the 4px change bar, and at least as wide as a
+     thread marker. */
+  @media (max-width: 768px) {
+    [data-column-number],
+    [data-gutter-buffer] {
+      padding-left: 8px;
+      padding-right: 4px;
+    }
+    [data-line-number-content],
+    [data-gutter-buffer]::before {
+      min-width: calc(1lh - 4px);
+    }
+    [data-line-number-content] { font-size: 11px; }
   }
   /* Phones: lines with threads get a button shaped like Pierre's comment
-     button, in the same spot, with a count badge. */
+     button over their line number, with a count badge. Its label names the
+     line, since it covers the number. */
   .reviews-thread-marker {
     position: absolute;
     top: 0;
@@ -654,8 +665,6 @@ export class VanillaDiffRenderer {
       overflow:
         this.diffStyle === "unified" && !(this.compact() && LOCKFILE.test(this.filePath)) ? "wrap" : "scroll",
       collapsed: this.collapsed(),
-      // Phones drop line numbers; the gutter holds only the comment buttons.
-      disableLineNumbers: this.compact(),
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),

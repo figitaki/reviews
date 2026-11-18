@@ -17,12 +17,12 @@ export const ReviewActivity = {
     this.details = this.el.querySelector("details")
     this.onClick = event => {
       if (event.target.closest("[data-quick-sections]")) {
-        // The guide's section bar scrolls away on phones; bring it back and
-        // open its map, the same as pressing its menu button.
+        // Sections toggles the guide map, the same as its menu button. The
+        // guide's section bar scrolls away on phones, so opening brings it back.
         const guide = document.getElementById("review-guide-shell")
-        guide?.scrollIntoView({ block: "start" })
         const map = guide?.querySelector("[data-guide-flyout-toggle]")
-        if (map?.getAttribute("aria-expanded") !== "true") map?.click()
+        if (map?.getAttribute("aria-expanded") !== "true") guide?.scrollIntoView({ block: "start" })
+        map?.click()
         return
       }
       if (event.target.closest("[data-activity-mark-all]")) {
