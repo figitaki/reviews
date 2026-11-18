@@ -257,7 +257,13 @@ pub fn diff_files(raw_diff: &str) -> Vec<DiffFile> {
         .iter()
         .map(|(path, hunks)| (path.clone(), hunks.len()))
         .collect();
-    for chunk in raw_diff.split("\ndiff --git ") {
+    // Keep the newline before the next file: it terminates the last body row.
+    let boundaries: Vec<_> = std::iter::once(0)
+        .chain(raw_diff.match_indices("\ndiff --git ").map(|(i, _)| i + 1))
+        .chain(std::iter::once(raw_diff.len()))
+        .collect();
+    for range in boundaries.windows(2) {
+        let chunk = &raw_diff[range[0]..range[1]];
         let chunk = chunk.strip_prefix("diff --git ").unwrap_or(chunk);
         let Some(header) = chunk.lines().next() else {
             continue;
@@ -871,7 +877,13 @@ fn expected_change_lines(diff: &DiffIndex) -> BTreeSet<ChangeLine> {
 
 fn diff_index(raw_diff: &str) -> DiffIndex {
     let mut index = DiffIndex::new();
-    for chunk in raw_diff.split("\ndiff --git ") {
+    // Keep the newline before the next file: it terminates the last body row.
+    let boundaries: Vec<_> = std::iter::once(0)
+        .chain(raw_diff.match_indices("\ndiff --git ").map(|(i, _)| i + 1))
+        .chain(std::iter::once(raw_diff.len()))
+        .collect();
+    for range in boundaries.windows(2) {
+        let chunk = &raw_diff[range[0]..range[1]];
         let chunk = chunk.strip_prefix("diff --git ").unwrap_or(chunk);
         let mut lines = chunk.lines();
         let Some(header) = lines.next() else { continue };
@@ -1138,6 +1150,36 @@ Second thought.
             .contains("does not cover changed line `q.sql`#1:L3"));
 
         let check = check_file("packet.md", "# T\n\n## S\n@hunk q.sql#1", diff);
+        assert!(check.is_valid(), "issues = {:#?}", check.issues);
+    }
+
+    #[test]
+    fn empty_hunk_rows_match_server_vector() {
+        let diff = include_str!("../../test/vectors/diffs/empty-hunk-rows.diff");
+        let index = diff_index(diff);
+        assert_eq!(index["x.txt"][0].row_count, 3);
+        assert_eq!(index["x.txt"][0].changed_rows, BTreeSet::from([2, 3]));
+        let check = check_file(
+            "packet.md",
+            "# T\n\n## S\n@hunk x.txt#1:L2-L2\n@hunk x.txt#1:L3-L3",
+            diff,
+        );
+        assert!(check.is_valid(), "issues = {:#?}", check.issues);
+    }
+
+    #[test]
+    fn multi_file_empty_rows_match_server_vector() {
+        let diff = include_str!("../../test/vectors/diffs/multi-file-empty-rows.diff");
+        let index = diff_index(diff);
+        for path in ["x.txt", "y.txt"] {
+            assert_eq!(index[path][0].row_count, 3);
+            assert_eq!(index[path][0].changed_rows, BTreeSet::from([1, 2]));
+        }
+        let check = check_file(
+            "packet.md",
+            "# T\n\n## S\n@hunk x.txt#1:L1-L3\n@hunk y.txt#1:L1-L3",
+            diff,
+        );
         assert!(check.is_valid(), "issues = {:#?}", check.issues);
     }
 

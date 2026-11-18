@@ -140,7 +140,7 @@
     align-items: flex-end;
     gap: 12px;
   }
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-activity {
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
     --review-quick-right: calc(16px + 4px + env(safe-area-inset-right));
     --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
   }
