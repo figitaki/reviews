@@ -15,7 +15,9 @@ with tempfile.TemporaryDirectory(prefix='rv-analytics-perf-') as tmp:
   for table,n in [('reviews',100000),('patchsets',200000),('comments',300000),('packet_section_decisions',100000)]:
    setup+=f"CREATE TABLE {table}(id bigint PRIMARY KEY, inserted_at timestamp NOT NULL, author_id bigint, payload text); CREATE INDEX ON {table}(author_id); INSERT INTO {table} SELECT n, date_trunc('second',transaction_timestamp()) AT TIME ZONE 'UTC' - (n%90)*interval '1 day' - interval '1 second', (n%60000)+1, repeat(md5(n::text),32) FROM generate_series(1,{n}) n;"
   setup+='ANALYZE;'
-  env={**os.environ,'PGHOST':tmp,'PGPORT':'5432','PGUSER':os.environ['USER'],'PGDATABASE':'postgres'}
+  # Drop inherited libpq settings (PGHOSTADDR overrides PGHOST, PGSERVICE adds a target).
+  base={k:v for k,v in os.environ.items() if not k.startswith('PG')}
+  env={**base,'PGHOST':tmp,'PGPORT':'5432','PGUSER':os.environ['USER'],'PGDATABASE':'postgres'}
   subprocess.run(['psql','-X','-q','-v','ON_ERROR_STOP=1'],input=setup,text=True,env=env,check=True,capture_output=True)
   query=(repo/'priv/analytics/snapshot.sql').read_text()
   results=[]
