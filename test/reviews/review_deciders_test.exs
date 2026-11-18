@@ -1,6 +1,8 @@
 defmodule Reviews.ReviewDecidersTest do
   use Reviews.DataCase, async: true
 
+  import Ecto.Query
+
   alias Reviews.Accounts
   alias Reviews.ReviewDeciders
   alias Reviews.ReviewPacket
@@ -223,6 +225,49 @@ defmodule Reviews.ReviewDecidersTest do
              deciders["bot"]
 
     assert %{decision: "commented", approved: 0, comment_count: 1} = deciders["person"]
+  end
+
+  test "on a timestamp tie, the account's newer decision row picks the avatar" do
+    author = user!("author")
+    %{review: review, patchset: ps} = packet_review!(author)
+
+    person = user!("tied")
+    human = identity!(person)
+
+    {:ok, agent} =
+      Accounts.create_agent_identity(person, %{display_name: "Bot", handle: "tiebot"})
+
+    human_decision = decide!(review, ps, human, 0, "approved")
+    decide!(review, ps, agent, 1, "approved")
+
+    # Timestamps have one-second precision, so both writes can share a second.
+    Repo.update_all(
+      from(d in PacketSectionDecision, where: d.account_id == ^person.id),
+      set: [updated_at: human_decision.updated_at]
+    )
+
+    deciders = by_handle(deciders(review))
+
+    assert %{decision: "approved", approved: 2} = deciders["tiebot"]
+    refute Map.has_key?(deciders, "tied")
+  end
+
+  test "an inherited pending section counts as undecided" do
+    author = user!("author")
+    %{review: review, patchset: ps1} = packet_review!(author)
+    reviewer = identity!(user!("repinned"))
+
+    decide!(review, ps1, reviewer, 0, "approved")
+
+    {:ok, ps2} =
+      ReviewsContext.append_patchset_unchecked(review, %{raw_diff: @diff_v1, packet: packet()})
+
+    decide!(review, ps2, reviewer, 0, "pending")
+
+    {:ok, _ps3} =
+      ReviewsContext.append_patchset_unchecked(review, %{raw_diff: @diff_v1, packet: packet()})
+
+    assert %{decision: "pending", approved: 0} = by_handle(deciders(review))["repinned"]
   end
 
   test "carries decisions forward to unchanged sections and marks stale ones pending" do

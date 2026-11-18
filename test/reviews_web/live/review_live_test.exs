@@ -766,6 +766,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
       codex = "#decider-stack-#{agent_comment.author_id}"
 
       assert has_element?(view, ~s|#{zara}.is-commented[title="@zara: commented · 1 comment"]|)
+      # Keyboard focus shows the same label as the mouse tooltip.
+      assert has_element?(
+               view,
+               ~s|#{zara}[tabindex="0"][data-label="@zara: commented · 1 comment"]|
+             )
+
       assert has_element?(view, ~s|#{zara} .rev-decider-badge .hero-chat-bubble-left-ellipsis|)
 
       assert has_element?(
@@ -804,7 +810,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               ~s|#decider-stack-more[title="2 more reviewers: @reviewer-6, @reviewer-7"]|,
+               ~s|#decider-stack-more[tabindex="0"][data-label="2 more reviewers: @reviewer-6, @reviewer-7"]|,
                "+2"
              )
     end

@@ -5,8 +5,9 @@ defmodule ReviewsWeb.DeciderComponents do
   Takes the deciders built by `Reviews.ReviewDeciders`. The stack shows the
   first five avatars, each ringed in its decision color with a small decision
   badge in the top-left corner, and a `+N` chip for the rest. Hover or focus
-  spreads the stack out. Each avatar has a `title` tooltip and screen-reader
-  text with the reviewer and their decision.
+  spreads the stack out. Each avatar and the `+N` chip can take keyboard focus,
+  which shows the same label as the mouse `title` tooltip; screen readers get
+  it as text.
   """
   use Phoenix.Component
 
@@ -42,7 +43,9 @@ defmodule ReviewsWeb.DeciderComponents do
         class={["rev-decider", decision_class(decider.decision)]}
         data-decision={decider.decision}
         data-kind={decider.author.kind}
+        data-label={decider_label(decider)}
         title={decider_label(decider)}
+        tabindex="0"
       >
         <span class="rev-decider-avatar" aria-hidden="true">
           <img
@@ -71,7 +74,9 @@ defmodule ReviewsWeb.DeciderComponents do
         :if={@hidden_deciders != []}
         id={"#{@id}-more"}
         class="rev-decider rev-decider-more"
+        data-label={overflow_label(@hidden_deciders)}
         title={overflow_label(@hidden_deciders)}
+        tabindex="0"
       >
         <span aria-hidden="true">+{length(@hidden_deciders)}</span>
         <span class="sr-only">{overflow_label(@hidden_deciders)}</span>

@@ -73,7 +73,10 @@ defmodule Reviews.ReviewDeciders do
       decisions
       |> Enum.group_by(& &1.account_id)
       |> Map.new(fn {_account_id, account_decisions} ->
-        latest = Enum.max_by(account_decisions, & &1.updated_at, DateTime)
+        # Timestamps have one-second precision; on a tie the newer row wins.
+        latest =
+          Enum.max_by(account_decisions, &{DateTime.to_unix(&1.updated_at), &1.id})
+
         {latest.author_id, rollup(account_decisions, sections, selected_patchset, patchsets)}
       end)
 
@@ -108,7 +111,12 @@ defmodule Reviews.ReviewDeciders do
             patchsets
           )
 
-        state.effective && state.effective.status
+        # An inherited "pending" pins the section as undecided.
+        case state.effective do
+          %{status: "pending"} -> nil
+          %{status: status} -> status
+          nil -> nil
+        end
       end)
 
     counts = Enum.frequencies(statuses)
