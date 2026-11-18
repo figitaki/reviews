@@ -100,7 +100,10 @@ defmodule ReviewsWeb.ReviewLive do
       {:ok, patchset_number} ->
         case refresh_snapshot(socket, patchset_number: patchset_number) do
           {:ok, socket} ->
-            {:noreply, reveal_activity_thread(socket, params["thread"])}
+            {:noreply,
+             socket
+             |> reveal_activity_thread(params["thread"])
+             |> reveal_packet_section(params["section"])}
 
           {:error, :patchset_not_found} ->
             {:noreply, put_flash(socket, :error, "Patchset not found.")}
@@ -817,6 +820,24 @@ defmodule ReviewsWeb.ReviewLive do
               ~p"/r/#{socket.assigns.review.slug}/changes?#{[patchset: socket.assigns.selected_patchset.number, thread: thread.id]}"
           )
       end
+    else
+      _ -> socket
+    end
+  end
+
+  # `?section=N` (the section sign-in link's return path) opens that section
+  # with its decision expanded.
+  defp reveal_packet_section(socket, index) do
+    with :show <- socket.assigns.live_action,
+         section_index when is_integer(section_index) <- parse_int(index),
+         %{} <-
+           ReviewPacket.section_at(socket.assigns.selected_patchset.packet || %{}, section_index) do
+      socket
+      |> assign(:active_outline_section_index, section_index)
+      |> assign(:editing_decision_index, section_index)
+      |> update(:expanded_section_ids, &MapSet.put(&1, section_index))
+      |> auto_open_section_hunks(section_index)
+      |> push_event("packet_nav_jump", %{id: "packet-section-#{section_index}-decision"})
     else
       _ -> socket
     end

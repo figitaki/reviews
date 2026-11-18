@@ -17,21 +17,6 @@
   min-width: 0;
 }
 
-.review-workspace > .review-activity {
-  order: -1;
-}
-
-@media (min-width: 1200px) {
-  .review-workspace {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    padding-right: 16px;
-  }
-
-  .review-workspace > .review-activity {
-    order: 0;
-  }
-}
 
 .review-page {
   --review-app-nav-h: 64px;
@@ -757,12 +742,6 @@
   padding-inline: clamp(16px, 2vw, 32px);
 }
 
-@media (min-width: 769px) {
-  .review-packet-shell.has-outline .review-packet-grid {
-    padding-right: calc(clamp(16px, 2vw, 32px) + var(--guide-rail-w));
-  }
-}
-
 .review-packet-inline-overview {
   width: min(100%, var(--guide-measure));
   margin-inline: auto;
@@ -1125,17 +1104,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-section-signin {
-  color: var(--review-muted);
-  font-size: var(--font-ui-size);
-  font-weight: var(--font-ui-weight);
-  line-height: var(--font-ui-leading);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.review-packet-section-signin:hover,
-.review-packet-section-signin:focus-visible {
-  color: var(--review-text);
+  text-decoration: none;
 }
 
 .review-packet-section-note {
@@ -1378,6 +1347,107 @@ details[open] > summary .review-collapse-icon,
   display: none;
 }
 
+/* Expanded, the toggle is a small close button in the bar's top-right
+   corner, out of the bar's flex layout. */
+.review-section-decision.is-editing .review-section-decision-toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--review-muted);
+}
+
+.review-section-decision.is-editing .review-section-decision-toggle:hover {
+  background: var(--review-hover);
+  color: var(--review-text);
+}
+
+.review-section-decision.is-editing .review-section-decision-copy {
+  padding-right: 28px;
+}
+
+.review-section-decision.is-editing .review-section-decision-toggle > span {
+  width: 14px;
+  height: 14px;
+}
+
+/* Above phones the decision collapses to a pill at the right edge of the
+   content, like the phone button; its toggle expands the full bar. */
+@media (min-width: 641px) {
+  .review-section-decision:not(.is-editing):not(.is-readonly) {
+    /* Centres the 40px pill on the 48px Comments button. */
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    width: fit-content;
+    margin-left: auto;
+    margin-right: 0;
+    justify-self: end;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .review-section-decision:not(.is-editing):not(.is-readonly) .review-section-decision-copy,
+  .review-section-decision:not(.is-editing):not(.is-readonly) .review-packet-section-actions {
+    display: none;
+  }
+
+  .review-section-decision-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    border: 1px solid var(--review-line-strong);
+    border-radius: 999px;
+    padding: 0 16px 0 12px;
+    background: var(--review-panel-raised);
+    color: var(--decision-accent);
+    cursor: pointer;
+    box-shadow: var(--shadow-float);
+    font-size: var(--font-ui-size);
+    font-weight: var(--font-ui-weight);
+    line-height: var(--font-ui-leading);
+  }
+
+  .review-section-decision-toggle:hover {
+    background: var(--review-hover);
+  }
+
+  .review-section-decision-toggle:focus-visible {
+    outline: 2px solid var(--decision-accent);
+    outline-offset: 3px;
+  }
+
+  .review-section-decision-toggle > .review-section-state-icon,
+  .review-section-decision-toggle > [class*="hero-"] {
+    width: 18px;
+    height: 18px;
+  }
+
+  .review-section-decision-toggle-label {
+    color: var(--review-text);
+  }
+
+  /* Bottom-aligned actions stay clear of the close button in the corner. */
+  .review-section-decision.is-editing {
+    align-items: flex-end;
+    padding-top: 22px;
+  }
+
+  .review-section-decision.is-editing .review-packet-section-actions {
+    margin-left: auto;
+  }
+}
+
 .review-section-decision-prompt {
   display: flex;
   align-items: center;
@@ -1535,14 +1605,15 @@ details[open] > summary .review-collapse-icon,
     height: 24px;
   }
 
+  .review-section-decision-toggle > .review-section-decision-toggle-label {
+    display: none;
+  }
+
   .review-section-decision.is-editing .review-section-decision-toggle {
-    flex-basis: 44px;
-    width: 44px;
-    height: 44px;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-    color: var(--review-muted);
+    top: 4px;
+    right: 4px;
+    width: 32px;
+    height: 32px;
   }
 
   .review-section-decision.is-editing .review-section-decision-copy {
@@ -2494,10 +2565,21 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-guide-flyout-title {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Decision status: a fixed-width trailing badge (label for screen readers
+   only), so long titles truncate the same way on every row. */
+.review-guide-flyout-state {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
 }
 
 .review-guide-flyout-files {

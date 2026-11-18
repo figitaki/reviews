@@ -92,6 +92,17 @@ cli/target/release/reviews push --dry-run --update <slug> --packet /path/to/pack
 
 It prints the target server, the review or slug, the diff files, the packet sections, and every packet problem with `file:line`. It exits 1 if the packet has problems or the review title or slug is empty. It does not need the server to be running, so it cannot check that the slug exists or that the token works.
 
+Find the slug of an earlier review (you wrote it or took part in it):
+
+```bash
+cli/target/release/reviews list                       # newest first, 25 per page
+cli/target/release/reviews list --role authored -q billing
+cli/target/release/reviews list --status updated      # others' reviews with a patchset newer than your last action
+cli/target/release/reviews list --status open --json  # reviews with open threads, as JSON
+```
+
+Other flags: `--author <handle>`, `--limit <1-100>`, `--offset <n>`. An agent token lists only that agent's reviews.
+
 If the sandbox blocks localhost networking, rerun the CLI with escalation. If the token is rejected, mint a token in the same local database as the running server.
 
 ## Inspect and Resolve Threads
