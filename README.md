@@ -7,7 +7,7 @@ The app is Phoenix 1.8 + LiveView, with diffs rendered by vanilla
 `@pierre/diffs` from a LiveView hook, and a Rust CLI (`reviews push`) for
 uploading diffs.
 
-Current alpha version: `0.0.1-alpha.2`.
+Current version: `0.0.1`.
 
 ## What It Provides
 
@@ -168,6 +168,19 @@ server, the review title or target slug, the diff files and hunks, and the
 packet sections. It lists every packet problem with `file:line`, flags an
 empty review title or `--update` slug, and exits with status 1 if there are
 any problems. It cannot check that the slug exists or that your token works.
+
+## MCP (prototype)
+
+The server can also serve agents over MCP at `/mcp`, using the same API token.
+It is on in dev and on preview apps, and off in production unless
+`MCP_ENABLED=true`. For example, with Claude Code:
+
+```sh
+claude mcp add --transport http reviews http://localhost:4000/mcp \
+  --header "Authorization: Bearer rev_..."
+```
+
+See [docs/MCP.md](docs/MCP.md) for the tools, access rules, and other clients.
 
 ## Layout
 

@@ -26,9 +26,9 @@ You need (one-time):
 
 ## 2. Versioning, tags, and changelog
 
-Reviews starts public release tracking at `0.0.1-alpha.0`. Use semver
-prerelease tags until the CLI contract, hosted service, and install assets are
-stable enough for a non-alpha release.
+Reviews started public release tracking at `0.0.1-alpha.0`. `0.0.1` is the
+first non-alpha release; see [RELEASE_0.0.1.md](RELEASE_0.0.1.md) for its scope
+and known limits. Versions with a `-` suffix publish as GitHub prereleases.
 
 Before cutting a release:
 

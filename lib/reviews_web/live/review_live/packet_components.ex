@@ -16,6 +16,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :selected_patchset, :any, required: true
   attr :published_threads, :list, required: true
   attr :current_user, :any, required: true
+  attr :can_decide_sections, :boolean, default: false
   attr :return_to, :string, default: "/"
   attr :diff_style, :string, required: true
   attr :expanded_hunk_ids, :any, required: true
@@ -119,6 +120,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               <.packet_section_decision
                 section={section}
                 current_user={@current_user}
+                can_decide={@can_decide_sections}
                 return_to={@return_to}
                 next_section={@packet_outline_sections_by_index[section.index + 1]}
                 show_nav={@show_packet_outline}
@@ -502,6 +504,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   attr :section, :map, required: true
   attr :current_user, :any, default: nil
+  attr :can_decide, :boolean, default: false
   attr :return_to, :string, default: "/"
   attr :next_section, :map, default: nil
   attr :show_nav, :boolean, default: false
@@ -510,7 +513,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     ~H"""
     <footer
       id={"packet-section-#{@section.index}-decision"}
-      class={["review-section-decision", !@current_user && "is-readonly"]}
+      class={["review-section-decision", !@can_decide && "is-readonly"]}
     >
       <div class="review-section-decision-copy">
         <span class="review-guide-eyebrow">Section decision</span>
@@ -520,32 +523,40 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </p>
       </div>
       <div class="review-packet-section-actions" aria-label={"Decision for #{@section.title}"}>
-        <%= if @current_user do %>
-          <button
-            :for={status <- ~w(approved denied ignored)}
-            type="button"
-            class={[
-              "review-section-action",
-              @section.effective_status == status && "is-active",
-              "is-#{status}"
-            ]}
-            title={section_status_label(status)}
-            aria-label={section_status_label(status)}
-            aria-pressed={to_string(@section.effective_status == status)}
-            phx-click="set_section_status"
-            phx-value-section_index={@section.index}
-            phx-value-status={status}
-          >
-            <.section_status_icon status={status} />
-            <span class="review-section-action-label">{section_status_label(status)}</span>
-          </button>
-        <% else %>
-          <.link
-            href={~p"/auth/github?#{[return_to: @return_to]}"}
-            class="review-packet-section-signin"
-          >
-            Sign in to record a section decision
-          </.link>
+        <%= cond do %>
+          <% @can_decide -> %>
+            <button
+              :for={status <- ~w(approved denied ignored)}
+              type="button"
+              class={[
+                "review-section-action",
+                @section.effective_status == status && "is-active",
+                "is-#{status}"
+              ]}
+              title={section_status_label(status)}
+              aria-label={section_status_label(status)}
+              aria-pressed={to_string(@section.effective_status == status)}
+              phx-click="set_section_status"
+              phx-value-section_index={@section.index}
+              phx-value-status={status}
+            >
+              <.section_status_icon status={status} />
+              <span class="review-section-action-label">{section_status_label(status)}</span>
+            </button>
+          <% @current_user -> %>
+            <p
+              id={"packet-section-#{@section.index}-decision-owner-only"}
+              class="review-packet-section-note"
+            >
+              Only the review owner can record section decisions.
+            </p>
+          <% true -> %>
+            <.link
+              href={~p"/auth/github?#{[return_to: @return_to]}"}
+              class="review-packet-section-signin"
+            >
+              Sign in to record a section decision
+            </.link>
         <% end %>
       </div>
     </footer>

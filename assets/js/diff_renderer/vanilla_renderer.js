@@ -514,7 +514,9 @@ export class VanillaDiffRenderer {
       thread,
       ui: this.threadUI.get(thread.id),
       onReply: this.signedIn ? (t, body) => this.replyToThread(t, body) : null,
-      onUpdateStatus: this.signedIn ? (t, status) => this.updateThreadStatus(t, status) : null,
+      onUpdateStatus: this.signedIn && thread.can_update_status
+        ? (t, status) => this.updateThreadStatus(t, status)
+        : null,
     })
   }
 

@@ -35,6 +35,8 @@ end
 
 http_port = parse_int_env.("PORT", 4000)
 
+config :reviews, :mcp, enabled: true, writes_enabled: true
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -113,3 +115,12 @@ config :phoenix_live_view,
   debug_attributes: true,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
+
+# OAuth: client assertions and connectors need an HTTPS issuer. Set
+# OAUTH_ISSUER to the public HTTPS URL that reaches this server (such as a
+# tunnel). OAUTH_ALLOW_PRIVATE_HOSTS lists client hosts that may resolve to
+# private addresses, for a demo client on this network.
+config :reviews, Reviews.OAuth,
+  issuer: System.get_env("OAUTH_ISSUER"),
+  allow_private_hosts:
+    String.split(System.get_env("OAUTH_ALLOW_PRIVATE_HOSTS", ""), ",", trim: true)
