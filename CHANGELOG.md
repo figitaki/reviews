@@ -77,6 +77,11 @@ connected agents keep working.
 
 ### Fixed
 
+- On phones, the Guide map shows each section's decision as a small badge
+  after its title, so long titles cut off in the same place and rows no
+  longer wrap. The Sections button opens and closes the map, and the map
+  closes when you go to another page. Diffs on phones show line numbers again,
+  in a compact gutter.
 - Faint text, additions and deletions meet WCAG AA contrast (4.5:1) in both
   themes, and form-field borders meet 3:1.
 - Screen readers find one main region on home, Settings, device login and the

@@ -28,6 +28,7 @@ import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
 import Markdown from "./hooks/markdown"
 import ReviewActivity from "./hooks/review_activity"
+import GuideFlyout from "./hooks/guide_flyout"
 import {mountDevicePage} from "./device_code"
 
 // LiveView saves window.scrollY into history.state 100 ms after every scroll
@@ -105,6 +106,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
     PacketNavTree,
     Markdown,
     ReviewActivity,
+    GuideFlyout,
   },
 })
 
