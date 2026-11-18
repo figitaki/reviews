@@ -44,10 +44,7 @@ defmodule ReviewsWeb.ReviewLive do
       nil ->
         if ReviewsContext.deleted?(slug), do: raise(ReviewsWeb.ReviewDeletedError, slug: slug)
 
-        {:ok,
-         socket
-         |> put_flash(:error, "Review not found.")
-         |> push_navigate(to: ~p"/")}
+        raise ReviewsWeb.ReviewNotFoundError, slug: slug
 
       review ->
         if connected?(socket) do

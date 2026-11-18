@@ -13,6 +13,15 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   that profile allows (gatekeep, figitaki/gatekeep#7). See "Turnkey-held
   identity keys" in `docs/POPPY.md`.
 
+- The "Verified agent" Token row for a DPoP-bound comment reads "Access token
+  bound to agent key", so it can't be read as the Session JWT's key. The
+  Bearer row is unchanged.
+
+- A review link that doesn't exist now shows a "Review not found" page with
+  a 404 status, instead of sending you to the home page with a brief message.
+  Any other unknown address shows a "Page not found" page in the app's usual
+  look, with the top bar and a link home, in place of plain "Not Found" text.
+
 - A review's owner can delete it for good (#202), from the review page's
   options menu, `DELETE /api/v1/reviews/:slug`, or `reviews delete <slug>`.
   The owner confirms by typing the slug, and the warning says when other
@@ -224,9 +233,6 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 
 ### Changed
 
-- The "Verified agent" Token row for a DPoP-bound comment now reads "Access token
-  bound to agent key (DPoP, RFC 9449)", so it can't be read as the Session JWT's
-  key. The Bearer row is unchanged.
 - Markdown excerpts with missing fence, table or indentation context use Source
   with an explanation. New/deleted documents render in one complete panel.
   Large documents use virtualized Source; smaller previews reuse cached content.

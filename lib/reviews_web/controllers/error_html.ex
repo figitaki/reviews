@@ -4,8 +4,8 @@ defmodule ReviewsWeb.ErrorHTML do
 
   See config/config.exs. Most errors still render the plain status text.
   `status_page/1` is the styled page for errors a visitor should understand:
-  it renders a deleted review (`ReviewsWeb.ReviewDeletedError`, 410) now, and
-  the "Better 404 page" issue (#180) can render its 404s with it too.
+  a deleted review (`ReviewsWeb.ReviewDeletedError`, 410), an unknown review
+  (`ReviewsWeb.ReviewNotFoundError`, 404) and any other unknown path (404).
   """
   use ReviewsWeb, :html
 
@@ -30,9 +30,36 @@ defmodule ReviewsWeb.ErrorHTML do
     Layouts.root(Map.put(assigns, :inner_content, page))
   end
 
+  def render("404.html", %{conn: _} = assigns) do
+    review? = match?(%ReviewsWeb.ReviewNotFoundError{}, assigns[:reason])
+
+    assigns =
+      assigns
+      |> Map.put(:page_title, if(review?, do: "Review not found", else: "Page not found"))
+      |> Map.put(:review?, review?)
+      |> Map.put(:current_user, assigns[:current_user])
+
+    page = ~H"""
+    <.status_page
+      id="not-found"
+      title={@page_title}
+      current_user={@current_user}
+      return_to={@conn.request_path}
+    >
+      <%= if @review? do %>
+        There is no review at this link. Check the link, or ask whoever shared it.
+      <% else %>
+        There is nothing at this address. Check the link and try again.
+      <% end %>
+    </.status_page>
+    """
+
+    Layouts.root(Map.put(assigns, :inner_content, page))
+  end
+
   # The default is to render a plain text page based on
-  # the template name. For example, "404.html" becomes
-  # "Not Found".
+  # the template name. For example, "500.html" becomes
+  # "Internal Server Error".
   def render(template, _assigns) do
     Phoenix.Controller.status_message_from_template(template)
   end
