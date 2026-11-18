@@ -96,6 +96,13 @@ config :reviews, Reviews.OAuth,
   registered_client_prefix: "rvc_",
   dpop_signing_algs: ["ES256"]
 
+# Poppy requests go through the Turnkey adapter, which adds what it verified
+# about Turnkey-hosted agents and otherwise is the Poppy adapter. The agent
+# host comes from Turnkey's draft Personal Agent Protocol guide and is
+# provisional until Turnkey ships it (see Reviews.Turnkey).
+config :reviews, Reviews.Poppy, adapter: Reviews.Turnkey.Adapter
+config :reviews, Reviews.Turnkey, agent_hosts: ["id.turnkey.com"]
+
 config :postgrex, :json_library, JSON
 
 # Import environment specific config. This must remain at the bottom

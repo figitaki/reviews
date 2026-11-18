@@ -410,9 +410,12 @@ grant they were posted under (`attribution["link_id"]` holds the same ID).
 Thread payloads sent to the diff renderer include `comments[].attribution`, which is `null` for
 comments made in the browser or through the CLI. It contains only `provider`, `verified_at`,
 `client_id`, `client_domain`, `client_name_claimed`, `agent_id_claimed` (a boolean), `owner_username`,
-`approved_at`, `link_revoked`, and `token_binding`: `"dpop"` when the comment's access token was
-bound to the agent's DPoP key, `"bearer"` when it wasn't, and `null` for comments recorded before
-Reviews kept the binding.
+`approved_at`, `link_revoked`, `token_binding`, `delegation_signed_by`, `turnkey_organization_id`, and
+`turnkey_agent`. `token_binding` is `"dpop"` when the comment's access token was bound to the agent's
+DPoP key, `"bearer"` when it wasn't, and `null` for comments recorded before Reviews kept the binding.
+`delegation_signed_by` is `"turnkey"` or `null`. It and the two Turnkey fields are set only for agents
+hosted by Turnkey whose delegation verified as Turnkey's `poppy-delegation/v1` profile (see
+"Turnkey-held identity keys" in `docs/POPPY.md`).
 
 ### Body size
 

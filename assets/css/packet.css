@@ -19,11 +19,12 @@
 
 
 .review-page {
-  --review-app-nav-h: 64px;
-  --review-toolbar-h: 64px;
+  /* Sticky offsets, in rem to track the bars as text grows. */
+  --review-app-nav-h: 4rem;
+  --review-toolbar-h: 4rem;
   --rev-header-h: calc(var(--review-app-nav-h) + var(--review-toolbar-h));
   --review-main-nav-h: var(--rev-header-h);
-  --review-section-sticky-h: 46px;
+  --review-section-sticky-h: 2.875rem;
 
   color-scheme: light;
   background: var(--review-bg);
@@ -67,7 +68,7 @@
 }
 
 .review-header.is-guide-compact .review-title.is-packet-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 650;
   line-height: 1.35;
 }
@@ -75,14 +76,14 @@
 .review-title {
   margin: 0;
   color: var(--review-text);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   line-height: 1.35;
 }
 
 .review-title.is-packet-title {
   max-width: 920px;
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 760;
   letter-spacing: 0;
   line-height: 1.12;
@@ -92,7 +93,7 @@
 .review-label,
 .rev-empty {
   color: var(--review-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -100,7 +101,7 @@
   margin-top: 8px;
   max-width: 76ch;
   color: color-mix(in srgb, var(--review-text) 72%, var(--review-muted));
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.48;
   overflow-wrap: anywhere;
 }
@@ -226,7 +227,7 @@
 .review-toolbar .review-title,
 .review-toolbar .review-header .review-title.is-packet-title {
   max-width: none;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
@@ -512,7 +513,7 @@
   background: var(--review-panel-raised);
   color: var(--review-text);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.4;
 }
 
@@ -587,7 +588,7 @@
 
 .review-banner {
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-packet {
@@ -606,12 +607,6 @@
 
 .review-packet-shell.has-outline {
   grid-template-columns: var(--guide-rail-w) minmax(0, 1fr);
-}
-
-/* Split diffs only run on wide screens, so split guide prose gets a
-   character-based measure instead of the 52rem default. */
-.review-packet-shell.is-guide-split {
-  --guide-measure: 72ch;
 }
 
 .review-packet-shell.is-outline-hidden {
@@ -645,7 +640,7 @@
   border-bottom: 1px solid var(--review-line);
   padding: 8px 10px;
   color: var(--review-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -679,7 +674,7 @@
   margin: 0;
   padding: 12px;
   color: var(--review-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-packet-nav-list {
@@ -722,7 +717,7 @@
   display: block;
   margin-bottom: 10px;
   color: var(--review-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -763,7 +758,7 @@
   border-radius: 999px;
   padding: 2px 7px;
   color: var(--review-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 750;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -884,7 +879,7 @@ details[open] > summary .review-collapse-icon,
   align-items: center;
   gap: 8px;
   color: var(--review-faint);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 650;
   line-height: 1.25;
   white-space: nowrap;
@@ -916,7 +911,7 @@ details[open] > summary .review-collapse-icon,
   max-width: 74ch;
   margin: 8px 0 0;
   color: var(--review-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 450;
   line-height: 1.45;
 }
@@ -997,7 +992,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-section-state-history {
   color: var(--review-warn);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-section-state-icon {
@@ -1294,11 +1289,18 @@ details[open] > summary .review-collapse-icon,
   line-height: var(--font-prose-leading);
 }
 
+/* The mark sits beside the label; a history line ("Previously approved in
+   v2; outdated for v3.") lines up under the label, not under the mark. */
 .review-section-header-state {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: var(--space-1) var(--space-3);
+}
+
+.review-section-header-state > .review-section-state-history {
+  grid-column: 2;
+  line-height: var(--font-meta-leading);
 }
 
 .review-section-decision {
@@ -1314,10 +1316,10 @@ details[open] > summary .review-collapse-icon,
   gap: 12px 20px;
   margin-top: 24px;
   border: 1px solid var(--review-line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 16px 20px;
   background: var(--review-panel-raised);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.08);
+  box-shadow: var(--shadow-float);
   --decision-accent: var(--ds-warn);
 }
 
@@ -1459,8 +1461,10 @@ details[open] > summary .review-collapse-icon,
   line-height: var(--font-ui-leading);
 }
 
+/* Lines up under the prompt's label, past its 15px icon and 8px gap. */
 .review-section-decision-history {
   margin: 0;
+  padding-left: calc(15px + 8px);
   color: var(--review-warn);
   font-size: var(--font-meta-size);
   font-weight: var(--font-meta-weight);
@@ -1560,8 +1564,10 @@ details[open] > summary .review-collapse-icon,
     gap: 12px;
   }
 
+  /* The closed decision is a floating button like Sections and Comments:
+     --size-fab, --radius-lg and --shadow-float. */
   .review-section-decision:not(.is-editing):not(.is-readonly) {
-    width: 56px;
+    width: var(--size-fab);
     margin-left: auto;
     margin-right: 0;
     justify-self: end;
@@ -1578,11 +1584,11 @@ details[open] > summary .review-collapse-icon,
 
   .review-section-decision-toggle {
     display: inline-flex;
-    flex: 0 0 56px;
+    flex: 0 0 var(--size-fab);
     align-items: center;
     justify-content: center;
-    width: 56px;
-    height: 56px;
+    width: var(--size-fab);
+    height: var(--size-fab);
     border: 1px solid var(--review-line-strong);
     border-radius: var(--radius-lg);
     background: var(--review-panel-raised);
@@ -1601,8 +1607,8 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-section-decision-toggle > span {
-    width: 24px;
-    height: 24px;
+    width: var(--size-fab-icon);
+    height: var(--size-fab-icon);
   }
 
   .review-section-decision-toggle > .review-section-decision-toggle-label {
@@ -1634,7 +1640,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-section-summary-status {
   color: var(--review-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -1686,7 +1692,7 @@ details[open] > summary .review-collapse-icon,
   border-radius: 999px;
   background: var(--review-panel-raised);
   color: var(--review-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 750;
   line-height: 1;
 }
@@ -1859,7 +1865,7 @@ details[open] > summary .review-collapse-icon,
   padding: 7px 10px;
   color: var(--review-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
   transition: border-color 120ms ease, background 120ms ease;
 }
@@ -2116,7 +2122,7 @@ details[open] > summary .review-collapse-icon,
   padding: 2px 7px;
   color: var(--review-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .review-modal {
@@ -2124,7 +2130,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-modal-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.3;
 }
@@ -2145,7 +2151,7 @@ details[open] > summary .review-collapse-icon,
   gap: 14px;
   width: min(480px, 100%);
   padding: 20px;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -2177,7 +2183,7 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-text);
   padding: 0 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-delete-input:focus-visible {
@@ -2209,7 +2215,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-draft-item {
   padding: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-textarea {
@@ -2222,7 +2228,7 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-text);
   padding: 10px 12px;
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-textarea::placeholder {
@@ -2236,14 +2242,14 @@ details[open] > summary .review-collapse-icon,
 
 .ds-page-header.is-review-header h1 {
   max-width: 920px;
-  font-size: clamp(30px, 4vw, 56px);
+  font-size: clamp(1.875rem, 4vw, 3.5rem);
   line-height: 1;
 }
 
 .ds-page-header.is-review-header .design-hero-copy {
   max-width: 720px;
   margin-top: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .ds-page-header.is-review-header .ds-page-header-actions {
@@ -2364,7 +2370,7 @@ details[open] > summary .review-collapse-icon,
   padding-block: 3px;
   color: var(--review-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 740;
   line-height: 1;
   transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
@@ -2475,7 +2481,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-flyout-heading {
   margin: 0;
   color: var(--review-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 720;
   line-height: 1.2;
 }
@@ -2511,7 +2517,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-flyout-label {
   margin-bottom: 8px;
   color: var(--review-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 760;
   letter-spacing: 0.08em;
   line-height: 1;
@@ -2519,8 +2525,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-guide-flyout-section,
-.review-guide-flyout-file,
-.review-guide-file-row {
+.review-guide-flyout-file {
   appearance: none;
   width: 100%;
   border: 0;
@@ -2538,7 +2543,7 @@ details[open] > summary .review-collapse-icon,
   gap: 10px;
   border-radius: 6px;
   color: var(--review-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 650;
   padding: 6px 8px;
 }
@@ -2556,7 +2561,7 @@ details[open] > summary .review-collapse-icon,
   flex: 0 0 auto;
   color: var(--review-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 720;
 }
 
@@ -2593,7 +2598,7 @@ details[open] > summary .review-collapse-icon,
   border-radius: 4px;
   color: var(--review-muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.2;
   padding: 4px 6px;
   text-overflow: ellipsis;
@@ -2630,7 +2635,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-panel-title {
   margin: 18px 0 0;
   color: var(--review-text);
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 780;
   letter-spacing: 0;
   line-height: 1.1;
@@ -2640,7 +2645,7 @@ details[open] > summary .review-collapse-icon,
   margin-top: 24px;
   max-width: 58ch;
   color: color-mix(in srgb, var(--review-text) 82%, var(--review-muted));
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1.58;
 }
 
@@ -2660,7 +2665,7 @@ details[open] > summary .review-collapse-icon,
   gap: 12px;
   margin-top: 26px;
   color: var(--review-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 680;
 }
 
@@ -2693,123 +2698,10 @@ details[open] > summary .review-collapse-icon,
   border-radius: 6px;
   background: var(--review-text);
   color: var(--review-bg);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 720;
   line-height: 1;
   padding: 0 14px;
-}
-
-.review-guide-panel-files {
-  display: grid;
-  gap: 0;
-  margin-top: 42px;
-}
-
-.review-guide-files-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  color: var(--review-faint);
-  font-size: 10px;
-  font-weight: 760;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.review-guide-files-label span:last-child {
-  height: 1px;
-  flex: 1 1 auto;
-  background: var(--review-line);
-}
-
-.review-guide-file-row {
-  display: grid;
-  grid-template-areas:
-    "icon name stat"
-    "icon path state";
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  column-gap: 7px;
-  row-gap: 2px;
-  align-items: center;
-  min-height: 38px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--review-panel) 68%, transparent);
-  padding: 6px 8px;
-}
-
-.review-guide-file-row:hover {
-  border-color: var(--review-line);
-  background: var(--review-panel);
-}
-
-.review-guide-file-row:focus-visible {
-  outline: 2px solid var(--review-focus);
-  outline-offset: -2px;
-}
-
-.review-guide-file-row:disabled {
-  cursor: default;
-}
-
-.review-guide-file-row.is-partial .review-guide-file-state {
-  color: var(--review-warn);
-}
-
-.review-guide-file-icon {
-  grid-area: icon;
-  width: 14px;
-  height: 14px;
-  color: var(--review-faint);
-}
-
-.review-guide-file-name {
-  grid-area: name;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--review-text);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.review-guide-file-path {
-  grid-area: path;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--review-faint);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.review-guide-file-stat {
-  grid-area: stat;
-  justify-self: end;
-}
-
-.review-guide-file-state {
-  grid-area: state;
-  display: inline-flex;
-  align-items: center;
-  justify-self: end;
-  gap: 4px;
-  color: var(--review-faint);
-  font-size: 10px;
-  font-weight: 680;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.review-guide-file-row.is-viewed .review-guide-file-state {
-  color: var(--review-add);
 }
 
 .review-guide-open-threads {
@@ -2923,14 +2815,14 @@ details[open] > summary .review-collapse-icon,
   align-items: center;
   padding: 0 56px 0 18px;
   color: var(--review-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .rev-file-path {
   min-width: 0;
   color: var(--review-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
@@ -2940,7 +2832,7 @@ details[open] > summary .review-collapse-icon,
   align-items: center;
   gap: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2959,7 +2851,7 @@ details[open] > summary .review-collapse-icon,
   background: var(--review-panel-raised);
   color: var(--review-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
 }
 
@@ -2978,7 +2870,7 @@ details[open] > summary .review-collapse-icon,
 .rev-open-threads-heading {
   padding: 0 8px 6px;
   color: var(--ds-muted, #a3a3a3);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2992,7 +2884,7 @@ details[open] > summary .review-collapse-icon,
   gap: 6px;
   padding: 4px 8px;
   color: var(--ds-text, #f5f5f5);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 .rev-open-thread-entry {
@@ -3022,14 +2914,14 @@ details[open] > summary .review-collapse-icon,
 }
 .rev-open-thread-path {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--ds-muted, #a3a3a3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .rev-open-thread-snippet {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--ds-text, #f5f5f5);
   overflow: hidden;
   display: -webkit-box;
@@ -3045,7 +2937,7 @@ details[open] > summary .review-collapse-icon,
 
   .review-page .ds-shell-topbar {
     position: static;
-    min-height: 48px;
+    min-height: 3rem;
     gap: 8px;
     background: var(--review-bg);
     padding-inline: 12px;
@@ -3074,31 +2966,8 @@ details[open] > summary .review-collapse-icon,
     }
   }
 
-  /* Keep the signed-out button compact without shrinking its tap area. */
-  .review-page .ds-shell-actions > a.review-button {
-    position: relative;
-    min-height: 32px;
-  }
-
-  .review-page .ds-shell-actions > a.review-button::after {
-    content: "";
-    position: absolute;
-    inset: -7px 0;
-  }
-
-  .review-page .ds-shell-actions .review-button > span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .review-page .ds-shell-actions img {
-    flex: 0 0 auto;
-  }
-
   .review-toolbar {
-    min-height: 48px;
+    min-height: 3rem;
     flex-wrap: nowrap;
     gap: 8px;
     padding: 0 12px;
@@ -3118,7 +2987,7 @@ details[open] > summary .review-collapse-icon,
   .review-toolbar .review-title,
   .review-toolbar .review-header .review-title.is-packet-title {
     overflow: hidden;
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 20px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -3189,7 +3058,7 @@ details[open] > summary .review-collapse-icon,
     flex: 0 0 auto;
   }
 
-  .review-mobile-revision-nav .fieldset {
+  .review-mobile-revision-nav .ds-field {
     margin: 0;
     gap: 0;
     padding: 0;
@@ -3204,7 +3073,7 @@ details[open] > summary .review-collapse-icon,
     background: var(--review-panel);
     padding-inline: 6px;
     color: var(--review-text);
-    font-size: 16px;
+    font-size: 1rem;
     cursor: pointer;
   }
 
@@ -3309,11 +3178,11 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-guide-panel-title {
-    font-size: 26px;
+    font-size: 1.625rem;
   }
 
   .review-guide-panel-prose {
-    font-size: 16px;
+    font-size: 1rem;
   }
 
   .review-hunk-line-stat {
@@ -3392,8 +3261,6 @@ details[open] > summary .review-collapse-icon,
 
   .review-section-header-title {
     order: 1;
-    font-size: clamp(22px, 6.4vw, 26px);
-    line-height: 1.2;
   }
 
   .review-section-header-meta {

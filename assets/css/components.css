@@ -14,63 +14,9 @@
   align-items: center;
   gap: 9px;
   color: var(--ds-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-decoration: none;
-}
-
-/* ---- Button (review-button) ---- */
-.r-button {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid var(--ds-line-strong);
-  border-radius: 6px;
-  background: var(--ds-panel);
-  color: var(--ds-text);
-  font-family: var(--font-sans);
-  font-size: var(--font-ui-size);
-  font-weight: var(--font-ui-weight);
-  line-height: var(--font-ui-leading);
-  padding: 0 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease,
-              color 160ms ease, opacity 160ms ease;
-}
-.r-button:hover { background: var(--ds-hover); border-color: var(--ds-line-strong); }
-.r-button-primary {
-  background: var(--ds-text);
-  border-color: var(--ds-text);
-  color: var(--ds-bg);
-}
-/* Primary hover/active: stay inverted, just nudge contrast — never dim
-   the surface to ds-hover or the ink-on-ink swap goes illegible. */
-.r-button-primary:hover {
-  background: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
-  border-color: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
-  color: var(--ds-bg);
-}
-.r-button-primary:active {
-  background: color-mix(in oklab, var(--ds-text) 78%, var(--ds-bg));
-  border-color: color-mix(in oklab, var(--ds-text) 78%, var(--ds-bg));
-  color: var(--ds-bg);
-}
-.r-button:disabled { cursor: not-allowed; opacity: 0.38; }
-
-/* Pill variant — fully-rounded shape for "soft" actions that sit inline
-   with prose (e.g. section decisions, "Mark Viewed"). Same metrics as
-   the default; only the radius changes. */
-.r-button.is-pill {
-  border-radius: 999px;
-  padding-inline: 14px;
-}
-.r-button.is-pill.is-icon-only {
-  width: 28px;
-  min-height: 28px;
-  padding: 0;
 }
 
 /* ---- Status mark (A / M / D / R) ---- */
@@ -86,7 +32,7 @@
   background: #101012;
   color: var(--ds-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
 }
 [data-theme="light"] .r-status-icon { background: var(--ds-panel-raised); }
@@ -103,7 +49,7 @@
   border-radius: 999px;
   padding: 2px 7px;
   color: var(--ds-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 750;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -165,7 +111,7 @@
   background: transparent;
   color: var(--ds-muted);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
@@ -195,7 +141,7 @@
   align-items: baseline;
   gap: 5px;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -228,7 +174,7 @@
   align-items: baseline;
   gap: 7px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
@@ -250,7 +196,7 @@
 .r-diff {
   border-top: 1px solid var(--ds-line);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   line-height: 1.55;
   background: var(--ds-panel);
 }
@@ -299,7 +245,7 @@
   color: var(--ds-muted);
   padding: 0 10px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-decoration: none;
   background: transparent;

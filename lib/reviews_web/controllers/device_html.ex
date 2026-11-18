@@ -18,13 +18,12 @@ defmodule ReviewsWeb.DeviceHTML do
             class="is-compact"
           >
             <:actions>
-              <.link
+              <.ds_github_button
                 id="device-sign-in-github"
                 href={~p"/auth/github?#{[return_to: @return_to]}"}
-                class="ds-button is-primary"
               >
                 Sign in with GitHub
-              </.link>
+              </.ds_github_button>
             </:actions>
           </.ds_page_header>
         </div>
@@ -86,9 +85,15 @@ defmodule ReviewsWeb.DeviceHTML do
                 Codes expire {@ttl_minutes} minutes after <code>reviews login</code>
                 shows them. If yours has, run it again for a new one.
               </p>
-              <button id="device-entry-submit" type="submit" class="ds-button is-primary">
+              <.ds_button
+                id="device-entry-submit"
+                type="submit"
+                variant="primary"
+                size="lg"
+                icon="hero-arrow-right"
+              >
                 Continue
-              </button>
+              </.ds_button>
             </form>
           </.ds_card>
         </div>
@@ -182,7 +187,6 @@ defmodule ReviewsWeb.DeviceHTML do
                     type="text"
                     label="Agent name"
                     autocomplete="off"
-                    class="ds-input"
                   />
                   <.input
                     field={@new_identity[:handle]}
@@ -192,7 +196,6 @@ defmodule ReviewsWeb.DeviceHTML do
                     autocomplete="off"
                     autocapitalize="none"
                     spellcheck="false"
-                    class="ds-input"
                   />
                   <p class="poppy-consent-note">
                     Allow creates this agent and signs the CLI in as it.
@@ -200,18 +203,25 @@ defmodule ReviewsWeb.DeviceHTML do
                 </div>
               </fieldset>
               <div class="poppy-consent-actions">
-                <button
+                <.ds_button
                   id="device-approve"
                   type="submit"
                   name="decision"
                   value="approve"
-                  class="ds-button is-primary"
+                  variant="primary"
+                  icon="hero-check"
                 >
                   Allow
-                </button>
-                <button id="device-deny" type="submit" name="decision" value="deny" class="ds-button">
+                </.ds_button>
+                <.ds_button
+                  id="device-deny"
+                  type="submit"
+                  name="decision"
+                  value="deny"
+                  icon="hero-x-mark"
+                >
                   Deny
-                </button>
+                </.ds_button>
               </div>
             </form>
           </.ds_card>

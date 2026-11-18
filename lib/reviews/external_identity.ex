@@ -9,11 +9,15 @@ defmodule Reviews.ExternalIdentity do
   way an agent authenticates. Bearer API tokens (`Reviews.Accounts`) remain a
   separate, unchanged path.
 
-  Later adapters plug in here without changing actor IDs, such as a
-  Turnkey-held key that signs delegations or DPoP proofs, or a DID verifier
-  that checks proofs against the DID document's `authentication`
-  relationship. Each still resolves to an owner's approval of one agent
-  identity.
+  Later adapters plug in here without changing actor IDs:
+
+    * a Turnkey-held identity key (`Reviews.Turnkey.Adapter`) wraps the Poppy
+      adapter: it uses the same owner-approved grants and adds what it
+      verified about the delegation to `attribution`;
+    * a DID verifier checks proofs against the DID document's
+      `authentication` relationship.
+
+  Each still resolves to an owner's approval of one agent identity.
 
   Each adapter records what it verified in `attribution`, a JSON-safe map stored
   with the records the request creates. Parties an adapter can't verify are

@@ -69,6 +69,9 @@ defmodule ReviewsWeb.Router do
     live "/settings", SettingsLive, :edit
     # Off in production unless DESIGN_CATALOG is set; see ReviewsWeb.DesignLive.
     live "/design", DesignLive, :index
+    live "/design/components", DesignComponentsLive, :index
+    live "/design/components/phone", DesignComponentsLive, :phone
+    live "/design/layouts", DesignLayoutsLive, :index
   end
 
   scope "/", ReviewsWeb do

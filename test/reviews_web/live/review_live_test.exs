@@ -183,6 +183,16 @@ defmodule ReviewsWeb.ReviewLiveTest do
     %{author: author, review: review}
   end
 
+  test "an unknown review slug returns the 404 page", %{conn: conn} do
+    for path <- [~p"/r/doesnotexist", ~p"/r/doesnotexist/changes"] do
+      {404, _headers, body} = assert_error_sent 404, fn -> get(conn, path) end
+
+      page = LazyHTML.from_document(body)
+      assert page |> LazyHTML.query("#not-found") |> LazyHTML.text() =~ "Review not found"
+      assert page |> LazyHTML.query("#not-found-home") |> LazyHTML.attribute("href") == ["/"]
+    end
+  end
+
   describe "anonymous viewer" do
     setup :seed!
 
@@ -328,16 +338,16 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-header-meta",
+               "#review-section-header-0 .review-section-header-meta",
                "Light"
              )
 
-      assert has_element?(view, "#review-split-section-overview-0 .review-change-stat-add", "+1")
-      assert has_element?(view, "#review-split-section-overview-0 .review-change-stat-del", "-1")
+      assert has_element?(view, "#review-section-header-0 .review-change-stat-add", "+1")
+      assert has_element?(view, "#review-section-header-0 .review-change-stat-del", "-1")
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Pending"
              )
 
@@ -356,7 +366,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       # content flow, not inside the overview.
       refute has_element?(
                view,
-               "#review-split-section-overview-0",
+               "#review-section-header-0",
                "Preserve packet JSON as the server contract."
              )
 
@@ -376,7 +386,6 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       sign_in_href = ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}"]}"
-      assert has_element?(view, ~s|.review-button[href="#{sign_in_href}"]|, "Sign in")
 
       # Signed-out readers get the collapsible decision; expanded, it offers
       # sign-in that returns to this section.
@@ -393,6 +402,10 @@ defmodule ReviewsWeb.ReviewLiveTest do
                ~s|#packet-section-0-decision-signin[href="#{section_sign_in_href}"]|,
                "Sign in to decide"
              )
+
+      # The top bar's Sign in is the shared, text-only account control.
+      assert has_element?(view, ~s|.l-nav-signin[href="#{sign_in_href}"]|, "Sign in")
+      refute has_element?(view, ".l-nav-signin svg")
 
       refute has_element?(view, "#packet-section-0-decision [aria-pressed]")
 
@@ -669,7 +682,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       view |> element("#diff-style-unified") |> render_click()
 
-      assert has_element?(view, "#review-split-section-overview-1", "Second section")
+      assert has_element?(view, "#review-section-header-1", "Second section")
 
       assert has_element?(
                view,
@@ -941,16 +954,16 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#review-guide-tick-0") |> render_click()
 
       refute has_element?(view, "#review-split-inline-overview")
-      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
+      assert has_element?(view, "#review-section-header-0", "Primary reasoning")
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Pending"
              )
 
       # Grounding prose reads in the section flow, not in the header.
-      refute has_element?(view, "#review-split-section-overview-0", "entrypoint change matters")
+      refute has_element?(view, "#review-section-header-0", "entrypoint change matters")
       assert has_element?(view, "#packet-section-0", "entrypoint change matters")
       assert has_element?(view, "#packet-section-0.is-open")
       refute has_element?(view, "#packet-section-1")
@@ -985,7 +998,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       refute has_element?(view, "#review-split-inline-overview")
 
       assert has_element?(view, "#packet-section-0.is-open")
-      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
+      assert has_element?(view, "#review-section-header-0", "Primary reasoning")
 
       assert has_element?(
                view,
@@ -1006,7 +1019,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-guide-tick-1.is-active")
 
       assert has_element?(view, "#packet-section-1.is-open")
-      assert has_element?(view, "#review-split-section-overview-1", "Secondary consequence")
+      assert has_element?(view, "#review-section-header-1", "Secondary consequence")
 
       assert has_element?(
                view,
@@ -1027,8 +1040,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#review-guide-shell .review-packet-nav-hide") |> render_click()
 
       refute has_element?(view, "#review-guide-shell")
-      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
-      assert has_element?(view, "#review-split-section-overview-1", "Secondary consequence")
+      assert has_element?(view, "#review-section-header-0", "Primary reasoning")
+      assert has_element?(view, "#review-section-header-1", "Secondary consequence")
       assert has_element?(view, "#packet-section-0-body", "entrypoint change matters")
       assert has_element?(view, "#packet-section-1-body", "stay out of the way")
       refute has_element?(view, "#packet-section-0 .review-packet-section-summary")
@@ -1828,7 +1841,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Approved"
              )
 
@@ -1840,7 +1853,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Pending"
              )
 
@@ -1918,13 +1931,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                latest_view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Pending for this revision"
              )
 
       assert has_element?(
                latest_view,
-               "#review-split-section-overview-0 .review-section-state-history",
+               "#review-section-header-0 .review-section-state-history",
                "Previously approved in v1; outdated for v2."
              )
 
@@ -1945,7 +1958,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                latest_view,
-               "#review-split-section-overview-0 .review-section-state-history",
+               "#review-section-header-0 .review-section-state-history",
                "Previously approved in v1"
              )
 
@@ -1997,13 +2010,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                carried_view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Skipped (carried forward)"
              )
 
       refute has_element?(
                carried_view,
-               "#review-split-section-overview-0 .review-section-state-history"
+               "#review-section-header-0 .review-section-state-history"
              )
 
       carried_view |> element("#packet-section-0-decision-toggle") |> render_click()
@@ -2267,8 +2280,11 @@ defmodule ReviewsWeb.ReviewLiveTest do
         assert {"x-robots-tag", "noindex, nofollow, noarchive"} in headers
       end
 
-      # A slug that never existed keeps today's not-found handling (#180).
-      assert {:error, {:live_redirect, %{to: "/"}}} = live(build_conn(), ~p"/r/never-existed")
+      # A slug that never existed is a 404, not a 410.
+      {404, _headers, body} =
+        assert_error_sent(404, fn -> get(build_conn(), ~p"/r/never-existed") end)
+
+      assert body =~ "Review not found"
     end
   end
 end

@@ -172,8 +172,8 @@
    above it. */
 .review-activity-panel {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: var(--size-fab);
+  height: var(--size-fab);
   box-sizing: border-box;
   border: 1px solid var(--review-line-strong, var(--ds-line));
   border-radius: var(--radius-lg);
@@ -210,7 +210,7 @@
   border: 1px solid var(--review-line-strong, var(--ds-line));
   border-radius: var(--radius-pill);
   background: var(--ds-panel-raised, var(--ds-panel));
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 18px;
   text-align: center;
 }
@@ -279,11 +279,11 @@
 .review-quick-button { display: none; }
 
 /* Phones: icon-only floating buttons, Sections (Guide only) above Comments,
-   stacked above the section decision button and centred on it. */
+   stacked above the section decision button, all three --size-fab. */
 @media (max-width: 640px) {
   .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
-    --review-quick-right: calc(16px + 4px + env(safe-area-inset-right));
-    --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
+    --review-quick-right: calc(16px + env(safe-area-inset-right));
+    --review-quick-bottom: calc(16px + var(--size-fab) + 12px + env(safe-area-inset-bottom));
   }
   /* Sections scrolls the Guide map in below the sticky review toolbar, so its
      close button stays visible. */
@@ -299,8 +299,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 48px;
-    height: 48px;
+    width: var(--size-fab);
+    height: var(--size-fab);
     padding: 0;
     border: 1px solid var(--review-line-strong, var(--ds-line));
     border-radius: var(--radius-lg);
@@ -310,7 +310,7 @@
     cursor: pointer;
   }
   .review-page:not(:has([data-guide-flyout-toggle])) .review-quick-button { display: none; }
-  .review-quick-icon { width: 22px; height: 22px; }
+  .review-quick-icon { width: var(--size-fab-icon); height: var(--size-fab-icon); }
   .review-quick-button:focus-visible {
     outline: 2px solid var(--ds-focus);
     outline-offset: 2px;
@@ -324,10 +324,10 @@
 }
 
 /* Comments use the same escaped Markdown renderer as the Guide, at UI scale. */
-.review-rich-markdown.review-comment-markdown { padding: 0; font-size: 13px; line-height: 1.5; }
+.review-rich-markdown.review-comment-markdown { padding: 0; font-size: 0.8125rem; line-height: 1.5; }
 .review-comment-markdown > :first-child { margin-top: 0; }
 .review-comment-markdown > :last-child { margin-bottom: 0; }
 .review-comment-markdown :is(p, ul, ol, blockquote, pre, table) { margin-block: 0.5em; }
 .review-comment-markdown :is(h1, h2, h3, h4, h5, h6) { font-size: 1em; margin-block: 0.75em 0.25em; }
-.review-comment-markdown pre { max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.review-comment-markdown pre { max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.75rem; }
 .review-comment-markdown table { display: block; max-width: 100%; overflow-x: auto; }

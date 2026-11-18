@@ -156,33 +156,63 @@ defmodule ReviewsWeb.Layouts do
             Reviews
           </.link>
 
-          <%= if @current_user do %>
-            <.link
-              navigate={~p"/settings"}
-              class="r-nav-item l-nav-user"
-              aria-label={"Signed in as #{@current_user.username}"}
-            >
-              <img
-                :if={@current_user.avatar_url}
-                src={@current_user.avatar_url}
-                alt=""
-                class="l-nav-avatar"
-                width="20"
-                height="20"
-              />
-              <span class="l-nav-user-name">{@current_user.username}</span>
-            </.link>
-          <% else %>
-            <.link
-              href={~p"/auth/github?#{[return_to: @return_to]}"}
-              class="r-button r-button-primary l-nav-signin"
-            >
-              Sign in
-            </.link>
-          <% end %>
+          <.account_menu current_user={@current_user} return_to={@return_to} />
         </nav>
       </div>
     </header>
+    """
+  end
+
+  @doc """
+  The account control in every top bar. Signed in, a menu under the avatar
+  and name with Settings and Sign out. Signed out, a text-only Sign in button;
+  sign-in buttons in the page body carry the GitHub mark instead.
+  """
+  attr :current_user, :map, default: nil
+  attr :return_to, :string, default: "/", doc: "the local path to return to after sign-in"
+
+  def account_menu(%{current_user: nil} = assigns) do
+    ~H"""
+    <.ds_button
+      href={~p"/auth/github?#{[return_to: @return_to]}"}
+      variant="primary"
+      class="l-nav-signin"
+    >
+      Sign in
+    </.ds_button>
+    """
+  end
+
+  def account_menu(assigns) do
+    ~H"""
+    <div class="dropdown dropdown-end account-menu">
+      <button
+        tabindex="0"
+        type="button"
+        class="review-button review-button-secondary account-menu-button"
+        aria-label={"Account menu for #{@current_user.username}"}
+      >
+        <img
+          :if={@current_user.avatar_url}
+          src={@current_user.avatar_url}
+          alt=""
+          width="24"
+          height="24"
+          class="account-menu-avatar"
+        />
+        <span class="account-menu-name">{@current_user.username}</span>
+      </button>
+      <ul tabindex="0" class="dropdown-content menu menu-sm review-menu z-20 mt-2 w-44 p-2">
+        <li>
+          <.link navigate={~p"/settings"}>Settings</.link>
+        </li>
+        <li>
+          <.link href={~p"/auth/logout"} method="delete">
+            Sign out
+          </.link>
+        </li>
+      </ul>
+    </div>
     """
   end
 

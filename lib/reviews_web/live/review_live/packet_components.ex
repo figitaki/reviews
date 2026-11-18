@@ -387,13 +387,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :section_count, :integer, required: true
   attr :current_user, :any, default: nil
 
-  defp packet_section_header(assigns) do
+  # Public for the design catalog (/design/components).
+  def packet_section_header(assigns) do
     assigns =
-      assign(assigns, :title_id, "review-split-section-overview-title-#{assigns.section.index}")
+      assign(assigns, :title_id, "review-section-header-title-#{assigns.section.index}")
 
     ~H"""
     <header
-      id={"review-split-section-overview-#{@section.index}"}
+      id={"review-section-header-#{@section.index}"}
       class="review-section-header"
       aria-labelledby={@title_id}
     >
@@ -446,7 +447,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :show_nav, :boolean, default: false
   attr :editing, :boolean, default: false
 
-  defp packet_section_decision(assigns) do
+  # Public for the component playground (/design/components).
+  def packet_section_decision(assigns) do
     # Signed-out readers get the same collapsible control, with a sign-in CTA.
     assigns =
       assigns
@@ -562,7 +564,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               href={~p"/auth/github?#{[return_to: @sign_in_return_to]}"}
               class="review-button review-button-primary review-packet-section-signin"
             >
-              Sign in to decide
+              <.github_mark /> Sign in to decide
             </.link>
         <% end %>
       </div>

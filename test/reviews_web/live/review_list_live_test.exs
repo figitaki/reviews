@@ -20,8 +20,10 @@ defmodule ReviewsWeb.ReviewListLiveTest do
     {:ok, view, _html} = live(conn, ~p"/reviews?status=open")
 
     sign_in = ~p"/auth/github?#{[return_to: "/reviews?status=open"]}"
-    assert has_element?(view, "#reviews-sign-in[href='#{sign_in}']")
+    assert has_element?(view, "#reviews-sign-in[href='#{sign_in}'] svg.ds-github-mark")
     assert has_element?(view, ".l-nav-signin[href='#{sign_in}']")
+    # The top bar's call to action is text only.
+    refute has_element?(view, ".l-nav-signin svg")
   end
 
   test "signed-in user sees their reviews and a nav link", %{conn: conn} do
@@ -35,6 +37,10 @@ defmodule ReviewsWeb.ReviewListLiveTest do
     {:ok, view, _html} = conn |> sign_in(carey) |> live(~p"/reviews")
 
     assert has_element?(view, "#nav-reviews[aria-current=page]")
+    # One account control: a menu with Settings and Sign out, not a Settings link.
+    assert has_element?(view, ".l-nav .account-menu button[aria-label='Account menu for carey']")
+    assert has_element?(view, ".l-nav .account-menu a[href='/settings']", "Settings")
+    assert has_element?(view, ".l-nav .account-menu a[href='/auth/logout']", "Sign out")
     assert has_element?(view, "#review-#{mine.id} a[href='/r/#{mine.slug}']", "Speed up lookup")
     refute has_element?(view, "#review-#{mine.id}", "patchset")
     assert has_element?(view, "#review-#{involved.id} .rl-author", "@conner")
