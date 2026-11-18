@@ -148,13 +148,13 @@ defmodule ReviewsWeb.SettingsLive do
             class="is-compact"
           >
             <:actions>
-              <.link
+              <.ds_button
                 :if={!@current_user}
                 href={~p"/auth/github?return_to=/settings"}
-                class="ds-button is-primary"
+                variant="primary"
               >
                 Sign in with GitHub
-              </.link>
+              </.ds_button>
             </:actions>
           </.ds_page_header>
 
@@ -223,7 +223,6 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Agent Name"
                         placeholder="Claude"
                         autocomplete="off"
-                        class="ds-input"
                       />
                       <.input
                         field={@agent_form[:handle]}
@@ -232,7 +231,6 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Handle"
                         placeholder="claude"
                         autocomplete="off"
-                        class="ds-input"
                       />
                       <.input
                         field={@agent_form[:provider]}
@@ -241,9 +239,13 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Provider"
                         placeholder="Claude, Codex, custom"
                         autocomplete="off"
-                        class="ds-input"
                       />
-                      <.ds_button type="submit" variant="primary" class="ds-settings-form-submit">
+                      <.ds_button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        class="ds-settings-form-submit"
+                      >
                         <.icon name="hero-plus" class="size-4" /> New agent identity
                       </.ds_button>
                     </form>
@@ -366,7 +368,6 @@ defmodule ReviewsWeb.SettingsLive do
                         type="select"
                         label="Acting Identity"
                         options={identity_options(@identities)}
-                        class="ds-input"
                       />
                       <.input
                         field={@token_form[:name]}
@@ -375,9 +376,13 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Token Name"
                         placeholder="laptop"
                         autocomplete="off"
-                        class="ds-input"
                       />
-                      <.ds_button type="submit" variant="primary" class="ds-settings-form-submit">
+                      <.ds_button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        class="ds-settings-form-submit"
+                      >
                         <.icon name="hero-key" class="size-4" /> Generate token
                       </.ds_button>
                     </form>
@@ -456,9 +461,9 @@ defmodule ReviewsWeb.SettingsLive do
                 body="Settings are tied to your GitHub account so identities and credentials can be managed safely."
               >
                 <:actions>
-                  <.link href={~p"/auth/github?return_to=/settings"} class="ds-button is-primary">
+                  <.ds_button href={~p"/auth/github?return_to=/settings"} variant="primary">
                     Sign in with GitHub
-                  </.link>
+                  </.ds_button>
                 </:actions>
               </.ds_empty_state>
             </div>

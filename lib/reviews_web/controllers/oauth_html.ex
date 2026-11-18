@@ -25,13 +25,13 @@ defmodule ReviewsWeb.OAuthHTML do
             class="is-compact"
           >
             <:actions>
-              <.link
+              <.ds_button
                 id="poppy-sign-in-github"
                 href={~p"/auth/github?#{[return_to: @return_to]}"}
-                class="ds-button is-primary"
+                variant="primary"
               >
                 Sign in with GitHub
-              </.link>
+              </.ds_button>
             </:actions>
           </.ds_page_header>
         </div>
@@ -148,7 +148,6 @@ defmodule ReviewsWeb.OAuthHTML do
                     type="text"
                     label="Agent name"
                     autocomplete="off"
-                    class="ds-input"
                   />
                   <.input
                     field={@new_identity[:handle]}
@@ -158,7 +157,6 @@ defmodule ReviewsWeb.OAuthHTML do
                     autocomplete="off"
                     autocapitalize="none"
                     spellcheck="false"
-                    class="ds-input"
                   />
                 </div>
               </fieldset>
@@ -174,24 +172,23 @@ defmodule ReviewsWeb.OAuthHTML do
               <p class="poppy-consent-note">{text(@request).note}</p>
 
               <div class="poppy-consent-actions">
-                <button
+                <.ds_button
                   id="poppy-consent-approve"
                   type="submit"
                   name="decision"
                   value="approve"
-                  class="ds-button is-primary"
+                  variant="primary"
                 >
                   Allow
-                </button>
-                <button
+                </.ds_button>
+                <.ds_button
                   id="poppy-consent-deny"
                   type="submit"
                   name="decision"
                   value="deny"
-                  class="ds-button"
                 >
                   Deny
-                </button>
+                </.ds_button>
               </div>
             </form>
           </.ds_card>

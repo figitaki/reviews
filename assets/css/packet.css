@@ -2123,6 +2123,84 @@ details[open] > summary .review-collapse-icon,
   line-height: 1.3;
 }
 
+/* Delete-review confirmation (DeleteReviewComponents). */
+.review-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in oklab, var(--review-bg) 70%, transparent);
+}
+
+.review-delete-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(480px, 100%);
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.review-delete-dialog p {
+  margin: 0;
+}
+
+.review-delete-warning {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  border: 1px solid color-mix(in oklab, var(--review-del) 45%, transparent);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--review-del) 12%, transparent);
+  padding: 8px 10px;
+}
+
+.review-delete-warning .size-4 {
+  margin-top: 3px;
+  color: var(--review-del);
+}
+
+.review-delete-input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--review-line-strong);
+  border-radius: 6px;
+  background: var(--review-panel);
+  color: var(--review-text);
+  padding: 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+}
+
+.review-delete-input:focus-visible {
+  outline: 2px solid var(--review-focus);
+  outline-offset: 1px;
+}
+
+.review-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.review-button-danger {
+  border-color: var(--review-del);
+  background: var(--review-del);
+  color: var(--review-bg);
+}
+
+.review-button-danger:hover:not(:disabled) {
+  border-color: var(--review-del);
+  background: color-mix(in oklab, var(--review-del) 85%, var(--review-text));
+}
+
+.review-menu-danger {
+  color: var(--review-del);
+}
+
 .review-draft-item {
   padding: 10px;
   font-size: 13px;
@@ -2991,7 +3069,7 @@ details[open] > summary .review-collapse-icon,
     flex: 0 0 auto;
   }
 
-  .review-mobile-revision-nav .fieldset {
+  .review-mobile-revision-nav .ds-field {
     margin: 0;
     gap: 0;
     padding: 0;
