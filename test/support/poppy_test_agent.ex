@@ -39,6 +39,62 @@ defmodule Reviews.PoppyTestAgent do
     publish(agent, Keyword.get(opts, :metadata, %{}))
   end
 
+  @doc """
+  A Personal Agent hosted the way Turnkey's draft Personal Agent Protocol
+  guide describes: `client_id` at `https://id.turnkey.com/t/<org>/agents/<slug>/agent.json`,
+  its key set next to it, and one P-256 identity key whose `kid` is its RFC
+  7638 thumbprint, with `use` and `alg`. Its delegations and client
+  assertions have the shapes of `turnkey.io/poppy-delegation/v1` and
+  `turnkey.io/client-assertion/v1`. `:host`, `:org`, and `:slug` change the
+  URL; `:redirect_uris` replaces the metadata's list.
+  """
+  def turnkey(opts \\ []) do
+    host = Keyword.get(opts, :host, "id.turnkey.com")
+    org = Keyword.get_lazy(opts, :org, &uuid/0)
+    slug = Keyword.get(opts, :slug, "shopper")
+    base = "https://#{host}/t/#{org}/agents/#{slug}"
+    root = turnkey_key()
+
+    agent = %__MODULE__{
+      client_id: "#{base}/agent.json",
+      jwks_uri: "#{base}/jwks.json",
+      redirect_uri: "#{base}/callback",
+      root: root,
+      rsa: rsa_key("unused"),
+      delegated: ec_key(nil),
+      sub: "usr_" <> random_id()
+    }
+
+    agent = %{agent | delegation: delegation(agent)}
+
+    metadata = %{
+      "client_name" => "Shopper",
+      "redirect_uris" => Keyword.get(opts, :redirect_uris, [agent.redirect_uri]),
+      "token_endpoint_auth_signing_alg" => "ES256"
+    }
+
+    publish(agent, metadata, [root.public])
+  end
+
+  @doc "A P-256 key published as Turnkey's guide lists agent keys."
+  def turnkey_key do
+    key = ec_key(nil)
+    kid = thumbprint(key.public)
+
+    %{
+      key
+      | kid: kid,
+        public: Map.merge(key.public, %{"kid" => kid, "use" => "sig", "alg" => "ES256"})
+    }
+  end
+
+  defp uuid do
+    <<a::32, b::16, c::16, d::16, e::48>> = :crypto.strong_rand_bytes(16)
+
+    :io_lib.format("~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b", [a, b, c, d, e])
+    |> IO.iodata_to_binary()
+  end
+
   @doc "Publishes (or republishes) the agent's metadata and key set."
   def publish(agent, extra_metadata \\ %{}, keys \\ nil) do
     Fetcher.setup()
@@ -61,26 +117,40 @@ defmodule Reviews.PoppyTestAgent do
     agent
   end
 
-  @doc "A delegation for the agent's delegated key (spec 5.2)."
+  @doc """
+  A delegation for the agent's delegated key (spec 5.2). `:signer` signs with
+  another key, and `:header` and `:claims` add or replace members.
+  """
   def delegation(agent, opts \\ []) do
     now = now()
     iat = Keyword.get(opts, :iat, now - 60)
-    signer = if Keyword.get(opts, :rsa), do: agent.rsa, else: agent.root
+
+    signer =
+      Keyword.get(opts, :signer, if(Keyword.get(opts, :rsa), do: agent.rsa, else: agent.root))
+
     delegated = Keyword.get(opts, :delegated, agent.delegated)
 
-    header = %{
-      "alg" => signer.alg,
-      "typ" => Keyword.get(opts, :typ, "poppy-delegation+jwt"),
-      "kid" => Keyword.get(opts, :kid, signer.kid)
-    }
+    header =
+      Map.merge(
+        %{
+          "alg" => signer.alg,
+          "typ" => Keyword.get(opts, :typ, "poppy-delegation+jwt"),
+          "kid" => Keyword.get(opts, :kid, signer.kid)
+        },
+        Keyword.get(opts, :header, %{})
+      )
 
-    claims = %{
-      "iss" => Keyword.get(opts, :iss, agent.client_id),
-      "cnf" => %{"jwk" => Keyword.get(opts, :cnf, delegated.public)},
-      "iat" => iat,
-      "exp" => Keyword.get(opts, :exp, iat + 6 * 60 * 60),
-      "jti" => random_id()
-    }
+    claims =
+      Map.merge(
+        %{
+          "iss" => Keyword.get(opts, :iss, agent.client_id),
+          "cnf" => %{"jwk" => Keyword.get(opts, :cnf, delegated.public)},
+          "iat" => iat,
+          "exp" => Keyword.get(opts, :exp, iat + 6 * 60 * 60),
+          "jti" => Keyword.get(opts, :jti, random_id())
+        },
+        Keyword.get(opts, :claims, %{})
+      )
 
     sign(header, claims, signer)
   end

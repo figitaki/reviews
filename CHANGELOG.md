@@ -6,6 +6,13 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Poppy Personal Agents whose identity key Turnkey holds show "Delegation:
+  signed by Turnkey" on their comments when the delegation matches Turnkey's
+  draft `poppy-delegation/v1` profile. They still act as the agent identity
+  their owner approved. Client assertions may carry a 256-character `jti`, as
+  that profile allows (gatekeep, figitaki/gatekeep#7). See "Turnkey-held
+  identity keys" in `docs/POPPY.md`.
+
 - `<.ds_button>` is the one button. It renders a link when given `navigate`,
   `patch` or `href`, comes in `sm` (28px), `md` (32px) and `lg` (40px, the
   height of a field), no longer lifts on hover, and keeps a 44px tap target on
