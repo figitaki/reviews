@@ -115,6 +115,36 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("reveal_packet_fragment", %{"id" => id}, socket) do
+    packet = socket.assigns.selected_patchset.packet
+
+    case PacketComponents.fragment_target(packet, socket.assigns.hunks_by_path, id) do
+      %{section_index: index, hunk_id: hunk_id, id: target_id}
+      when socket.assigns.live_action != :changes ->
+        socket =
+          socket
+          |> assign(:editing_decision_index, nil)
+          |> assign(:active_outline_section_index, index)
+          |> update(:expanded_section_ids, &MapSet.put(&1, index))
+          |> update(:expanded_hunk_ids, &MapSet.put(&1, hunk_id))
+
+        {:reply, %{id: target_id}, socket}
+
+      _ ->
+        {:reply, %{id: nil}, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("restore_packet_location", %{"thread" => id}, socket) when id in [nil, ""] do
+    handle_event("select_packet_overview", %{}, socket)
+  end
+
+  def handle_event("restore_packet_location", %{"thread" => id}, socket) do
+    {:noreply, reveal_activity_thread(socket, id, &reveal_packet_overview/1)}
+  end
+
+  @impl true
   def handle_event("select_patchset", %{"number" => number}, socket) do
     case Integer.parse(to_string(number)) do
       {n, _} ->
@@ -246,13 +276,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("select_packet_overview", _params, socket) do
-    socket =
-      socket
-      |> assign(:editing_decision_index, nil)
-      |> assign(:active_outline_section_index, nil)
-      |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
-
-    {:noreply, socket}
+    {:noreply, reveal_packet_overview(socket)}
   end
 
   @impl true
@@ -587,7 +611,12 @@ defmodule ReviewsWeb.ReviewLive do
   def render(assigns) do
     ~H"""
     <Layouts.flash_group flash={@flash} />
-    <div class="review-page min-h-screen">
+    <div
+      id="review-page"
+      class="review-page min-h-screen"
+      phx-hook="PacketFragments"
+      data-patchset={@selected_patchset.id}
+    >
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
           <DeleteReviewComponents.review_menu :if={@can_delete_review} />
@@ -784,7 +813,14 @@ defmodule ReviewsWeb.ReviewLive do
     """
   end
 
-  defp reveal_activity_thread(socket, id) do
+  defp reveal_packet_overview(socket) do
+    socket
+    |> assign(:editing_decision_index, nil)
+    |> assign(:active_outline_section_index, nil)
+    |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
+  end
+
+  defp reveal_activity_thread(socket, id, on_missing \\ &Function.identity/1) do
     with thread when not is_nil(thread) <-
            Enum.find(socket.assigns.published_threads, &(to_string(&1.id) == id)),
          true <- is_map(thread.anchor),
@@ -821,7 +857,7 @@ defmodule ReviewsWeb.ReviewLive do
           )
       end
     else
-      _ -> socket
+      _ -> on_missing.(socket)
     end
   end
 

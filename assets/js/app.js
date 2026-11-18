@@ -28,6 +28,7 @@ import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
 import Markdown from "./hooks/markdown"
 import ReviewActivity from "./hooks/review_activity"
+import PacketFragments from "./hooks/packet_fragments"
 import GuideFlyout from "./hooks/guide_flyout"
 import {mountDevicePage} from "./device_code"
 
@@ -106,6 +107,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
     PacketNavTree,
     Markdown,
     ReviewActivity,
+    PacketFragments,
     GuideFlyout,
   },
 })

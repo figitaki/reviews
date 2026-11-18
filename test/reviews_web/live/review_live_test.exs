@@ -402,6 +402,23 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(returned, "#packet-section-0-decision.is-editing")
 
       assert has_element?(view, "#review-packet .review-hunk-card")
+
+      [target] =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#review-packet [phx-hook=DiffRenderer]")
+        |> LazyHTML.attribute("id")
+
+      render_click(view, "select_packet_overview")
+      refute has_element?(view, "##{target}")
+      render_hook(view, "reveal_packet_fragment", %{"id" => target})
+      assert has_element?(view, "##{target}[data-hunk-expanded=true]")
+      render_click(view, "select_packet_overview")
+      render_hook(view, "reveal_packet_fragment", %{"id" => "packet-section-999-row-0"})
+      refute has_element?(view, "##{target}")
+      render_hook(view, "reveal_packet_fragment", %{"id" => target})
+      assert has_element?(view, "##{target}")
       refute has_element?(view, "#review-packet .review-hunk-summary")
 
       assert has_element?(
@@ -541,6 +558,28 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       refute has_element?(view, "#packet-section-0-row-1 .review-hunk-card")
+
+      for target <- [
+            "packet-section-0-row-1",
+            "packet-section-0-row-0--hunk-lib-packet-ex-1-through-2-summary",
+            "packet-section-0-row-0--hunk-lib-packet-ex-1-through-2-diff"
+          ] do
+        render_click(view, "select_packet_overview")
+        render_hook(view, "reveal_packet_fragment", %{"id" => target})
+        assert has_element?(view, "#packet-section-0-row-0 [data-hunk-expanded=true]")
+      end
+
+      {:ok, _} =
+        ReviewsCtx.append_patchset_unchecked(packet_review, %{
+          raw_diff: snapshot!(packet_review).selected_patchset.raw_diff
+        })
+
+      render_patch(view, ~p"/r/#{packet_review.slug}?patchset=2")
+      render_hook(view, "reveal_packet_fragment", %{"id" => "packet-section-0-row-1"})
+      refute has_element?(view, "#packet-section-0-row-0")
+      render_patch(view, ~p"/r/#{packet_review.slug}?patchset=1")
+      render_hook(view, "reveal_packet_fragment", %{"id" => "packet-section-0-row-1"})
+      assert has_element?(view, "#packet-section-0-row-0 [data-hunk-expanded=true]")
 
       refute has_element?(
                view,
@@ -1469,6 +1508,26 @@ defmodule ReviewsWeb.ReviewLiveTest do
       {:ok, direct, _} = live(conn, path)
       assert has_element?(direct, ~s|#packet-section-1 [data-hunk-expanded="true"]|)
       refute has_element?(direct, "#diff-files")
+
+      render_hook(direct, "reveal_packet_fragment", %{"id" => "packet-section-0-row-0"})
+      assert has_element?(direct, "#packet-section-0")
+      render_hook(direct, "restore_packet_location", %{"thread" => to_string(thread.id)})
+      assert has_element?(direct, ~s|#packet-section-1 [data-hunk-expanded="true"]|)
+      refute has_element?(direct, "#packet-section-0")
+
+      assert_push_event(direct, "open_review_thread", %{
+        thread_id: ^thread_id,
+        file_path: "example.ex",
+        hunk_id: "packet-section-1-row-0--hunk-example-ex-2"
+      })
+
+      for missing_thread <- [nil, "", "invalid", "999999999"] do
+        render_hook(direct, "reveal_packet_fragment", %{"id" => "packet-section-0-row-0"})
+        assert has_element?(direct, "#packet-section-0")
+        render_hook(direct, "restore_packet_location", %{"thread" => missing_thread})
+        assert has_element?(direct, "#review-split-inline-overview")
+        refute has_element?(direct, "#packet-section-0")
+      end
     end
 
     test "hunk viewed state is shared between packet and changes views", %{
