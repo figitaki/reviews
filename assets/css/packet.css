@@ -3209,8 +3209,9 @@ details[open] > summary .review-collapse-icon,
 .review-rich-markdown { padding: 1rem 1.5rem; overflow-wrap: anywhere; line-height: 1.65; color: var(--ds-text); }
 /* Rendered Markdown wraps at the Guide prose measure, centred like the prose
    column; the card and Source stay full width. Content-box keeps the text
-   itself, not text plus padding, at the measure. */
-.review-rich-markdown { box-sizing: content-box; max-width: var(--guide-measure); margin-inline: auto; }
+   itself, not text plus padding, at the measure. Scoped to the preview:
+   comment bodies reuse .review-rich-markdown and stay left-aligned. */
+.review-markdown-preview .review-rich-markdown { box-sizing: content-box; max-width: var(--guide-measure); margin-inline: auto; }
 .review-rich-markdown .review-markdown-change { border-left: 3px solid var(--ds-add); padding-left: .75rem; }
 .review-markdown-side.is-before .review-markdown-change { border-left-color: var(--ds-del); }
 .review-rich-markdown > * + * { margin-top: 1rem; }
