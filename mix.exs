@@ -4,7 +4,7 @@ defmodule Reviews.MixProject do
   def project do
     [
       app: :reviews,
-      version: "0.0.1",
+      version: "0.0.2",
       elixir: "~> 1.20",
       description: "Code-review tool for arbitrary diffs (Phoenix + Rust CLI).",
       package: [
@@ -83,8 +83,8 @@ defmodule Reviews.MixProject do
       {:ueberauth_github, "~> 0.8"},
       {:fastest_mcp, "~> 1.0.1"},
       # The OAuth issuer (Reviews.OAuth). Not on Hex yet; pinned to the merge
-      # of figitaki/gatekeep#5 (the device authorization grant).
-      {:gatekeep, github: "figitaki/gatekeep", ref: "3f096d6950d69b5287dcd26f15b65ec0d463b541"}
+      # of figitaki/gatekeep#7 (client assertion jtis of up to 256 bytes).
+      {:gatekeep, github: "figitaki/gatekeep", ref: "d1c5cc3e99d739ab74f15b19c7dbf55ed99f3228"}
     ]
   end
 

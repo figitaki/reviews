@@ -10,6 +10,7 @@ defmodule Reviews.Policy do
     * Push a patchset: the review owner.
     * Resolve or reopen a thread: the review owner or the thread's author.
     * Decide a packet section: the review owner.
+    * Delete the review: the review owner.
 
   "Owner" and "author" mean the account, not one identity: an account's human
   identity and its agent identities share its permissions.
@@ -27,6 +28,7 @@ defmodule Reviews.Policy do
           | :comment
           | :push
           | :decide_section
+          | :delete
           | {:update_thread_status, thread :: map()}
 
   # The scope a delegated principal needs for each write. API tokens and web
@@ -61,6 +63,8 @@ defmodule Reviews.Policy do
 
   # Explicitly added reviewers will also be allowed here once that feature exists.
   defp allowed?(%{identity: actor}, :decide_section, review), do: owner?(actor, review)
+
+  defp allowed?(%{identity: actor}, :delete, review), do: owner?(actor, review)
 
   defp allowed?(%{identity: actor}, {:update_thread_status, thread}, review) do
     owner?(actor, review) or same_account?(actor, author(thread))

@@ -245,46 +245,30 @@
   .review-activity-body { animation: none; }
 }
 
-/* Below wide screens the button floats over the content. */
-@media (max-width: 1199px) {
-  .review-activity {
-    --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
-    --review-quick-right: calc(16px + env(safe-area-inset-right));
+/* The button floats over the content at every width; the review content
+   stays full width. */
+.review-activity {
+  --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
+  --review-quick-right: calc(16px + env(safe-area-inset-right));
 
-    position: fixed;
-    right: var(--review-quick-right);
-    bottom: var(--review-quick-bottom);
-    z-index: var(--z-fab);
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 12px;
-  }
-  /* Leave room so the button never covers the last lines of code. */
-  .review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  position: fixed;
+  right: var(--review-quick-right);
+  bottom: var(--review-quick-bottom);
+  z-index: var(--z-fab);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
 }
+/* Leave room so the button never covers the last lines of code. */
+.review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 
-/* Tablets: the sticky section decision bar stops short of the button. */
-@media (min-width: 641px) and (max-width: 1199px) {
+/* Above phones the sticky section decision bar stops short of the button. */
+@media (min-width: 641px) {
   .review-page:has(.review-activity:not([data-empty])) .review-section-decision { margin-right: 64px; }
 }
 
-/* Wide screens: the aside reserves a column beside the code, as wide as the
-   open log, so neither the button nor the log covers code. */
 @media (min-width: 1200px) {
-  .review-activity {
-    --review-activity-w: 300px;
-
-    width: var(--review-activity-w);
-    align-self: stretch;
-  }
-  .review-activity:not(:has(details[open])) { --review-activity-w: var(--size-fab); }
-  .review-activity-panel {
-    position: fixed;
-    right: calc(16px + env(safe-area-inset-right));
-    bottom: calc(16px + env(safe-area-inset-bottom));
-    z-index: var(--z-fab);
-  }
   .review-activity-body { width: 300px; }
   .review-activity-log {
     max-height: min(60dvh, calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 120px));
