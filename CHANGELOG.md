@@ -6,6 +6,13 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Packets have a default section order: the core change first, then what
+  follows from it (callers, schema, tests), then glue (config, generated
+  files, lockfiles, docs). The writing-review-packets skill shows it as the
+  default, not a rule. `reviews push --dry-run` prints a note when a section
+  of only glue files comes before a section that changes code. Notes do not
+  change the exit status or stop a push.
+
 - The review page is full width at every screen width. On wide screens the
   Comments button no longer reserves a column beside the content: it floats
   in the bottom-right corner with its log above it, as on tablets. The log

@@ -90,7 +90,7 @@ Check any of these first without contacting the server by adding `--dry-run` (al
 cli/target/release/reviews push --dry-run --update <slug> --packet /path/to/packet.md
 ```
 
-It prints the target server, the review or slug, the diff files, the packet sections, and every packet problem with `file:line`. It exits 1 if the packet has problems or the review title or slug is empty. It does not need the server to be running, so it cannot check that the slug exists or that the token works.
+It prints the target server, the review or slug, the diff files, the packet sections, and every packet problem with `file:line`. It exits 1 if the packet has problems or the review title or slug is empty. Notes, such as a glue-only section placed before the core change, are printed but do not change the exit status. It does not need the server to be running, so it cannot check that the slug exists or that the token works.
 
 Find the slug of an earlier review (you wrote it or took part in it):
 
