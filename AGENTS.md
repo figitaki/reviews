@@ -23,7 +23,7 @@ CI (`.github/workflows/ci.yml`) runs format check, compile with warnings as erro
 
 ## Review packets for PRs
 
-Every PR we push, including drafts, must include an up-to-date review packet link in the PR description's **Reviews Packet** section (`- Packet: <URL>`), so reviewers can find and review it. Use the printed `/r/<slug>` URL on `https://reviews-dev.fly.dev` or a reviewer-accessible preview host; name the preview host when using one. A localhost link is not accessible to reviewers.
+Every PR we push, including drafts, must include an up-to-date review packet link in the PR description's **Reviews Packet** section (`- Packet: <URL>`), so reviewers can find and review it. Use the printed `/r/<slug>` URL on `https://reviews.figitaki.dev` or a reviewer-accessible preview host; name the preview host when using one. Point the CLI at `https://reviews.figitaki.dev`, not `reviews-dev.fly.dev`: that hostname 301-redirects, and the redirect turns the CLI's POSTs into GETs that fail with 404. A localhost link is not accessible to reviewers.
 
 Follow [writing-review-packets](skills/writing-review-packets/SKILL.md). After committing the changes, capture the full PR diff explicitly (the CLI defaults to only `HEAD~1..HEAD`):
 
@@ -57,7 +57,7 @@ Do not reopen these without the maintainer.
 - Input is the CLI only; no web paste.
 - Sharing is link-based: anyone with the URL can view. Commenting needs GitHub OAuth or an API token.
 - Comments publish immediately. Per-viewer drafts were removed (`priv/repo/migrations/20260519120000_drop_draft_review_support.exs`).
-- Decisions are per packet section, per patchset, per identity (`approved`, `denied`, `ignored`, `pending`) and carry forward to later patchsets until the section changes.
+- Decisions are per packet section, per patchset, per account (`approved`, `denied`, `ignored`, `pending`), record which identity made them, and carry forward to later patchsets until the section changes. The API sets a status explicitly; only the review page's button toggles.
 - Agent identities are first-class: an agent can push, comment and decide under its own handle and token.
 - Threads carry across patchsets by content, not line numbers. `Anchoring.relocate/3` matches a line by text and context and returns `{:error, :outdated}` when it cannot. Wiring it into `append_patchset` is open work; see the tracker. Token-range anchors can be written but not relocated; keep the `"token_range"` stub.
 - Code storage uses code.storage (Pierre) only; no local git adapter. It is optional, enabled by `CODE_STORAGE_*` env vars (see README).

@@ -25,12 +25,12 @@ defmodule ReviewsWeb.Api.ReviewController do
       {:error, :not_found} ->
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "Review not found"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
 
       {:error, :patchset_not_found} ->
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "Patchset not found"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:patchset_not_found, "Patchset not found"))
     end
   end
 
@@ -94,37 +94,8 @@ defmodule ReviewsWeb.Api.ReviewController do
   end
 
   defp render_thread(thread) do
-    %{
-      id: thread.id,
-      file_path: thread.file_path,
-      side: thread.side,
-      line_hint: get_in(thread.anchor || %{}, ["line_number_hint"]),
-      status: thread.status,
-      author: render_identity(thread.author),
-      resolved_by: render_identity(thread.resolved_by),
-      resolved_at: thread.resolved_at,
-      comments:
-        Enum.map(thread.comments || [], fn c ->
-          %{
-            body: c.body,
-            author: render_identity(c.author),
-            inserted_at: c.inserted_at
-          }
-        end)
-    }
-  end
-
-  defp render_identity(nil), do: nil
-
-  defp render_identity(identity) do
-    %{
-      id: identity.id,
-      kind: identity.kind,
-      handle: identity.handle,
-      username: identity.handle,
-      display_name: identity.display_name,
-      avatar_url: identity.avatar_url
-    }
+    ReviewsWeb.Payloads.thread(thread)
+    |> Map.put(:comments, Enum.map(thread.comments || [], &ReviewsWeb.Payloads.comment/1))
   end
 
   @doc "POST /api/v1/reviews"
@@ -146,15 +117,17 @@ defmodule ReviewsWeb.Api.ReviewController do
       {:error, _step, changeset, _} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: format_changeset(changeset)})
+        |> json(ReviewsWeb.ApiErrors.changeset(changeset))
 
       {:error, %Ecto.Changeset{} = changeset} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: format_changeset(changeset)})
+        |> json(ReviewsWeb.ApiErrors.changeset(changeset))
 
       _ ->
-        conn |> put_status(:bad_request) |> json(%{errors: %{detail: "Invalid request"}})
+        conn
+        |> put_status(:bad_request)
+        |> json(ReviewsWeb.ApiErrors.detail(:invalid_request, "Invalid request"))
     end
   end
 
@@ -170,12 +143,4 @@ defmodule ReviewsWeb.Api.ReviewController do
   end
 
   defp normalize_params(_), do: nil
-
-  defp format_changeset(%Ecto.Changeset{} = cs) do
-    Ecto.Changeset.traverse_errors(cs, fn {msg, opts} ->
-      Regex.replace(~r/%{(\w+)}/, msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
-  end
 end

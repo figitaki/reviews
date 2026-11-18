@@ -117,7 +117,7 @@ defmodule Reviews.PoppyTestAgent do
   defp ath(opts) do
     case Keyword.fetch(opts, :ath) do
       {:ok, value} -> value
-      :error -> if token = opts[:access_token], do: Reviews.OAuth.JOSE.digest(token)
+      :error -> if token = opts[:access_token], do: Gatekeep.JOSE.digest(token)
     end
   end
 
@@ -245,7 +245,7 @@ defmodule Reviews.PoppyTestAgent do
   end
 
   def thumbprint(jwk) do
-    {:ok, value} = Reviews.OAuth.JOSE.thumbprint(jwk)
+    {:ok, value} = Gatekeep.JOSE.thumbprint(jwk)
     value
   end
 

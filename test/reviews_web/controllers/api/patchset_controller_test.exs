@@ -65,6 +65,8 @@ defmodule ReviewsWeb.Api.PatchsetControllerTest do
       })
 
     assert json_response(conn, 422) == %{
+             "error_code" => "validation_failed",
+             "error_detail" => "Invalid input",
              "errors" => %{"branch_name" => ["should be at most 255 character(s)"]}
            }
 
@@ -134,7 +136,10 @@ defmodule ReviewsWeb.Api.PatchsetControllerTest do
     packet = %{
       "format_version" => 1,
       "title" => "Patchset v2 guide",
-      "tasks" => [%{"key" => "smoke", "description" => "Smoke test it"}]
+      "tasks" => [%{"key" => "smoke", "description" => "Smoke test it"}],
+      "sections" => [
+        %{"title" => "S", "rows" => [%{"kind" => "hunk", "path" => "foo", "hunk_index" => 1}]}
+      ]
     }
 
     body = %{

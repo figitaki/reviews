@@ -70,8 +70,7 @@ A non-exhaustive list of every place `/` is implied:
    - `assets/js/app.js`
    - `assets/js/hooks/diff_renderer.js`
    - any other React-island fetches
-8. **CLI base URL** — `cli/` already defaults to `https://reviews-dev.fly.dev`
-   (commit `5624544`). If a deployment runs on a base path, the CLI's
+8. **CLI base URL** — `reviews login` defaults to `https://reviews.figitaki.dev`. If a deployment runs on a base path, the CLI's
    URL config needs to accept paths (e.g. `https://host/reviews`).
    Most likely already works since it's just a base URL, but verify
    `cli/` URL construction doesn't strip paths.

@@ -101,12 +101,22 @@ defmodule ReviewsWeb.Router do
     post "/authorize", OAuthController, :approve
   end
 
+  # CLI sign-in (RFC 8628): the person enters the code `reviews login` shows.
+  scope "/device", ReviewsWeb do
+    pipe_through :browser
+
+    get "/", DeviceController, :show
+    post "/", DeviceController, :lookup
+    post "/decide", DeviceController, :decide
+  end
+
   scope "/oauth", ReviewsWeb do
     pipe_through :oauth_endpoint
 
     post "/token", OAuthController, :token
     post "/revoke", OAuthController, :revoke
     post "/register", OAuthController, :register
+    post "/device_authorization", OAuthController, :device_authorization
     options "/:endpoint", OAuthController, :token
   end
 
@@ -115,6 +125,9 @@ defmodule ReviewsWeb.Router do
     pipe_through [:poppy_api, :review_content]
 
     get "/reviews/:slug", ReviewController, :show
+    get "/reviews/:slug/files", ReviewPageController, :files
+    get "/reviews/:slug/threads", ReviewPageController, :threads
+    get "/reviews/:slug/threads/:thread_id/comments", ReviewPageController, :comments
   end
 
   scope "/api/poppy/v1", ReviewsWeb.Api do
@@ -144,6 +157,9 @@ defmodule ReviewsWeb.Router do
     pipe_through [:api, :review_content]
 
     get "/reviews/:slug", ReviewController, :show
+    get "/reviews/:slug/files", ReviewPageController, :files
+    get "/reviews/:slug/threads", ReviewPageController, :threads
+    get "/reviews/:slug/threads/:thread_id/comments", ReviewPageController, :comments
   end
 
   scope "/api/v1", ReviewsWeb.Api do

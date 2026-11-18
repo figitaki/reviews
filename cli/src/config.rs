@@ -1,11 +1,24 @@
 //! Config file at `~/.config/reviews/config.toml`.
 //!
-//! Format:
+//! `reviews login` writes tokens that refresh themselves:
+//!
+//! ```toml
+//! [default]
+//! server_url = "https://reviews.figitaki.dev"
+//!
+//! [default.oauth]
+//! access_token = "gka_..."
+//! refresh_token = "gkr_..."
+//! expires_at = 1763400000
+//! token_endpoint = "https://reviews.figitaki.dev/oauth/token"
+//! ```
+//!
+//! `reviews login --token` writes an API token minted in Settings instead:
 //!
 //! ```toml
 //! [default]
 //! server_url = "http://localhost:4000"
-//! api_token = "abcdef..."
+//! api_token = "rev_..."
 //! ```
 
 use anyhow::{anyhow, Context, Result};
@@ -15,7 +28,21 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Profile {
     pub server_url: String,
-    pub api_token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth: Option<OAuthTokens>,
+}
+
+/// Tokens from `reviews login`. The access token lasts about an hour; the
+/// CLI trades the refresh token for new ones (`crate::auth`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OAuthTokens {
+    pub access_token: String,
+    pub refresh_token: String,
+    /// Unix seconds when the access token expires.
+    pub expires_at: i64,
+    pub token_endpoint: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -24,11 +51,24 @@ pub struct Config {
 }
 
 impl Config {
+    /// A config with an API token minted in Settings.
     pub fn new(server_url: String, api_token: String) -> Self {
         Config {
             default: Profile {
                 server_url,
-                api_token,
+                api_token: Some(api_token),
+                oauth: None,
+            },
+        }
+    }
+
+    /// A config with tokens from the device sign-in.
+    pub fn with_oauth(server_url: String, oauth: OAuthTokens) -> Self {
+        Config {
+            default: Profile {
+                server_url,
+                api_token: None,
+                oauth: Some(oauth),
             },
         }
     }
@@ -56,6 +96,8 @@ impl Config {
         Ok(path)
     }
 
+    /// Writes the config with mode 0600, through a temporary file renamed
+    /// into place, so a concurrent reader never sees half a file.
     pub fn save_to(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).with_context(|| {
@@ -63,19 +105,18 @@ impl Config {
             })?;
         }
         let text = toml::to_string_pretty(self).context("could not serialize config")?;
-        std::fs::write(path, text)
-            .with_context(|| format!("could not write config to {}", path.display()))?;
+        let tmp = path.with_extension("toml.tmp");
+        std::fs::write(&tmp, text)
+            .with_context(|| format!("could not write config to {}", tmp.display()))?;
         // Best-effort tighten perms to 0600 on Unix; ignore on other platforms.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(path)
-                .with_context(|| format!("could not stat {}", path.display()))?
-                .permissions();
-            perms.set_mode(0o600);
-            std::fs::set_permissions(path, perms)
-                .with_context(|| format!("could not set permissions on {}", path.display()))?;
+            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
+                .with_context(|| format!("could not set permissions on {}", tmp.display()))?;
         }
+        std::fs::rename(&tmp, path)
+            .with_context(|| format!("could not write config to {}", path.display()))?;
         Ok(())
     }
 }
@@ -98,6 +139,34 @@ mod tests {
         cfg.save_to(&path).unwrap();
         let loaded = Config::load_from(&path).unwrap();
         assert_eq!(cfg, loaded);
+
+        let cfg = Config::with_oauth(
+            "http://localhost:4000".into(),
+            OAuthTokens {
+                access_token: "gka_a".into(),
+                refresh_token: "gkr_r".into(),
+                expires_at: 1_763_400_000,
+                token_endpoint: "http://localhost:4000/oauth/token".into(),
+            },
+        );
+        cfg.save_to(&path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("api_token"), "text = {text}");
+        assert_eq!(Config::load_from(&path).unwrap(), cfg);
+    }
+
+    #[test]
+    fn loads_a_config_written_before_device_sign_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "[default]\nserver_url = \"http://x\"\napi_token = \"rev_old\"\n",
+        )
+        .unwrap();
+        let cfg = Config::load_from(&path).unwrap();
+        assert_eq!(cfg.default.api_token.as_deref(), Some("rev_old"));
+        assert_eq!(cfg.default.oauth, None);
     }
 
     #[test]
