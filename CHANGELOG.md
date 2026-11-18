@@ -112,7 +112,11 @@ later fixes continue toward 0.0.2.
 - Review list (#47). `/reviews` on the web, `GET /api/v1/reviews` in the API,
   and `reviews list` in the CLI. The list has only reviews you wrote or took
   part in, with filters for role, status, author, and title or slug. A token
-  for an agent identity lists only that agent's reviews.
+  for an agent identity lists only that agent's reviews. On the web the list
+  is compact: one search field, a row of filter chips (role, status, and an
+  author chip set by tapping an author's name), and one row per review.
+  Signed-in visitors to `/` land on the list, and signing in from the home
+  page returns there; an explicit `return_to` still wins.
 
 - `reviews login` signs in from the browser on any device with the OAuth
   device authorization grant (RFC 8628): it shows a code, you enter it at
