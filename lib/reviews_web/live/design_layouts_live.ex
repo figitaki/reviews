@@ -15,18 +15,20 @@ defmodule ReviewsWeb.DesignLayoutsLive do
   alias ReviewsWeb.DesignLive
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     unless DesignLive.enabled?(), do: raise(DesignLive.Disabled)
 
     {:ok,
      assign(socket,
        page_title: "Page layouts",
+       signed_in?: is_integer(session["current_user_id"]),
        pages: [
          %{
            id: "list",
            title: "Review list",
            path: ~p"/reviews",
-           note: "Compact header, one search field, a chip row that scrolls on phones."
+           note: "Compact header, one search field, a chip row that scrolls on phones.",
+           auth?: true
          },
          %{
            id: "review",
@@ -34,13 +36,15 @@ defmodule ReviewsWeb.DesignLayoutsLive do
            path: ~p"/r/#{Reviews.DemoReview.slug()}",
            note:
              "Guide beside the code on wide screens. On phones: the Guide map flyout, and the " <>
-               "floating Sections, Comments and decision buttons."
+               "floating Sections, Comments and decision buttons.",
+           auth?: false
          },
          %{
            id: "settings",
            title: "Settings",
            path: ~p"/settings",
-           note: "Stacked cards of forms; fields and buttons share one height."
+           note: "Stacked cards of forms; fields and buttons share one height.",
+           auth?: true
          }
        ]
      )}
@@ -51,6 +55,13 @@ defmodule ReviewsWeb.DesignLayoutsLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <style :type={ReviewsWeb.ColocatedCSS}>
+        /* minmax(0, 1fr): the 640px desktop frame must not widen the page. */
+        #design-layouts,
+        .dcl-page,
+        .dcl-frames figure {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
         .dcl-page {
           display: grid;
           gap: var(--space-5);
@@ -66,7 +77,16 @@ defmodule ReviewsWeb.DesignLayoutsLive do
         .dcl-frames figure {
           display: grid;
           gap: var(--space-2);
+          min-width: 0;
+          max-width: 100%;
           margin: 0;
+        }
+
+        .dcl-state {
+          margin: 0;
+          color: var(--ds-text);
+          font-size: var(--font-meta-size);
+          font-weight: var(--weight-semi);
         }
 
         .dcl-viewport {
@@ -76,10 +96,19 @@ defmodule ReviewsWeb.DesignLayoutsLive do
           background: var(--ds-bg);
         }
 
-        /* Desktop: a 1280 x 800 page shown at half size. */
+        /* Desktop: a 1280 x 800 page shown at half size. Narrower than that,
+           the frame scrolls sideways instead of overflowing the page. */
         .dcl-viewport.is-desktop {
           width: 640px;
+          max-width: 100%;
           height: 400px;
+          overflow-x: auto;
+        }
+
+        .dcl-viewport.is-desktop > div {
+          width: 640px;
+          height: 400px;
+          overflow: hidden;
         }
 
         .dcl-viewport.is-desktop iframe {
@@ -113,8 +142,9 @@ defmodule ReviewsWeb.DesignLayoutsLive do
           <DesignLive.catalog_nav current={:layouts} />
           <h1>Page layouts</h1>
           <p class="dc-intro">
-            The real pages, framed at desktop (1280px, shown at half size) and phone (390px)
-            widths. They show what you would see there, signed in or not; open one to use it.
+            The real pages, framed at desktop (1280px, shown at half size) and phone (390px, at
+            three quarters) widths. They load with your session, so they show what you would see
+            there. Open a page at full size to check spacing and tap targets at 1:1.
           </p>
         </header>
 
@@ -127,20 +157,30 @@ defmodule ReviewsWeb.DesignLayoutsLive do
         >
           <h2 id={"dcl-#{page.id}-title"}>{page.title}</h2>
           <p class="dc-intro">
-            {page.note} <.link href={page.path}>Open {page.path}</.link>
+            {page.note} <.link href={page.path}>Open {page.path} at full size</.link>
+          </p>
+          <p :if={page.auth?} id={"dcl-#{page.id}-state"} class="dcl-state">
+            <%= if @signed_in? do %>
+              Showing your account, signed in.
+            <% else %>
+              Signed out, so this shows the sign-in state, not the page.
+              <.link href={~p"/auth/github?#{[return_to: ~p"/design/layouts"]}"}>Sign in</.link>
+              to see it with your data.
+            <% end %>
           </p>
           <div class="dcl-frames">
             <figure>
               <div class="dcl-viewport is-desktop">
-                <iframe
-                  id={"dcl-#{page.id}-desktop"}
-                  src={page.path}
-                  title={"#{page.title} at desktop width"}
-                  loading="lazy"
-                  tabindex="-1"
-                ></iframe>
+                <div>
+                  <iframe
+                    id={"dcl-#{page.id}-desktop"}
+                    src={page.path}
+                    title={"#{page.title} at desktop width"}
+                    loading="lazy"
+                  ></iframe>
+                </div>
               </div>
-              <figcaption class="dc-name">Desktop, 1280px</figcaption>
+              <figcaption class="dc-name">Desktop, 1280 × 800 at 50%</figcaption>
             </figure>
             <figure>
               <div class="dcl-viewport is-phone">
@@ -151,7 +191,7 @@ defmodule ReviewsWeb.DesignLayoutsLive do
                   loading="lazy"
                 ></iframe>
               </div>
-              <figcaption class="dc-name">Phone, 390px</figcaption>
+              <figcaption class="dc-name">Phone, 390 × 844 at 75%</figcaption>
             </figure>
           </div>
         </section>

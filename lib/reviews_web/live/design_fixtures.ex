@@ -84,12 +84,21 @@ defmodule ReviewsWeb.DesignFixtures do
       hunk_index: 1,
       line_start: 38,
       line_end: 46,
-      display_additions: 4,
-      display_deletions: 2,
+      display_additions: count_lines(@diff, "+"),
+      display_deletions: count_lines(@diff, "-"),
       row_ref: "design-row-1",
       hunk_fingerprint: "design",
       viewed?: viewed?
     }
+  end
+
+  # Changed lines in a unified diff, without the ---/+++ file headers.
+  defp count_lines(diff, sign) do
+    diff
+    |> String.split("\n")
+    |> Enum.count(
+      &(String.starts_with?(&1, sign) and not String.starts_with?(&1, sign <> sign <> sign))
+    )
   end
 
   @doc "The signed-in viewer for the app shell and new comments."
