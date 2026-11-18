@@ -104,6 +104,11 @@ later fixes continue toward 0.0.2.
 
 ### Added
 
+- A design catalog at `/design` shows the tokens and `ds_` components in the
+  dark and light themes side by side, with every pill style in use. It is on
+  in dev and on preview apps, and off in production. A new `<.ds_chip>`
+  component gives filters and toggles one shared pill style.
+
 - `reviews login` signs in from the browser on any device with the OAuth
   device authorization grant (RFC 8628): it shows a code, you enter it at
   `/device`, and the CLI stores tokens that refresh themselves. It works over

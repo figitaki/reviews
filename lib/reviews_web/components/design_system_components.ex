@@ -113,6 +113,28 @@ defmodule ReviewsWeb.DesignSystemComponents do
     """
   end
 
+  @doc """
+  A pill-shaped filter or toggle link. `selected` fills it and sets
+  `aria-current`. Pass `patch`, `navigate` or `href` as for `<.link>`.
+  On touch screens the hit area grows to 44px without the pill growing.
+  """
+  attr :selected, :boolean, default: false
+  attr :class, :any, default: nil
+  attr :rest, :global, include: ~w(patch navigate href replace)
+  slot :inner_block, required: true
+
+  def ds_chip(assigns) do
+    ~H"""
+    <.link
+      class={["ds-chip", @selected && "is-selected", @class]}
+      aria-current={@selected && "true"}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </.link>
+    """
+  end
+
   attr :icon, :string, required: true
   attr :title, :string, required: true
   attr :body, :string, required: true
