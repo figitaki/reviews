@@ -12,22 +12,54 @@
   background: var(--ds-panel);
   overflow: hidden;
 }
+.review-activity-panel[data-unread="true"] { border-color: var(--ds-blue); }
 
 .review-activity-summary {
-  cursor: pointer;
-  padding: var(--space-3) var(--space-4);
-  font-weight: var(--weight-medium);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
   min-height: 44px;
+  padding: 0 var(--space-3);
+  cursor: pointer;
+  font-weight: var(--weight-medium);
   white-space: nowrap;
+  list-style: none;
 }
+.review-activity-summary::-webkit-details-marker { display: none; }
+
+.review-activity-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.review-activity-close {
+  display: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  fill: none;
+  stroke: var(--ds-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.review-activity-panel[open] .review-activity-close { display: block; }
 
 .review-activity-count,
 .review-activity-read {
-  color: var(--ds-blue);
+  color: var(--ds-muted);
   font-size: var(--font-label-size);
   font-variant-numeric: tabular-nums;
 }
-.review-activity-count { margin-inline-start: var(--space-3); }
+.review-activity-read,
+[data-unread="true"] .review-activity-count { color: var(--ds-blue); }
 .review-activity-body { padding: 0 var(--space-3) var(--space-3); }
 .review-activity-note { color: var(--ds-muted); margin: var(--space-3); }
 
@@ -73,6 +105,14 @@
     align-self: start;
   }
   .review-activity:not(:has(details[open])) { width: auto; }
+  /* Collapsed, the rail is just the icon and count. */
+  .review-activity-panel:not([open]) .review-activity-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
   .review-activity-body {
     max-height: calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 96px);
     overflow-y: auto;
@@ -84,7 +124,7 @@
 }
 
 /* Comments use the same escaped Markdown renderer as the Guide, at UI scale. */
-.review-rich-markdown.review-comment-markdown { font-size: 13px; line-height: 1.5; }
+.review-rich-markdown.review-comment-markdown { padding: 0; font-size: 13px; line-height: 1.5; }
 .review-comment-markdown > :first-child { margin-top: 0; }
 .review-comment-markdown > :last-child { margin-bottom: 0; }
 .review-comment-markdown :is(p, ul, ol, blockquote, pre, table) { margin-block: 0.5em; }

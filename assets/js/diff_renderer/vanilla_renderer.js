@@ -1,5 +1,6 @@
 import * as Diffs from "@pierre/diffs"
 import { isMarkdown } from "../lib/markdown.js"
+import { COMPACT } from "../lib/breakpoints.js"
 import { discussionCount, markdownPreview, markdownPreviewState, previewNotice } from "./markdown_preview.js"
 
 import {
@@ -9,12 +10,11 @@ import {
   threadStatusBadge,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
-import { MobileConversation } from "./mobile_conversation.js"
-import { SelectionAction } from "./selection_action.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
   annotationSideToSide,
   composerToAnchor,
+  sideToAnnotationSide,
   threadsToAnnotations,
 } from "../lib/translate.js"
 
@@ -27,6 +27,74 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
     --diffs-font-size: var(--font-code-size);
     --diffs-line-height: var(--font-code-leading);
     --diffs-font-features: "liga" 0, "calt" 0;
+  }
+  /* Pierre's comment button is one line tall. Widen its touch area without
+     covering the neighbouring rows' gutter. */
+  @media (pointer: coarse) {
+    [data-utility-button]::before,
+    .reviews-thread-marker::before { inset: -6px -12px; }
+  }
+  /* Phones hide line numbers. The gutter keeps the change bar and is just
+     wide enough for Pierre's comment button (at left: 6px) and our badge. */
+  [data-disable-line-numbers] :is([data-column-number], [data-gutter-buffer]) {
+    min-width: calc(1lh + 14px);
+  }
+  /* Phones: lines with threads get a button shaped like Pierre's comment
+     button, in the same spot, with a count badge. */
+  .reviews-thread-marker {
+    position: absolute;
+    top: 0;
+    left: 6px;
+    z-index: var(--z-float);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1lh;
+    height: 1lh;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background-color: var(--diffs-modified-base);
+    color: var(--diffs-bg);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  [data-reviews-discussed] {
+    --diffs-line-bg: light-dark(
+      color-mix(in lab, var(--diffs-computed-diff-line-bg) 82%, var(--diffs-modified-base)),
+      color-mix(in lab, var(--diffs-computed-diff-line-bg) 75%, var(--diffs-modified-base))
+    );
+  }
+  .reviews-thread-marker:focus-visible {
+    outline: 2px solid var(--ds-focus);
+    outline-offset: 2px;
+  }
+  .reviews-thread-marker::before { content: ""; position: absolute; inset: 0 0 0 -4px; }
+  .reviews-thread-marker[aria-expanded="true"] { box-shadow: 0 0 0 2px var(--diffs-bg), 0 0 0 3px var(--diffs-modified-base); }
+  .reviews-thread-marker svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .reviews-thread-marker-count {
+    position: absolute;
+    top: -5px;
+    right: -7px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    box-sizing: border-box;
+    border: 1px solid var(--diffs-modified-base);
+    border-radius: var(--radius-pill);
+    background: var(--diffs-bg);
+    color: var(--diffs-modified-base);
+    font: 600 10px/12px var(--diffs-header-font-family, system-ui, sans-serif);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
   }
   /* Phones: "N unmodified lines" separators span the card edge to edge and
      drop their rounded corners, matching the card (packet.css, 768px). */
@@ -111,6 +179,23 @@ function shouldVirtualize({ rawDiff, fileDiff, diffStyle }) {
   )
 }
 
+// A line anchor, or a token anchor when the reader selected text within the
+// line before pressing the gutter button (Pierre keeps the selection intact).
+function lineAnchor(lineElement, side, lineNumber) {
+  const anchor = { kind: "line", side, lineNumber, lineText: lineElement?.textContent || "" }
+  const selection = lineElement?.getRootNode().getSelection?.() || document.getSelection()
+  if (!lineElement || !selection?.rangeCount || selection.isCollapsed) return anchor
+  const range = selection.getRangeAt(0)
+  const tokenText = range.toString()
+  if (!lineElement.contains(range.startContainer) || !lineElement.contains(range.endContainer) ||
+      !tokenText.trim()) return anchor
+  const before = range.cloneRange()
+  before.selectNodeContents(lineElement)
+  before.setEnd(range.startContainer, range.startOffset)
+  const lineCharStart = before.toString().length
+  return { ...anchor, kind: "token", tokenText, lineCharStart, lineCharEnd: lineCharStart + tokenText.length }
+}
+
 export function hunkViewLabel(hunkUI) {
   if (!hunkUI) return ""
   if (hunkUI.hunkViewed) return "Viewed"
@@ -145,22 +230,22 @@ export class VanillaDiffRenderer {
     this.onToggleHunk = onToggleHunk
     this.onSetHunkViewed = onSetHunkViewed
     this.composerAt = null
-    this.selectionAction = new SelectionAction(container, (anchor) => {
-      this.setComposerAt(this.signedIn ? anchor : { ...anchor, kind: "signin" })
-    })
     this.fileDiff = parsePatch(rawDiff, filePath)
     this.instance = null
     this.headerInstance = null
     this.virtualizer = null
     this.threadUI = new Map()
+    // Phones keep threads out of the diff flow: a gutter button per commented
+    // line opens that line's threads inline. Lines open now, as "side:line".
+    this.compactQuery = window.matchMedia(COMPACT)
+    this.onCompactChange = () => this.render()
+    this.compactQuery.addEventListener("change", this.onCompactChange)
+    this.openLines = new Set()
     this.composerDraft = ""
-    this.mobileConversation = new MobileConversation()
-    this.mobileQuery = window.matchMedia("(max-width: 768px)")
-    this.mobileResize = () => {
-      this.mobileConversation.close(false)
-      this.render()
-    }
-    this.mobileQuery.addEventListener("change", this.mobileResize)
+    // For touch, Pierre reveals its button in its own pointerdown handler,
+    // which runs before this one.
+    this.onPointerDown = () => this.labelGutterUtility()
+    container.addEventListener("pointerdown", this.onPointerDown)
     this.hasMarkdownPreview = isMarkdown(filePath) && (this.fileDiff?.hunks.length || 0) > 0
     if (this.hasMarkdownPreview) {
       // Added/deleted files carry the whole document even in a sliced packet hunk.
@@ -255,12 +340,101 @@ export class VanillaDiffRenderer {
   setComposerAt(composerAt) {
     this.composerAt = composerAt
     this.composerDraft = ""
-    this.mobileSelection = composerAt && this.mobileQuery.matches ? { composer: true } : null
     this.render()
   }
 
+  // Pierre's gutter "+" is the only way to start a comment, so selecting text
+  // stays native. A drag reports a range, but comments anchor to one line:
+  // the line where the gesture ended.
+  commentFromGutter(range) {
+    const side = range.endSide || range.side
+    const anchor = lineAnchor(this.renderedLine(side, range.end), side, range.end)
+    this.setComposerAt(this.signedIn ? anchor : { ...anchor, kind: "signin" })
+  }
+
+  renderedLine(side, lineNumber, attribute = "line") {
+    const root = this.sourceContainer?.querySelector("diffs-container")?.shadowRoot
+    const unifiedSide = side === "deletions"
+      ? '[data-line-type="change-deletion"]'
+      : ':not([data-line-type="change-deletion"])'
+    const cell = `[data-${attribute}="${lineNumber}"]`
+    return root?.querySelector(`[data-${side}] ${cell}, [data-unified] ${cell}${unifiedSide}`)
+  }
+
+  compact() {
+    return this.compactQuery.matches
+  }
+
+  toggleLine(side, lineNumber) {
+    const key = `${side}:${lineNumber}`
+    if (this.openLines.has(key)) this.openLines.delete(key)
+    else this.openLines.add(key)
+    this.render()
+  }
+
+  // Pierre has no read-only gutter decorations, so the buttons go into its
+  // line-number cells after each render, including virtualized re-renders.
+  placeThreadMarkers() {
+    const root = this.sourceContainer?.querySelector("diffs-container")?.shadowRoot
+    if (!root) return
+    root.querySelectorAll(".reviews-thread-marker").forEach((marker) => marker.remove())
+    if (!this.compact()) return
+    for (const { side, lineNumber, metadata } of threadsToAnnotations(this.threads)) {
+      const cell = this.renderedLine(side, lineNumber, "column-number")
+      if (!cell) continue
+      const threads = metadata.threads
+      const comments = threads.reduce((sum, thread) => sum + (thread.comments?.length || 0), 0)
+      const open = this.openLines.has(`${side}:${lineNumber}`)
+      const sign = side === "deletions" ? "−" : "+"
+      const what = threads.length > 1
+        ? `${threads.length} threads, ${comments} comments`
+        : `${comments} ${comments === 1 ? "comment" : "comments"}`
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+      icon.setAttribute("viewBox", "0 0 24 24")
+      icon.setAttribute("aria-hidden", "true")
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path")
+      path.setAttribute("d", "M8 10h8M8 14h5M21 12a9 9 0 0 1-9 9H3l1.5-4A9 9 0 1 1 21 12Z")
+      icon.append(path)
+      cell.append(el("button", {
+        type: "button",
+        className: "reviews-thread-marker",
+        "aria-expanded": String(open),
+        "aria-label": `${open ? "Hide" : "Show"} ${what} on line ${sign}${lineNumber}`,
+        // Keep Pierre from revealing its "+" on the same cell.
+        onpointerdown: (event) => event.stopPropagation(),
+        onclick: (event) => {
+          event.stopPropagation()
+          this.toggleLine(side, lineNumber)
+        },
+      }, [icon, el("span", { className: "reviews-thread-marker-count", "aria-hidden": "true" }, String(comments))]))
+    }
+    // Lines being discussed stay highlighted. This is not Pierre's line
+    // selection, which would pin its "+" to that line.
+    const lines = [...this.openLines]
+    if (this.composerAt) lines.push(`${this.composerAt.side}:${this.composerAt.lineNumber}`)
+    for (const key of lines) {
+      const [side, line] = key.split(":")
+      for (const attribute of ["line", "column-number"]) {
+        this.renderedLine(side, line, attribute)?.setAttribute("data-reviews-discussed", "")
+      }
+    }
+  }
+
+  // Pierre shows its button on hover, or on pointerdown on a line number for
+  // touch, but gives it no accessible name. Name it for the row it is on.
+  labelGutterUtility() {
+    const line = this.instance?.getHoveredLine?.()
+    const root = this.sourceContainer?.querySelector("diffs-container")?.shadowRoot
+    const button = root?.querySelector("[data-utility-button]")
+    if (!line || !button) return
+    button.setAttribute("aria-label", `Comment on line ${line.lineNumber}`)
+    button.title = button.getAttribute("aria-label")
+  }
+
   annotations() {
-    const real = threadsToAnnotations(this.threads).map((annotation) => ({
+    const real = threadsToAnnotations(this.threads)
+      .filter(({ side, lineNumber }) => !this.compact() || this.openLines.has(`${side}:${lineNumber}`))
+      .map((annotation) => ({
       ...annotation,
       metadata: { kind: "real", ...annotation.metadata },
     }))
@@ -291,6 +465,8 @@ export class VanillaDiffRenderer {
       thread_anchor: anchor,
       line_text: this.composerAt.lineText || "",
     })
+    // Show the new thread under its line once it arrives.
+    if (this.compact()) this.openLines.add(`${this.composerAt.side}:${this.composerAt.lineNumber}`)
     this.setComposerAt(null)
   }
 
@@ -317,15 +493,6 @@ export class VanillaDiffRenderer {
   renderAnnotation(annotation) {
     const meta = annotation.metadata || {}
     if (meta.kind === "composer") {
-      if (this.mobileQuery.matches) {
-        const marker = el("button", {
-          type: "button", className: "reviews-conversation-marker",
-          style: { minHeight: "44px", padding: "8px 12px", color: "var(--ds-text)", background: "var(--ds-panel)", border: "1px solid var(--ds-line)", borderRadius: "8px", cursor: "pointer" },
-          onclick: () => this.openMobileConversation({ composer: true }, marker),
-        }, "Continue comment…")
-        if (this.mobileSelection?.composer) this.mobileOpener = marker
-        return marker
-      }
       return meta.composerKind === "signin"
         ? signInPrompt(() => this.setComposerAt(null))
         : commentComposer({
@@ -338,22 +505,7 @@ export class VanillaDiffRenderer {
 
     const threadList = meta.threads || []
 
-    return el("div", {}, threadList.map((thread) => {
-      if (!this.mobileQuery.matches) return this.renderThread(thread)
-      const marker = el("button", {
-        type: "button", className: "reviews-conversation-marker",
-        dataset: { threadId: thread.id },
-        style: { display: "flex", alignItems: "center", gap: "8px", minHeight: "44px", margin: "4px 0", padding: "8px 12px", color: "var(--ds-text)", background: "var(--ds-panel)", border: "1px solid var(--ds-line)", borderRadius: "8px", cursor: "pointer", font: "13px var(--font-sans, system-ui, sans-serif)" },
-        onclick: () => this.openMobileConversation({ threadId: thread.id }, marker),
-      }, [
-        threadStatusBadge(thread.status),
-        el("span", { style: { color: "var(--ds-muted)", fontSize: "12px" } },
-          `${thread.comments?.length || 0} ${thread.comments?.length === 1 ? "comment" : "comments"}`),
-      ])
-      marker.setAttribute("aria-label", `View ${thread.status} thread on line ${thread.anchor?.line_number_hint}: ${thread.comments?.length || 0} ${thread.comments?.length === 1 ? "comment" : "comments"}`)
-      if (this.mobileSelection?.threadId === thread.id) this.mobileOpener = marker
-      return marker
-    }))
+    return el("div", {}, threadList.map((thread) => this.renderThread(thread)))
   }
 
   renderThread(thread) {
@@ -376,7 +528,7 @@ export class VanillaDiffRenderer {
     this.threadUI.set(thread.id, { ...this.threadUI.get(thread.id), expanded: true })
     this.focusedThreadId = thread.id
     this.pendingThreadFocus = thread.id
-    this.mobileSelection = { threadId: thread.id }
+    this.openLines.add(`${sideToAnnotationSide(thread.side)}:${thread.anchor?.line_number_hint}`)
     this.render()
   }
 
@@ -389,51 +541,9 @@ export class VanillaDiffRenderer {
       this.pendingThreadFocus = null
       target.style.scrollMarginTop = "calc(var(--review-main-nav-h) + 60px)"
       target.scrollIntoView({ block: "start", behavior: "instant" })
-      if (!this.mobileQuery.matches) {
-        target.tabIndex = -1
-        target.focus({ preventScroll: true })
-      }
+      target.tabIndex = -1
+      target.focus({ preventScroll: true })
     })
-  }
-
-  openMobileConversation(selection, opener) {
-    this.mobileSelection = selection
-    this.mobileOpener = opener
-    this.renderMobileConversation()
-  }
-
-  renderMobileConversation() {
-    if (this.collapsed() || !this.mobileQuery.matches || !this.mobileSelection) {
-      this.mobileConversation.close()
-      return
-    }
-    let content
-    if (this.mobileSelection.composer && this.composerAt) {
-      content = this.composerAt.kind === "signin"
-        ? signInPrompt(() => this.setComposerAt(null))
-        : commentComposer({
-            initialValue: this.composerDraft,
-            embedded: true,
-            autoFocus: !this.mobileConversation.node,
-            onChange: (value) => { this.composerDraft = value },
-            onSave: (body) => this.createNewComment(body),
-            onCancel: () => this.setComposerAt(null),
-          })
-    } else {
-      const thread = this.threads.find((thread) => thread.id === this.mobileSelection.threadId)
-      if (thread) content = this.renderThread(thread)
-    }
-    if (!content) {
-      this.mobileConversation.close()
-      return
-    }
-    Object.assign(content.style, { border: "none", borderRadius: "0", marginBottom: "0" })
-    const title = this.mobileSelection.composer
-      ? `${this.filePath} · Line ${annotationSideToSide(this.composerAt.side) === "old" ? "−" : "+"}${this.composerAt.lineNumber}`
-      : this.filePath
-    this.mobileConversation.show(content, title, () => {
-      this.mobileSelection = null
-    }, () => this.mobileOpener)
   }
 
   // Keep Pierre's path, status icon and counts. The disclosure button uses
@@ -531,14 +641,20 @@ export class VanillaDiffRenderer {
       diffStyle: this.diffStyle,
       overflow: this.diffStyle === "unified" ? "wrap" : "scroll",
       collapsed: this.collapsed(),
+      // Phones drop line numbers; the gutter holds only the comment buttons.
+      disableLineNumbers: this.compact(),
       unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
-      onPostRender: () => this.focusPendingThread(),
-      onLineEnter: (props) => this.selectionAction.offer(props),
-      onLineClick: (props) => this.selectionAction.offer(props, true),
-      onLineNumberClick: (props) => this.selectionAction.offer(props, true),
+      onPostRender: (_node, _instance, phase) => {
+        if (phase === "unmount") return
+        this.placeThreadMarkers()
+        this.focusPendingThread()
+      },
+      enableGutterUtility: true,
+      onGutterUtilityClick: (range) => this.commentFromGutter(range),
+      onLineEnter: () => this.labelGutterUtility(),
     }
   }
 
@@ -557,7 +673,7 @@ export class VanillaDiffRenderer {
     // desktop reply editor, not every draft that happens to be open.
     const active = document.activeElement
     const threadId = active?.closest?.("[data-thread-id]")?.dataset.threadId
-    if (!this.mobileQuery.matches && active?.tagName === "TEXTAREA" &&
+    if (active?.tagName === "TEXTAREA" &&
         this.container.contains(active) && threadId) {
       const thread = this.threads.find(thread => String(thread.id) === threadId)
       const ui = thread && this.threadUI.get(thread.id)
@@ -566,9 +682,11 @@ export class VanillaDiffRenderer {
         ui.replySelection = [active.selectionStart, active.selectionEnd, active.selectionDirection]
       }
     }
-    if (this.collapsed() || (this.hasMarkdownPreview && this.preview)) {
-      this.mobileConversation.close(false)
-    }
+    // Rebuilding empties the file for a moment. Hold its height until the new
+    // diff has laid out, or the page clamps the scroll position and the reader
+    // loses their line (virtualized files measure rows after render).
+    this.container.style.minHeight = `${this.container.offsetHeight}px`
+    requestAnimationFrame(() => requestAnimationFrame(() => { this.container.style.minHeight = "" }))
     this.cleanUp(false)
     this.container.replaceChildren()
     this.container.dataset.virtualized = "false"
@@ -618,15 +736,11 @@ export class VanillaDiffRenderer {
       !this.collapsed() && !this.focusedThreadId &&
       shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
     ) {
-      if (this.tryRenderVirtualized(options, renderArgs)) {
-        this.renderMobileConversation()
-        return
-      }
+      if (this.tryRenderVirtualized(options, renderArgs)) return
     }
 
     this.instance = new Diffs.FileDiff(options)
     this.instance.render(renderArgs)
-    this.renderMobileConversation()
   }
 
   tryRenderVirtualized(options, renderArgs) {
@@ -666,11 +780,9 @@ export class VanillaDiffRenderer {
   }
 
   cleanUp(clear = true) {
-    this.selectionAction.clear()
     if (clear) {
-      this.selectionAction.destroy()
-      this.mobileQuery.removeEventListener("change", this.mobileResize)
-      this.mobileConversation.close(false)
+      this.container.removeEventListener("pointerdown", this.onPointerDown)
+      this.compactQuery.removeEventListener("change", this.onCompactChange)
       this.threadUI.clear()
     }
     this.headerInstance?.cleanUp?.()

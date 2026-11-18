@@ -52,6 +52,9 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
       assign(assigns, :activity_data, %{
         reviewId: to_string(assigns.review.id),
         identityId: if(assigns.current_identity, do: to_string(assigns.current_identity.id)),
+        # The summary counts every comment, as each thread's own count does;
+        # unread state is shown separately.
+        commentCount: assigns.threads |> Enum.map(&length(&1.comments)) |> Enum.sum(),
         threads: threads
       })
 
@@ -66,8 +69,15 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
     >
       <details id={"#{@id}-panel"} class="review-activity-panel">
         <summary id={"#{@id}-summary"} class="review-activity-summary">
-          <span>Comments</span>
+          <svg class="review-activity-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 10h8M8 14h5M21 12a9 9 0 0 1-9 9H3l1.5-4A9 9 0 1 1 21 12Z" />
+          </svg>
+          <span class="review-activity-label">Comments</span>
           <span data-activity-count class="review-activity-count"></span>
+          <%!-- The summary closes the open panel; this shows that it does. --%>
+          <svg class="review-activity-close" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
         </summary>
         <div class="review-activity-body">
           <p data-activity-storage class="sr-only">

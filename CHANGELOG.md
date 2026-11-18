@@ -39,6 +39,21 @@ later fixes continue toward 0.0.2.
 - Phoenix 1.8.15, LiveView 1.2.12, Tailwind CLI 4.3.3, esbuild 0.28.2 and
   other dependency updates. Diff rendering moves to @pierre/diffs 1.6.4 and
   packet navigation to @pierre/trees 1.0.0.
+- Comments start from Pierre Diffs' gutter button beside the line number,
+  replacing the row-end comment button. Selected text within the line still
+  becomes the comment's anchor. Threads are more compact, with Resolve at the
+  right of the header. The collapsed comments rail is an icon with the comment
+  count, left out when there are none, and a blue outline while comments are
+  unread; the open rail shows a close mark. On phones, threads no
+  longer break up the diff: a line with threads shows a comment button beside
+  its line number, with a badge counting its comments and a keyboard focus
+  ring, and tapping it shows them under the highlighted line. Phones hide line
+  numbers, so the gutter only holds the change bar and the comment buttons. The
+  composer stays inline under its line instead of a floating panel, inputs use
+  16px text so focusing them does not zoom the page, and keyboard hints are
+  hidden. Opening a composer in a large virtualized file keeps your place.
+- On phones, Guide prose keeps a 16px inset from the screen edge while diffs
+  stay full width.
 - The OAuth issuer runs on [gatekeep](https://github.com/figitaki/gatekeep)
   (`Reviews.OAuth`). Endpoints, metadata, scopes, the agents-only rule,
   refresh rotation, DPoP, and Settings → Connected agents work as before, and

@@ -54,6 +54,9 @@ defmodule ReviewsWeb.ReviewLiveTest do
       JSON.decode!(json)
     end
 
+    # The summary count matches the threads' own counts, the viewer's included.
+    assert data.(%{id: 1})["commentCount"] == 3
+
     assert [entry] = data.(%{id: 1})["threads"]
     assert %{"id" => "1", "line" => 42, "side" => "new", "comments" => [%{"id" => "1"}]} = entry
     assert entry["href"] == "/r/example?patchset=2&thread=1"
