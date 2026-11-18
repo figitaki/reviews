@@ -14,9 +14,7 @@ defmodule ReviewsWeb.Api.PatchsetController do
   def create(conn, %{"slug" => slug} = params) do
     case Reviews.get_review_by_slug(slug) do
       nil ->
-        conn
-        |> put_status(:not_found)
-        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
+        ReviewsWeb.ApiErrors.render(conn, Reviews.not_found_reason(slug))
 
       review ->
         attrs = %{

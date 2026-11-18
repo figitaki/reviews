@@ -60,9 +60,6 @@
 }
 .l-nav-signin {
   margin-left: 4px;
-  height: 32px;
-  padding: 0 14px;
-  font-size: 13px;
 }
 
 /* Only the account link gives up width; a long name truncates instead of
@@ -179,10 +176,22 @@
   gap: 12px;
   margin-top: 28px;
 }
-.home-actions .r-button {
-  min-height: 44px;
-  padding-inline: 18px;
-  text-decoration: none;
+/* Error pages a visitor should understand (ReviewsWeb.ErrorHTML.status_page). */
+.l-status { padding-block: 96px 72px; }
+.l-status h1 {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: var(--tracking-flat);
+}
+.l-status-message {
+  max-width: 58ch;
+  margin: 20px 0 0;
+  color: var(--ds-muted);
+  font-size: var(--font-prose-size);
+  line-height: var(--font-prose-leading);
+  text-wrap: pretty;
 }
 .home-demo-note {
   margin: 14px 0 0;
