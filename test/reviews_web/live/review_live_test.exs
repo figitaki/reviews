@@ -338,16 +338,16 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-header-meta",
+               "#review-section-header-0 .review-section-header-meta",
                "Light"
              )
 
-      assert has_element?(view, "#review-split-section-overview-0 .review-change-stat-add", "+1")
-      assert has_element?(view, "#review-split-section-overview-0 .review-change-stat-del", "-1")
+      assert has_element?(view, "#review-section-header-0 .review-change-stat-add", "+1")
+      assert has_element?(view, "#review-section-header-0 .review-change-stat-del", "-1")
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Pending"
              )
 
@@ -366,7 +366,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       # content flow, not inside the overview.
       refute has_element?(
                view,
-               "#review-split-section-overview-0",
+               "#review-section-header-0",
                "Preserve packet JSON as the server contract."
              )
 
@@ -679,7 +679,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       view |> element("#diff-style-unified") |> render_click()
 
-      assert has_element?(view, "#review-split-section-overview-1", "Second section")
+      assert has_element?(view, "#review-section-header-1", "Second section")
 
       assert has_element?(
                view,
@@ -951,16 +951,16 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#review-guide-tick-0") |> render_click()
 
       refute has_element?(view, "#review-split-inline-overview")
-      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
+      assert has_element?(view, "#review-section-header-0", "Primary reasoning")
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Pending"
              )
 
       # Grounding prose reads in the section flow, not in the header.
-      refute has_element?(view, "#review-split-section-overview-0", "entrypoint change matters")
+      refute has_element?(view, "#review-section-header-0", "entrypoint change matters")
       assert has_element?(view, "#packet-section-0", "entrypoint change matters")
       assert has_element?(view, "#packet-section-0.is-open")
       refute has_element?(view, "#packet-section-1")
@@ -995,7 +995,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       refute has_element?(view, "#review-split-inline-overview")
 
       assert has_element?(view, "#packet-section-0.is-open")
-      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
+      assert has_element?(view, "#review-section-header-0", "Primary reasoning")
 
       assert has_element?(
                view,
@@ -1016,7 +1016,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(view, "#review-guide-tick-1.is-active")
 
       assert has_element?(view, "#packet-section-1.is-open")
-      assert has_element?(view, "#review-split-section-overview-1", "Secondary consequence")
+      assert has_element?(view, "#review-section-header-1", "Secondary consequence")
 
       assert has_element?(
                view,
@@ -1037,8 +1037,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#review-guide-shell .review-packet-nav-hide") |> render_click()
 
       refute has_element?(view, "#review-guide-shell")
-      assert has_element?(view, "#review-split-section-overview-0", "Primary reasoning")
-      assert has_element?(view, "#review-split-section-overview-1", "Secondary consequence")
+      assert has_element?(view, "#review-section-header-0", "Primary reasoning")
+      assert has_element?(view, "#review-section-header-1", "Secondary consequence")
       assert has_element?(view, "#packet-section-0-body", "entrypoint change matters")
       assert has_element?(view, "#packet-section-1-body", "stay out of the way")
       refute has_element?(view, "#packet-section-0 .review-packet-section-summary")
@@ -1838,7 +1838,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Approved"
              )
 
@@ -1850,7 +1850,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Pending"
              )
 
@@ -1928,13 +1928,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                latest_view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Pending for this revision"
              )
 
       assert has_element?(
                latest_view,
-               "#review-split-section-overview-0 .review-section-state-history",
+               "#review-section-header-0 .review-section-state-history",
                "Previously approved in v1; outdated for v2."
              )
 
@@ -1955,7 +1955,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                latest_view,
-               "#review-split-section-overview-0 .review-section-state-history",
+               "#review-section-header-0 .review-section-state-history",
                "Previously approved in v1"
              )
 
@@ -2007,13 +2007,13 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                carried_view,
-               "#review-split-section-overview-0 .review-section-state-text",
+               "#review-section-header-0 .review-section-state-text",
                "Skipped (carried forward)"
              )
 
       refute has_element?(
                carried_view,
-               "#review-split-section-overview-0 .review-section-state-history"
+               "#review-section-header-0 .review-section-state-history"
              )
 
       carried_view |> element("#packet-section-0-decision-toggle") |> render_click()

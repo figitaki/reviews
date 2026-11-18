@@ -62,7 +62,7 @@ In a checkout of Reviews, read `priv/examples/section_review_performance.packet.
 ## Writing Method
 
 1. Inspect the diff with `git diff` or the intended CLI range.
-2. Identify logical review areas: persistence/schema, read model, LiveView state, rendering, styling, tests, tooling.
+2. Identify logical review areas: persistence/schema, read model, LiveView state, rendering, styling, tests, tooling. Order them by the default section order below unless another order reads better.
 3. Prefer stable section titles if updating an existing packet and you want approvals to inherit.
 4. Put a reasoning-first overview paragraph at the top of each `##` section. Explain why the grouped changes exist, what approving them means, and how to review them.
 5. Use `###` subheadings sparingly, only when a section truly needs scan landmarks; do not add a stock technical-overview subsection to every section.
@@ -74,6 +74,36 @@ In a checkout of Reviews, read `priv/examples/section_review_performance.packet.
 ## Structure Preferences
 
 Treat each `##` section as an approval unit. A reviewer should be able to approve the section without implicitly approving unrelated risks.
+
+### Default Section Order
+
+Unless the change reads better another way, order sections like this:
+
+1. **The core change:** the behavior or decision the diff exists for.
+2. **What follows from it:** callers, schema and migrations, tests.
+3. **Glue:** config, generated files, lockfiles, docs and the changelog.
+
+This is the default, not a rule. Depart from it when another order is clearer, for example when a schema change must be understood before the code that uses it; say why in the overview. A packet skeleton in this order:
+
+```markdown
+# <Outcome of the change>
+
+<Outcome, scope and reading order.>
+
+## <The core change>
+<Why it exists and what approving it means.>
+@hunk <core file>#1
+
+## <What follows: callers, schema, tests>
+<How the rest of the code takes up the change.>
+@hunk <caller or test file>#1
+
+## <Glue: config, docs, lockfiles>
+<Anything worth checking here, or why it is mechanical.>
+@hunk <config, doc or lockfile>#1
+```
+
+`reviews push --dry-run` prints a note, not a problem, when a section that only touches glue files (lockfiles, generated files, files under `config/`, Markdown under `docs/`, CHANGELOG or README files) comes before a section that changes other code. The note does not change the exit status.
 
 Shape sections around independent review decisions, not just file adjacency. Split a section when it mixes substantial concerns such as:
 - persistence/schema changes and runtime behavior,
@@ -150,7 +180,7 @@ When updating a packet, recheck each note against the new diff and remove or rew
 ## Pre-Push Packet Review
 
 Before pushing, audit the packet:
-1. Run `reviews push --dry-run --packet /path/to/packet.md` (add `--update <slug>` for a new patchset). It checks the packet against the diff without contacting the server and lists every problem as `file:line: message`. Fix them all and run it again until it says the packet is valid.
+1. Run `reviews push --dry-run --packet /path/to/packet.md` (add `--update <slug>` for a new patchset). It checks the packet against the diff without contacting the server and lists every problem as `file:line: message`. Fix them all and run it again until it says the packet is valid. It also lists notes, such as a glue section placed before the core change; act on a note or leave it, since notes do not stop a push.
 2. Confirm every changed line is covered by exactly one intended hunk ref.
 3. Count hunks, files, and changed-line weight per section.
 4. Split any section whose approval would bless multiple unrelated concerns.
