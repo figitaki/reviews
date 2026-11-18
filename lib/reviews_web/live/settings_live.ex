@@ -101,7 +101,7 @@ defmodule ReviewsWeb.SettingsLive do
         {:noreply, put_flash(socket, :error, "Sign in to manage connected agents.")}
 
       user ->
-        case OAuth.revoke_link(user, id) do
+        case OAuth.revoke_grant(user, id) do
           :ok ->
             {:noreply,
              socket
@@ -257,7 +257,7 @@ defmodule ReviewsWeb.SettingsLive do
                           {link_label(link)}
                         </span>
                         <span>
-                          Acts as {identity_label(link.identity)}. Calls itself {link.subject_name ||
+                          Acts as {identity_label(link.identity)}. Calls itself {link.client_name ||
                             "(no name)"} (not verified).
                         </span>
                         <span translate="no">{Enum.join(link.scopes, " ")}</span>
@@ -456,14 +456,14 @@ defmodule ReviewsWeb.SettingsLive do
     |> assign(:agent_identities, Enum.filter(identities, &(&1.kind == "agent")))
     |> assign(:identity_token_stats, Accounts.identity_token_counts(user))
     |> assign(:tokens, Accounts.list_tokens_for(user))
-    |> assign(:agent_links, OAuth.list_links_for(user))
+    |> assign(:agent_links, OAuth.list_grants_for(user))
   end
 
   # A registered client has no domain; it goes by the name it gave.
-  defp link_label(%{subject: subject} = link) do
-    case URI.parse(subject) do
+  defp link_label(%{client_id: client_id} = grant) do
+    case URI.parse(client_id) do
       %URI{scheme: "https", host: host} when is_binary(host) -> host
-      _ -> "#{link.subject_name || "Unnamed app"} (registered app)"
+      _ -> "#{grant.client_name || "Unnamed app"} (registered app)"
     end
   end
 

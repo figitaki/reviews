@@ -18,7 +18,8 @@ defmodule Reviews.Application do
         [
           # Before the endpoint, so /mcp never sees a stopped server.
           ReviewsWeb.MCP.Server,
-          Reviews.OAuth.Clients,
+          # The OAuth issuer's client metadata cache, after the repo.
+          Reviews.OAuth.Issuer,
           # Start to serve requests, typically the last entry
           ReviewsWeb.Endpoint
         ]
