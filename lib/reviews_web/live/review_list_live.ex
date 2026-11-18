@@ -726,9 +726,9 @@ defmodule ReviewsWeb.ReviewListLive do
 
     cond do
       seconds < 60 -> "just now"
-      seconds < 3600 -> "#{div(seconds, 60)} min ago"
-      seconds < 86_400 -> "#{div(seconds, 3600)} h ago"
-      seconds < 86_400 * 30 -> "#{div(seconds, 86_400)} d ago"
+      seconds < 3600 -> "#{div(seconds, 60)}min ago"
+      seconds < 86_400 -> "#{div(seconds, 3600)}h ago"
+      seconds < 86_400 * 30 -> "#{div(seconds, 86_400)}d ago"
       true -> Calendar.strftime(at, "%Y-%m-%d")
     end
   end

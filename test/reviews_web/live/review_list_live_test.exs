@@ -162,9 +162,9 @@ defmodule ReviewsWeb.ReviewListLiveTest do
   test "relative_time/2" do
     now = ~U[2026-10-09 12:00:00Z]
     assert ReviewListLive.relative_time(~U[2026-10-09 11:59:30Z], now) == "just now"
-    assert ReviewListLive.relative_time(~U[2026-10-09 11:15:00Z], now) == "45 min ago"
-    assert ReviewListLive.relative_time(~U[2026-10-09 07:00:00Z], now) == "5 h ago"
-    assert ReviewListLive.relative_time(~U[2026-10-06 12:00:00Z], now) == "3 d ago"
+    assert ReviewListLive.relative_time(~U[2026-10-09 11:15:00Z], now) == "45min ago"
+    assert ReviewListLive.relative_time(~U[2026-10-09 07:00:00Z], now) == "5h ago"
+    assert ReviewListLive.relative_time(~U[2026-10-06 12:00:00Z], now) == "3d ago"
     assert ReviewListLive.relative_time(~U[2026-01-01 12:00:00Z], now) == "2026-01-01"
   end
 end
