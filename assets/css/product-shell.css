@@ -510,6 +510,58 @@ textarea.ds-input{
   font-size: 13px;
 }
 
+/* CLI sign-in page (ReviewsWeb.DeviceHTML): one box per letter, 4-4. */
+.device-code{
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.device-code legend{
+  margin-bottom: 8px;
+  color: var(--ds-text);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.device-code-boxes{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 44px)) 12px repeat(4, minmax(0, 44px));
+  gap: 6px;
+  align-items: center;
+}
+
+.device-code-dash{
+  color: var(--ds-muted);
+  text-align: center;
+}
+
+.device-code-box{
+  min-height: 52px;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 650;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.device-expiry{
+  margin: 14px 0 10px;
+  color: var(--ds-muted);
+  font-size: 13px;
+}
+
+.device-expiry strong{
+  color: var(--ds-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.device-expiry.is-urgent strong,
+.device-expiry.is-expired{
+  color: var(--ds-warn);
+}
+
 .poppy-consent-actions{
   display: flex;
   gap: 8px;
