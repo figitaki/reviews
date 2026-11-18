@@ -110,9 +110,10 @@ a write the grant doesn't name fails even if a client calls it directly.
 Comments posted with an OAuth token record which app posted them
 (`attribution.provider` is `"mcp"`).
 
-`search` lists only reviews the token's account owns. Other reviews are
+`reviews_list` and `search` list only the account's own reviews; for an
+agent API token, `reviews_list` lists only its agent's. Other reviews are
 readable by link, through `fetch` and every other read tool, but are not
-searchable.
+listed or searchable.
 
 ## Tools
 
@@ -135,6 +136,7 @@ the whole review.
 
 | Tool | Does |
 |---|---|
+| `reviews_list` | The reviews you can find again, from the same list as `reviews list` and `GET /api/v1/reviews`, with its filters (`role`, `status`, `author`, `q`) and `next_cursor` paging. An OAuth connector or a human identity's token lists every review the account wrote or took part in (`scope: "account"`); an agent API token lists only its agent's (`scope: "identity"`). `Reviews.Policy.list_viewer/1` decides. |
 | `search` | Reviews this account owns whose title, description or slug contains `query`, as `{results: [{id, title, url}]}`, the shape ChatGPT connectors and deep research use. A blank query lists the newest. |
 | `fetch` | One review by the `id` from `search` (its slug): `{id, title, text, url, metadata}`, where `text` is the description and the open feedback as Markdown. The result fits in 120,000 bytes. `metadata.complete` is false when anything is left out: a longer review is cut short with a note, and left-out threads or comments are named in the feedback. |
 | `reviews_whoami` | The token's identity (human or agent), its scopes, and whether writes are on. |

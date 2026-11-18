@@ -165,6 +165,33 @@ defmodule ReviewsWeb.MCP.Server do
 
     server
     |> FastestMCP.add_tool(
+      "reviews_list",
+      &Handlers.list_reviews/2,
+      [
+        title: "List reviews",
+        description:
+          "Lists reviews you can find again, newest activity first: reviews written or " <>
+            "taken part in (a comment, a section decision, or a viewed hunk). A connector " <>
+            "signed in with OAuth lists the whole account's reviews; an agent API token lists " <>
+            "only its agent's. role: authored, involved, or all. status: open (open threads), " <>
+            "updated (a new revision since you took part), or all. author: a handle. q: " <>
+            "text in the title, description, or slug. Continue with next_cursor.",
+        input_schema:
+          object(
+            %{
+              "role" => %{"type" => "string", "enum" => Reviews.ReviewIndex.roles()},
+              "status" => %{"type" => "string", "enum" => Reviews.ReviewIndex.statuses()},
+              "author" => %{"type" => "string", "maxLength" => 255},
+              "q" => %{"type" => "string", "maxLength" => 500},
+              "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => Paging.max_limit()},
+              "cursor" => cursor_prop(),
+              "max_bytes" => max_bytes_prop()
+            },
+            []
+          )
+      ] ++ read
+    )
+    |> FastestMCP.add_tool(
       "search",
       &Handlers.search/2,
       [

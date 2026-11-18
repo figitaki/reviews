@@ -12,6 +12,9 @@ defmodule Reviews.Policy do
     * Resolve or reopen a thread: the review owner or the thread's author. A
       delegated principal also needs `threads:write`.
     * Decide a packet section: the review owner.
+    * List reviews (`list_viewer/1`): a human identity or an OAuth connector
+      grant at `/mcp` lists the whole account's reviews; an agent identity,
+      such as an agent API token, lists only its own.
 
   "Owner" and "author" mean the account, not one identity: an account's human
   identity and its agent identities share its permissions.
@@ -19,7 +22,7 @@ defmodule Reviews.Policy do
   The actor is a `Reviews.Principal`, or a bare `Identity` (treated as a
   principal with every scope), or nil for a signed-out reader.
   """
-  alias Reviews.Accounts.Identity
+  alias Reviews.Accounts.{Identity, User}
   alias Reviews.Principal
   alias Reviews.Repo
   alias Reviews.Reviews.Review
@@ -53,6 +56,23 @@ defmodule Reviews.Policy do
   end
 
   def can?(_actor, _action, _review), do: false
+
+  @doc """
+  Whose reviews the principal lists (`Reviews.ReviewIndex`): its `User`,
+  covering every identity of the account, or one `Identity`.
+
+  An OAuth connector at `/mcp` (Claude, ChatGPT) acts as an agent but works
+  for the person who approved it, so it lists the whole account. A human
+  identity does too. Any other agent principal, such as an agent API token,
+  lists only that agent's reviews.
+  """
+  @spec list_viewer(Principal.t()) :: User.t() | Identity.t()
+  def list_viewer(%Principal{via: :mcp, scopes: scopes, user: %User{} = user})
+      when is_list(scopes),
+      do: user
+
+  def list_viewer(%Principal{identity: %Identity{kind: "human"}, user: %User{} = user}), do: user
+  def list_viewer(%Principal{identity: identity}), do: identity
 
   defp scoped?(principal, action) do
     case Map.fetch(@scopes, action_name(action)) do

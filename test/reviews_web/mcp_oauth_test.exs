@@ -424,6 +424,87 @@ defmodule ReviewsWeb.MCPOAuthTest do
     end
   end
 
+  describe "reviews_list" do
+    setup ctx do
+      agent_review = Reviews.ReviewIndexFixtures.review!(ctx.agent, "Agent review")
+      stranger = user_fixture("stranger")
+      foreign = Reviews.ReviewIndexFixtures.review!(stranger, "Not yours")
+      %{agent_review: agent_review, foreign: foreign}
+    end
+
+    defp listed(token, args \\ %{}) do
+      call_tool(token, "reviews_list", args)
+      |> json_response(200)
+      |> get_in(["result", "structuredContent"])
+    end
+
+    defp slugs(page), do: Enum.map(page["reviews"], & &1["slug"])
+
+    test "an OAuth connector lists the whole account; an agent API token only its agent's", ctx do
+      oauth = sign_in(ctx.claude, ctx.owner, ctx.agent, ["reviews:read"])
+      page = listed(oauth["access_token"])
+      assert page["scope"] == "account"
+      assert Enum.sort(slugs(page)) == Enum.sort([ctx.review.slug, ctx.agent_review.slug])
+      refute ctx.foreign.slug in slugs(page)
+
+      {:ok, _, agent_raw} =
+        Accounts.mint_token(ctx.owner, %{"name" => "agent", "identity_id" => ctx.agent.id})
+
+      page = listed(agent_raw)
+      assert page["scope"] == "identity"
+      assert slugs(page) == [ctx.agent_review.slug]
+
+      {:ok, _, human_raw} = Accounts.mint_token(ctx.owner, %{"name" => "cli"})
+      assert listed(human_raw)["scope"] == "account"
+    end
+
+    test "takes #83's filters and pages with cursors bound to them", ctx do
+      token = sign_in(ctx.claude, ctx.owner, ctx.agent, ["reviews:read"])["access_token"]
+
+      assert slugs(listed(token, %{"q" => "agent"})) == [ctx.agent_review.slug]
+      assert slugs(listed(token, %{"author" => "claude"})) == [ctx.agent_review.slug]
+
+      first = listed(token, %{"limit" => 1})
+      assert [one] = slugs(first)
+      assert first["next_cursor"] =~ ~r/^c\d+\.0\.\d+$/
+
+      second = listed(token, %{"limit" => 1, "cursor" => first["next_cursor"]})
+      assert [two] = slugs(second)
+      assert Enum.sort([one, two]) == Enum.sort([ctx.review.slug, ctx.agent_review.slug])
+      assert second["next_cursor"] == nil
+
+      # A cursor continues only the list it came from.
+      result =
+        call_tool(token, "reviews_list", %{"q" => "agent", "cursor" => first["next_cursor"]})
+        |> json_response(200)
+
+      assert result["result"]["isError"] == true
+
+      bad = call_tool(token, "reviews_list", %{"role" => "nobody"}) |> json_response(200)
+      # The input schema's enum refuses it before the handler runs.
+      assert bad["error"] || bad["result"]["isError"]
+    end
+  end
+
+  describe "Reviews.Policy.list_viewer/1" do
+    test "a connector grant at /mcp lists the account; other agent principals one identity",
+         ctx do
+      alias Reviews.{Policy, Principal}
+      human = Accounts.human_identity_for(ctx.owner)
+
+      assert Policy.list_viewer(Principal.delegated(ctx.agent, ctx.owner, [], nil, :mcp)) ==
+               ctx.owner
+
+      assert Policy.list_viewer(Principal.new(human, :api_token, ctx.owner)) == ctx.owner
+      assert Policy.list_viewer(Principal.new(ctx.agent, :api_token, ctx.owner)) == ctx.agent
+      # An agent API token at /mcp is not a connector grant.
+      assert Policy.list_viewer(Principal.new(ctx.agent, :mcp, ctx.owner)) == ctx.agent
+      # Poppy agents act for themselves.
+      assert Policy.list_viewer(Principal.delegated(ctx.agent, ctx.owner, [], nil, :poppy)) ==
+               ctx.agent
+    end
+  end
+
   describe "private_key_jwt clients, as ChatGPT signs in" do
     # ChatGPT's client ID, with an RS256 key; the fetcher serves it in tests.
     defp keyed_client(base) do

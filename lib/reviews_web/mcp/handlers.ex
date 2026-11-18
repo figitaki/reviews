@@ -396,6 +396,104 @@ defmodule ReviewsWeb.MCP.Handlers do
     end)
   end
 
+  ## The review list
+
+  @list_filters ~w(role status author q)
+
+  @doc """
+  The reviews the caller can find again, from `Reviews.ReviewIndex`: the
+  same list and filters as `reviews list` and `GET /api/v1/reviews`.
+  `Reviews.Policy.list_viewer/1` decides whose reviews: an OAuth connector or
+  a human identity's token lists the whole account; an agent API token lists
+  only its agent's. Pages continue with `next_cursor`, and each fits in
+  `max_bytes`.
+  """
+  def list_reviews(args, ctx) do
+    viewer = ctx |> current_principal!() |> Reviews.Policy.list_viewer()
+    params = Map.take(args, @list_filters)
+    scope = {:reviews_list, viewer_key(viewer), params}
+
+    with {:ok, limit} <- page_limit(args["limit"]),
+         {:ok, cursor} <- decode_cursor(args, scope),
+         {offset, _} = pair(cursor),
+         {:ok, filters} <- list_filters(params, limit, offset) do
+      list_page(viewer, filters, scope, offset, args)
+    end
+    |> unwrap()
+  catch
+    :too_small -> error_result(@too_small)
+    :bad_cursor -> error_result(@bad_cursor)
+  end
+
+  defp list_page(viewer, filters, scope, offset, args) do
+    result = ReviewsContext.list_reviews(viewer, filters)
+
+    header = %{
+      scope: if(match?(%Reviews.Accounts.User{}, viewer), do: "account", else: "identity"),
+      filters: Map.take(filters, [:role, :status, :author, :q]),
+      next_cursor: nil
+    }
+
+    {reviews, _left, count} = Budget.fill(result.entries, room!(args, header), &list_entry/1)
+
+    next =
+      cond do
+        count == 0 and result.entries != [] -> throw(:too_small)
+        count < length(result.entries) -> offset + count
+        true -> result.next_offset
+      end
+
+    next_cursor = next && Paging.encode(scope, {:position, next, 0})
+
+    header
+    |> Map.merge(%{reviews: reviews, next_cursor: next_cursor})
+    |> with_list_hint(next_cursor)
+  end
+
+  defp viewer_key(%Reviews.Accounts.User{id: id}), do: {:user, id}
+  defp viewer_key(%Reviews.Accounts.Identity{id: id}), do: {:identity, id}
+
+  defp list_filters(params, limit, offset) do
+    case Reviews.ReviewIndex.normalize_filters(
+           Map.merge(params, %{"limit" => limit, "offset" => offset})
+         ) do
+      {:ok, filters} ->
+        {:ok, filters}
+
+      {:error, errors} ->
+        {:error, Enum.map_join(errors, " ", fn {key, message} -> "#{key}: #{message}." end)}
+    end
+  end
+
+  defp list_entry(entry) do
+    review = entry.review
+
+    %{
+      slug: review.slug,
+      title: Budget.cap(review.title, @title_cap),
+      url: review_url(review),
+      author: identity_payload(review.author),
+      role: entry.role,
+      revisions: entry.patchset_count,
+      latest_revision: entry.latest_patchset_number,
+      threads: entry.thread_count,
+      open_threads: entry.open_thread_count,
+      has_new_revision: entry.has_new_patchset,
+      last_pushed_at: iso(entry.last_pushed_at),
+      last_activity_at: iso(entry.last_activity_at),
+      updated_at: iso(entry.updated_at)
+    }
+  end
+
+  defp iso(nil), do: nil
+  defp iso(%DateTime{} = at), do: DateTime.to_iso8601(at)
+  defp iso(%NaiveDateTime{} = at), do: NaiveDateTime.to_iso8601(at)
+
+  defp with_list_hint(payload, nil), do: payload
+
+  defp with_list_hint(payload, _next),
+    do: Map.put(payload, :hint, "More follows. Call again with next_cursor and the same filters.")
+
   ## search and fetch, in the shape ChatGPT's connectors and deep research use
 
   @search_limit 20

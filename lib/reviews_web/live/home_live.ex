@@ -1,5 +1,10 @@
 defmodule ReviewsWeb.HomeLive do
-  @moduledoc "Public landing page with installation and a link to the real demo review."
+  @moduledoc """
+  Public landing page with installation and a link to the real demo review.
+
+  Signed-in visitors go to their review list at `/reviews`, and signing in
+  from here returns there.
+  """
   use ReviewsWeb, :live_view
 
   @install_command "curl -fsSL https://raw.githubusercontent.com/figitaki/reviews/main/install.sh | sh"
@@ -7,13 +12,20 @@ defmodule ReviewsWeb.HomeLive do
 
   @impl true
   def mount(_params, session, socket) do
-    {:ok,
-     socket
-     |> assign(:page_title, "Reviews — code review for agentic diffs")
-     |> assign(:install_command, @install_command)
-     |> assign(:repo_url, @repo_url)
-     |> assign(:demo_slug, Reviews.DemoReview.slug())
-     |> assign(:current_user, load_current_user(session))}
+    case load_current_user(session) do
+      # Signed-in people land on their review list, not the landing page.
+      %Reviews.Accounts.User{} -> {:ok, push_navigate(socket, to: ~p"/reviews")}
+      nil -> {:ok, assign_landing(socket)}
+    end
+  end
+
+  defp assign_landing(socket) do
+    socket
+    |> assign(:page_title, "Reviews — code review for agentic diffs")
+    |> assign(:install_command, @install_command)
+    |> assign(:repo_url, @repo_url)
+    |> assign(:demo_slug, Reviews.DemoReview.slug())
+    |> assign(:current_user, nil)
   end
 
   defp load_current_user(session) do
@@ -35,7 +47,11 @@ defmodule ReviewsWeb.HomeLive do
     ~H"""
     <Layouts.app flash={@flash}>
       <div id="reviews-home" class="l-page">
-        <Layouts.landing_topbar current_user={@current_user} show_workflow_anchor={false} />
+        <Layouts.landing_topbar
+          current_user={@current_user}
+          show_workflow_anchor={false}
+          return_to={~p"/reviews"}
+        />
 
         <div class="home-content">
           <section class="home-hero" aria-labelledby="home-title">

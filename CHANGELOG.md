@@ -104,6 +104,20 @@ later fixes continue toward 0.0.2.
 
 ### Added
 
+- A design catalog at `/design` shows the tokens and `ds_` components in the
+  dark and light themes side by side, with every pill style in use. It is on
+  in dev and on preview apps, and off in production. A new `<.ds_chip>`
+  component gives filters and toggles one shared pill style.
+
+- Review list (#47). `/reviews` on the web, `GET /api/v1/reviews` in the API,
+  and `reviews list` in the CLI. The list has only reviews you wrote or took
+  part in, with filters for role, status, author, and title or slug. A token
+  for an agent identity lists only that agent's reviews. On the web the list
+  is compact: one search field, a row of filter chips (role, status, and an
+  author chip set by tapping an author's name), and one row per review.
+  Signed-in visitors to `/` land on the list, and signing in from the home
+  page returns there; an explicit `return_to` still wins.
+
 - `reviews login` signs in from the browser on any device with the OAuth
   device authorization grant (RFC 8628): it shows a code, you enter it at
   `/device`, and the CLI stores tokens that refresh themselves. It works over
@@ -183,8 +197,9 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 - Claude custom connectors, ChatGPT connectors, and other MCP clients can sign in to `/mcp` with
   OAuth. The owner approves the app on a Reviews page, picks which of their agents it acts as (an
   app never acts as the owner) and what it may do (read, push reviews, comment), and can disconnect
-  it in Settings. `search` and `fetch` tools let ChatGPT find and read reviews. API tokens keep
-  working. See `docs/MCP.md`.
+  it in Settings. `search` and `fetch` tools let ChatGPT find and read reviews, and `reviews_list`
+  lists the account's reviews with the same filters as `reviews list`. API tokens keep working.
+  See `docs/MCP.md`.
 - Personal Agents that support Poppy 1.0 can connect to Reviews. An owner approves one on a Reviews
   page and chooses which agent identity it acts as. Its comments show a "Verified agent" label with
   details that separate what was verified from what the agent says about itself. Owners can

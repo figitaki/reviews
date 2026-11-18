@@ -84,9 +84,10 @@ defmodule ReviewsWeb.Layouts do
   end
 
   @doc """
-  Shared landing-style topbar — used on `/` (HomeLive) and `/settings`
-  (SettingsLive). Renders brand + a small nav + either a Sign-in CTA or a
-  link to the current user's settings.
+  Shared landing-style topbar — used on `/` (HomeLive), `/reviews`
+  (ReviewListLive), and `/settings` (SettingsLive). Renders brand + a small
+  nav + either a Sign-in CTA or a link to the current user's settings.
+  Signed-in users also get a "Reviews" link to their review list.
 
   Visual style: `.l-topbar` chrome from `landing.css` and `.r-*` components
   from `components.css`.
@@ -100,6 +101,11 @@ defmodule ReviewsWeb.Layouts do
     doc: "whether to include the in-page #chapter-push 'Workflow' anchor link"
 
   attr :return_to, :string, default: "/", doc: "the local path to return to after sign-in"
+
+  attr :active, :atom,
+    default: nil,
+    values: [nil, :reviews],
+    doc: "the nav item to mark as the current page"
 
   def landing_topbar(assigns) do
     ~H"""
@@ -130,10 +136,25 @@ defmodule ReviewsWeb.Layouts do
         </.link>
 
         <nav class="l-nav" aria-label="Primary">
-          <a :if={@show_workflow_anchor} class="r-nav-item" href="/#chapter-push">Workflow</a>
-          <a class="r-nav-item" href="https://github.com/figitaki/reviews">
+          <a
+            :if={@show_workflow_anchor}
+            class="r-nav-item l-nav-optional"
+            href="/#chapter-push"
+          >
+            Workflow
+          </a>
+          <a class="r-nav-item l-nav-optional" href="https://github.com/figitaki/reviews">
             GitHub <span aria-hidden="true">↗</span>
           </a>
+          <.link
+            :if={@current_user}
+            id="nav-reviews"
+            navigate={~p"/reviews"}
+            class={["r-nav-item", @active == :reviews && "is-active"]}
+            aria-current={@active == :reviews && "page"}
+          >
+            Reviews
+          </.link>
 
           <%= if @current_user do %>
             <.link
@@ -149,7 +170,7 @@ defmodule ReviewsWeb.Layouts do
                 width="20"
                 height="20"
               />
-              <span>{@current_user.username}</span>
+              <span class="l-nav-user-name">{@current_user.username}</span>
             </.link>
           <% else %>
             <.link
