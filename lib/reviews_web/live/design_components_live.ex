@@ -221,6 +221,13 @@ defmodule ReviewsWeb.DesignComponentsLive do
           background: var(--ds-panel-raised);
         }
 
+        /* One column up to 768px, as on the review page. */
+        @media (max-width: 768px) {
+          .dcp-rail {
+            display: none;
+          }
+        }
+
         .dcp-skeleton:nth-child(3n) {
           width: 60%;
         }
@@ -247,14 +254,19 @@ defmodule ReviewsWeb.DesignComponentsLive do
           </p>
           <div :for={n <- 1..14} :key={n} class="dcp-skeleton"></div>
         </div>
-        <%!-- The decision button floats only inside a Guide with an outline. --%>
+        <%!-- The decision button floats only inside a Guide with an outline. On the
+        review page the Guide fills the first column and the decision sits in
+        .review-packet-grid, the content column; the empty rail keeps that layout. --%>
         <div class="review-packet-shell has-outline">
-          <PacketComponents.packet_section_decision
-            section={DesignFixtures.section(0, @decisions[0].status, "Retry once")}
-            current_user={@viewer}
-            can_decide
-            editing={@decisions[0].editing}
-          />
+          <div class="dcp-rail" aria-hidden="true"></div>
+          <div class="review-packet-grid">
+            <PacketComponents.packet_section_decision
+              section={DesignFixtures.section(0, @decisions[0].status, "Retry once")}
+              current_user={@viewer}
+              can_decide
+              editing={@decisions[0].editing}
+            />
+          </div>
         </div>
         <ActivityComponents.activity
           review={DesignFixtures.review()}

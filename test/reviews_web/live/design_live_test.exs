@@ -63,6 +63,11 @@ defmodule ReviewsWeb.DesignLiveTest do
 
     {:ok, phone, _html} = live(conn, ~p"/design/components/phone")
     assert has_element?(phone, "#review-activity .review-quick-button")
+    # The decision sits in the content column, not the Guide rail.
+    assert has_element?(
+             phone,
+             ".review-packet-shell.has-outline > .review-packet-grid #packet-section-0-decision"
+           )
 
     # The Comments log asks the page to open a thread; the frame says which.
     render_hook(phone, "open_activity_thread", %{"thread_id" => "101"})
@@ -76,6 +81,8 @@ defmodule ReviewsWeb.DesignLiveTest do
     assert has_element?(view, "#dcp-shell .l-topbar")
     assert has_element?(view, "#dcp-shell .dropdown a[href='/settings']")
     assert has_element?(view, "#dcp-hunk-diff[phx-hook=DiffRenderer]")
+    # The sample patch adds five lines and removes two; the stat must agree.
+    assert render(view) =~ "5 additions, 2 deletions"
 
     # A new line comment comes back as a fourth thread, without saving.
     render_hook(view, "create_comment", %{
@@ -112,6 +119,11 @@ defmodule ReviewsWeb.DesignLiveTest do
         width <- ~w(desktop phone) do
       assert has_element?(view, "#dcl-#{id}-#{width}[src='#{src}']")
     end
+
+    # Signed out, the list and Settings frames say they show the sign-in state.
+    assert has_element?(view, "#dcl-list-state", "Signed out")
+    assert has_element?(view, "#dcl-settings-state", "Signed out")
+    refute has_element?(view, "#dcl-review-state")
   end
 
   test "returns 404 when the catalog is off", %{conn: conn} do
