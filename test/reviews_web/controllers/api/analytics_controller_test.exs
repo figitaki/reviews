@@ -126,6 +126,16 @@ defmodule ReviewsWeb.Api.AnalyticsControllerTest do
           |> get(@path)
 
         assert json_response(conn, 400)["errors"]
+
+        # A body without Content-Length or Transfer-Encoding, as HTTP/2 allows.
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer " <> token)
+          |> put_req_header("content-type", "text/plain")
+          |> get(@path, "PRIVATE-BODY")
+
+        assert get_req_header(conn, "content-length") == []
+        assert json_response(conn, 400)["errors"]["detail"] == "Body is not supported"
       end)
 
     refute log =~ token

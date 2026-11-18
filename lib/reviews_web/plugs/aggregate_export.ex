@@ -33,7 +33,12 @@ defmodule ReviewsWeb.Plugs.AggregateExport do
         error(conn, :invalid_request, "Body is not supported")
 
       true ->
-        authenticate(conn, authorization)
+        # HTTP/2 can send a body without framing headers; read at most one byte to find it.
+        case read_body(conn, length: 1, read_length: 1) do
+          {:ok, "", conn} -> authenticate(conn, authorization)
+          {_result, _body, conn} -> error(conn, :invalid_request, "Body is not supported")
+          {:error, _reason} -> error(conn, :invalid_request, "Body is not supported")
+        end
     end
   end
 
