@@ -386,7 +386,6 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       sign_in_href = ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}"]}"
-      assert has_element?(view, ~s|.review-button[href="#{sign_in_href}"]|, "Sign in")
 
       # Signed-out readers get the collapsible decision; expanded, it offers
       # sign-in that returns to this section.
