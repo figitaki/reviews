@@ -9,6 +9,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 - Packet hunk links reveal their section and expand the target card on direct
   load, repeated clicks, and browser history navigation.
 
+- Comments and threads keep their posting order when two share a timestamp
+  second. Order used to depend on how Postgres stored the rows.
+
 - The review page is full width at every screen width. On wide screens the
   Comments button no longer reserves a column beside the content: it floats
   in the bottom-right corner with its log above it, as on tablets. The log
@@ -206,6 +209,9 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 
 ### Changed
 
+- The "Verified agent" Token row for a DPoP-bound comment now reads "Access token
+  bound to agent key (DPoP, RFC 9449)", so it can't be read as the Session JWT's
+  key. The Bearer row is unchanged.
 - Markdown excerpts with missing fence, table or indentation context use Source
   with an explanation. New/deleted documents render in one complete panel.
   Large documents use virtualized Source; smaller previews reuse cached content.
