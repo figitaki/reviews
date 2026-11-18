@@ -509,7 +509,7 @@ export function attributionDetails(attribution, author) {
 // check and never shows here. Comments recorded before Reviews kept this have
 // no row.
 export function tokenBindingText(binding) {
-  if (binding === "dpop") return ["Access token bound to agent key (DPoP, RFC 9449)", null]
+  if (binding === "dpop") return ["Access token bound to agent key", null]
   if (binding === "bearer") return ["Bearer", "not bound to a key"]
   return null
 }
