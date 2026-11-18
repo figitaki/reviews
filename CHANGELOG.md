@@ -7,6 +7,13 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- The review page is full width at every screen width. On wide screens the
+  Comments button no longer reserves a column beside the content: it floats
+  in the bottom-right corner with its log above it, as on tablets. The log
+  starts closed (an open choice is still remembered in this browser) and
+  closes on a tap outside it, and the section decision bar stops short of the
+  button above 640px.
+
 - Add stable API and MCP error codes while retaining legacy fields and Poppy authentication responses; teach the CLI to read them.
 
 - Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.

@@ -17,21 +17,6 @@
   min-width: 0;
 }
 
-.review-workspace > .review-activity {
-  order: -1;
-}
-
-@media (min-width: 1200px) {
-  .review-workspace {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    padding-right: 16px;
-  }
-
-  .review-workspace > .review-activity {
-    order: 0;
-  }
-}
 
 .review-page {
   --review-app-nav-h: 64px;
