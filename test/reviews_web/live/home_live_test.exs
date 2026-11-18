@@ -9,6 +9,21 @@ defmodule ReviewsWeb.HomeLiveTest do
     assert get_resp_header(conn, "x-robots-tag") == []
   end
 
+  test "signed-in visitors go to their review list", %{conn: conn} do
+    user = Reviews.ReviewIndexFixtures.user!("carey")
+    conn = Plug.Test.init_test_session(conn, %{current_user_id: user.id})
+
+    assert {:error, {:live_redirect, %{to: "/reviews"}}} = live(conn, ~p"/")
+    assert redirected_to(get(conn, ~p"/")) == "/reviews"
+  end
+
+  test "signing in from the landing page returns to the review list", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    sign_in = ~p"/auth/github?#{[return_to: "/reviews"]}"
+    assert has_element?(view, ".l-nav-signin[href='#{sign_in}']")
+  end
+
   test "robots policy discourages sensitive routes without blocking the landing page", %{
     conn: conn
   } do

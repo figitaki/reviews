@@ -4,7 +4,7 @@ defmodule Reviews.Turnkey.Adapter do
   identity key lives in Turnkey (`Reviews.Turnkey`).
 
   It runs `Reviews.Poppy.Adapter` first, so every Poppy check and the
-  owner-approved link stay the same, and the request still acts as the
+  owner-approved grant stay the same, and the request still acts as the
   identity the owner approved. Actor IDs don't change. For a Turnkey-hosted
   `client_id`, it then checks the request's delegation against Turnkey's
   `poppy-delegation/v1` profile and records the result in `attribution`:
@@ -21,8 +21,8 @@ defmodule Reviews.Turnkey.Adapter do
   """
   @behaviour Reviews.ExternalIdentity
 
-  alias Reviews.OAuth.{Clients, JOSE}
-  alias Reviews.Poppy
+  alias Gatekeep.{Clients, JOSE}
+  alias Reviews.{OAuth, Poppy}
   alias Reviews.Turnkey
 
   @impl true
@@ -36,7 +36,7 @@ defmodule Reviews.Turnkey.Adapter do
   defp turnkey_attribution(request, %{"client_id" => client_id} = attribution, opts) do
     case Turnkey.hosted_agent(client_id) do
       {:ok, _agent} ->
-        with {:ok, client} <- Clients.fetch(client_id),
+        with {:ok, client} <- Clients.fetch(OAuth.config(), client_id),
              {:ok, delegation} <- delegation(request.headers["poppy-session"]),
              {:ok, verified} <-
                Turnkey.verify_delegation(delegation, client, attribution["delegated_key"], opts) do

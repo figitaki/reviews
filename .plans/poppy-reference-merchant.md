@@ -59,8 +59,8 @@ tkhq/docs#945 ("MPP identity attestations"), both Beta and unmerged. Only those 
 
 | Area | Result |
 | --- | --- |
-| `client-assertion/v1` (ES256, thumbprint `kid`, `iss` = `sub`, `aud` = issuer, at most 300 s) | Already worked. `jti` limit raised from 255 to 256 to match the profile. |
-| Hosted `agent.json` and `jwks.json` (same host, `private_key_jwt`, `use`/`alg` on keys) | Already worked when `redirect_uris` is set. Empty `redirect_uris` (headless) was refused; now accepted for clients with keys, which can't use Direct Sign-In. |
+| `client-assertion/v1` (ES256, thumbprint `kid`, `iss` = `sub`, `aud` = issuer, at most 300 s) | Already worked. The `jti` limit was 255; figitaki/gatekeep#7 raises it to 256 to match the profile. |
+| Hosted `agent.json` and `jwks.json` (same host, `private_key_jwt`, `use`/`alg` on keys) | Already worked. Gatekeep accepts empty `redirect_uris` (headless); such an agent can't use Direct Sign-In. |
 | `poppy-delegation/v1` verified as Turnkey's | New: `Reviews.Turnkey.Adapter`. Comments record and show "signed by Turnkey". |
 | MPP attestations (`turnkey.io/mpp-attestation/v1`, EdDSA) | Not used. They attest a Turnkey user to a paid API's origin, not a Personal Agent's key, and Reviews has no paid API. |
 
@@ -82,6 +82,7 @@ Gaps:
 ## Path to Turnkey or DID
 
 `Reviews.ExternalIdentity` is the adapter boundary. Turnkey-signed delegations now go through it (see
-above), on the same `poppy` links. A did:web whose `authentication` key signs the challenge, becomes another adapter that resolves to an
-`identity_links` row with its own `provider`. Comments then record that adapter's `attribution`.
+above), on the same owner-approved grants. A did:web whose `authentication` key signs the challenge
+becomes another adapter that resolves to an owner-approved grant of one agent identity. Comments then
+record that adapter's `attribution`.
 Signed section decisions (#106) remain separate evidence. A Poppy login is not a signed decision.

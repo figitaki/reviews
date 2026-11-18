@@ -31,6 +31,14 @@ config :reviews, ReviewsWeb.Endpoint,
   secret_key_base: "PksNuEADSq2cFj3rPjGzuMlw2ulffcTg5IHJLaFhVcq8wWgjFfUr/EhTVD4cpvRl",
   server: false
 
+config :reviews, :mcp,
+  enabled: true,
+  writes_enabled: true,
+  allowed_hosts: ["localhost", "www.example.com"],
+  # Paging tests send many requests from one identity.
+  requests_per_second: 1_000.0,
+  burst: 1_000
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 
@@ -50,10 +58,19 @@ config :phoenix,
 config :reviews, Reviews.OAuth,
   issuer: "https://reviews.test",
   fetcher: Reviews.OAuthTestClient.Fetcher,
-  resources: [Reviews.Poppy, Reviews.OAuthTestResource.KeysOnly, Reviews.OAuthTestResource],
+  # Public clients first, so the metadata lists `none` first, as it did
+  # before gatekeep.
+  resources: [
+    Reviews.OAuthTestResource,
+    Reviews.OAuthTestResource.KeysOnly,
+    Reviews.Poppy,
+    Reviews.OAuth.CLI
+  ],
   default_resource: Reviews.Poppy
 
 # Raise on LiveView test-time template problems instead of warning.
 config :phoenix_live_view, :test_warnings,
   duplicate_id: :raise,
   missing_form_id: :raise
+
+config :reviews, :design_catalog, true

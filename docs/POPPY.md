@@ -21,10 +21,12 @@ neither kind of token works on the other's routes.
 | Delegation chain | Poppy 1.0 has none. Approval happens in Reviews. | "owner approval in Reviews" |
 | Delegation signed by Turnkey | Turnkey-hosted `client_id`, and a delegation of Turnkey's `poppy-delegation/v1` shape signed by the key Turnkey publishes | Yes: "signed by Turnkey". See "Turnkey-held identity keys". |
 
-The approval is an `identity_links` row: `(identity_id, approved_by_user_id, provider: "poppy",
-subject: client_id, scopes)`. It never creates an identity. A DID or Turnkey-held key adds rows with
-another `provider` through the `Reviews.ExternalIdentity` behaviour, so actor IDs stay the same
-(see "Adding other verification methods").
+The approval is a grant of the OAuth issuer, which runs on
+[gatekeep](https://github.com/figitaki/gatekeep): a `gatekeep_grants` row with the Personal Agent's
+`client_id`, the agent identity's ID as `subject`, the approving user's ID as `owner`, the domain as
+`resource`, and the scopes (`Reviews.OAuth.Grant`). It never creates an identity. Other verification
+methods plug in through the `Reviews.ExternalIdentity` behaviour, so actor IDs stay the same (see
+"Adding other verification methods").
 
 ## Endpoints
 
@@ -36,7 +38,7 @@ another `provider` through the `Reviews.ExternalIdentity` behaviour, so actor ID
 | `GET /api/poppy/openapi.json` | OpenAPI 3.1 description of the Poppy API |
 | `GET /oauth/authorize`, `POST /oauth/authorize` | Direct Sign-In: GitHub sign-in, then a consent page where the owner picks one of their agent identities |
 | `POST /oauth/token` | `authorization_code` (PKCE S256) and `refresh_token`. `private_key_jwt` client assertion (ES256 or PS384, `aud` = issuer). An optional `DPoP` proof binds the tokens (see "DPoP"). |
-| `POST /oauth/revoke` | RFC 7009. Revoking the refresh token revokes the link and its access tokens. |
+| `POST /oauth/revoke` | RFC 7009. Revoking the refresh token revokes the grant and its access tokens. Revoking an access token revokes only that token. |
 | `GET /api/poppy/v1/reviews/:slug` | Read a review. Works signed out with a verified Session header. |
 | `POST /api/poppy/v1/reviews/:slug/comments` | Post a comment. Needs an access token with `comments:write`. |
 
@@ -65,10 +67,11 @@ To refuse an agent, add its `client_id` to `config :reviews, Reviews.OAuth, bloc
    compared against the configured public origin, never the `Host` header. `iat` must fall within 60
    seconds, plus 30 seconds of clock skew.
 7. `jti` hasn't been seen. The replay cache is the `oauth_seen_jtis` table, shared by every server.
-8. With an access token, `ath` must match it. The token must be unexpired, its link not revoked, and
-   the link's `subject` equal to the JWT's `iss`. Without a token, `ath` must be absent.
-9. A DPoP-bound token must come with the `DPoP` scheme and a valid proof from its key. A Bearer token
-   must come with the `Bearer` scheme. See "DPoP".
+8. With an access token, `ath` must match it. Without a token, `ath` must be absent.
+9. The access token must be unexpired, issued for the domain, and its grant not revoked
+   (`Gatekeep.Token`). A DPoP-bound token must come with the `DPoP` scheme and a valid proof from its
+   key; a Bearer token must come with the `Bearer` scheme. See "DPoP". The token's client must be
+   the JWT's `iss`.
 10. The Session (`client_id`, `sid`, `sub`) is created or continued. It can't switch to another
    identity (`session_ended`) or change `agent_id`.
 
@@ -95,8 +98,8 @@ DPoP.
   gets a DPoP access token. Dynamically registered clients can't declare the flag.
 
 - **Sign-in.** A token request with a valid `DPoP` proof gets `token_type: "DPoP"`. The access
-  token and the link's refresh token are both bound to the key's RFC 7638 thumbprint
-  (`identity_links.dpop_jkt`, `oauth_access_tokens.dpop_jkt`). Without a proof, both are Bearer.
+  token and the grant's refresh token are both bound to the key's RFC 7638 thumbprint
+  (`gatekeep_grants.dpop_jkt`, `gatekeep_access_tokens.dpop_jkt`). Without a proof, both are Bearer.
 - **Refresh.** A refresh token bound to a key needs a proof from that key. A missing proof or a
   proof from another key gets `invalid_grant` (spec 4.4). A Bearer refresh token stays Bearer. A
   proof sent with it binds only the new access token (RFC 9449 §5).
@@ -112,8 +115,8 @@ DPoP.
   (spec 5.2). The Session JWT is signed with the delegated key and names the Session and User. The
   proof is signed with the DPoP key in its own `jwk` header. Both carry `ath`. The Session JWT
   check is unchanged.
-- **Replay.** Proof `jti`s go into the same `oauth_seen_jtis` table as Session JWTs, as `kind`
-  `dpop`, per `client_id`, so a proof works once on any server.
+- **Replay.** Proof `jti`s go into gatekeep's `gatekeep_seen_jtis` table, per proof key, so a proof
+  works once on any server. Session JWT `jti`s stay in Reviews' `oauth_seen_jtis`.
 - **No nonces.** Reviews doesn't issue `DPoP-Nonce` (RFC 9449 §8, §9). The `iat` window and the
   shared replay cache already limit how long a proof works. Nonces would also add a round trip to
   each agent's first token request and API call.
@@ -129,9 +132,9 @@ DPoP.
 
 - **Owner:** Settings → Connected agents → Disconnect. Access and refresh tokens stop on the next request.
 - **Agent:** `POST /oauth/revoke` with the refresh token (sign-out).
-- **Reused code:** redeeming an authorization code twice revokes the link it created.
+- **Reused code:** redeeming an authorization code twice revokes the grant it created.
 - **Personal Agent key:** after removal from `jwks_uri`, the key stops verifying once the
-  client cache expires (`client_cache_seconds`, default 300) or `Reviews.OAuth.Clients.forget/1` runs.
+  client cache expires (`client_cache_seconds`, default 300) or `Gatekeep.Clients.forget(Reviews.OAuth.config(), client_id)` runs.
   Delegations can't be withdrawn early (spec 10.7).
 - **Block a client:** `config :reviews, Reviews.OAuth, blocked_clients: [client_id]`.
 
@@ -161,8 +164,8 @@ Turnkey signs two kinds of JWT, and both are ordinary Poppy JWTs:
 
 - **Client assertions** (`turnkey.io/client-assertion/v1`): ES256, `kid` = the key's RFC 7638
   thumbprint, `iss` = `sub` = the `client_id`, `aud` = the Reviews issuer, at most 300 seconds, and a
-  `jti` of 22 to 256 characters. The issuer already accepts these; it now allows a 256-character `jti`
-  (it allowed 255).
+  `jti` of 22 to 256 characters. The issuer (gatekeep) already accepts these; since
+  figitaki/gatekeep#7 it allows a 256-character `jti` (it allowed 255).
 - **Delegations** (`turnkey.io/poppy-delegation/v1`): `typ` `poppy-delegation+jwt`, ES256, `kid` = the
   identity key's thumbprint, and only `iss`, `cnf.jwk`, `iat`, `exp`, and `jti`, with no audience. The
   Poppy checks already accept these.
@@ -208,14 +211,14 @@ company, so owner approval in Reviews is still what grants account access. Revie
 signed key set (`jwks.jwt`) that the attestations guide describes, because the agent guide doesn't say
 it is served for agents.
 
-**Headless agents.** Turnkey lists `redirect_uris` as empty for a headless agent. Reviews now accepts
-client metadata with keys and no redirect URIs, so such an agent can send Session JWTs (read signed
-out) and client assertions. It can't use Direct Sign-In, so it can't post comments. Metadata without
-keys still needs a redirect URI.
+**Headless agents.** Turnkey lists `redirect_uris` as empty for a headless agent. Gatekeep accepts
+client metadata with no redirect URIs, so such an agent can send Session JWTs (read signed out) and
+client assertions. It can't use Direct Sign-In, because no redirect URI matches, so it can't post
+comments.
 
 ## Adding other verification methods
 
-Implement `Reviews.ExternalIdentity.authenticate/2` and resolve to an `IdentityLink` with a new
-`provider` (`"turnkey"`, `"did"`). Store what was verified in `attribution`, using the Poppy
+Implement `Reviews.ExternalIdentity.authenticate/2` and resolve to an owner's grant of one agent
+identity. Store what was verified in `attribution`, using the Poppy
 adapter's map as the shape, and leave parties you can't verify unset or mark them as claims. Owner
 approval, revocation, and the UI label stay the same. Reviews actor IDs don't change.

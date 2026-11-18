@@ -19,6 +19,9 @@ config :reviews, ReviewsWeb.Endpoint,
     ]
   ]
 
+# Keep crash messages (which can include internals) out of MCP responses.
+config :reviews, ReviewsWeb.MCP.Server, mask_error_details: true
+
 # Do not print debug messages in production
 config :logger, level: :info
 

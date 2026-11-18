@@ -35,6 +35,8 @@ end
 
 http_port = parse_int_env.("PORT", 4000)
 
+config :reviews, :mcp, enabled: true, writes_enabled: true
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -122,3 +124,5 @@ config :reviews, Reviews.OAuth,
   issuer: System.get_env("OAUTH_ISSUER"),
   allow_private_hosts:
     String.split(System.get_env("OAUTH_ALLOW_PRIVATE_HOSTS", ""), ",", trim: true)
+
+config :reviews, :design_catalog, true

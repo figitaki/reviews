@@ -6,13 +6,14 @@ defmodule Reviews.TurnkeyTest do
   """
   use Reviews.DataCase, async: true
 
-  alias Reviews.OAuth.Clients
+  alias Gatekeep.Clients
+  alias Reviews.OAuth
   alias Reviews.PoppyTestAgent, as: Agent
   alias Reviews.Turnkey
 
   setup do
     agent = Agent.turnkey()
-    {:ok, client} = Clients.fetch(agent.client_id)
+    {:ok, client} = Clients.fetch(OAuth.config(), agent.client_id)
     %{agent: agent, client: client, session_key: Agent.thumbprint(agent.delegated.public)}
   end
 
@@ -72,7 +73,7 @@ defmodule Reviews.TurnkeyTest do
 
       # The same claims from an agent that isn't hosted by Turnkey.
       plain = Agent.new()
-      {:ok, plain_client} = Clients.fetch(plain.client_id)
+      {:ok, plain_client} = Clients.fetch(OAuth.config(), plain.client_id)
 
       assert {:error, :not_turnkey_hosted} =
                Turnkey.verify_delegation(
@@ -146,8 +147,8 @@ defmodule Reviews.TurnkeyTest do
     test "refuses a key whose kid isn't its thumbprint", ctx do
       key = Agent.ec_key("identity-1")
       Agent.publish(ctx.agent, %{"client_name" => "Shopper"}, [key.public])
-      Clients.forget(ctx.agent.client_id)
-      {:ok, client} = Clients.fetch(ctx.agent.client_id)
+      Clients.forget(OAuth.config(), ctx.agent.client_id)
+      {:ok, client} = Clients.fetch(OAuth.config(), ctx.agent.client_id)
 
       assert {:error, :kid_not_thumbprint} =
                Turnkey.verify_delegation(

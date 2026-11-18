@@ -85,6 +85,8 @@ export const Thread = z.object({
   inserted_at: z.string().nullable().optional(),
   author: Author,
   comments: z.array(Comment),
+  // Whether the viewer may resolve or reopen it: the review owner or the thread's author.
+  can_update_status: z.boolean().default(false),
 })
 
 export const CreateCommentPayload = z.object({

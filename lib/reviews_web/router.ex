@@ -53,11 +53,22 @@ defmodule ReviewsWeb.Router do
     plug :put_review_robots_header
   end
 
+  # MCP has no session cookie or CSRF token; FastestMCP checks the bearer
+  # token, Host and Origin itself. See ReviewsWeb.MCP.Server.
+  pipeline :mcp do
+    plug :require_mcp_enabled
+    plug :put_review_robots_header
+    plug :put_no_store_header
+  end
+
   scope "/", ReviewsWeb do
     pipe_through :browser
 
     live "/", HomeLive, :index
+    live "/reviews", ReviewListLive, :index
     live "/settings", SettingsLive, :edit
+    # Off in production unless DESIGN_CATALOG is set; see ReviewsWeb.DesignLive.
+    live "/design", DesignLive, :index
   end
 
   scope "/", ReviewsWeb do
@@ -93,12 +104,22 @@ defmodule ReviewsWeb.Router do
     post "/authorize", OAuthController, :approve
   end
 
+  # CLI sign-in (RFC 8628): the person enters the code `reviews login` shows.
+  scope "/device", ReviewsWeb do
+    pipe_through :browser
+
+    get "/", DeviceController, :show
+    post "/", DeviceController, :lookup
+    post "/decide", DeviceController, :decide
+  end
+
   scope "/oauth", ReviewsWeb do
     pipe_through :oauth_endpoint
 
     post "/token", OAuthController, :token
     post "/revoke", OAuthController, :revoke
     post "/register", OAuthController, :register
+    post "/device_authorization", OAuthController, :device_authorization
     options "/:endpoint", OAuthController, :token
   end
 
@@ -107,6 +128,9 @@ defmodule ReviewsWeb.Router do
     pipe_through [:poppy_api, :review_content]
 
     get "/reviews/:slug", ReviewController, :show
+    get "/reviews/:slug/files", ReviewPageController, :files
+    get "/reviews/:slug/threads", ReviewPageController, :threads
+    get "/reviews/:slug/threads/:thread_id/comments", ReviewPageController, :comments
   end
 
   scope "/api/poppy/v1", ReviewsWeb.Api do
@@ -136,17 +160,28 @@ defmodule ReviewsWeb.Router do
     pipe_through [:api, :review_content]
 
     get "/reviews/:slug", ReviewController, :show
+    get "/reviews/:slug/files", ReviewPageController, :files
+    get "/reviews/:slug/threads", ReviewPageController, :threads
+    get "/reviews/:slug/threads/:thread_id/comments", ReviewPageController, :comments
   end
 
   scope "/api/v1", ReviewsWeb.Api do
     pipe_through [:api, :api_authenticated]
 
+    get "/reviews", ReviewController, :index
     post "/reviews", ReviewController, :create
     post "/reviews/:slug/patchsets", PatchsetController, :create
     post "/reviews/:slug/comments", CommentController, :create
     patch "/reviews/:slug/threads/:thread_id", ThreadController, :update
     post "/reviews/:slug/sections/:section_index/decision", SectionDecisionController, :create
     get "/me", MeController, :show
+  end
+
+  scope "/" do
+    pipe_through :mcp
+
+    forward "/mcp", ReviewsWeb.MCP.Server,
+      allowed_hosts: {ReviewsWeb.MCP.Server, :allowed_hosts, []}
   end
 
   # Enable LiveDashboard in development
@@ -163,6 +198,19 @@ defmodule ReviewsWeb.Router do
   # Crawler directives only; review links remain anonymously accessible.
   defp put_review_robots_header(conn, _opts) do
     put_resp_header(conn, "x-robots-tag", "noindex, nofollow, noarchive")
+  end
+
+  defp put_no_store_header(conn, _opts), do: put_resp_header(conn, "cache-control", "no-store")
+
+  defp require_mcp_enabled(conn, _opts) do
+    if ReviewsWeb.MCP.Server.enabled?() do
+      conn
+    else
+      conn
+      |> put_resp_content_type("application/json")
+      |> send_resp(404, JSON.encode!(%{errors: %{detail: "Not Found"}}))
+      |> halt()
+    end
   end
 
   # No cookies are read here, so any origin may call. A preflight ends here.

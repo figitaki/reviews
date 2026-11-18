@@ -2,9 +2,13 @@
 //!
 //! Endpoints (see docs/CONTRACTS.md):
 //!   GET  /api/v1/me
+//!   GET  /api/v1/reviews
 //!   POST /api/v1/reviews
 //!   POST /api/v1/reviews/:slug/patchsets
 //!   GET  /api/v1/reviews/:slug
+//!   POST /api/v1/reviews/:slug/comments (new thread or reply)
+//!   PATCH /api/v1/reviews/:slug/threads/:thread_id
+//!   POST /api/v1/reviews/:slug/sections/:section_index/decision
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::blocking::{Client, RequestBuilder, Response};
@@ -22,7 +26,8 @@ pub struct ApiClient {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Me {
     pub username: String,
-    pub email: String,
+    /// Null when the GitHub account has no public email.
+    pub email: Option<String>,
     pub identity: Option<Identity>,
 }
 
@@ -72,11 +77,16 @@ pub struct CreatePatchsetResponse {
 
 #[derive(Debug, Serialize)]
 pub struct CreateCommentRequest<'a> {
-    pub file_path: &'a str,
-    pub side: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_path: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub side: Option<&'a str>,
     pub body: &'a str,
-    pub thread_anchor: Value,
-    /// Set to append to an existing thread instead of opening a new one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_anchor: Option<Value>,
+    /// Exact revision number for a new thread; omitted selects latest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thread_id: Option<i64>,
 }
@@ -110,6 +120,23 @@ pub struct SectionDecisionResponse {
     pub patchset_number: i64,
     pub section_index: i64,
     pub status: Option<String>,
+}
+
+/// Filters for `GET /api/v1/reviews`. `None` fields are left out of the query.
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct ListReviewsQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub q: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<u32>,
 }
 
 impl ApiClient {
@@ -148,7 +175,7 @@ impl ApiClient {
     fn require_token(&self, what: &str) -> Result<&str> {
         self.token
             .as_deref()
-            .ok_or_else(|| anyhow!("{what} requires an API token. Run `reviews login` first."))
+            .ok_or_else(|| anyhow!("{what} requires you to sign in. Run `reviews login` first."))
     }
 
     pub fn me(&self) -> Result<Me> {
@@ -226,6 +253,19 @@ impl ApiClient {
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 
+    pub fn list_reviews(&self, query: &ListReviewsQuery) -> Result<Value> {
+        let path = "/api/v1/reviews";
+        let _ = self.require_token(&format!("GET {path}"))?;
+        let resp = self
+            .auth(self.http.get(self.url(path)))
+            .query(query)
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<Value>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
     pub fn show_review(&self, slug: &str, patchset: Option<i64>) -> Result<Value> {
         let path = format!("/api/v1/reviews/{slug}");
         let mut req = self.auth(self.http.get(self.url(&path)));
@@ -265,20 +305,51 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
         return Ok(resp);
     }
     let body = resp.text().unwrap_or_default();
-    let hint = match status {
+    let parsed = serde_json::from_str::<Value>(&body).ok();
+    let code = parsed
+        .as_ref()
+        .and_then(|v| v.get("error_code"))
+        .and_then(Value::as_str);
+    let hint = match code {
+        Some("invalid_anchor") => " — choose a line or token selection in the selected revision.",
+        Some("patchset_not_found") => " — select a revision that belongs to this review.",
+        _ => match status {
         StatusCode::UNAUTHORIZED => {
-            " — your API token was rejected. Mint a new one in /settings and run `reviews login`."
+            " — the server rejected your sign-in. Run `reviews login` again."
+        }
+        StatusCode::FORBIDDEN => {
+            " — this identity is not allowed to do that on this review. Only the review owner can push revisions or decide sections; the owner or the thread's author can resolve or reopen a thread."
         }
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",
+        StatusCode::BAD_REQUEST => " — the server did not accept a parameter. See the body.",
         _ => "",
+    },
     };
-    Err(anyhow!("{what} failed: HTTP {status}{hint}\nbody: {body}"))
+    let code_label = code.map(|c| format!(" [{c}]")).unwrap_or_default();
+    Err(anyhow!(
+        "{what} failed: HTTP {status}{code_label}{hint}\nbody: {body}"
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_stable_error_code_from_server_fixture() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("GET", "/api/v1/me")
+            .with_status(422)
+            .with_body(include_str!("../../test/vectors/api/invalid-anchor.json"))
+            .create();
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let error = format!("{}", client.me().unwrap_err());
+        assert!(error.contains("[invalid_anchor]"));
+        assert!(error.contains("choose a line or token selection"));
+        mock.assert();
+    }
 
     #[test]
     fn me_happy_path() {
@@ -294,7 +365,7 @@ mod tests {
         let client = ApiClient::new(server.url(), "tok").unwrap();
         let me = client.me().unwrap();
         assert_eq!(me.username, "careyjanecka");
-        assert_eq!(me.email, "carey@example.com");
+        assert_eq!(me.email.as_deref(), Some("carey@example.com"));
         assert_eq!(me.identity.unwrap().handle, "codex");
         mock.assert();
     }
@@ -313,6 +384,28 @@ mod tests {
         let msg = format!("{err:#}");
         assert!(msg.contains("401"), "msg = {msg}");
         assert!(msg.contains("reviews login"), "msg = {msg}");
+    }
+
+    #[test]
+    fn forbidden_explains_who_may_act() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("PATCH", "/api/v1/reviews/k7m2qz/threads/7")
+            .with_status(403)
+            .with_body(r#"{"errors":{"detail":"Only the review owner or the thread's author can resolve or reopen it"}}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let err = client
+            .update_thread_status(
+                "k7m2qz",
+                7,
+                &UpdateThreadStatusRequest { status: "resolved" },
+            )
+            .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("403"), "msg = {msg}");
+        assert!(msg.contains("review owner"), "msg = {msg}");
     }
 
     #[test]
@@ -453,11 +546,12 @@ mod tests {
             .create_comment(
                 "k7m2qz",
                 &CreateCommentRequest {
-                    file_path: "foo",
-                    side: "new",
+                    file_path: Some("foo"),
+                    side: Some("new"),
                     body: "lgtm",
-                    thread_anchor: anchor,
+                    thread_anchor: Some(anchor),
                     thread_id: None,
+                    revision: None,
                 },
             )
             .unwrap();
@@ -468,17 +562,62 @@ mod tests {
     }
 
     #[test]
+    fn reply_posts_only_thread_and_body_without_get() {
+        let mut server = mockito::Server::new();
+        let get = server.mock("GET", mockito::Matcher::Any).expect(0).create();
+        let post = server
+            .mock("POST", "/api/v1/reviews/slug/comments")
+            .match_body(mockito::Matcher::Json(
+                serde_json::json!({"thread_id": 7, "body": "reply"}),
+            ))
+            .with_status(201)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"thread_id":7,"comment_id":8,"url":"http://localhost/r/slug"}"#)
+            .create();
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        client
+            .create_comment(
+                "slug",
+                &CreateCommentRequest {
+                    file_path: None,
+                    side: None,
+                    body: "reply",
+                    thread_anchor: None,
+                    thread_id: Some(7),
+                    revision: None,
+                },
+            )
+            .unwrap();
+        post.assert();
+        get.assert();
+    }
+
+    #[test]
+    fn comment_serializes_exact_revision() {
+        let req = CreateCommentRequest {
+            file_path: Some("foo"),
+            side: Some("new"),
+            body: "comment",
+            thread_anchor: Some(serde_json::json!({"granularity":"line", "line_number_hint":1})),
+            thread_id: None,
+            revision: Some(2),
+        };
+        assert_eq!(serde_json::to_value(req).unwrap()["revision"], 2);
+    }
+
+    #[test]
     fn create_comment_requires_token() {
         let client = ApiClient::anonymous("http://example.invalid").unwrap();
         let err = client
             .create_comment(
                 "x",
                 &CreateCommentRequest {
-                    file_path: "f",
-                    side: "new",
+                    file_path: Some("f"),
+                    side: Some("new"),
                     body: "b",
-                    thread_anchor: serde_json::json!({"granularity": "line"}),
+                    thread_anchor: Some(serde_json::json!({"granularity": "line"})),
                     thread_id: None,
+                    revision: None,
                 },
             )
             .unwrap_err();
@@ -534,6 +673,63 @@ mod tests {
         assert_eq!(resp.review, "k7m2qz");
         assert_eq!(resp.status.as_deref(), Some("approved"));
         mock.assert();
+    }
+
+    #[test]
+    fn list_reviews_sends_filters_and_token() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("GET", "/api/v1/reviews")
+            .match_header("authorization", "Bearer tok")
+            .match_query(mockito::Matcher::AllOf(vec![
+                mockito::Matcher::UrlEncoded("role".into(), "involved".into()),
+                mockito::Matcher::UrlEncoded("q".into(), "billing export".into()),
+                mockito::Matcher::UrlEncoded("limit".into(), "5".into()),
+            ]))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"reviews":[],"limit":5,"offset":0,"next_offset":null}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let body = client
+            .list_reviews(&ListReviewsQuery {
+                role: Some("involved".into()),
+                q: Some("billing export".into()),
+                limit: Some(5),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(body["limit"], 5);
+        mock.assert();
+    }
+
+    #[test]
+    fn list_reviews_requires_token() {
+        let client = ApiClient::anonymous("http://example.invalid").unwrap();
+        let err = client
+            .list_reviews(&ListReviewsQuery::default())
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("reviews login"));
+    }
+
+    #[test]
+    fn list_reviews_400_shows_hint() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/api/v1/reviews")
+            .match_query(mockito::Matcher::Any)
+            .with_status(400)
+            .with_body(r#"{"errors":{"role":"must be one of: all, authored, involved"}}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let err = client
+            .list_reviews(&ListReviewsQuery::default())
+            .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("400"), "msg = {msg}");
+        assert!(msg.contains("must be one of"), "msg = {msg}");
     }
 
     #[test]

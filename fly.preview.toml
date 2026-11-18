@@ -25,6 +25,11 @@ kill_signal = 'SIGTERM'
   # workflow also stages AUTH_RELAY_SECRET. See "GitHub sign-in on previews"
   # in docs/PREVIEW_ENVS.md.
   AUTH_RELAY_URL = 'https://reviews.figitaki.dev'
+  # Hosted MCP at /mcp (docs/MCP.md). Production leaves both unset (off).
+  MCP_ENABLED = 'true'
+  MCP_WRITES_ENABLED = 'true'
+  # Design catalog at /design (ReviewsWeb.DesignLive). Production leaves it off.
+  DESIGN_CATALOG = 'true'
 
 [http_service]
   internal_port = 8080

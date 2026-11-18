@@ -14,7 +14,9 @@ defmodule ReviewsWeb.Api.PatchsetController do
   def create(conn, %{"slug" => slug} = params) do
     case Reviews.get_review_by_slug(slug) do
       nil ->
-        conn |> put_status(:not_found) |> json(%{errors: %{detail: "Review not found"}})
+        conn
+        |> put_status(:not_found)
+        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
 
       review ->
         attrs = %{
@@ -24,7 +26,7 @@ defmodule ReviewsWeb.Api.PatchsetController do
           packet: params["packet"]
         }
 
-        case Reviews.append_patchset(review, conn.assigns.current_identity, attrs) do
+        case Reviews.append_patchset(review, conn.assigns.current_principal, attrs) do
           {:ok, patchset} ->
             conn
             |> put_status(:created)
@@ -36,21 +38,13 @@ defmodule ReviewsWeb.Api.PatchsetController do
           {:error, :forbidden} ->
             conn
             |> put_status(:forbidden)
-            |> json(%{errors: %{detail: "Forbidden"}})
+            |> json(ReviewsWeb.ApiErrors.detail(:forbidden, "Forbidden"))
 
           {:error, changeset} ->
             conn
             |> put_status(:unprocessable_entity)
-            |> json(%{errors: format_changeset(changeset)})
+            |> json(ReviewsWeb.ApiErrors.changeset(changeset))
         end
     end
-  end
-
-  defp format_changeset(%Ecto.Changeset{} = cs) do
-    Ecto.Changeset.traverse_errors(cs, fn {msg, opts} ->
-      Regex.replace(~r/%{(\w+)}/, msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
   end
 end

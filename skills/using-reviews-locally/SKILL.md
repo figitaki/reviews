@@ -22,7 +22,10 @@ Do not run `mix phx.server` directly unless you know OAuth/env loading is unnece
 
 The CLI reads `~/.config/reviews/config.toml` and currently uses `[default]`.
 
-Expected shape:
+`reviews login --server <url>` writes it: it shows a code to enter at
+`<url>/device` and saves tokens that refresh themselves under
+`[default.oauth]`. `reviews login --token` reads an API token from stdin
+instead, which suits scripts and agents without a browser. That shape is:
 
 ```toml
 [default]
@@ -89,6 +92,17 @@ cli/target/release/reviews push --dry-run --update <slug> --packet /path/to/pack
 
 It prints the target server, the review or slug, the diff files, the packet sections, and every packet problem with `file:line`. It exits 1 if the packet has problems or the review title or slug is empty. It does not need the server to be running, so it cannot check that the slug exists or that the token works.
 
+Find the slug of an earlier review (you wrote it or took part in it):
+
+```bash
+cli/target/release/reviews list                       # newest first, 25 per page
+cli/target/release/reviews list --role authored -q billing
+cli/target/release/reviews list --status updated      # others' reviews with a patchset newer than your last action
+cli/target/release/reviews list --status open --json  # reviews with open threads, as JSON
+```
+
+Other flags: `--author <handle>`, `--limit <1-100>`, `--offset <n>`. An agent token lists only that agent's reviews.
+
 If the sandbox blocks localhost networking, rerun the CLI with escalation. If the token is rejected, mint a token in the same local database as the running server.
 
 ## Inspect and Resolve Threads
@@ -120,7 +134,8 @@ cli/target/release/reviews reply <slug> <thread-id> --body "Switched to Decimal 
 
 Notes:
 - `reviews threads` can run anonymously against public review JSON.
-- `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` / a valid API token.
+- `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` (or `reviews login --token` with an API token).
+- `reviews resolve` and `reviews reopen` work only for the review owner or the thread's author; `reviews section` works only for the review owner. Others get HTTP 403.
 - Thread IDs are accepted bare (`7`) or as printed by the listing (`#7`).
 - `reviews reply` appends to the thread. `reviews comment` always opens a new one.
 - `reviews show --format md` also includes thread IDs and status, which can be used as targets for reply/resolve/reopen.

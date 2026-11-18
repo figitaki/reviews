@@ -101,6 +101,29 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
       assert url =~ slug
     end
 
+    test "rejects a title over 255 characters with a validation error",
+         %{conn: conn, raw_token: raw} do
+      # Postgres counts code points. "e\u0301" is one grapheme but two code
+      # points, so 128 of them must fail too.
+      for title <- [String.duplicate("t", 256), String.duplicate("e\u0301", 128)] do
+        conn =
+          conn
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> put_req_header("content-type", "application/json")
+          |> post(~p"/api/v1/reviews", %{
+            "title" => title,
+            "raw_diff" =>
+              "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+          })
+
+        assert json_response(conn, 422) == %{
+                 "error_code" => "validation_failed",
+                 "error_detail" => "Invalid input",
+                 "errors" => %{"title" => ["should be at most 255 character(s)"]}
+               }
+      end
+    end
+
     test "stores the token identity as review author", %{
       conn: conn,
       agent: agent,
@@ -130,7 +153,9 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
         "format_version" => 1,
         "title" => "Reviewer guide",
         "summary" => "Read this first.",
-        "tour" => [%{"kind" => "hunk", "path" => "foo"}]
+        "sections" => [
+          %{"title" => "S", "rows" => [%{"kind" => "hunk", "path" => "foo", "hunk_index" => 1}]}
+        ]
       }
 
       body = %{
@@ -151,6 +176,68 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
 
       conn = get(build_conn(), ~p"/api/v1/reviews/#{slug}")
       assert get_in(json_response(conn, 200), ["selected_patchset", "packet"]) == packet
+    end
+
+    test "rejects empty packet strings and preserves literal placeholder text", %{
+      raw_token: raw,
+      user: user
+    } do
+      diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"
+
+      {:ok, %{review: review}} =
+        ReviewsContext.create_review_with_initial_patchset(user, %{title: "T", raw_diff: diff})
+
+      invalid = %{
+        "title" => "T",
+        "sections" => [
+          %{
+            "title" => "T",
+            "rows" => [
+              %{
+                "kind" => "hunk",
+                "path" => "%{unregistered_packet_placeholder}",
+                "hunk_index" => 1
+              }
+            ]
+          }
+        ]
+      }
+
+      for packet <- ["", invalid],
+          path <- ["/api/v1/reviews", "/api/v1/reviews/#{review.slug}/patchsets"] do
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> post(path, %{title: "T", raw_diff: diff, packet: packet})
+
+        assert %{"errors" => %{"packet" => errors}} = json_response(conn, 422)
+
+        if is_map(packet),
+          do:
+            assert(Enum.any?(errors, &String.contains?(&1, "%{unregistered_packet_placeholder}")))
+      end
+
+      assert length(ReviewsContext.list_patchsets(review)) == 1
+    end
+
+    test "rejects uncovered packets on both upload endpoints", %{raw_token: raw, user: user} do
+      diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"
+      packet = %{"title" => "T", "sections" => []}
+
+      {:ok, %{review: review}} =
+        ReviewsContext.create_review_with_initial_patchset(user, %{title: "T", raw_diff: diff})
+
+      for path <- [~p"/api/v1/reviews", ~p"/api/v1/reviews/#{review.slug}/patchsets"] do
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> post(path, %{title: "T", raw_diff: diff, packet: packet})
+
+        assert %{"errors" => %{"packet" => errors}} = json_response(conn, 422)
+        assert Enum.any?(errors, &String.contains?(&1, "not in any hunk row"))
+      end
+
+      assert length(ReviewsContext.list_patchsets(review)) == 1
     end
 
     test "rejects requests with no bearer token", %{conn: conn} do
@@ -197,7 +284,13 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
           packet: %{
             "format_version" => 1,
             "title" => "Packet v1",
-            "summary" => "Initial packet."
+            "summary" => "Initial packet.",
+            "sections" => [
+              %{
+                "title" => "S",
+                "rows" => [%{"kind" => "hunk", "path" => "foo", "hunk_index" => 1}]
+              }
+            ]
           }
         })
 
@@ -206,7 +299,7 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
           "--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+newer\n"
 
       {:ok, ps2} =
-        ReviewsContext.append_patchset(review, %{
+        ReviewsContext.append_patchset_unchecked(review, %{
           base_sha: "cafef00d",
           branch_name: "carey/foo",
           raw_diff: diff_v2
@@ -315,6 +408,116 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
          %{conn: conn, review: review} do
       conn = get(conn, ~p"/api/v1/reviews/#{review.slug}?patchset=99")
       assert %{"errors" => %{"detail" => "Patchset not found"}} = json_response(conn, 404)
+    end
+  end
+
+  describe "GET /api/v1/reviews" do
+    import Reviews.ReviewIndexFixtures
+
+    setup do
+      carey = user!("carey-list")
+      conner = user!("conner-list")
+      agent = agent!(carey, "codex")
+
+      {:ok, _token, human_raw} = Accounts.mint_token(carey, %{"name" => "laptop"})
+
+      {:ok, _token, agent_raw} =
+        Accounts.mint_token(carey, %{"name" => "agent", "identity_id" => agent.id})
+
+      mine = review!(carey, "Speed up lookup", at: at(30))
+      by_agent = review!(agent, "Agent cleanup", at: at(20))
+      involved = review!(conner, "Billing export", at: at(10))
+      comment!(involved, carey)
+      _hidden = review!(conner, "Not shared with carey", at: at(5))
+
+      %{
+        human_raw: human_raw,
+        agent_raw: agent_raw,
+        mine: mine,
+        by_agent: by_agent,
+        involved: involved
+      }
+    end
+
+    defp list(conn, raw, params \\ %{}) do
+      conn
+      |> put_req_header("authorization", "Bearer #{raw}")
+      |> get(~p"/api/v1/reviews", params)
+    end
+
+    test "requires a token", %{conn: conn} do
+      assert conn |> get(~p"/api/v1/reviews") |> json_response(401)
+    end
+
+    test "human token lists reviews for all of the owner's identities", ctx do
+      body = ctx.conn |> list(ctx.human_raw) |> json_response(200)
+
+      assert Enum.map(body["reviews"], & &1["slug"]) == [
+               ctx.involved.slug,
+               ctx.by_agent.slug,
+               ctx.mine.slug
+             ]
+
+      assert body["limit"] == 25
+      assert body["offset"] == 0
+      assert body["next_offset"] == nil
+
+      [involved | _] = body["reviews"]
+      assert involved["role"] == "involved"
+      assert involved["title"] == "Billing export"
+      assert involved["url"] =~ "/r/#{ctx.involved.slug}"
+      assert involved["author"]["handle"] == "conner-list"
+      assert involved["patchset_count"] == 1
+      assert involved["latest_patchset_number"] == 1
+      assert involved["thread_count"] == 1
+      assert involved["open_thread_count"] == 1
+      assert involved["has_new_patchset"] == false
+      assert is_binary(involved["updated_at"])
+    end
+
+    test "agent token lists only the agent's reviews", ctx do
+      body = ctx.conn |> list(ctx.agent_raw) |> json_response(200)
+      assert Enum.map(body["reviews"], & &1["slug"]) == [ctx.by_agent.slug]
+    end
+
+    test "filters and pagination", ctx do
+      body = ctx.conn |> list(ctx.human_raw, %{"role" => "authored"}) |> json_response(200)
+      assert Enum.map(body["reviews"], & &1["slug"]) == [ctx.by_agent.slug, ctx.mine.slug]
+
+      body = ctx.conn |> list(ctx.human_raw, %{"author" => "codex"}) |> json_response(200)
+      assert Enum.map(body["reviews"], & &1["slug"]) == [ctx.by_agent.slug]
+
+      body = ctx.conn |> list(ctx.human_raw, %{"q" => "lookup"}) |> json_response(200)
+      assert Enum.map(body["reviews"], & &1["slug"]) == [ctx.mine.slug]
+
+      body = ctx.conn |> list(ctx.human_raw, %{"status" => "open"}) |> json_response(200)
+      assert Enum.map(body["reviews"], & &1["slug"]) == [ctx.involved.slug]
+
+      body = ctx.conn |> list(ctx.human_raw, %{"limit" => "2"}) |> json_response(200)
+      assert length(body["reviews"]) == 2
+      assert body["next_offset"] == 2
+
+      body =
+        ctx.conn |> list(ctx.human_raw, %{"limit" => "2", "offset" => "2"}) |> json_response(200)
+
+      assert Enum.map(body["reviews"], & &1["slug"]) == [ctx.mine.slug]
+      assert body["next_offset"] == nil
+    end
+
+    test "bad filter values return 400 with a message per param", ctx do
+      body =
+        ctx.conn
+        |> list(ctx.human_raw, %{
+          "role" => "boss",
+          "limit" => "0",
+          "offset" => "9223372036854775808"
+        })
+        |> json_response(400)
+
+      assert body["errors"]["role"] =~ "must be one of"
+      assert body["errors"]["limit"] == "must be 1 or more"
+      # One past PostgreSQL's bigint OFFSET; the query would raise instead.
+      assert body["errors"]["offset"] == "must be 9223372036854775807 or less"
     end
   end
 end

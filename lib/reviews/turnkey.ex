@@ -31,8 +31,8 @@ defmodule Reviews.Turnkey do
   keeps the key from raw-signing, so a raw signature over the same claims
   would look the same.
   """
-  alias Reviews.OAuth.{Clients, JOSE}
-  alias Reviews.Poppy
+  alias Gatekeep.{Client, Clients, JOSE}
+  alias Reviews.{OAuth, Poppy}
 
   @delegation_profile "turnkey.io/poppy-delegation/v1"
   @max_delegation_lifetime 24 * 60 * 60
@@ -80,7 +80,7 @@ defmodule Reviews.Turnkey do
 
   @doc """
   Verifies `jwt` as a Turnkey `poppy-delegation/v1` delegation for `client`,
-  a Turnkey-hosted client from `Reviews.OAuth.Clients.fetch/1`, vouching for
+  a Turnkey-hosted client from `Gatekeep.Clients.fetch/2`, vouching for
   the session key whose RFC 7638 thumbprint is `session_key`.
 
   Checks the client's URLs, the exact header and claims of the profile, the
@@ -89,7 +89,7 @@ defmodule Reviews.Turnkey do
   24 hours, the times, and the `jti` format. `opts[:now]` is the current Unix
   time. Every failure is `{:error, reason}` with a specific atom.
   """
-  @spec verify_delegation(String.t(), Clients.client(), String.t(), keyword()) ::
+  @spec verify_delegation(String.t(), Client.t(), String.t(), keyword()) ::
           {:ok, map()} | {:error, atom()}
   def verify_delegation(jwt, client, session_key, opts \\ []) do
     now = Keyword.get_lazy(opts, :now, fn -> System.system_time(:second) end)
@@ -146,7 +146,7 @@ defmodule Reviews.Turnkey do
 
   # The profile signs with a P-256 key; other key types in the set don't count.
   defp identity_key(client, kid) do
-    case Clients.key(client, kid) do
+    case Clients.key(OAuth.config(), client, kid) do
       {:ok, %{"kty" => "EC", "crv" => "P-256"} = key} -> {:ok, key}
       _ -> {:error, :unknown_key}
     end

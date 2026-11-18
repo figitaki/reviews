@@ -10,6 +10,7 @@ defmodule Reviews.ReviewView do
   alias Reviews.Accounts.Identity
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
+  alias Reviews.Policy
   alias Reviews.ReviewHunks
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.{File, Patchset, Review}
@@ -36,6 +37,8 @@ defmodule Reviews.ReviewView do
   end
 
   def snapshot(%Review{} = review, viewer, opts \\ []) do
+    # The author decides what the viewer may do; load it once for every thread.
+    review = Reviews.Repo.preload(review, :author)
     patchsets = ReviewsContext.list_patchsets(review)
     selected = pick_patchset(patchsets, Keyword.get(opts, :patchset_number))
 
@@ -106,16 +109,33 @@ defmodule Reviews.ReviewView do
       hunks_by_path: hunks_by_path,
       packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
-      published_threads: project_threads(review, patchsets, selected),
+      published_threads:
+        review
+        |> project_threads(patchsets, selected)
+        |> Enum.map(
+          &Map.put(
+            &1,
+            :can_update_status,
+            Policy.can?(viewer, {:update_thread_status, &1}, review)
+          )
+        ),
       viewer: viewer
     }
   end
 
-  defp project_threads(_review, _patchsets, nil), do: []
+  @doc """
+  Published threads projected onto `selected`, without building file or hunk
+  payloads. `patchsets` needs `id` and `number`; raw diffs are loaded only for
+  the selected revision and the older revisions threads started on. Pass
+  `threads` to project one page instead of every thread of the review.
+  """
+  def project_threads(review, patchsets, selected, threads \\ nil)
 
-  defp project_threads(review, patchsets, selected) do
+  def project_threads(_review, _patchsets, nil, _threads), do: []
+
+  def project_threads(review, patchsets, selected, threads) do
     by_id = Map.new(patchsets, &{&1.id, &1})
-    threads = Threads.list_published_threads(review.id)
+    threads = threads || Threads.list_published_threads(review.id)
 
     historical_origins =
       threads
@@ -127,7 +147,7 @@ defmodule Reviews.ReviewView do
       if historical_origins == [] do
         %{}
       else
-        Map.new([selected | historical_origins], &{&1.id, Reviews.Anchoring.index(&1)})
+        Map.new([selected | historical_origins], &{&1.id, Reviews.Anchoring.index(with_diff(&1))})
       end
 
     Enum.flat_map(threads, fn thread ->
@@ -161,6 +181,9 @@ defmodule Reviews.ReviewView do
       end
     end)
   end
+
+  defp with_diff(%Patchset{raw_diff: raw_diff} = patchset) when is_binary(raw_diff), do: patchset
+  defp with_diff(%{id: id}), do: ReviewsContext.get_patchset!(id)
 
   defp file_diff_meta(_files, nil), do: []
 
@@ -219,6 +242,7 @@ defmodule Reviews.ReviewView do
       resolved_by: user_to_payload(thread.resolved_by),
       inserted_at: encode_dt(thread.inserted_at),
       author: user_to_payload(thread.author),
+      can_update_status: Map.get(thread, :can_update_status, false),
       comments:
         Enum.map(thread.comments || [], fn c ->
           %{
@@ -233,12 +257,13 @@ defmodule Reviews.ReviewView do
     }
   end
 
+  @doc "Public verification metadata. Never exposes pairwise subjects, sessions or key thumbprints."
   # Only what the adapter verified, plus the agent's own claims labelled as
   # such. The pairwise User ID, Session, and key thumbprint stay server-side;
   # `token_binding` says only whether the token was bound to a DPoP key, and is
   # nil for comments recorded before Reviews kept that.
-  defp attribution_payload(%{attribution: %{"provider" => "poppy"} = a} = comment) do
-    link = Map.get(comment, :identity_link)
+  def attribution_payload(%{attribution: %{"provider" => "poppy"} = a} = comment) do
+    grant = Map.get(comment, :oauth_grant)
 
     %{
       provider: "poppy",
@@ -249,7 +274,7 @@ defmodule Reviews.ReviewView do
       agent_id_claimed: is_binary(a["agent_id_claimed"]),
       owner_username: a["owner_username"],
       approved_at: a["approved_at"],
-      link_revoked: match?(%{revoked_at: %DateTime{}}, link),
+      link_revoked: match?(%{revoked_at: %DateTime{}}, grant),
       token_binding: token_binding(a),
       delegation_signed_by: a["delegation_signed_by"],
       turnkey_organization_id: a["turnkey_organization_id"],
@@ -257,7 +282,7 @@ defmodule Reviews.ReviewView do
     }
   end
 
-  defp attribution_payload(_comment), do: nil
+  def attribution_payload(_comment), do: nil
 
   defp token_binding(%{"access_token_dpop_key" => jkt}) when is_binary(jkt), do: "dpop"
   defp token_binding(%{"access_token_dpop_key" => nil}), do: "bearer"

@@ -6,14 +6,64 @@ defmodule ReviewsWeb.Api.ReviewController do
   user should open. Bearer-token auth via `Plugs.RequireApiToken` (mounted
   in the router pipeline).
 
+  `GET /api/v1/reviews` lists the reviews the token's actor wrote or took
+  part in (see `Reviews.ReviewIndex`). Bearer-token auth. A human-identity
+  token lists reviews for all of the owner's identities. An agent-identity
+  token lists only that agent's reviews.
+
   `GET /api/v1/reviews/:slug` is the read counterpart — public (matches the
   anonymous web view) and returns a JSON snapshot intended for agents
   consuming reviews from the CLI.
   """
   use ReviewsWeb, :controller
 
-  alias Reviews.{ReviewNavigation, ReviewPacket, ReviewView}
+  alias Reviews.{ReviewIndex, ReviewNavigation, ReviewPacket, ReviewView}
   alias Reviews.Reviews, as: ReviewsContext
+
+  @doc "GET /api/v1/reviews"
+  def index(conn, params) do
+    case ReviewIndex.normalize_filters(params) do
+      {:ok, filters} ->
+        viewer = list_viewer(conn.assigns.current_user, conn.assigns.current_identity)
+        result = ReviewsContext.list_reviews(viewer, filters)
+
+        json(conn, %{
+          reviews: Enum.map(result.entries, &render_list_entry/1),
+          limit: result.limit,
+          offset: result.offset,
+          next_offset: result.next_offset
+        })
+
+      {:error, errors} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{errors: errors})
+    end
+  end
+
+  defp list_viewer(user, %{kind: "human"}), do: user
+  defp list_viewer(_user, identity), do: identity
+
+  defp render_list_entry(entry) do
+    review = entry.review
+
+    %{
+      slug: review.slug,
+      title: review.title,
+      url: url(~p"/r/#{review.slug}"),
+      author: ReviewsWeb.Payloads.identity(review.author),
+      role: entry.role,
+      patchset_count: entry.patchset_count,
+      latest_patchset_number: entry.latest_patchset_number,
+      last_pushed_at: entry.last_pushed_at,
+      updated_at: entry.updated_at,
+      thread_count: entry.thread_count,
+      open_thread_count: entry.open_thread_count,
+      last_activity_at: entry.last_activity_at,
+      has_new_patchset: entry.has_new_patchset,
+      created_at: review.inserted_at
+    }
+  end
 
   @doc "GET /api/v1/reviews/:slug"
   def show(conn, %{"slug" => slug} = params) do
@@ -25,12 +75,12 @@ defmodule ReviewsWeb.Api.ReviewController do
       {:error, :not_found} ->
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "Review not found"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
 
       {:error, :patchset_not_found} ->
         conn
         |> put_status(:not_found)
-        |> json(%{errors: %{detail: "Patchset not found"}})
+        |> json(ReviewsWeb.ApiErrors.detail(:patchset_not_found, "Patchset not found"))
     end
   end
 
@@ -94,37 +144,8 @@ defmodule ReviewsWeb.Api.ReviewController do
   end
 
   defp render_thread(thread) do
-    %{
-      id: thread.id,
-      file_path: thread.file_path,
-      side: thread.side,
-      line_hint: get_in(thread.anchor || %{}, ["line_number_hint"]),
-      status: thread.status,
-      author: render_identity(thread.author),
-      resolved_by: render_identity(thread.resolved_by),
-      resolved_at: thread.resolved_at,
-      comments:
-        Enum.map(thread.comments || [], fn c ->
-          %{
-            body: c.body,
-            author: render_identity(c.author),
-            inserted_at: c.inserted_at
-          }
-        end)
-    }
-  end
-
-  defp render_identity(nil), do: nil
-
-  defp render_identity(identity) do
-    %{
-      id: identity.id,
-      kind: identity.kind,
-      handle: identity.handle,
-      username: identity.handle,
-      display_name: identity.display_name,
-      avatar_url: identity.avatar_url
-    }
+    ReviewsWeb.Payloads.thread(thread)
+    |> Map.put(:comments, Enum.map(thread.comments || [], &ReviewsWeb.Payloads.comment/1))
   end
 
   @doc "POST /api/v1/reviews"
@@ -146,15 +167,17 @@ defmodule ReviewsWeb.Api.ReviewController do
       {:error, _step, changeset, _} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: format_changeset(changeset)})
+        |> json(ReviewsWeb.ApiErrors.changeset(changeset))
 
       {:error, %Ecto.Changeset{} = changeset} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: format_changeset(changeset)})
+        |> json(ReviewsWeb.ApiErrors.changeset(changeset))
 
       _ ->
-        conn |> put_status(:bad_request) |> json(%{errors: %{detail: "Invalid request"}})
+        conn
+        |> put_status(:bad_request)
+        |> json(ReviewsWeb.ApiErrors.detail(:invalid_request, "Invalid request"))
     end
   end
 
@@ -170,12 +193,4 @@ defmodule ReviewsWeb.Api.ReviewController do
   end
 
   defp normalize_params(_), do: nil
-
-  defp format_changeset(%Ecto.Changeset{} = cs) do
-    Ecto.Changeset.traverse_errors(cs, fn {msg, opts} ->
-      Regex.replace(~r/%{(\w+)}/, msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
-  end
 end
