@@ -40,6 +40,9 @@ defmodule ReviewsWeb.ReviewListLiveTest do
     assert has_element?(view, "#review-#{involved.id} .rl-author", "@conner")
     assert has_element?(view, "#review-#{involved.id} .rl-badge-open", "1 open")
     refute has_element?(view, "#review-#{mine.id} .rl-badge-open")
+    # Open threads leave a row unread; a row with nothing waiting is read.
+    assert has_element?(view, "#review-#{mine.id}.is-read")
+    refute has_element?(view, "#review-#{involved.id}.is-read")
     refute has_element?(view, "#review-#{hidden.id}")
     refute has_element?(view, "#review-pager")
   end

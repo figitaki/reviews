@@ -274,6 +274,21 @@ defmodule ReviewsWeb.ReviewListLive do
         transition: background-color 160ms ease;
       }
 
+      /* Read rows (nothing waiting for you) step back: a flatter
+         background and a regular-weight title. Unread rows keep the panel
+         and the semibold title. */
+      .rl-row.is-read {
+        background: color-mix(in srgb, var(--ds-panel) 40%, var(--ds-bg));
+      }
+
+      .rl-row.is-read .rl-title {
+        font-weight: var(--weight-regular);
+      }
+
+      .rl-row.is-read .rl-title a {
+        color: color-mix(in srgb, var(--ds-text) 78%, var(--ds-muted));
+      }
+
       .rl-row + .rl-row {
         border-top: var(--border-hair) solid var(--ds-line);
       }
@@ -566,7 +581,11 @@ defmodule ReviewsWeb.ReviewListLive do
       </script>
 
       <ul id="review-list" class="rl-list" phx-update="stream" aria-labelledby="reviews-title">
-        <li :for={{dom_id, entry} <- @streams.reviews} id={dom_id} class="rl-row">
+        <li
+          :for={{dom_id, entry} <- @streams.reviews}
+          id={dom_id}
+          class={["rl-row", read?(entry) && "is-read"]}
+        >
           <h2 class="rl-title">
             <.link navigate={~p"/r/#{entry.review.slug}"}>{entry.review.title}</.link>
           </h2>
@@ -685,6 +704,11 @@ defmodule ReviewsWeb.ReviewListLive do
     </.link>
     """
   end
+
+  # Unread means something is waiting for you: a patchset newer than your
+  # last action, or open threads. Nothing records opening a review, so this
+  # is the closest signal the index has.
+  defp read?(entry), do: not entry.has_new_patchset and entry.open_thread_count == 0
 
   # A second tap on the selected status chip turns that filter off.
   defp toggle(value, value), do: "all"
