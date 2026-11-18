@@ -466,7 +466,7 @@ defmodule ReviewsWeb.DesignLive do
             <li>
               Sign in with GitHub always uses <code>&lt;.ds_github_button&gt;</code>, which shows
               the GitHub mark. Keep the mark unchanged and in one colour with high contrast, as
-              GitHub's brand rules ask.
+              GitHub's brand rules ask. The top bar's primary Sign in stays text only.
             </li>
           </:rules>
           <div class="dc-icons">

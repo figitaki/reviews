@@ -173,12 +173,15 @@ defmodule ReviewsWeb.Layouts do
               <span class="l-nav-user-name">{@current_user.username}</span>
             </.link>
           <% else %>
-            <.ds_github_button
+            <%!-- The top bar's call to action stays text only; sign-in buttons in
+            the page body carry the GitHub mark. --%>
+            <.ds_button
               href={~p"/auth/github?#{[return_to: @return_to]}"}
+              variant="primary"
               class="l-nav-signin"
             >
               Sign in
-            </.ds_github_button>
+            </.ds_button>
           <% end %>
         </nav>
       </div>
