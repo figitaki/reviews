@@ -125,6 +125,12 @@ later fixes continue toward 0.0.2.
   resolving work there but save nothing. `/design` now also shows every
   button and field state and says how each one behaves.
 
+- The design catalog also shows the app shell (both top bars and the account
+  menu), the Pierre diff with comments, the section decision panel in each
+  state, and the phone floating buttons with the decision button. A new
+  `/design/layouts` frames the real list, review and Settings pages at desktop
+  and phone widths. All of it stays off in production.
+
 - Review list (#47). `/reviews` on the web, `GET /api/v1/reviews` in the API,
   and `reviews list` in the CLI. The list has only reviews you wrote or took
   part in, with filters for role, status, author, and title or slug. A token

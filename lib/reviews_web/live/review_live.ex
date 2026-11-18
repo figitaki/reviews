@@ -668,7 +668,8 @@ defmodule ReviewsWeb.ReviewLive do
   attr :current_user, :any, default: nil
   attr :return_to, :string, default: "/"
 
-  defp user_menu(%{current_user: nil} = assigns) do
+  # Public for the design catalog (/design/components).
+  def user_menu(%{current_user: nil} = assigns) do
     ~H"""
     <a
       href={~p"/auth/github?#{[return_to: @return_to]}"}
@@ -679,7 +680,7 @@ defmodule ReviewsWeb.ReviewLive do
     """
   end
 
-  defp user_menu(assigns) do
+  def user_menu(assigns) do
     ~H"""
     <div class="dropdown dropdown-end">
       <button

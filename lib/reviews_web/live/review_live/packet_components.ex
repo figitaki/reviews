@@ -512,7 +512,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :show_nav, :boolean, default: false
   attr :editing, :boolean, default: false
 
-  defp packet_section_decision(assigns) do
+  # Public for the component playground (/design/components).
+  def packet_section_decision(assigns) do
     ~H"""
     <footer
       id={"packet-section-#{@section.index}-decision"}

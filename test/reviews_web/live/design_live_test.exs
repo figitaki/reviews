@@ -53,11 +53,57 @@ defmodule ReviewsWeb.DesignLiveTest do
     assert has_element?(phone, "#dcp-opened", "thread 101")
   end
 
+  test "the playground's diff and section decision answer like the review page", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/design/components")
+    path = ReviewsWeb.DesignFixtures.file_path()
+
+    assert has_element?(view, "#dcp-shell .l-topbar")
+    assert has_element?(view, "#dcp-shell .dropdown a[href='/settings']")
+    assert has_element?(view, "#dcp-hunk-diff[phx-hook=DiffRenderer]")
+
+    # A new line comment comes back as a fourth thread, without saving.
+    render_hook(view, "create_comment", %{
+      "file_path" => path,
+      "side" => "new",
+      "body" => "Why one retry?",
+      "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 39}
+    })
+
+    assert_push_event(view, "threads_updated:" <> ^path, %{threads: threads})
+    assert length(threads) == 4
+    assert List.last(threads).comments |> hd() |> Map.fetch!(:body) == "Why one retry?"
+
+    # A reply joins its thread.
+    render_hook(view, "create_comment", %{"thread_id" => 103, "body" => "Agreed."})
+    assert_push_event(view, "threads_updated:" <> ^path, %{threads: threads})
+    assert length(Enum.find(threads, &(&1.id == 103)).comments) == 2
+
+    render_hook(view, "toggle_hunk_diff", %{"hunk_id" => "dcp-hunk"})
+    refute has_element?(view, "#dcp-hunk-summary.is-open")
+
+    # Approving, then choosing Approve again, clears the decision.
+    approve = "#packet-section-0-decision button.is-approved"
+    view |> element(approve) |> render_click()
+    assert has_element?(view, "#packet-section-0-decision.is-approved")
+    view |> element(approve) |> render_click()
+    assert has_element?(view, "#packet-section-0-decision.is-pending")
+  end
+
+  test "page layouts frame the real list, review and settings pages", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/design/layouts")
+
+    for {id, src} <- [list: "/reviews", review: "/r/demo-review", settings: "/settings"],
+        width <- ~w(desktop phone) do
+      assert has_element?(view, "#dcl-#{id}-#{width}[src='#{src}']")
+    end
+  end
+
   test "returns 404 when the catalog is off", %{conn: conn} do
     Application.put_env(:reviews, :design_catalog, false)
     on_exit(fn -> Application.put_env(:reviews, :design_catalog, true) end)
 
     assert_error_sent 404, fn -> get(conn, ~p"/design") end
     assert_error_sent 404, fn -> get(conn, ~p"/design/components") end
+    assert_error_sent 404, fn -> get(conn, ~p"/design/layouts") end
   end
 end

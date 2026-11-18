@@ -560,6 +560,9 @@ defmodule ReviewsWeb.DesignLive do
       <.ds_chip navigate={~p"/design/components"} selected={@current == :components}>
         Components
       </.ds_chip>
+      <.ds_chip navigate={~p"/design/layouts"} selected={@current == :layouts}>
+        Page layouts
+      </.ds_chip>
     </nav>
     """
   end

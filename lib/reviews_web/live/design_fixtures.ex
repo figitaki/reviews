@@ -41,15 +41,113 @@ defmodule ReviewsWeb.DesignFixtures do
           }
         )
       ]),
-      thread(102, "resolved", 7, "old", sam, [
+      thread(102, "resolved", 41, "old", sam, [
         comment(1005, sam, ago(now, 3 * 86_400), "This import is unused."),
         comment(1006, carey, ago(now, 3 * 86_400 - 600), "Removed, thanks.")
       ])
       |> Map.merge(%{resolved_by: carey, resolved_at: ago(now, 3 * 86_400 - 600)}),
-      thread(103, "open", 88, "new", carey, [
+      thread(103, "open", 44, "new", carey, [
         comment(1007, carey, ago(now, 90), "Nit: `relocate/3` reads better than `move/3`.")
       ])
     ]
+  end
+
+  @diff """
+  diff --git a/lib/reviews/threads.ex b/lib/reviews/threads.ex
+  --- a/lib/reviews/threads.ex
+  +++ b/lib/reviews/threads.ex
+  @@ -38,6 +38,9 @@ defmodule Reviews.Threads do
+     def relocate(thread, patchset, opts \\\\ []) do
+  -    case Anchoring.relocate(thread.anchor, patchset) do
+  +    retries = Keyword.get(opts, :retries, 1)
+  +
+  +    case Anchoring.relocate(thread.anchor, patchset) do
+         {:ok, anchor} -> update_anchor(thread, anchor)
+  -      {:error, :outdated} -> mark_outdated(thread)
+  +      {:error, :outdated} when retries > 0 -> relocate(thread, patchset, retries: retries - 1)
+  +      {:error, :outdated} -> mark_outdated(thread)
+       end
+     end
+  """
+
+  @doc "The changed file the sample threads sit on, shaped like the review page's file diffs."
+  def file do
+    %{id: 1, path: @file_path, status: "modified", raw_diff: @diff}
+  end
+
+  @doc "One hunk of `file/0`, shaped like `Reviews.ReviewHunks` output."
+  def hunk(viewed? \\ false) do
+    %{
+      file_path: @file_path,
+      display_raw_diff: @diff,
+      hunk_header: "@@ -38,6 +38,9 @@",
+      hunk_index: 1,
+      line_start: 38,
+      line_end: 46,
+      display_additions: 4,
+      display_deletions: 2,
+      row_ref: "design-row-1",
+      hunk_fingerprint: "design",
+      viewed?: viewed?
+    }
+  end
+
+  @doc "The signed-in viewer for the app shell and new comments."
+  def viewer, do: %{identity(4, "you", "You") | avatar_url: nil} |> Map.put(:username, "you")
+
+  @doc "A packet section in each decision state."
+  def section(index, status, title) do
+    %{
+      index: index,
+      title: title,
+      status: status,
+      effective_status: status,
+      decision_history: if(status != "pending", do: "Decided by @carey on v3.")
+    }
+  end
+
+  @doc """
+  Applies a `create_comment` payload from the diff to the sample threads, as
+  the review page would after saving it: a reply joins its thread, anything
+  else starts one.
+  """
+  def add_comment(threads, %{"body" => body} = params, author, now \\ DateTime.utc_now()) do
+    next_id =
+      Enum.max(Enum.flat_map(threads, &[&1.id | Enum.map(&1.comments, fn c -> c.id end)])) + 1
+
+    comment = comment(next_id, author, DateTime.truncate(now, :second), body)
+
+    case Enum.find(threads, &(&1.id == params["thread_id"])) do
+      nil ->
+        new =
+          thread(
+            next_id,
+            "open",
+            params["thread_anchor"]["line_number_hint"],
+            params["side"],
+            author,
+            [
+              comment
+            ]
+          )
+          |> Map.put(:anchor, params["thread_anchor"])
+
+        threads ++ [new]
+
+      thread ->
+        Enum.map(threads, fn
+          %{id: id} = t when id == thread.id -> %{t | comments: t.comments ++ [comment]}
+          t -> t
+        end)
+    end
+  end
+
+  @doc "Sets a sample thread's status, as `update_thread_status` would."
+  def set_status(threads, id, status) do
+    Enum.map(threads, fn
+      %{id: ^id} = t -> %{t | status: status}
+      t -> t
+    end)
   end
 
   defp identity(id, handle, name) do
