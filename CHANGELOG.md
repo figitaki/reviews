@@ -12,7 +12,15 @@ later fixes continue toward 0.0.2.
   in the bottom-right corner with its log above it, as on tablets. The log
   starts closed (an open choice is still remembered in this browser) and
   closes on a tap outside it, and the section decision bar stops short of the
-  button above 640px.
+  button above 640px. Guide diffs span the content width; the Guide no longer
+  pads its right side to balance the section rail. Prose keeps its reading
+  width.
+
+- The section decision collapses on every screen width, as on phones: one
+  button shows the current decision (or "Decide") and expands the full bar;
+  Escape or the close button collapses it. Signed-out readers get the same
+  control, and expanding it offers "Sign in to decide", which returns to the
+  review with that section and its decision open.
 
 - Add stable API and MCP error codes while retaining legacy fields and Poppy authentication responses; teach the CLI to read them.
 

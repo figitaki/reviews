@@ -376,19 +376,30 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       sign_in_href = ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}"]}"
+      assert has_element?(view, ~s|.review-button[href="#{sign_in_href}"]|, "Sign in")
+
+      # Signed-out readers get the collapsible decision; expanded, it offers
+      # sign-in that returns to this section.
+      section_sign_in_href =
+        ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}?#{[section: 0]}"]}"
+
+      refute has_element?(view, "#packet-section-0-decision.is-readonly")
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
+      view |> element("#packet-section-0-decision-toggle") |> render_click()
+      assert has_element?(view, "#packet-section-0-decision.is-editing")
 
       assert has_element?(
                view,
-               ~s|#packet-section-0-decision .review-packet-section-signin[href="#{sign_in_href}"]|,
-               "Sign in to record a section decision"
+               ~s|#packet-section-0-decision-signin[href="#{section_sign_in_href}"]|,
+               "Sign in to decide"
              )
 
-      assert has_element?(view, ~s|.review-button[href="#{sign_in_href}"]|, "Sign in")
-
-      # Without a decision to record, the footer stays inline: no phone toggle.
-      assert has_element?(view, "#packet-section-0-decision.is-readonly")
-      refute has_element?(view, "#packet-section-0-decision-toggle")
       refute has_element?(view, "#packet-section-0-decision [aria-pressed]")
+
+      # Coming back from sign-in opens that section with its decision expanded.
+      {:ok, returned, _html} = live(build_conn(), ~p"/r/#{packet_review.slug}?#{[section: 0]}")
+      assert has_element?(returned, "#packet-section-0.is-open")
+      assert has_element?(returned, "#packet-section-0-decision.is-editing")
 
       assert has_element?(view, "#review-packet .review-hunk-card")
       refute has_element?(view, "#review-packet .review-hunk-summary")
@@ -1699,9 +1710,9 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       assert has_element?(view, "#packet-section-0-decision [aria-pressed=false]", "Approve")
-      view |> element("#packet-section-0-decision button", "Skip") |> render_click()
+      view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
       assert has_element?(view, "#packet-section-0-decision.is-ignored", "Skipped")
-      view |> element("#packet-section-0-decision button", "Skip") |> render_click()
+      view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
       assert has_element?(view, "#packet-section-0-decision.is-pending", "Pending")
       view |> element("#packet-section-0-decision-toggle") |> render_click()
 
@@ -1717,7 +1728,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#packet-section-0-decision-toggle") |> render_click()
       assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
       view |> element("#packet-section-0-decision-toggle") |> render_click()
-      view |> element("#packet-section-0-decision button", "Approve") |> render_click()
+      view |> element("#packet-section-0-decision-controls button", "Approve") |> render_click()
       assert has_element?(view, "#packet-section-0.is-open")
 
       assert has_element?(view, "#packet-section-0-decision.is-approved", "Approved")
@@ -1756,7 +1767,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       view |> element("#packet-section-0-decision-toggle") |> render_click()
       assert has_element?(view, "#packet-section-0-decision [aria-pressed=true]", "Approve")
-      view |> element("#packet-section-0-decision button", "Approve") |> render_click()
+      view |> element("#packet-section-0-decision-controls button", "Approve") |> render_click()
       assert has_element?(view, "#packet-section-0.is-open")
       refute has_element?(view, "#packet-section-0 .review-section-action.is-active")
 
@@ -1767,7 +1778,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       view |> element("#packet-section-0-decision-toggle") |> render_click()
-      view |> element("#packet-section-0-decision button", "Request changes") |> render_click()
+      view |> element("#packet-section-0-decision-controls button", "Request changes") |> render_click()
       assert has_element?(view, "#packet-section-0-decision.is-denied", "Changes requested")
 
       assert has_element?(
@@ -1783,7 +1794,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
       view |> element("#packet-section-0-decision-toggle") |> render_click()
-      view |> element("#packet-section-0-decision button", "Approve") |> render_click()
+      view |> element("#packet-section-0-decision-controls button", "Approve") |> render_click()
       assert has_element?(view, "#packet-section-0-decision.is-approved", "Approved")
 
       {:ok, _ps2} =
@@ -1856,7 +1867,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert has_element?(latest_view, "#packet-section-0.is-open")
 
       latest_view |> element("#packet-section-0-decision-toggle") |> render_click()
-      latest_view |> element("#packet-section-0-decision button", "Skip") |> render_click()
+      latest_view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
 
       assert has_element?(
                latest_view,
@@ -1922,7 +1933,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       carried_view |> element("#packet-section-0-decision-toggle") |> render_click()
-      carried_view |> element("#packet-section-0-decision button", "Skip") |> render_click()
+      carried_view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
       refute has_element?(carried_view, "#packet-section-0 .review-section-action.is-active")
     end
   end
