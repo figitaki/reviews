@@ -6,6 +6,12 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The design catalog also shows the app shell (both top bars and the account
+  menu), the Pierre diff with comments, the section decision panel in each
+  state, and the phone floating buttons with the decision button. A new
+  `/design/layouts` frames the real list, review and Settings pages at desktop
+  and phone widths. All of it stays off in production.
+
 - Packets have a default section order: the core change first, then what
   follows from it (callers, schema, tests), then glue (config, generated
   files, lockfiles, docs). The writing-review-packets skill shows it as the

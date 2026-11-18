@@ -446,7 +446,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :show_nav, :boolean, default: false
   attr :editing, :boolean, default: false
 
-  defp packet_section_decision(assigns) do
+  # Public for the component playground (/design/components).
+  def packet_section_decision(assigns) do
     # Signed-out readers get the same collapsible control, with a sign-in CTA.
     assigns =
       assigns

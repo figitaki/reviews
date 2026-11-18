@@ -71,6 +71,7 @@ defmodule ReviewsWeb.Router do
     live "/design", DesignLive, :index
     live "/design/components", DesignComponentsLive, :index
     live "/design/components/phone", DesignComponentsLive, :phone
+    live "/design/layouts", DesignLayoutsLive, :index
   end
 
   scope "/", ReviewsWeb do
