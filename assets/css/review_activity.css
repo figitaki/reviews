@@ -52,7 +52,11 @@
 }
 .review-activity-panel[open] .review-activity-close { display: block; }
 
-.review-activity[hidden] { display: none; }
+/* No comments renders nothing, except on phones, where the Comments and
+   Sections buttons always show. */
+@media (min-width: 641px) {
+  .review-activity[data-empty] { display: none; }
+}
 
 .review-activity-count {
   color: var(--ds-muted);
@@ -172,6 +176,12 @@
   outline-offset: -2px;
 }
 
+/* Collapsed on phones and wide screens, the rail is just the icon and count;
+   the label stays for screen readers. */
+@media (max-width: 640px), (min-width: 1200px) {
+  .review-activity-panel:not([open]) .review-activity-label { @apply sr-only; }
+}
+
 /* Wide screens: the aside reserves a column beside the code, and the log is
    pinned to the lower right of the screen within it, so it never covers
    code however long the page is. */
@@ -193,16 +203,116 @@
     box-shadow: var(--shadow-panel);
   }
   .review-activity-panel:not([open]) .review-activity-summary { justify-content: center; padding: 0; }
-  /* Collapsed, the rail is just the icon and count. */
-  .review-activity-panel:not([open]) .review-activity-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
   .review-activity-log {
     max-height: min(60dvh, calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 120px));
+  }
+}
+
+/* The Sections button exists only on phones. */
+.review-quick-button { display: none; }
+
+/* Phones: icon-only floating buttons, Sections (Guide only) above Comments,
+   stacked above the section decision button and centred on it. */
+@media (max-width: 640px) {
+  .review-activity {
+    --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
+    --review-quick-right: calc(16px + env(safe-area-inset-right));
+
+    position: fixed;
+    right: var(--review-quick-right);
+    bottom: var(--review-quick-bottom);
+    z-index: var(--z-fab);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+  }
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
+    --review-quick-right: calc(16px + 4px + env(safe-area-inset-right));
+    --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
+  }
+  /* Sections scrolls the Guide map in below the sticky review toolbar, so its
+     close button stays visible. */
+  #review-guide-shell { scroll-margin-top: var(--rev-header-h, 48px); }
+  /* The open decision panel spans the screen. */
+  .review-page:has(.review-section-decision.is-editing) .review-activity { display: none; }
+  /* Leave room so the buttons never cover the last lines of code. The Guide
+     grid already reserves space for the decision button. */
+  .review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
+    padding-bottom: 72px;
+  }
+
+  .review-quick-button,
+  .review-activity-panel:not([open]) {
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--review-line-strong, var(--ds-line));
+    border-radius: var(--radius-lg);
+    background: var(--ds-panel-raised, var(--ds-panel));
+    color: var(--ds-text);
+    box-shadow: var(--shadow-float);
+  }
+  .review-quick-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+  }
+  .review-page:not(:has([data-guide-flyout-toggle])) .review-quick-button { display: none; }
+  .review-quick-icon { width: 22px; height: 22px; }
+  .review-quick-button:focus-visible {
+    outline: 2px solid var(--ds-focus);
+    outline-offset: 2px;
+  }
+
+  /* Closed, the comments panel is the Comments button: its icon, with the
+     comment count as a badge and a blue outline while any are unread. */
+  .review-activity-panel:not([open]) { overflow: visible; }
+  .review-activity-panel:not([open])[data-unread="true"] {
+    border-color: var(--ds-blue);
+    box-shadow: 0 0 0 1px var(--ds-blue), var(--shadow-float);
+  }
+  .review-activity-panel:not([open]) .review-activity-summary {
+    position: relative;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+  }
+  .review-activity-panel:not([open]) .review-activity-icon { width: 22px; height: 22px; }
+  .review-activity-panel:not([open]) .review-activity-count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border: 1px solid var(--review-line-strong, var(--ds-line));
+    border-radius: var(--radius-pill);
+    background: var(--ds-panel-raised, var(--ds-panel));
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+  }
+  .review-activity-panel:not([open])[data-unread="true"] .review-activity-count { border-color: var(--ds-blue); }
+  .review-activity-panel:not([open]) .review-activity-count:empty { display: none; }
+
+  /* Open, the list floats above the decision button across the screen. */
+  .review-activity:has(details[open]) {
+    left: calc(16px + env(safe-area-inset-left));
+    right: calc(16px + env(safe-area-inset-right));
+  }
+  .review-activity:has(details[open]) .review-quick-button { display: none; }
+  .review-activity-panel[open] {
+    align-self: stretch;
+    box-shadow: var(--shadow-panel);
+  }
+  .review-activity-panel[open] .review-activity-log {
+    max-height: calc(60dvh - var(--review-quick-bottom));
   }
 }
 

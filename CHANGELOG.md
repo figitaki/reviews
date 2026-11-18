@@ -210,6 +210,19 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
   visible viewport. Empty comments cannot be submitted.
 - Reseeding keeps the real demo review and its comments unless its bundled
   fixture changes.
+- On phones, two icon-only floating buttons stacked above the section decision
+  button replace the comments row above the section navigation: Sections, in
+  the Guide only, opens the Guide map below the toolbar, and Comments, always
+  shown with the comment count as a badge and a blue outline while comments are
+  unread, floats the unread list above the code. A tap outside or Escape closes
+  the list. The decision button
+  now stays fixed to the screen inside open Guide sections.
+- Section decisions keep a floating island on desktop and use a compact
+  floating action button on phones, including before sign-in. After voting,
+  only the selected outcome stays labeled; alternatives reveal their labels
+  on hover or keyboard focus.
+- The Guide map separates from the reading surface without a shadow, and
+  compact section numbers stay aligned regardless of their decision state.
 - Section diffs and the Changes view open without line-count or file-count
   limits. Large diffs use the existing virtualized renderer; manual collapse
   controls remain available.
