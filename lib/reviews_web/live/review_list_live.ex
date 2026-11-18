@@ -203,39 +203,6 @@ defmodule ReviewsWeb.ReviewListLive do
         display: none;
       }
 
-      .rl-chip {
-        display: inline-flex;
-        flex-shrink: 0;
-        align-items: center;
-        gap: var(--space-1);
-        min-height: 28px;
-        border: var(--border-hair) solid var(--ds-line);
-        border-radius: var(--radius-pill);
-        background: var(--ds-panel);
-        color: var(--ds-muted);
-        padding: 0 var(--space-4);
-        font-size: var(--font-size-xs);
-        font-weight: var(--weight-medium);
-        text-decoration: none;
-        white-space: nowrap;
-      }
-
-      .rl-chip:hover {
-        border-color: var(--ds-line-strong);
-        color: var(--ds-text);
-      }
-
-      .rl-chip:focus-visible {
-        outline: 2px solid var(--ds-focus);
-        outline-offset: 2px;
-      }
-
-      .rl-chip.is-active {
-        border-color: var(--ds-text);
-        background: var(--ds-text);
-        color: var(--ds-bg);
-      }
-
       .rl-chip-sep {
         flex-shrink: 0;
         width: var(--border-hair);
@@ -243,7 +210,7 @@ defmodule ReviewsWeb.ReviewListLive do
         background: var(--ds-line);
       }
 
-      .rl-chip-clear {
+      .ds-chip.rl-chip-clear {
         border-color: transparent;
         background: transparent;
       }
@@ -485,11 +452,16 @@ defmodule ReviewsWeb.ReviewListLive do
         }
       }
 
-      /* COARSE (tokens.css): 44px tap targets for chips and the search field. */
+      /* COARSE (tokens.css): a 44px search field; .ds-chip grows its own tap area. */
       @media (pointer: coarse) {
-        .rl-chip,
         .rl-search .ds-input {
           min-height: 44px;
+        }
+
+        /* Room for .ds-chip's 44px tap area inside the scrolling row. */
+        .rl-chips {
+          margin-block: calc(-1 * var(--space-3));
+          padding-block: var(--space-3);
         }
 
         /* 16px text keeps iOS Safari from zooming into the field. */
@@ -526,40 +498,40 @@ defmodule ReviewsWeb.ReviewListLive do
       </header>
 
       <nav id="review-chips" class="rl-chips" aria-label="Filters" phx-hook=".ActiveChip">
-        <.chip
+        <.ds_chip
           :if={@filters.author}
           id="filter-author"
-          active
+          selected
           patch={list_path(%{@filters | author: nil})}
           aria-label={"Remove author filter @#{@filters.author}"}
         >
           @{@filters.author} <.icon name="hero-x-mark-mini" class="size-3" />
-        </.chip>
-        <.chip
+        </.ds_chip>
+        <.ds_chip
           :for={{value, label} <- [{"all", "All"}, {"authored", "Mine"}, {"involved", "Taking part"}]}
           id={"filter-role-#{value}"}
-          active={@filters.role == value}
+          selected={@filters.role == value}
           patch={list_path(%{@filters | role: value})}
         >
           {label}
-        </.chip>
+        </.ds_chip>
         <span class="rl-chip-sep" aria-hidden="true"></span>
-        <.chip
+        <.ds_chip
           :for={{value, label} <- [{"open", "Open threads"}, {"updated", "New patchset"}]}
           id={"filter-status-#{value}"}
-          active={@filters.status == value}
+          selected={@filters.status == value}
           patch={list_path(%{@filters | status: toggle(@filters.status, value)})}
         >
           {label}
-        </.chip>
-        <.link
+        </.ds_chip>
+        <.ds_chip
           :if={filters_active?(@filters)}
           id="clear-filters"
           patch={~p"/reviews"}
-          class="rl-chip rl-chip-clear"
+          class="rl-chip-clear"
         >
           Clear
-        </.link>
+        </.ds_chip>
       </nav>
 
       <script :type={Phoenix.LiveView.ColocatedHook} name=".ActiveChip">
@@ -569,7 +541,7 @@ defmodule ReviewsWeb.ReviewListLive do
           mounted() { this.reveal() },
           updated() { this.reveal() },
           reveal() {
-            const chips = this.el.querySelectorAll(".rl-chip.is-active")
+            const chips = this.el.querySelectorAll(".ds-chip.is-selected")
             const chip = chips[chips.length - 1]
             if (!chip) return
             const box = this.el.getBoundingClientRect()
@@ -682,26 +654,6 @@ defmodule ReviewsWeb.ReviewListLive do
         </span>
       </nav>
     </div>
-    """
-  end
-
-  attr :id, :string, required: true
-  attr :active, :boolean, default: false
-  attr :patch, :string, required: true
-  attr :rest, :global, include: ~w(aria-label)
-  slot :inner_block, required: true
-
-  defp chip(assigns) do
-    ~H"""
-    <.link
-      id={@id}
-      patch={@patch}
-      class={["rl-chip", @active && "is-active"]}
-      aria-current={@active && "true"}
-      {@rest}
-    >
-      {render_slot(@inner_block)}
-    </.link>
     """
   end
 
