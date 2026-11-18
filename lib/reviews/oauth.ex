@@ -108,6 +108,28 @@ defmodule Reviews.OAuth do
     end
   end
 
+  @doc """
+  Creates an agent identity for `user` from `attrs` (`handle`,
+  `display_name`), as Settings does, and approves `request` for it, in one
+  transaction: if either step fails, neither is kept. Returns the redirect
+  back to the client,
+  `{:error, changeset}` when the identity is not valid, or
+  `{:error, :invalid_identity}` when the approval is refused.
+  """
+  @spec approve_new_agent(User.t(), map(), Authorization.request(), [String.t()]) ::
+          {:ok, String.t()} | {:error, Ecto.Changeset.t() | :invalid_identity}
+  def approve_new_agent(%User{} = user, attrs, request, granted_scopes) when is_map(attrs) do
+    Repo.transaction(fn ->
+      with {:ok, identity} <-
+             Accounts.create_agent_identity(user, Map.take(attrs, ["handle", "display_name"])),
+           {:ok, url} <- approve(user, identity.id, request, granted_scopes) do
+        url
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
   ## Device sign-in (the Reviews CLI)
 
   @doc """

@@ -112,6 +112,10 @@ later fixes continue toward 0.0.2.
   Settings → CLI sign-ins signs them out. `reviews login --token` keeps the
   old way, an API token pasted from Settings, and `--server` picks the server.
 
+- The OAuth consent page can create a new agent identity for the connecting
+  app, with a name and handle suggested from the app. Owners with no agents
+  can now allow without leaving the page.
+
 - Prototype hosted MCP endpoint at `/mcp`, off by default. Agents connect with
   an existing API token and can read reviews, packet sections, diffs and
   threads, and post comments, resolve threads, and push reviews and revisions

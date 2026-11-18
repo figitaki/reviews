@@ -7,7 +7,8 @@ defmodule ReviewsWeb.OAuthController do
     * `GET /oauth/authorize` - `Gatekeep.Plug.Authorize` checks the request
       and hands it to this module, the issuer's `Gatekeep.Consent`: the owner
       signs in with GitHub, chooses which of their agent identities the app
-      acts as, and approves scopes.
+      acts as (or creates one there, through
+      `Reviews.OAuth.approve_new_agent/4`), and approves scopes.
     * `POST /oauth/authorize` - the owner's decision (`approve/2`).
     * `POST /oauth/token` - `authorization_code` with PKCE and
       `refresh_token`. Clients with keys authenticate with a
@@ -52,10 +53,19 @@ defmodule ReviewsWeb.OAuthController do
 
       {_user, {:ok, request}} when decision == "approve" ->
         granted = Enum.filter(request.scopes, &(&1 in List.wrap(params["granted_scopes"])))
+        new_identity = new_identity_params(params)
 
-        case OAuth.approve(user, params["identity_id"], request, granted) do
+        result =
+          if params["identity_id"] == "new",
+            do: OAuth.approve_new_agent(user, new_identity, request, granted),
+            else: OAuth.approve(user, params["identity_id"], request, granted)
+
+        case result do
           {:ok, url} ->
             Gatekeep.Plug.Authorize.redirect(conn, url)
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            render_consent(conn, request, "new", changeset)
 
           {:error, :invalid_identity} ->
             conn
@@ -63,7 +73,7 @@ defmodule ReviewsWeb.OAuthController do
               :error,
               "Choose one of your agent identities and at least one permission."
             )
-            |> render_consent(request)
+            |> render_consent(request, params["identity_id"], new_identity)
         end
 
       {_user, {:ok, request}} ->
@@ -77,7 +87,14 @@ defmodule ReviewsWeb.OAuthController do
     end
   end
 
-  defp render_consent(conn, request) do
+  defp new_identity_params(%{"new_identity" => %{} = attrs}), do: attrs
+  defp new_identity_params(_params), do: %{}
+
+  # `selected` is the `identity_id` to check: an agent's ID, "new" for the
+  # new agent identity fields, or nil for the first agent. `new_identity` is
+  # what those fields hold: the owner's input, a changeset with its errors,
+  # or nil to suggest a name and handle from the client.
+  defp render_consent(conn, request, selected \\ nil, new_identity \\ nil) do
     case conn.assigns.current_user do
       nil ->
         render(conn, :sign_in,
@@ -87,15 +104,54 @@ defmodule ReviewsWeb.OAuthController do
         )
 
       user ->
+        identities = Accounts.list_agent_identities_for(user)
+
+        selected =
+          case identities do
+            [] -> "new"
+            [first | _] -> selected || to_string(first.id)
+          end
+
         render(conn, :consent,
           request: request,
           auth_params: request.params,
-          identities: Accounts.list_agent_identities_for(user),
+          identities: identities,
+          selected: selected,
+          new_identity:
+            Phoenix.Component.to_form(new_identity || suggested_identity(request.client),
+              as: :new_identity
+            ),
           scopes: request.scope_descriptions,
           current_user: user,
           page_title: "Connect an agent"
         )
     end
+  end
+
+  # A name and handle for a new agent identity, from what the client calls
+  # itself or else its domain: "Muse" and "muse" for muse.ai. The owner can
+  # change both before allowing.
+  defp suggested_identity(client) do
+    name =
+      case client.client_name && String.trim(client.client_name) do
+        name when is_binary(name) and name != "" ->
+          name
+
+        _ ->
+          (URI.parse(client.client_id).host || "")
+          |> String.split(".")
+          |> hd()
+          |> String.capitalize()
+      end
+
+    handle =
+      name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, "-")
+      |> String.trim("-")
+      |> String.slice(0, 80)
+
+    %{"display_name" => String.slice(name, 0, 120), "handle" => handle}
   end
 
   defp invalid_request(conn, status, reason, title \\ "Sign-in link not valid") do
