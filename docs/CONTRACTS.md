@@ -551,3 +551,22 @@ Pages return `slug`, `revision`, `next_cursor` (null at the end), and `files`, `
 REST and Poppy use `Reviews.Paging` for cursor encoding and page limits. Pass opaque `next_cursor` unchanged with the same endpoint, review, revision, thread and filters; a cursor from another query is rejected. Page sizes may change between calls. REST and Poppy share a cursor scope; MCP uses a distinct scope because comment position semantics differ. Cursors are query-tagged positions, not authorization tokens; every request retains its normal access checks. Legacy untagged cursors are rejected; restart from the first page. Revision numbers must be integers from 1 through 2147483647, independently of page-size limits. The first request may omit `revision` to select latest; all continuation requests must include the returned revision. Revision selection pins diff projection, not a database snapshot: new comments and thread status changes can appear while paging. Comments carry stable IDs, `offset` (UTF-8 byte offset), `body` (one chunk), and `complete`; concatenate chunks for the same comment until complete. A page can stop before `limit` to fit its byte budget. If metadata alone cannot fit, retry with a larger budget. Invalid limits, cursors, offsets or missing continuation revision return 422 with `error_code: invalid_pagination`; missing/foreign/future threads and missing revisions return 404 with `error_code: resource_not_found`. Both retain `errors.detail` and expose the same prose as `error_detail`.
 
 These endpoints use bounded domain page queries rather than loading the full review snapshot. Poppy OpenAPI documents their parameters and response envelopes, which are checked against actual endpoint results.
+
+### Packet hunk fragments
+
+Guide URLs accept packet hunk fragments, including rendered `-summary` and
+`-diff` IDs and packet row IDs (`#packet-section-N-row-M`). Rows grouped into
+one card resolve to that card. Include `?patchset=N` to link to a historical
+revision; targets are always resolved against the selected revision, never a
+different patchset. Unknown targets leave the current section unchanged.
+
+The `PacketFragments` hook sends `reveal_packet_fragment` with `{id}` after
+connection, hash changes, repeated same-fragment clicks, and revision changes.
+The server validates the ID against rendered packet units, reveals the section,
+expands its card, and replies with `{id: canonical_dom_id}` (or `{id: null}` for
+an unknown target). The client focuses and scrolls after the patch is applied.
+Native anchor navigation owns URL/history; returning to an empty fragment sends
+`restore_packet_location` with the URL's `thread` value. It restores that
+discussion when present, or Overview otherwise. Modified clicks, external links,
+and different URLs retain native browser behavior. This does not enable packet fragments on the raw
+`/changes` view or make hunk IDs stable across changed packet contents.
