@@ -173,13 +173,12 @@ defmodule ReviewsWeb.Layouts do
               <span class="l-nav-user-name">{@current_user.username}</span>
             </.link>
           <% else %>
-            <.ds_button
+            <.ds_github_button
               href={~p"/auth/github?#{[return_to: @return_to]}"}
-              variant="primary"
               class="l-nav-signin"
             >
               Sign in
-            </.ds_button>
+            </.ds_github_button>
           <% end %>
         </nav>
       </div>

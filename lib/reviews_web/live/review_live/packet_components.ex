@@ -617,7 +617,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               href={~p"/auth/github?#{[return_to: @return_to]}"}
               class="review-packet-section-signin"
             >
-              Sign in to record a section decision
+              <.github_mark /> Sign in to record a section decision
             </.link>
         <% end %>
       </div>

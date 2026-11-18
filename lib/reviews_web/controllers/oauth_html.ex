@@ -25,13 +25,12 @@ defmodule ReviewsWeb.OAuthHTML do
             class="is-compact"
           >
             <:actions>
-              <.ds_button
+              <.ds_github_button
                 id="poppy-sign-in-github"
                 href={~p"/auth/github?#{[return_to: @return_to]}"}
-                variant="primary"
               >
                 Sign in with GitHub
-              </.ds_button>
+              </.ds_github_button>
             </:actions>
           </.ds_page_header>
         </div>
@@ -178,6 +177,7 @@ defmodule ReviewsWeb.OAuthHTML do
                   name="decision"
                   value="approve"
                   variant="primary"
+                  icon="hero-check"
                 >
                   Allow
                 </.ds_button>
@@ -186,6 +186,7 @@ defmodule ReviewsWeb.OAuthHTML do
                   type="submit"
                   name="decision"
                   value="deny"
+                  icon="hero-x-mark"
                 >
                   Deny
                 </.ds_button>

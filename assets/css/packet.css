@@ -1125,6 +1125,9 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-packet-section-signin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--review-muted);
   font-size: var(--font-ui-size);
   font-weight: var(--font-ui-weight);

@@ -66,10 +66,13 @@ defmodule ReviewsWeb.HomeLive do
                 navigate={~p"/r/#{@demo_slug}"}
                 variant="primary"
                 size="lg"
+                icon="hero-book-open"
               >
                 Open demo review
               </.ds_button>
-              <.ds_button href="#home-install" size="lg">Install the CLI</.ds_button>
+              <.ds_button href="#home-install" size="lg" icon="hero-command-line">
+                Install the CLI
+              </.ds_button>
             </div>
             <p class="home-demo-note">A real review packet. No sign-in needed to read.</p>
           </section>
@@ -103,7 +106,11 @@ defmodule ReviewsWeb.HomeLive do
             <p>Install the CLI and agent skills, then push your first review packet.</p>
             <div id="hero-install-root" class="home-install-command" phx-hook=".InstallCopy">
               <code data-install-cmd>{@install_command}</code>
-              <.ds_button data-install-copy aria-label="Copy install command">
+              <.ds_button
+                data-install-copy
+                icon="hero-clipboard-document"
+                aria-label="Copy install command"
+              >
                 Copy
               </.ds_button>
               <span class="home-copy-status" role="status" data-copy-status></span>
