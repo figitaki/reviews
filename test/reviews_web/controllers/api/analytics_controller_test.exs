@@ -118,6 +118,7 @@ defmodule ReviewsWeb.Api.AnalyticsControllerTest do
           build_conn() |> put_req_header("authorization", "Bearer " <> token) |> post(@path, %{})
 
         assert json_response(conn, 405)["error_code"] == "method_not_allowed"
+        assert get_resp_header(conn, "allow") == ["GET"]
 
         conn =
           build_conn()

@@ -23,7 +23,7 @@ defmodule ReviewsWeb.Plugs.AggregateExport do
 
     cond do
       conn.method != "GET" ->
-        error(conn, :method_not_allowed)
+        conn |> put_resp_header("allow", "GET") |> error(:method_not_allowed)
 
       conn.query_string != "" ->
         error(conn, :invalid_request, "Parameters are not supported")
