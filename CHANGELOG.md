@@ -6,6 +6,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Comments and threads keep their posting order when two share a timestamp
+  second. Order used to depend on how Postgres stored the rows.
+
 - The review page is full width at every screen width. On wide screens the
   Comments button no longer reserves a column beside the content: it floats
   in the bottom-right corner with its log above it, as on tablets. The log
