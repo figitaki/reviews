@@ -60,6 +60,8 @@ later fixes continue toward 0.0.2.
 - The closed section decision on phones is a 48px floating button like
   Sections and Comments, and the decision panel uses the same `--radius-lg`
   and `--shadow-float` tokens instead of its own radius and two-layer shadow.
+  New `--size-fab` (3rem) and `--size-fab-icon` (1.375rem) tokens size all
+  three floating buttons.
 
 - Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI).
   Elixir 1.20.4 includes the fix for CVE-2026-75758.

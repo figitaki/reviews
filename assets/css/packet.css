@@ -1494,9 +1494,9 @@ details[open] > summary .review-collapse-icon,
   }
 
   /* The closed decision is a floating button like Sections and Comments:
-     48px, --radius-lg and --shadow-float. */
+     --size-fab, --radius-lg and --shadow-float. */
   .review-section-decision:not(.is-editing):not(.is-readonly) {
-    width: 48px;
+    width: var(--size-fab);
     margin-left: auto;
     margin-right: 0;
     justify-self: end;
@@ -1513,11 +1513,11 @@ details[open] > summary .review-collapse-icon,
 
   .review-section-decision-toggle {
     display: inline-flex;
-    flex: 0 0 48px;
+    flex: 0 0 var(--size-fab);
     align-items: center;
     justify-content: center;
-    width: 48px;
-    height: 48px;
+    width: var(--size-fab);
+    height: var(--size-fab);
     border: 1px solid var(--review-line-strong);
     border-radius: var(--radius-lg);
     background: var(--review-panel-raised);
@@ -1536,8 +1536,8 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-section-decision-toggle > span {
-    width: 22px;
-    height: 22px;
+    width: var(--size-fab-icon);
+    height: var(--size-fab-icon);
   }
 
   .review-section-decision.is-editing .review-section-decision-toggle {
