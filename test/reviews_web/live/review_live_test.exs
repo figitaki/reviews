@@ -2148,7 +2148,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
         view
         |> form("#delete-review-form", %{confirm_slug: review.slug})
         |> render_submit()
-        |> follow_redirect(conn, ~p"/")
+        |> follow_redirect(conn, ~p"/reviews")
 
       assert html =~ "Deleted review #{review.slug}."
       assert ReviewsCtx.deleted?(review.slug)

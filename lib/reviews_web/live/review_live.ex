@@ -415,7 +415,7 @@ defmodule ReviewsWeb.ReviewLive do
           {:noreply,
            socket
            |> put_flash(:info, "Deleted review #{review.slug}.")
-           |> push_navigate(to: ~p"/")}
+           |> push_navigate(to: ~p"/reviews")}
 
         {:error, :review_deleted} ->
           {:noreply, redirect(socket, to: socket.assigns.return_to)}
