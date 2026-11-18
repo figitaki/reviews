@@ -52,14 +52,17 @@
   margin-left: 0;
 }
 
-.rev-decider-stack:hover .rev-decider,
-.rev-decider-stack:focus-within .rev-decider {
-  margin-left: 2px;
-}
+/* Narrow headers have no room for the spread stack beside the sign-in link. */
+@media (min-width: 481px) {
+  .rev-decider-stack:hover .rev-decider,
+  .rev-decider-stack:focus-within .rev-decider {
+    margin-left: 2px;
+  }
 
-.rev-decider-stack:hover .rev-decider:first-child,
-.rev-decider-stack:focus-within .rev-decider:first-child {
-  margin-left: 0;
+  .rev-decider-stack:hover .rev-decider:first-child,
+  .rev-decider-stack:focus-within .rev-decider:first-child {
+    margin-left: 0;
+  }
 }
 
 .rev-decider:hover,
