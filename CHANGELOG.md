@@ -298,6 +298,14 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
   and mobile page height uses the stable small viewport.
 - Diff file headers toggle across the whole row with a rotating chevron.
   Viewed state uses one independent toggle.
+- On phones, the open comments list keeps its height while the browser's
+  toolbars collapse and expand.
+- On phones, lockfiles such as `mix.lock` and `package-lock.json` scroll
+  sideways instead of wrapping, so each entry stays one row. Opening a thread
+  in one keeps the start of each line in view.
+- Brave on iPhone no longer brings its toolbars back each time a scroll
+  stops. The page now saves its scroll position for back and forward
+  only when it leaves the page, not after every scroll.
 
 ## [0.0.1-alpha.2] - 2026-05-21
 

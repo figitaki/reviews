@@ -20,6 +20,10 @@ import {
 
 const VIRTUAL_LINE_THRESHOLD = 1500
 const VIRTUAL_BYTE_THRESHOLD = 200 * 1024
+// Machine-written lockfiles have one long line per entry. On phones they scroll
+// sideways instead of wrapping, so each line stays one row and the package
+// names and versions at the start of each line are easy to scan.
+const LOCKFILE = /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|Gemfile\.lock|mix\.lock|composer\.lock|poetry\.lock|uv\.lock|Pipfile\.lock|go\.sum|flake\.lock|Package\.resolved|Podfile\.lock|pubspec\.lock)$/
 const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
   :host {
     --diffs-font-family: var(--font-mono);
@@ -540,7 +544,15 @@ export class VanillaDiffRenderer {
       if (!target) return
       this.pendingThreadFocus = null
       target.style.scrollMarginTop = "calc(var(--review-main-nav-h) + 60px)"
-      target.scrollIntoView({ block: "start", behavior: "instant" })
+      if (this.compact()) {
+        // Scroll the page only. On a lockfile's sideways-scrolling code,
+        // scrollIntoView also scrolls the code to Pierre's sticky annotation
+        // and hides the start of every line.
+        const margin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0
+        window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - margin, behavior: "instant" })
+      } else {
+        target.scrollIntoView({ block: "start", behavior: "instant" })
+      }
       target.tabIndex = -1
       target.focus({ preventScroll: true })
     })
@@ -639,7 +651,8 @@ export class VanillaDiffRenderer {
     return {
       theme: currentPierreTheme(),
       diffStyle: this.diffStyle,
-      overflow: this.diffStyle === "unified" ? "wrap" : "scroll",
+      overflow:
+        this.diffStyle === "unified" && !(this.compact() && LOCKFILE.test(this.filePath)) ? "wrap" : "scroll",
       collapsed: this.collapsed(),
       // Phones drop line numbers; the gutter holds only the comment buttons.
       disableLineNumbers: this.compact(),

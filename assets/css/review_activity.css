@@ -336,7 +336,7 @@
   .review-activity-body {
     width: calc(100vw - var(--review-quick-right) - 16px - env(safe-area-inset-left));
   }
-  .review-activity-log { max-height: calc(60dvh - var(--review-quick-bottom)); }
+  .review-activity-log { max-height: calc(60svh - var(--review-quick-bottom)); }
 }
 
 /* Comments use the same escaped Markdown renderer as the Guide, at UI scale. */
