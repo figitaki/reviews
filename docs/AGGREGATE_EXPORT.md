@@ -39,6 +39,8 @@ The existing application database connection remains in Reviews. TinyCube needs 
 
 Run `mix test` with a dedicated local test database, `mix format --check-formatted`, and `mix compile --warnings-as-errors`. The privacy fixtures include sentinel packet/comment/title/user content that must never appear in exports. Tests cover exact windows, deduplication, empty datasets, credential scope/expiry/revocation, log redaction, request-shape rejection, cache single flight/expiry/failure recovery and rate limits.
 
+For an offline query-cost check, run `elixir scripts/check_analytics_query.exs` with local `initdb`, `pg_ctl`, and `psql` on PATH. It creates and removes an isolated Unix-socket database, strips inherited PostgreSQL connection settings, and reports two JSON EXPLAIN summaries. The 700,000 synthetic activity rows and 60,000 identities model scan width, not production data distribution or load. This is not a production latency guarantee.
+
 Review the endpoint and TinyCube collector together. Before enabling, confirm production schema compatibility and query cost, use the existing signed release workflow, provision the separate credential through private secret channels, and test missing/wrong/expired credentials as well as a valid aggregate response. Do not activate unreviewed code or claim the endpoint is live based on local tests.
 
 Rollback: remove the aggregate credential configuration on every instance first; revert the signed activation/release change if needed. The endpoint is disabled without valid runtime configuration. No schema migration or user-data changes need undoing.
