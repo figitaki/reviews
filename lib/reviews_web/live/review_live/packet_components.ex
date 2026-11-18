@@ -389,11 +389,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   defp packet_section_header(assigns) do
     assigns =
-      assign(assigns, :title_id, "review-split-section-overview-title-#{assigns.section.index}")
+      assign(assigns, :title_id, "review-section-header-title-#{assigns.section.index}")
 
     ~H"""
     <header
-      id={"review-split-section-overview-#{@section.index}"}
+      id={"review-section-header-#{@section.index}"}
       class="review-section-header"
       aria-labelledby={@title_id}
     >

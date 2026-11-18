@@ -22,6 +22,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   to decide", which returns to the review with that section and its decision
   open.
 
+- Guide prose uses the same 52rem column in split and stacked diffs, so
+  switching diff style no longer changes its width. On phones, section
+  headings are 20px, the same size as on desktop.
+
 ## [0.0.2] - 2026-11-18
 
 Sign in to the CLI from any browser, see every review you are part of in one

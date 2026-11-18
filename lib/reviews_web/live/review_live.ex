@@ -266,7 +266,7 @@ defmodule ReviewsWeb.ReviewLive do
     socket =
       case parse_int(section_index) do
         index when is_integer(index) ->
-          push_event(socket, "packet_nav_jump", %{id: "review-split-section-overview-#{index}"})
+          push_event(socket, "packet_nav_jump", %{id: "review-section-header-#{index}"})
 
         _ ->
           socket
