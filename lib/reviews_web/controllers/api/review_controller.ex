@@ -73,9 +73,7 @@ defmodule ReviewsWeb.Api.ReviewController do
       json(conn, render_review(snapshot))
     else
       {:error, :not_found} ->
-        conn
-        |> put_status(:not_found)
-        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
+        ReviewsWeb.ApiErrors.render(conn, ReviewsContext.not_found_reason(slug))
 
       {:error, :patchset_not_found} ->
         conn
@@ -180,6 +178,45 @@ defmodule ReviewsWeb.Api.ReviewController do
         |> json(ReviewsWeb.ApiErrors.detail(:invalid_request, "Invalid request"))
     end
   end
+
+  @doc """
+  GET /api/v1/reviews/:slug/deletion
+
+  What deleting the review would remove, so a client can warn before it
+  deletes. Owner only, like the deletion itself.
+  """
+  def deletion(conn, %{"slug" => slug}) do
+    with {:ok, review} <- fetch_review(conn, slug) do
+      if Reviews.Policy.can?(conn.assigns.current_principal, :delete, review) do
+        summary = ReviewsContext.deletion_summary(review)
+        json(conn, Map.merge(%{slug: review.slug, title: review.title}, summary))
+      else
+        forbidden(conn)
+      end
+    end
+  end
+
+  @doc "DELETE /api/v1/reviews/:slug"
+  def delete(conn, %{"slug" => slug}) do
+    with {:ok, review} <- fetch_review(conn, slug) do
+      case ReviewsContext.delete_review(review, conn.assigns.current_principal) do
+        {:ok, review} -> json(conn, %{slug: review.slug, deleted: true})
+        {:error, :forbidden} -> forbidden(conn)
+        {:error, reason} -> ReviewsWeb.ApiErrors.render(conn, reason)
+      end
+    end
+  end
+
+  # A deleted review's slug gets 410 `review_deleted`, an unknown one 404.
+  defp fetch_review(conn, slug) do
+    case ReviewsContext.get_review_by_slug(slug) do
+      nil -> ReviewsWeb.ApiErrors.render(conn, ReviewsContext.not_found_reason(slug))
+      review -> {:ok, review}
+    end
+  end
+
+  defp forbidden(conn),
+    do: ReviewsWeb.ApiErrors.render(conn, :forbidden, "Only the review owner can delete it.")
 
   defp normalize_params(params) when is_map(params) do
     %{
