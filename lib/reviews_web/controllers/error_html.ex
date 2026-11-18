@@ -87,9 +87,9 @@ defmodule ReviewsWeb.ErrorHTML do
         <h1 id={"#{@id}-title"}>{@title}</h1>
         <p class="l-status-message">{render_slot(@inner_block)}</p>
         <div class="home-actions">
-          <.link id={"#{@id}-home"} navigate={~p"/"} class="r-button r-button-primary">
+          <.ds_button id={"#{@id}-home"} navigate={~p"/"} variant="primary" size="lg">
             Go to Reviews home
-          </.link>
+          </.ds_button>
         </div>
       </section>
     </div>

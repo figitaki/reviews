@@ -3189,7 +3189,7 @@ details[open] > summary .review-collapse-icon,
     flex: 0 0 auto;
   }
 
-  .review-mobile-revision-nav .fieldset {
+  .review-mobile-revision-nav .ds-field {
     margin: 0;
     gap: 0;
     padding: 0;
