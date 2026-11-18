@@ -225,7 +225,7 @@ defmodule ReviewsWeb.OAuthTest do
       assert issuer["keys_resource_extra"] == true
     end
 
-    test "with no resource taking public clients, the issuer offers no public clients or registration" do
+    test "with only the CLI taking a public client, the issuer offers no registration" do
       previous = Application.get_env(:reviews, Reviews.OAuthTestResource)
 
       on_exit(fn ->
@@ -239,7 +239,8 @@ defmodule ReviewsWeb.OAuthTest do
       issuer =
         build_conn() |> get("/.well-known/oauth-authorization-server") |> json_response(200)
 
-      assert issuer["token_endpoint_auth_methods_supported"] == ["private_key_jwt"]
+      # "none" is the Reviews CLI's own client; no other client can use it.
+      assert issuer["token_endpoint_auth_methods_supported"] == ["private_key_jwt", "none"]
       refute Map.has_key?(issuer, "registration_endpoint")
       refute @resource in issuer["protected_resources"]
 

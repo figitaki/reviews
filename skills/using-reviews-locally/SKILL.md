@@ -22,7 +22,10 @@ Do not run `mix phx.server` directly unless you know OAuth/env loading is unnece
 
 The CLI reads `~/.config/reviews/config.toml` and currently uses `[default]`.
 
-Expected shape:
+`reviews login --server <url>` writes it: it shows a code to enter at
+`<url>/device` and saves tokens that refresh themselves under
+`[default.oauth]`. `reviews login --token` reads an API token from stdin
+instead, which suits scripts and agents without a browser. That shape is:
 
 ```toml
 [default]
@@ -120,7 +123,7 @@ cli/target/release/reviews reply <slug> <thread-id> --body "Switched to Decimal 
 
 Notes:
 - `reviews threads` can run anonymously against public review JSON.
-- `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` / a valid API token.
+- `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` (or `reviews login --token` with an API token).
 - `reviews resolve` and `reviews reopen` work only for the review owner or the thread's author; `reviews section` works only for the review owner. Others get HTTP 403.
 - Thread IDs are accepted bare (`7`) or as printed by the listing (`#7`).
 - `reviews reply` appends to the thread. `reviews comment` always opens a new one.
