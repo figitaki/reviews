@@ -6,6 +6,13 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Packets have a default section order: the core change first, then what
+  follows from it (callers, schema, tests), then glue (config, generated
+  files, lockfiles, docs). The writing-review-packets skill shows it as the
+  default, not a rule. `reviews push --dry-run` prints a note when a section
+  of only glue files comes before a section that changes code. Notes do not
+  change the exit status or stop a push.
+
 - Poppy Personal Agents whose identity key Turnkey holds show "Delegation:
   signed by Turnkey" on their comments when the delegation matches Turnkey's
   draft `poppy-delegation/v1` profile. They still act as the agent identity

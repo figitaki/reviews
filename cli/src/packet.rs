@@ -31,6 +31,9 @@ pub struct PacketCheck {
     /// turned into a packet at all (for example, invalid JSON).
     pub packet: Option<Value>,
     pub issues: Vec<Issue>,
+    /// Advice that does not block a push, such as a section order that
+    /// differs from the default. Only `push --dry-run` prints these.
+    pub notes: Vec<Issue>,
 }
 
 impl PacketCheck {
@@ -41,13 +44,12 @@ impl PacketCheck {
     /// Each issue as `path:line: message` (or `path: message` when the issue
     /// has no single line), using `display_path` for the path.
     pub fn issue_lines(&self, display_path: &str) -> Vec<String> {
-        self.issues
-            .iter()
-            .map(|issue| match issue.line {
-                Some(line) => format!("{display_path}:{line}: {}", issue.message),
-                None => format!("{display_path}: {}", issue.message),
-            })
-            .collect()
+        located_lines(&self.issues, display_path)
+    }
+
+    /// Each note, in the same form as `issue_lines`.
+    pub fn note_lines(&self, display_path: &str) -> Vec<String> {
+        located_lines(&self.notes, display_path)
     }
 
     /// The packet to send, or an error that lists every issue.
@@ -174,8 +176,10 @@ pub fn check_packet_for_diff(path: &Path, raw_diff: &str) -> Result<PacketCheck>
         None => bail!("packet file must have a .md or .json extension"),
     };
 
+    let mut notes = Vec::new();
     if let Some(packet) = &packet {
         issues.extend(validate_packet(packet, &diff, &source));
+        notes = order_notes(packet, &source);
     }
     issues.sort_by_key(|issue| issue.line.unwrap_or(usize::MAX));
 
@@ -183,7 +187,90 @@ pub fn check_packet_for_diff(path: &Path, raw_diff: &str) -> Result<PacketCheck>
         path: path.to_path_buf(),
         packet,
         issues,
+        notes,
     })
+}
+
+fn located_lines(issues: &[Issue], display_path: &str) -> Vec<String> {
+    issues
+        .iter()
+        .map(|issue| match issue.line {
+            Some(line) => format!("{display_path}:{line}: {}", issue.message),
+            None => format!("{display_path}: {}", issue.message),
+        })
+        .collect()
+}
+
+/// Notes for sections that look out of the default order: the core change
+/// first, then what follows from it, then glue. A section whose hunk refs are
+/// all glue files (see `is_glue_path`) gets a note when a later section
+/// refers to any other file. Sections without hunk refs are ignored.
+fn order_notes(packet: &Value, source: &SourceMap) -> Vec<Issue> {
+    let Some(sections) = packet.get("sections").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    // For each section: its title and whether it is glue only. `None` when it
+    // has no hunk refs.
+    let kinds: Vec<(String, Option<bool>)> = sections
+        .iter()
+        .map(|section| {
+            let title = section
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let paths: Vec<&str> = section
+                .get("rows")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|row| row.get("kind").and_then(Value::as_str) == Some("hunk"))
+                .filter_map(|row| row.get("path").and_then(Value::as_str))
+                .collect();
+            let glue_only = (!paths.is_empty()).then(|| paths.iter().all(|p| is_glue_path(p)));
+            (title, glue_only)
+        })
+        .collect();
+
+    let mut notes = Vec::new();
+    for (idx, (title, glue_only)) in kinds.iter().enumerate() {
+        if *glue_only != Some(true) {
+            continue;
+        }
+        let Some((code_title, _)) = kinds[idx + 1..]
+            .iter()
+            .find(|(_, glue_only)| *glue_only == Some(false))
+        else {
+            continue;
+        };
+        notes.push(Issue::at(
+            source.section_line(idx),
+            format!(
+                "section \"{title}\" only changes glue files (config, docs, lockfiles or generated files) but comes before \"{code_title}\", which changes code. The default order puts the core change first and glue last; move this section later unless this order reads better."
+            ),
+        ));
+    }
+    notes
+}
+
+/// Files that support a change rather than make it: lockfiles, generated
+/// files, files under a `config/` directory, Markdown under `docs/`, and
+/// CHANGELOG and README files.
+fn is_glue_path(path: &str) -> bool {
+    let segments: Vec<&str> = path.split('/').collect();
+    let (name, dirs) = segments.split_last().unwrap_or((&"", &[]));
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".lock")
+        || lower.ends_with(".lockb")
+        || matches!(lower.as_str(), "package-lock.json" | "pnpm-lock.yaml")
+        || lower.contains(".generated.")
+        || dirs
+            .iter()
+            .any(|dir| matches!(*dir, "generated" | "config"))
+        || (dirs.contains(&"docs") && lower.ends_with(".md"))
+        || lower.starts_with("changelog")
+        || lower.starts_with("readme")
 }
 
 pub fn discover_packet(repo: &Path, branch_name: &str) -> Option<PathBuf> {
@@ -1122,6 +1209,29 @@ Second thought.
         let check = check_file("packet.md", PACKET, DIFF);
         assert!(check.is_valid(), "issues = {:#?}", check.issues);
         assert_eq!(check.packet.unwrap()["title"], "Narrative packet");
+    }
+
+    const ORDER_DIFF: &str = "diff --git a/lib/a.ex b/lib/a.ex\n--- a/lib/a.ex\n+++ b/lib/a.ex\n@@ -1,1 +1,1 @@\n-old\n+new\ndiff --git a/mix.lock b/mix.lock\n--- a/mix.lock\n+++ b/mix.lock\n@@ -1,1 +1,1 @@\n-old\n+new\ndiff --git a/docs/X.md b/docs/X.md\n--- a/docs/X.md\n+++ b/docs/X.md\n@@ -1,1 +1,1 @@\n-old\n+new\n";
+
+    #[test]
+    fn notes_glue_section_before_code_section() {
+        let body = "# T\n\n## Update deps and docs\n@hunk mix.lock#1\n@hunk docs/X.md#1\n\n## Core change\n@hunk lib/a.ex#1\n";
+        let check = check_file("packet.md", body, ORDER_DIFF);
+        assert!(check.is_valid(), "issues = {:#?}", check.issues);
+        let note = only_issue(check.notes);
+        assert_eq!(note.line, Some(3));
+        assert!(note
+            .message
+            .contains("section \"Update deps and docs\" only changes glue files"));
+        assert!(note.message.contains("comes before \"Core change\""));
+    }
+
+    #[test]
+    fn default_section_order_has_no_notes() {
+        let body = "# T\n\n## Core change\n@hunk lib/a.ex#1\n\n## Update deps and docs\n@hunk mix.lock#1\n@hunk docs/X.md#1\n";
+        let check = check_file("packet.md", body, ORDER_DIFF);
+        assert!(check.is_valid(), "issues = {:#?}", check.issues);
+        assert!(check.notes.is_empty(), "notes = {:#?}", check.notes);
     }
 
     #[test]
