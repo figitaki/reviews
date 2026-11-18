@@ -13,9 +13,7 @@ defmodule ReviewsWeb.Api.ThreadController do
 
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
-        conn
-        |> put_status(:not_found)
-        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
+        ReviewsWeb.ApiErrors.render(conn, ReviewsContext.not_found_reason(slug))
 
       review ->
         case Threads.update_status(review, thread_id, principal, status) do
