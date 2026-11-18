@@ -4,7 +4,7 @@
 
 This feature was staged on `reviews-private-analytics-current` at public main
 `91b13c66f29d277cc99c974f167e7f7a72d6935a` from `https://github.com/figitaki/reviews.git`,
-then brought up to date by merging main `0a5b51e`. After the merge the collector
+then brought up to date by merging main, most recently `e4da917`. After the merge the collector
 authenticates as a `Reviews.Principal` (`via: :aggregate_export`, no identity or
 scopes) and its errors use the shared `Reviews.Errors` codes. The SQL is unchanged:
 section decisions gained `account_id`, but `author_id` still resolves to the same owner.
@@ -15,6 +15,26 @@ contract/runbook documentation. No database migration, account credential, publi
 content permission, deployment configuration or dependency version is changed.
 Human and agent identities belonging to the same owner count as one active account.
 Kind subtotals are not exported; declared identity kind is not proof of a human operator.
+
+## Current integration validation (local, 2026-11-18)
+
+This revision starts from published PR head `e6149ca` and merges main `e4da917`,
+without replacing the Principal, shared-error or HTTP/2 request-body fixes.
+The documentation conflict preserves both the aggregate and review-list APIs.
+
+- `mix precommit`: **471 passed**, compilation and formatting passed.
+- `bun install --frozen-lockfile` and `bun run test`: **44 passed**.
+- Asset build and Hex audit passed; no retired or advisory packages found.
+- Strict Sobelow passed with four unchanged low-confidence findings and no
+  medium/high findings.
+- Two extra authentication regressions verify that the ordinary API plug rejects
+  the collector token through its OAuth fallback, and that a valid device-login
+  CLI token can read `/api/v1/me` but cannot read aggregates.
+- The aggregate success-response schema remains unchanged for the paired dashboard.
+- No production query, credential provisioning or deployment was performed.
+
+Earlier measurements and dashboard results below are historical, not new runtime
+validation of the dashboard or a production cost guarantee.
 
 ## Validation (local, 2026-11-16, before the merge with main)
 

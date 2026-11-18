@@ -7,6 +7,8 @@ later fixes continue toward 0.0.2.
 
 ## [Unreleased]
 
+- The `/device` page takes the CLI's code in one box per letter, accepting only the code's letters; typing moves forward, backspace moves back, and pasting the whole code fills every box. The confirmation counts down to the code's expiry and turns off Allow when it runs out.
+
 - Add stable API and MCP error codes while retaining legacy fields and Poppy authentication responses; teach the CLI to read them.
 
 - Pin REST, Poppy and CLI comments to exact revisions, validate anchors in the domain layer, and accept replies without placeholder locations.
@@ -104,6 +106,20 @@ later fixes continue toward 0.0.2.
 
 ### Added
 
+- A design catalog at `/design` shows the tokens and `ds_` components in the
+  dark and light themes side by side, with every pill style in use. It is on
+  in dev and on preview apps, and off in production. A new `<.ds_chip>`
+  component gives filters and toggles one shared pill style.
+
+- Review list (#47). `/reviews` on the web, `GET /api/v1/reviews` in the API,
+  and `reviews list` in the CLI. The list has only reviews you wrote or took
+  part in, with filters for role, status, author, and title or slug. A token
+  for an agent identity lists only that agent's reviews. On the web the list
+  is compact: one search field, a row of filter chips (role, status, and an
+  author chip set by tapping an author's name), and one row per review.
+  Signed-in visitors to `/` land on the list, and signing in from the home
+  page returns there; an explicit `return_to` still wins.
+
 - `reviews login` signs in from the browser on any device with the OAuth
   device authorization grant (RFC 8628): it shows a code, you enter it at
   `/device`, and the CLI stores tokens that refresh themselves. It works over
@@ -132,6 +148,13 @@ later fixes continue toward 0.0.2.
   `Reviews.Paging`, which the REST and Poppy page endpoints will share.
 
 ### Fixed
+
+- Faint text, green additions and red deletions now meet WCAG AA contrast
+  (4.5:1) on every surface in both themes, and form-field borders meet 3:1.
+  The fix is in the design tokens, so every screen picks it up.
+- Home, settings, device login and the sign-in pages no longer put a
+  second `<main>` landmark inside the page's own, so screen readers find
+  one main region and the skip link lands on it.
 
 - The REST and Poppy comment endpoints no longer return database error text.
   A `file_path` over 255 characters is now a `422` validation error.

@@ -45,6 +45,7 @@ Run these from the PR checkout with the CLI configured for the intended review h
 - `lib/reviews_web/mcp/` is the prototype hosted MCP server at `/mcp` (FastestMCP, off unless `MCP_ENABLED`); see `docs/MCP.md`.
 - `lib/reviews_web/controllers/api/` is the JSON API the CLI uses. `docs/CONTRACTS.md` documents it and the LiveView hook events; update it with any API change.
 - `assets/js/hooks/diff_renderer.js` mounts Pierre; rendering code is in `assets/js/diff_renderer/`; dataset parsing goes through Zod schemas in `assets/js/schemas.js`.
+- `/design` (`ReviewsWeb.DesignLive`) renders the tokens and `ds_` components in both themes. It is on in dev and on previews. Check a design-system change there, and add new `ds_` components to it.
 - `assets/css/app.css` imports `tokens.css`, `components.css`, `packet.css` (review UI, `.review-*` / `.rev-*`), `landing.css`, `product-shell.css`. Use the `--ds-*` tokens; do not add hex colours in components.
 - `.plans/` holds design plans and is tracked. Read the plan for the area you touch before changing it. `.plans/market-scan-2026-10.md` lists product ideas with prior art.
 - `skills/` are the agent skills shipped with the CLI installer (overview, writing packets, using Reviews locally). Keep them in sync with CLI flags.

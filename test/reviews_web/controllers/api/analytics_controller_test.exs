@@ -96,6 +96,58 @@ defmodule ReviewsWeb.Api.AnalyticsControllerTest do
     end
   end
 
+  test "collector credential is denied by the API plug including its OAuth fallback", %{
+    token: token
+  } do
+    conn =
+      build_conn(:get, "/api/v1/me")
+      |> put_req_header("authorization", "Bearer " <> token)
+      |> ReviewsWeb.Plugs.RequireApiToken.call([])
+
+    assert conn.halted
+    assert json_response(conn, 401)["errors"]
+    refute conn.assigns[:current_principal]
+  end
+
+  test "valid device-login CLI credentials cannot read aggregates" do
+    %{user: user} = activity()
+    {:ok, identity} = Reviews.Accounts.ensure_human_identity(user)
+
+    request =
+      build_conn()
+      |> post("/oauth/device_authorization", %{
+        "client_id" => "reviews-cli",
+        "resource" => Reviews.OAuth.CLI.id()
+      })
+      |> json_response(200)
+
+    assert :ok = Reviews.OAuth.approve_device(user, request["user_code"], identity.id)
+
+    tokens =
+      build_conn()
+      |> post("/oauth/token", %{
+        "grant_type" => "urn:ietf:params:oauth:grant-type:device_code",
+        "client_id" => "reviews-cli",
+        "device_code" => request["device_code"]
+      })
+      |> json_response(200)
+
+    conn =
+      build_conn()
+      |> put_req_header("authorization", "Bearer " <> tokens["access_token"])
+      |> get("/api/v1/me")
+
+    assert json_response(conn, 200)["username"] == user.username
+
+    conn =
+      build_conn()
+      |> put_req_header("authorization", "Bearer " <> tokens["access_token"])
+      |> get(@path)
+
+    assert json_response(conn, 401)["errors"]
+    assert get_resp_header(conn, "cache-control") == ["no-store"]
+  end
+
   test "arbitrary filters, SQL, request logging params, bodies and methods are rejected before logging",
        %{token: token} do
     log =

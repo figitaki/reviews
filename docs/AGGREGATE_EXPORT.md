@@ -1,6 +1,6 @@
 # Private aggregate export
 
-Status: implemented locally, not deployed or enabled. No collector credential has been generated or installed. Signed review publication uses the established Turnkey GPG workflow. Do not use SSH signing or unsigned commits. Deployment and credential provisioning require separate authorization.
+Status: implemented and deployed to the PR preview, not enabled or deployed to production. No collector credential has been generated or installed. Signed review publication uses the established Turnkey GPG workflow. Do not use SSH signing or unsigned commits. Deployment and credential provisioning require separate authorization.
 
 ## Contract
 

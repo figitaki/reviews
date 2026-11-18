@@ -72,3 +72,5 @@ config :reviews, Reviews.OAuth,
 config :phoenix_live_view, :test_warnings,
   duplicate_id: :raise,
   missing_form_id: :raise
+
+config :reviews, :design_catalog, true
