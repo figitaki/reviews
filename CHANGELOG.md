@@ -136,6 +136,13 @@ later fixes continue toward 0.0.2.
 
 ### Fixed
 
+- Faint text, green additions and red deletions now meet WCAG AA contrast
+  (4.5:1) on every surface in both themes, and form-field borders meet 3:1.
+  The fix is in the design tokens, so every screen picks it up.
+- Home, settings, device login and the sign-in pages no longer put a
+  second `<main>` landmark inside the page's own, so screen readers find
+  one main region and the skip link lands on it.
+
 - The REST and Poppy comment endpoints no longer return database error text.
   A `file_path` over 255 characters is now a `422` validation error.
 
