@@ -71,6 +71,11 @@ later fixes continue toward 0.0.2.
   labels did not grow at all. At the default size nothing moves. A test now
   fails on a px font size or a px space, radius or size token.
 
+- A section's review state lines up on phones: when a decision was carried
+  forward or made outdated, the history line sits under the label instead of
+  wrapping back under the status mark, here and in the decision panel.
+  `/design/components` shows every section review state.
+
 - Toolchain moved to Elixir 1.20.4 / Erlang 28.5.0.7 (Dockerfile, CI).
   Elixir 1.20.4 includes the fix for CVE-2026-75758.
 - Phoenix 1.8.15, LiveView 1.2.12, Tailwind CLI 4.3.3, esbuild 0.28.2 and

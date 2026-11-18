@@ -104,6 +104,20 @@ defmodule ReviewsWeb.DesignLiveTest do
     assert_push_event(view, "threads_updated:" <> ^path, %{threads: threads})
     assert length(Enum.find(threads, &(&1.id == 103)).comments) == 2
 
+    # The section header shows each review state, including a carried-forward
+    # decision and one made outdated by a change.
+    assert has_element?(
+             view,
+             "#dcp-section-states [data-theme=dark]",
+             "Approved (carried forward)"
+           )
+
+    assert has_element?(
+             view,
+             "#dcp-section-states [data-theme=light] .review-section-state-history",
+             "outdated for v3"
+           )
+
     render_hook(view, "toggle_hunk_diff", %{"hunk_id" => "dcp-hunk"})
     refute has_element?(view, "#dcp-hunk-summary.is-open")
 

@@ -453,7 +453,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :section_count, :integer, required: true
   attr :current_user, :any, default: nil
 
-  defp packet_section_header(assigns) do
+  # Public for the design catalog (/design/components).
+  def packet_section_header(assigns) do
     assigns =
       assign(assigns, :title_id, "review-split-section-overview-title-#{assigns.section.index}")
 
