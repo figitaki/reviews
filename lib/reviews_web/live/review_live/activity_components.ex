@@ -142,6 +142,7 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
           </svg>
         </summary>
         <div class="review-activity-body">
+          <p class="review-activity-heading" aria-hidden="true">Comments</p>
           <p data-activity-storage class="sr-only">
             Read state is saved in this browser, not your account.
           </p>

@@ -62,6 +62,13 @@ later fixes continue toward 0.0.2.
   append while you are on the page, and the log keeps its entries for the
   visit. It collapses to an icon, remembers that in this browser, and renders
   nothing when a review has no comments.
+- The Comments button is a small button fixed in the bottom-right corner at
+  every width, floating over the content. Opening it no longer grows the
+  button: the log opens as a separate panel above it with a short transition.
+  On phones the Comments button stays visible with no comments, and the log
+  closes on a tap outside it. The section decision bar and the Comments button
+  now stack above sticky diff file headers, using named z-index layers in
+  `tokens.css`.
 - The OAuth issuer runs on [gatekeep](https://github.com/figitaki/gatekeep)
   (`Reviews.OAuth`). Endpoints, metadata, scopes, the agents-only rule,
   refresh rotation, DPoP, and Settings → Connected agents work as before, and

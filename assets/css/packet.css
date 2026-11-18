@@ -212,7 +212,7 @@
 .review-toolbar {
   position: sticky;
   top: var(--review-app-nav-h);
-  z-index: 40;
+  z-index: var(--z-toolbar);
   display: flex;
   min-width: 0;
   align-items: center;
@@ -1337,7 +1337,7 @@ details[open] > summary .review-collapse-icon,
 
   position: sticky;
   bottom: calc(16px + env(safe-area-inset-bottom));
-  z-index: 8;
+  z-index: var(--z-decision);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1819,7 +1819,7 @@ details[open] > summary .review-collapse-icon,
 .reviews-markdown-sticky-header {
   position: sticky;
   top: var(--review-main-nav-h);
-  z-index: 10;
+  z-index: var(--z-sticky);
   background: var(--review-panel);
 }
 
@@ -2123,7 +2123,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-guide-shell {
   position: sticky;
-  z-index: 30;
+  z-index: var(--z-guide);
   top: var(--rev-header-h);
   display: grid;
   grid-template-columns: var(--guide-rail-w);
