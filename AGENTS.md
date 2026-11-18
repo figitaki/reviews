@@ -17,14 +17,32 @@ This file is for every coding agent (Claude Code, Codex, Cursor, …). `CLAUDE.m
 | JS unit tests | `cd assets && bun run test` |
 | Assets | `mix assets.build` (CI runs it; tailwind needs `NODE_PATH`, already wired) |
 | CLI | `cd cli && cargo build --release`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` |
-| Preview a change as a review | `reviews push` from any checkout, then open the printed `/r/<slug>` URL; `reviews push --update <slug>` adds a patchset; `reviews push --dry-run` validates without sending |
+| Preview a change as a review | `reviews push` from any checkout, then open the printed `/r/<slug>` URL; `reviews push --update <slug>` adds a patchset; `reviews push --dry-run` (alias `--validate`) validates without sending; on problems it lists each as `file:line: message` and exits 1 |
 
 CI (`.github/workflows/ci.yml`) runs format check, compile with warnings as errors, `bun install --frozen-lockfile`, `mix assets.build`, and `mix test`. Match it locally before pushing.
+
+## Review packets for PRs
+
+Every PR we push, including drafts, must include an up-to-date review packet link in the PR description's **Reviews Packet** section (`- Packet: <URL>`), so reviewers can find and review it. Use the printed `/r/<slug>` URL on `https://reviews-dev.fly.dev` or a reviewer-accessible preview host; name the preview host when using one. A localhost link is not accessible to reviewers.
+
+Follow [writing-review-packets](skills/writing-review-packets/SKILL.md). After committing the changes, capture the full PR diff explicitly (the CLI defaults to only `HEAD~1..HEAD`):
+
+```sh
+# For a PR targeting main; use the PR's actual base branch if different.
+git fetch origin main
+reviews push --dry-run --range origin/main...HEAD --packet /path/to/packet.md
+reviews push --range origin/main...HEAD --packet /path/to/packet.md
+# After each PR revision, refresh the packet and append to the same review.
+reviews push --update <slug> --range origin/main...HEAD --packet /path/to/packet.md
+```
+
+Run these from the PR checkout with the CLI configured for the intended review host. Keep packet prose and hunk references synchronized with the latest pushed PR head and base, covering every changed line exactly once. Refresh the packet after each push or rebase, verify the latest patchset matches the PR diff, and keep the PR description's link current. Use the unpinned review URL so reviewers open the latest patchset. Validate each revision with `--dry-run` before uploading; the CLI also validates packet structure and coverage during upload.
 
 ## Where things are
 
 - `lib/reviews/` contexts: `reviews.ex` (reviews, patchsets), `threads.ex`, `packet_section_decisions.ex`, `anchoring.ex`, `accounts.ex` (users, agent identities, API tokens), `code_snapshots.ex` + `code_storage/` (optional code.storage backend).
 - `lib/reviews_web/live/review_live.ex` is the review screen; its packet UI is in `review_live/packet_components.ex`, diff components in `review_live/diff_components.ex`. `settings_live.ex` holds identities and tokens.
+- `lib/reviews_web/mcp/` is the prototype hosted MCP server at `/mcp` (FastestMCP, off unless `MCP_ENABLED`); see `docs/MCP.md`.
 - `lib/reviews_web/controllers/api/` is the JSON API the CLI uses. `docs/CONTRACTS.md` documents it and the LiveView hook events; update it with any API change.
 - `assets/js/hooks/diff_renderer.js` mounts Pierre; rendering code is in `assets/js/diff_renderer/`; dataset parsing goes through Zod schemas in `assets/js/schemas.js`.
 - `assets/css/app.css` imports `tokens.css`, `components.css`, `packet.css` (review UI, `.review-*` / `.rev-*`), `landing.css`, `product-shell.css`. Use the `--ds-*` tokens; do not add hex colours in components.
@@ -39,7 +57,7 @@ Do not reopen these without the maintainer.
 - Input is the CLI only; no web paste.
 - Sharing is link-based: anyone with the URL can view. Commenting needs GitHub OAuth or an API token.
 - Comments publish immediately. Per-viewer drafts were removed (`priv/repo/migrations/20260519120000_drop_draft_review_support.exs`).
-- Decisions are per packet section, per patchset, per identity (`approved`, `denied`, `ignored`, `pending`) and carry forward to later patchsets until the section changes.
+- Decisions are per packet section, per patchset, per account (`approved`, `denied`, `ignored`, `pending`), record which identity made them, and carry forward to later patchsets until the section changes. The API sets a status explicitly; only the review page's button toggles.
 - Agent identities are first-class: an agent can push, comment and decide under its own handle and token.
 - Threads carry across patchsets by content, not line numbers. `Anchoring.relocate/3` matches a line by text and context and returns `{:error, :outdated}` when it cannot. Wiring it into `append_patchset` is open work; see the tracker. Token-range anchors can be written but not relocated; keep the `"token_range"` stub.
 - Code storage uses code.storage (Pierre) only; no local git adapter. It is optional, enabled by `CODE_STORAGE_*` env vars (see README).

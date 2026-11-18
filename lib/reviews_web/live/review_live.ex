@@ -21,6 +21,7 @@ defmodule ReviewsWeb.ReviewLive do
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
+  alias Reviews.Policy
   alias Reviews.ReviewNavigation
   alias Reviews.ReviewPacket
   alias Reviews.ReviewView
@@ -58,10 +59,15 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:page_title, review.title)
               |> assign(:current_user, current_user)
               |> assign(:current_identity, current_identity)
+              |> assign(
+                :can_decide_sections,
+                Policy.can?(current_identity, :decide_section, snapshot.review)
+              )
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
               |> assign(:expanded_hunk_ids, MapSet.new())
               |> assign(:expanded_section_ids, MapSet.new())
+              |> assign(:editing_decision_index, nil)
               |> assign(:active_outline_section_index, nil)
               |> assign(:changes_default_expanded_patchset_ids, MapSet.new())
               |> assign(:show_packet_outline, packet_outline_visible?(current_user))
@@ -79,7 +85,10 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_params(params, _uri, socket) do
+  def handle_params(params, uri, socket) do
+    %URI{path: path, query: query} = URI.parse(uri)
+    socket = assign(socket, :return_to, if(query, do: "#{path}?#{query}", else: path))
+
     case parse_optional_patchset(params["patchset"]) do
       {:ok, patchset_number} ->
         case refresh_snapshot(socket, patchset_number: patchset_number) do
@@ -110,6 +119,20 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
+  def handle_event("toggle_section_decision", %{"section_index" => index}, socket) do
+    with %{} = patchset <- socket.assigns.selected_patchset,
+         {section_index, ""} <- Integer.parse(to_string(index)),
+         %{} <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
+      editing =
+        if socket.assigns.editing_decision_index == section_index, do: nil, else: section_index
+
+      {:noreply, assign(socket, :editing_decision_index, editing)}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("set_section_status", %{"section_index" => index, "status" => status}, socket)
       when status in ["approved", "denied", "ignored"] do
     with %{} = identity <- socket.assigns.current_identity,
@@ -120,10 +143,17 @@ defmodule ReviewsWeb.ReviewLive do
       {:noreply,
        socket
        |> refresh_snapshot!()
+       |> assign(:editing_decision_index, nil)
        |> collapse_packet_section(section_index)}
     else
-      nil -> {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
-      _ -> {:noreply, put_flash(socket, :error, "Could not update section.")}
+      nil ->
+        {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
+
+      {:error, :forbidden} ->
+        {:noreply, put_flash(socket, :error, "Only the review owner can decide sections.")}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Could not update section.")}
     end
   end
 
@@ -208,6 +238,7 @@ defmodule ReviewsWeb.ReviewLive do
   def handle_event("select_packet_overview", _params, socket) do
     socket =
       socket
+      |> assign(:editing_decision_index, nil)
       |> assign(:active_outline_section_index, nil)
       |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
 
@@ -220,6 +251,7 @@ defmodule ReviewsWeb.ReviewLive do
       case parse_int(section_index) do
         index when is_integer(index) ->
           socket
+          |> assign(:editing_decision_index, nil)
           |> assign(:active_outline_section_index, index)
           |> assign(:expanded_section_ids, MapSet.put(socket.assigns.expanded_section_ids, index))
           |> auto_open_section_hunks(index)
@@ -329,6 +361,14 @@ defmodule ReviewsWeb.ReviewLive do
              ) do
           {:ok, _thread} ->
             {:noreply, push_threads_for_file(socket, params["file_path"])}
+
+          {:error, :forbidden} ->
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               "Only the review owner or the thread's author can resolve or reopen it."
+             )}
 
           {:error, reason} ->
             Logger.warning("update_thread_status failed: #{inspect(reason)}")
@@ -486,7 +526,7 @@ defmodule ReviewsWeb.ReviewLive do
     <div class="review-page min-h-screen">
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
-          <.user_menu current_user={@current_user} />
+          <.user_menu current_user={@current_user} return_to={@return_to} />
         </:actions>
 
         <% packet = @selected_patchset && @selected_patchset.packet %>
@@ -591,6 +631,9 @@ defmodule ReviewsWeb.ReviewLive do
                 selected_patchset={@selected_patchset}
                 published_threads={@published_threads}
                 current_user={@current_user}
+                editing_decision_index={@editing_decision_index}
+                can_decide_sections={@can_decide_sections}
+                return_to={@return_to}
                 diff_style={@diff_style}
                 expanded_hunk_ids={@expanded_hunk_ids}
                 show_packet_outline={show_packet_outline}
@@ -623,10 +666,14 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   attr :current_user, :any, default: nil
+  attr :return_to, :string, default: "/"
 
   defp user_menu(%{current_user: nil} = assigns) do
     ~H"""
-    <a href="/auth/github" class="review-button review-button-secondary">
+    <a
+      href={~p"/auth/github?#{[return_to: @return_to]}"}
+      class="review-button review-button-secondary"
+    >
       Sign in
     </a>
     """
@@ -846,10 +893,8 @@ defmodule ReviewsWeb.ReviewLive do
     |> Map.get(:display_raw_diff, "")
     |> to_string()
     |> String.split("\n")
-    |> Enum.count(fn line ->
-      !String.starts_with?(line, ["diff --git", "index ", "--- ", "+++ ", "@@ "]) &&
-        String.trim(line) != ""
-    end)
+    |> Enum.drop_while(&(not String.starts_with?(&1, "@@ ")))
+    |> Enum.count(&(!String.starts_with?(&1, "@@ ") && String.trim(&1) != ""))
   end
 
   defp update_hunk_view(socket, _params, _action) when is_nil(socket.assigns.current_user) do
@@ -1022,6 +1067,10 @@ defmodule ReviewsWeb.ReviewLive do
     |> assign(:review, snapshot.review)
     |> assign(:patchsets, snapshot.patchsets)
     |> assign(:selected_patchset, snapshot.selected_patchset)
+    |> assign(
+      :editing_decision_index,
+      if(previous_patchset_id == next_patchset_id, do: socket.assigns[:editing_decision_index])
+    )
     |> assign(:files, snapshot.files)
     |> assign(:file_diffs, snapshot.file_diffs)
     |> assign(:hunks_by_path, snapshot.hunks_by_path)
@@ -1134,15 +1183,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   defp file_diff_id(file), do: "file-diff-#{file.id}"
 
-  defp put_section_status(socket, patchset, user, section, status) do
-    PacketSectionDecisions.put_section_status(
-      socket.assigns.review,
-      patchset,
-      user,
-      section,
-      socket.assigns.packet_section_decisions,
-      socket.assigns.patchsets,
-      status
-    )
+  defp put_section_status(socket, patchset, identity, section, status) do
+    PacketSectionDecisions.toggle(socket.assigns.review, patchset, identity, section, status)
   end
 end

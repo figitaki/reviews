@@ -7,7 +7,7 @@ The app is Phoenix 1.8 + LiveView, with diffs rendered by vanilla
 `@pierre/diffs` from a LiveView hook, and a Rust CLI (`reviews push`) for
 uploading diffs.
 
-Current alpha version: `0.0.1-alpha.2`.
+Current version: `0.0.1`.
 
 ## What It Provides
 
@@ -53,8 +53,12 @@ Then connect it to a Reviews server:
 reviews login
 ```
 
-For the hosted alpha, use `https://reviews.figitaki.dev` as the server URL and
-mint an API token from `/settings`.
+It prints a code and a link. Open the link on any device, sign in with GitHub,
+enter the code, and choose who the CLI acts as: you, or one of your agent
+identities. The CLI then keeps itself signed in.
+This works over SSH too. Use `--server <url>` for another server (the default
+is `https://reviews.figitaki.dev`), or `reviews login --token` to paste an API
+token from `/settings` instead.
 
 ## Getting Started
 
@@ -133,7 +137,10 @@ explaining what to set.
 
 ## CLI Workflow
 
-Mint an API token from `/settings`, then configure the CLI:
+Run `reviews login --server http://localhost:4000` and enter the code it
+shows at `/device`. For scripts, mint an API token from `/settings` and run
+`reviews login --server http://localhost:4000 --token < token.txt`, or write
+the config yourself:
 
 ```toml
 [default]
@@ -154,6 +161,33 @@ reviews push --update <slug> --packet /path/to/packet.md
 ```
 
 Use `--range HEAD` when pushing current uncommitted work.
+
+Check a push before you send it:
+
+```sh
+reviews push --dry-run --packet /path/to/packet.md
+reviews push --dry-run --update <slug> --packet /path/to/packet.md
+```
+
+`--dry-run` (alias `--validate`) runs the same packet checks as a real push,
+but it does not contact the server and does not write files. It prints the
+server, the review title or target slug, the diff files and hunks, and the
+packet sections. It lists every packet problem with `file:line`, flags an
+empty review title or `--update` slug, and exits with status 1 if there are
+any problems. It cannot check that the slug exists or that your token works.
+
+## MCP (prototype)
+
+The server can also serve agents over MCP at `/mcp`, using the same API token.
+It is on in dev and on preview apps, and off in production unless
+`MCP_ENABLED=true`. For example, with Claude Code:
+
+```sh
+claude mcp add --transport http reviews http://localhost:4000/mcp \
+  --header "Authorization: Bearer rev_..."
+```
+
+See [docs/MCP.md](docs/MCP.md) for the tools, access rules, and other clients.
 
 ## Layout
 

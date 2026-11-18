@@ -51,11 +51,13 @@ defmodule ReviewsWeb.Endpoint do
 
   # `length: 50_000_000` lets diffs up to ~50MB flow through the JSON parser —
   # the CLI's `POST /api/v1/reviews` body is `raw_diff` JSON-wrapped.
-  plug Plug.Parsers,
+  # `/mcp` requests are capped at `mcp_length` before decoding.
+  plug ReviewsWeb.Plugs.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
     json_decoder: Phoenix.json_library(),
-    length: 50_000_000
+    length: 50_000_000,
+    mcp_length: 4_000_000
 
   plug Plug.MethodOverride
   plug Plug.Head

@@ -85,6 +85,7 @@ const DiffRenderer = {
       container: this.el,
       filePath,
       rawDiff,
+      fullDiff: ds.fullDiff,
       signedIn,
       threads: initialThreads,
       diffStyle: initialDiffStyle,

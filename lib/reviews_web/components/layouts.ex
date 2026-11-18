@@ -99,6 +99,8 @@ defmodule ReviewsWeb.Layouts do
     default: true,
     doc: "whether to include the in-page #chapter-push 'Workflow' anchor link"
 
+  attr :return_to, :string, default: "/", doc: "the local path to return to after sign-in"
+
   def landing_topbar(assigns) do
     ~H"""
     <header class="l-topbar">
@@ -150,7 +152,10 @@ defmodule ReviewsWeb.Layouts do
               <span>{@current_user.username}</span>
             </.link>
           <% else %>
-            <.link href={~p"/auth/github"} class="r-button r-button-primary l-nav-signin">
+            <.link
+              href={~p"/auth/github?#{[return_to: @return_to]}"}
+              class="r-button r-button-primary l-nav-signin"
+            >
               Sign in
             </.link>
           <% end %>

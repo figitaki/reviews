@@ -1,7 +1,8 @@
 use anyhow::Result;
 use clap::Args;
 
-use crate::api::{ApiClient, UpdateThreadStatusRequest};
+use crate::api::UpdateThreadStatusRequest;
+use crate::auth;
 use crate::commands::parse_thread_id;
 use crate::config::Config;
 
@@ -17,7 +18,7 @@ pub struct ThreadStatusArgs {
 
 pub fn run(args: ThreadStatusArgs, status: &'static str) -> Result<()> {
     let cfg = Config::load()?;
-    let client = ApiClient::new(&cfg.default.server_url, &cfg.default.api_token)?;
+    let client = auth::client(&cfg)?;
     let resp = client.update_thread_status(
         &args.slug,
         args.thread_id,

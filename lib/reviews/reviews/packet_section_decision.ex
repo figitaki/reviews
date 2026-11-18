@@ -1,6 +1,8 @@
 defmodule Reviews.Reviews.PacketSectionDecision do
   @moduledoc """
-  Per-reviewer decision for one packet section in one patchset.
+  One account's decision for one packet section in one patchset. An account
+  is a person and their agent identities; `author` is the identity that made
+  the decision.
   """
   use Ecto.Schema
   import Ecto.Changeset
@@ -19,11 +21,12 @@ defmodule Reviews.Reviews.PacketSectionDecision do
     belongs_to :review, Reviews.Reviews.Review
     belongs_to :patchset, Reviews.Reviews.Patchset
     belongs_to :author, Reviews.Accounts.Identity
+    belongs_to :account, Reviews.Accounts.User
 
     timestamps(type: :utc_datetime)
   end
 
-  @required ~w(review_id patchset_id author_id section_index section_title section_fingerprint status)a
+  @required ~w(review_id patchset_id author_id account_id section_index section_title section_fingerprint status)a
   @optional ~w(section_refs)a
 
   def changeset(decision, attrs) do
@@ -32,8 +35,8 @@ defmodule Reviews.Reviews.PacketSectionDecision do
     |> validate_required(@required)
     |> validate_number(:section_index, greater_than_or_equal_to: 0)
     |> validate_inclusion(:status, @statuses)
-    |> unique_constraint([:review_id, :patchset_id, :author_id, :section_index],
-      name: :packet_section_decisions_one_per_user_section
+    |> unique_constraint([:review_id, :patchset_id, :account_id, :section_index],
+      name: :packet_section_decisions_one_per_account_section
     )
   end
 

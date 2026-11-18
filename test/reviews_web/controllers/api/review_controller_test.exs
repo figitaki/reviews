@@ -5,6 +5,8 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
 
+  import Phoenix.LiveViewTest
+
   describe "POST /api/v1/reviews" do
     setup do
       {:ok, user} =
@@ -24,6 +26,53 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
         Accounts.mint_token(user, %{name: "agent", identity_id: agent.id})
 
       %{user: user, raw_token: raw, agent: agent, agent_raw_token: agent_raw}
+    end
+
+    test "quoted UTF-8 paths survive upload and packet rendering", %{conn: conn, raw_token: raw} do
+      diff = ~S"""
+      diff --git "a/caf\303\251.txt" "b/caf\303\251.txt"
+      --- "a/caf\303\251.txt"
+      +++ "b/caf\303\251.txt"
+      @@ -1 +1 @@
+      -old
+      +new
+      """
+
+      packet = %{
+        "title" => "Quoted paths",
+        "sections" => [
+          %{
+            "title" => "Text",
+            "rows" => [%{"kind" => "hunk", "path" => "café.txt", "hunk_index" => 1}]
+          }
+        ]
+      }
+
+      response =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews", %{
+          "title" => "Quoted paths",
+          "raw_diff" => diff,
+          "packet" => packet
+        })
+
+      %{"slug" => slug} = json_response(response, 201)
+      review = ReviewsContext.get_review_by_slug(slug)
+      {:ok, snapshot} = Reviews.ReviewView.snapshot(review, nil, [])
+      assert [%{path: "café.txt"}] = snapshot.file_diffs
+      assert [%{hunk_index: 1}] = snapshot.hunks_by_path["café.txt"]
+      assert ReviewsContext.raw_diff_for_file(snapshot.selected_patchset, "café.txt") == diff
+      assert ReviewsContext.raw_diff_for_file(snapshot.selected_patchset, "café") == nil
+
+      {:ok, view, _html} = live(build_conn(), ~p"/r/#{slug}")
+      render_click(view, "select_guide_section", %{"section_index" => "0"})
+
+      assert has_element?(
+               view,
+               ~s|#review-packet [phx-hook="DiffRenderer"][data-file-path="café.txt"]|
+             )
     end
 
     test "creates a review + patchset with a valid token", %{conn: conn, raw_token: raw} do
@@ -50,6 +99,29 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
 
       assert is_binary(slug) and slug != ""
       assert url =~ slug
+    end
+
+    test "rejects a title over 255 characters with a validation error",
+         %{conn: conn, raw_token: raw} do
+      # Postgres counts code points. "e\u0301" is one grapheme but two code
+      # points, so 128 of them must fail too.
+      for title <- [String.duplicate("t", 256), String.duplicate("e\u0301", 128)] do
+        conn =
+          conn
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> put_req_header("content-type", "application/json")
+          |> post(~p"/api/v1/reviews", %{
+            "title" => title,
+            "raw_diff" =>
+              "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+          })
+
+        assert json_response(conn, 422) == %{
+                 "error_code" => "validation_failed",
+                 "error_detail" => "Invalid input",
+                 "errors" => %{"title" => ["should be at most 255 character(s)"]}
+               }
+      end
     end
 
     test "stores the token identity as review author", %{
@@ -81,7 +153,9 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
         "format_version" => 1,
         "title" => "Reviewer guide",
         "summary" => "Read this first.",
-        "tour" => [%{"kind" => "hunk", "path" => "foo"}]
+        "sections" => [
+          %{"title" => "S", "rows" => [%{"kind" => "hunk", "path" => "foo", "hunk_index" => 1}]}
+        ]
       }
 
       body = %{
@@ -102,6 +176,68 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
 
       conn = get(build_conn(), ~p"/api/v1/reviews/#{slug}")
       assert get_in(json_response(conn, 200), ["selected_patchset", "packet"]) == packet
+    end
+
+    test "rejects empty packet strings and preserves literal placeholder text", %{
+      raw_token: raw,
+      user: user
+    } do
+      diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"
+
+      {:ok, %{review: review}} =
+        ReviewsContext.create_review_with_initial_patchset(user, %{title: "T", raw_diff: diff})
+
+      invalid = %{
+        "title" => "T",
+        "sections" => [
+          %{
+            "title" => "T",
+            "rows" => [
+              %{
+                "kind" => "hunk",
+                "path" => "%{unregistered_packet_placeholder}",
+                "hunk_index" => 1
+              }
+            ]
+          }
+        ]
+      }
+
+      for packet <- ["", invalid],
+          path <- ["/api/v1/reviews", "/api/v1/reviews/#{review.slug}/patchsets"] do
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> post(path, %{title: "T", raw_diff: diff, packet: packet})
+
+        assert %{"errors" => %{"packet" => errors}} = json_response(conn, 422)
+
+        if is_map(packet),
+          do:
+            assert(Enum.any?(errors, &String.contains?(&1, "%{unregistered_packet_placeholder}")))
+      end
+
+      assert length(ReviewsContext.list_patchsets(review)) == 1
+    end
+
+    test "rejects uncovered packets on both upload endpoints", %{raw_token: raw, user: user} do
+      diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n"
+      packet = %{"title" => "T", "sections" => []}
+
+      {:ok, %{review: review}} =
+        ReviewsContext.create_review_with_initial_patchset(user, %{title: "T", raw_diff: diff})
+
+      for path <- [~p"/api/v1/reviews", ~p"/api/v1/reviews/#{review.slug}/patchsets"] do
+        conn =
+          build_conn()
+          |> put_req_header("authorization", "Bearer #{raw}")
+          |> post(path, %{title: "T", raw_diff: diff, packet: packet})
+
+        assert %{"errors" => %{"packet" => errors}} = json_response(conn, 422)
+        assert Enum.any?(errors, &String.contains?(&1, "not in any hunk row"))
+      end
+
+      assert length(ReviewsContext.list_patchsets(review)) == 1
     end
 
     test "rejects requests with no bearer token", %{conn: conn} do
@@ -148,7 +284,13 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
           packet: %{
             "format_version" => 1,
             "title" => "Packet v1",
-            "summary" => "Initial packet."
+            "summary" => "Initial packet.",
+            "sections" => [
+              %{
+                "title" => "S",
+                "rows" => [%{"kind" => "hunk", "path" => "foo", "hunk_index" => 1}]
+              }
+            ]
           }
         })
 
@@ -157,7 +299,7 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
           "--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+newer\n"
 
       {:ok, ps2} =
-        ReviewsContext.append_patchset(review, %{
+        ReviewsContext.append_patchset_unchecked(review, %{
           base_sha: "cafef00d",
           branch_name: "carey/foo",
           raw_diff: diff_v2

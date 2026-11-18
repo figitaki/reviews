@@ -87,6 +87,7 @@ defmodule Reviews.AnalyticsFixtures do
       review_id: review.id,
       patchset_id: patchset.id,
       author_id: agent_two.id,
+      account_id: owner.id,
       section_index: 0,
       section_title: "PRIVATE-SECTION",
       section_fingerprint: "PRIVATE-FINGERPRINT",

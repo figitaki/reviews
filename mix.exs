@@ -4,7 +4,7 @@ defmodule Reviews.MixProject do
   def project do
     [
       app: :reviews,
-      version: "0.0.1-alpha.2",
+      version: "0.0.1",
       elixir: "~> 1.20",
       description: "Code-review tool for arbitrary diffs (Phoenix + Rust CLI).",
       package: [
@@ -36,7 +36,7 @@ defmodule Reviews.MixProject do
   def application do
     [
       mod: {Reviews.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools, :inets, :ssl]
     ]
   end
 
@@ -55,13 +55,13 @@ defmodule Reviews.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:phoenix, "~> 1.8.13"},
+      {:phoenix, "~> 1.8.15"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
       {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 4.4"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
-      {:phoenix_live_view, "~> 1.2.11"},
+      {:phoenix_live_view, "~> 1.2.12"},
       {:lazy_html, ">= 0.1.13", only: :test},
       {:sobelow, "== 0.18.1", only: [:dev, :test], runtime: false},
       {:phoenix_live_dashboard, "~> 0.9.1"},
@@ -80,7 +80,11 @@ defmodule Reviews.MixProject do
       {:dns_cluster, "~> 0.3.0"},
       {:bandit, "~> 1.14.1"},
       {:ueberauth, "~> 0.10"},
-      {:ueberauth_github, "~> 0.8"}
+      {:ueberauth_github, "~> 0.8"},
+      {:fastest_mcp, "~> 1.0.1"},
+      # The OAuth issuer (Reviews.OAuth). Not on Hex yet; pinned to the merge
+      # of figitaki/gatekeep#5 (the device authorization grant).
+      {:gatekeep, github: "figitaki/gatekeep", ref: "3f096d6950d69b5287dcd26f15b65ec0d463b541"}
     ]
   end
 

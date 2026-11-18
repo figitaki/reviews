@@ -41,6 +41,13 @@ defmodule Reviews.ThreadsTest do
     %{author: author, review: review}
   end
 
+  defp agent_for(user) do
+    Accounts.create_agent_identity(user, %{
+      handle: "agent-#{System.unique_integer([:positive])}",
+      display_name: "Agent"
+    })
+  end
+
   defp line_params(body \\ "Should be `:newer`?") do
     %{
       "file_path" => "lib/foo.ex",
@@ -202,7 +209,7 @@ defmodule Reviews.ThreadsTest do
     test "re-resolving keeps the original resolver and stays quiet" do
       %{author: author, review: review} = setup_review!()
       %{author: other} = setup_review!()
-      {:ok, %{thread: thread}} = Threads.publish_comment(review, author, line_params("nit"))
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, other, line_params("nit"))
       {:ok, resolved} = Threads.update_status(review, thread.id, author, "resolved")
 
       Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
@@ -214,6 +221,47 @@ defmodule Reviews.ThreadsTest do
       refute_receive {:thread_updated, _}
     end
 
+    test "only the review owner's and the thread author's accounts may change status" do
+      %{author: owner, review: review} = setup_review!()
+      %{author: commenter} = setup_review!()
+      %{author: stranger} = setup_review!()
+      {:ok, owner_agent} = agent_for(owner)
+      {:ok, commenter_agent} = agent_for(commenter)
+      {:ok, stranger_agent} = agent_for(stranger)
+      {:ok, %{thread: thread}} = Threads.publish_comment(review, commenter, line_params("nit"))
+      Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
+
+      for actor <- [stranger, stranger_agent], status <- ["resolved", "open"] do
+        assert {:error, :forbidden} = Threads.update_status(review, thread.id, actor, status)
+      end
+
+      assert %Thread{status: "open", resolved_by_id: nil} = Repo.get(Thread, thread.id)
+      refute_receive {:thread_updated, _}
+
+      for actor <- [owner, owner_agent, commenter, commenter_agent] do
+        assert {:ok, %Thread{status: "resolved"}} =
+                 Threads.update_status(review, thread.id, actor, "resolved")
+
+        assert {:ok, %Thread{status: "open"}} =
+                 Threads.update_status(review, thread.id, actor, "open")
+      end
+    end
+
+    test "a thread started by an agent can be resolved by its owner's human identity" do
+      %{review: review} = setup_review!()
+      %{author: commenter} = setup_review!()
+      %{author: stranger} = setup_review!()
+      {:ok, commenter_agent} = agent_for(commenter)
+
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, commenter_agent, line_params("nit"))
+
+      assert {:error, :forbidden} = Threads.update_status(review, thread.id, stranger, "resolved")
+
+      assert {:ok, %Thread{status: "resolved"}} =
+               Threads.update_status(review, thread.id, commenter, "resolved")
+    end
+
     test "treats an out-of-range thread id as a miss rather than crashing" do
       %{author: author, review: review} = setup_review!()
 
@@ -222,6 +270,34 @@ defmodule Reviews.ThreadsTest do
 
       assert {:error, :not_found} =
                Threads.update_status(review, "99999999999999999999", author, "resolved")
+    end
+
+    test "delegated principals act only within their scopes" do
+      %{review: review} = setup_review!()
+      %{author: commenter} = setup_review!()
+      {:ok, agent} = agent_for(commenter)
+      attribution = %{"provider" => "poppy", "client_id" => "https://agent.example"}
+
+      unscoped = Reviews.Principal.delegated(agent, commenter, [], attribution, :poppy)
+
+      scoped =
+        Reviews.Principal.delegated(agent, commenter, ["comments:write"], attribution, :poppy)
+
+      assert {:error, :forbidden} = Threads.publish_comment(review, unscoped, line_params("no"))
+      assert Threads.list_published_threads(review.id) == []
+
+      assert {:ok, %{thread: thread, comment: comment}} =
+               Threads.publish_comment(review, scoped, line_params("yes"))
+
+      assert comment.author_id == agent.id
+      assert comment.attribution == attribution
+
+      # The same identity may resolve its own thread with an API token, but an
+      # OAuth grant for comments does not extend to resolving.
+      assert {:error, :forbidden} = Threads.update_status(review, thread.id, scoped, "resolved")
+
+      assert {:ok, %Thread{status: "resolved"}} =
+               Threads.update_status(review, thread.id, agent, "resolved")
     end
   end
 end
