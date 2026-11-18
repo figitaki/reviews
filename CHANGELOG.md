@@ -6,6 +6,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- A review link that doesn't exist now shows a "Review not found" page with
+  a 404 status, instead of sending you to the home page with a brief message.
+  Any other unknown address shows a "Page not found" page in the app's usual
+  look, with the top bar and a link home, in place of plain "Not Found" text.
+
 - The review page is full width at every screen width. On wide screens the
   Comments button no longer reserves a column beside the content: it floats
   in the bottom-right corner with its log above it, as on tablets. The log

@@ -183,6 +183,16 @@ defmodule ReviewsWeb.ReviewLiveTest do
     %{author: author, review: review}
   end
 
+  test "an unknown review slug returns the 404 page", %{conn: conn} do
+    for path <- [~p"/r/doesnotexist", ~p"/r/doesnotexist/changes"] do
+      {404, _headers, body} = assert_error_sent 404, fn -> get(conn, path) end
+
+      page = LazyHTML.from_document(body)
+      assert page |> LazyHTML.query("#not-found") |> LazyHTML.text() =~ "Review not found"
+      assert page |> LazyHTML.query("#not-found-home") |> LazyHTML.attribute("href") == ["/"]
+    end
+  end
+
   describe "anonymous viewer" do
     setup :seed!
 

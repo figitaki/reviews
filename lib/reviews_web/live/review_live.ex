@@ -18,6 +18,11 @@ defmodule ReviewsWeb.ReviewLive do
 
   require Logger
 
+  defmodule NotFoundError do
+    @moduledoc false
+    defexception message: "review not found", plug_status: 404
+  end
+
   alias Reviews.Accounts
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
@@ -39,10 +44,7 @@ defmodule ReviewsWeb.ReviewLive do
   def mount(%{"slug" => slug}, session, socket) do
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
-        {:ok,
-         socket
-         |> put_flash(:error, "Review not found.")
-         |> push_navigate(to: ~p"/")}
+        raise NotFoundError
 
       review ->
         if connected?(socket) do
