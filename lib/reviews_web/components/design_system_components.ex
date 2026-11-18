@@ -90,24 +90,48 @@ defmodule ReviewsWeb.DesignSystemComponents do
     """
   end
 
+  @variant_classes %{"primary" => "is-primary", "ghost" => "is-ghost", "danger" => "is-danger"}
+  @size_classes %{"sm" => "is-sm", "lg" => "is-lg"}
+
+  @doc """
+  The one button. Pass `navigate`, `patch` or `href` to render it as a link
+  that looks the same; otherwise it is a `<button type="button">`.
+
+  `variant`: `primary` for the one main action in a view, `secondary` for
+  the rest, `ghost` for low-emphasis actions inside panels, `danger` for
+  destructive ones.
+
+  `size`: `sm` (28px) in dense rows, `md` (32px, compact) in toolbars and
+  panels, `lg` (40px, regular) in forms and page calls to action, the same
+  height as a field. On touch screens every size keeps a 44px tap target.
+
+  Hover and press change the surface only. Keyboard focus shows a ring in
+  `--ds-focus`. `disabled` dims to 38% and stops clicks.
+  """
   attr :variant, :string, default: "secondary", values: ~w(primary secondary ghost danger)
+  attr :size, :string, default: "md", values: ~w(sm md lg)
   attr :class, :any, default: nil
-  attr :rest, :global, include: ~w(type disabled aria-label phx-click phx-value-number)
+
+  attr :rest, :global,
+    include: ~w(type disabled form name value href navigate patch replace method download)
+
   slot :inner_block, required: true
 
   def ds_button(assigns) do
+    assigns =
+      assign(assigns,
+        link?: Enum.any?([:href, :navigate, :patch], &Map.has_key?(assigns.rest, &1)),
+        classes: [
+          "ds-button",
+          @variant_classes[assigns.variant],
+          @size_classes[assigns.size],
+          assigns.class
+        ]
+      )
+
     ~H"""
-    <button
-      type={@rest[:type] || "button"}
-      class={[
-        "ds-button",
-        @variant == "primary" && "is-primary",
-        @variant == "ghost" && "is-ghost",
-        @variant == "danger" && "is-danger",
-        @class
-      ]}
-      {@rest}
-    >
+    <.link :if={@link?} class={@classes} {@rest}>{render_slot(@inner_block)}</.link>
+    <button :if={!@link?} type={@rest[:type] || "button"} class={@classes} {@rest}>
       {render_slot(@inner_block)}
     </button>
     """
@@ -143,7 +167,7 @@ defmodule ReviewsWeb.DesignSystemComponents do
   def ds_empty_state(assigns) do
     ~H"""
     <div class="ds-empty-state">
-      <.icon name={@icon} class="size-5" />
+      <.icon name={@icon} class="ds-empty-icon size-5" />
       <h3>{@title}</h3>
       <p>{@body}</p>
       <div :if={@actions != []} class="ds-empty-actions">{render_slot(@actions)}</div>

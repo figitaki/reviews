@@ -608,12 +608,6 @@
   grid-template-columns: var(--guide-rail-w) minmax(0, 1fr);
 }
 
-/* Split diffs only run on wide screens, so split guide prose gets a
-   character-based measure instead of the 52rem default. */
-.review-packet-shell.is-guide-split {
-  --guide-measure: 72ch;
-}
-
 .review-packet-shell.is-outline-hidden {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -2519,8 +2513,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-guide-flyout-section,
-.review-guide-flyout-file,
-.review-guide-file-row {
+.review-guide-flyout-file {
   appearance: none;
   width: 100%;
   border: 0;
@@ -2697,119 +2690,6 @@ details[open] > summary .review-collapse-icon,
   font-weight: 720;
   line-height: 1;
   padding: 0 14px;
-}
-
-.review-guide-panel-files {
-  display: grid;
-  gap: 0;
-  margin-top: 42px;
-}
-
-.review-guide-files-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  color: var(--review-faint);
-  font-size: 10px;
-  font-weight: 760;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.review-guide-files-label span:last-child {
-  height: 1px;
-  flex: 1 1 auto;
-  background: var(--review-line);
-}
-
-.review-guide-file-row {
-  display: grid;
-  grid-template-areas:
-    "icon name stat"
-    "icon path state";
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  column-gap: 7px;
-  row-gap: 2px;
-  align-items: center;
-  min-height: 38px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--review-panel) 68%, transparent);
-  padding: 6px 8px;
-}
-
-.review-guide-file-row:hover {
-  border-color: var(--review-line);
-  background: var(--review-panel);
-}
-
-.review-guide-file-row:focus-visible {
-  outline: 2px solid var(--review-focus);
-  outline-offset: -2px;
-}
-
-.review-guide-file-row:disabled {
-  cursor: default;
-}
-
-.review-guide-file-row.is-partial .review-guide-file-state {
-  color: var(--review-warn);
-}
-
-.review-guide-file-icon {
-  grid-area: icon;
-  width: 14px;
-  height: 14px;
-  color: var(--review-faint);
-}
-
-.review-guide-file-name {
-  grid-area: name;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--review-text);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.review-guide-file-path {
-  grid-area: path;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--review-faint);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.review-guide-file-stat {
-  grid-area: stat;
-  justify-self: end;
-}
-
-.review-guide-file-state {
-  grid-area: state;
-  display: inline-flex;
-  align-items: center;
-  justify-self: end;
-  gap: 4px;
-  color: var(--review-faint);
-  font-size: 10px;
-  font-weight: 680;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.review-guide-file-row.is-viewed .review-guide-file-state {
-  color: var(--review-add);
 }
 
 .review-guide-open-threads {
@@ -3189,7 +3069,7 @@ details[open] > summary .review-collapse-icon,
     flex: 0 0 auto;
   }
 
-  .review-mobile-revision-nav .fieldset {
+  .review-mobile-revision-nav .ds-field {
     margin: 0;
     gap: 0;
     padding: 0;
@@ -3392,8 +3272,6 @@ details[open] > summary .review-collapse-icon,
 
   .review-section-header-title {
     order: 1;
-    font-size: clamp(22px, 6.4vw, 26px);
-    line-height: 1.2;
   }
 
   .review-section-header-meta {

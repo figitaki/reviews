@@ -19,60 +19,6 @@
   text-decoration: none;
 }
 
-/* ---- Button (review-button) ---- */
-.r-button {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid var(--ds-line-strong);
-  border-radius: 6px;
-  background: var(--ds-panel);
-  color: var(--ds-text);
-  font-family: var(--font-sans);
-  font-size: var(--font-ui-size);
-  font-weight: var(--font-ui-weight);
-  line-height: var(--font-ui-leading);
-  padding: 0 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease,
-              color 160ms ease, opacity 160ms ease;
-}
-.r-button:hover { background: var(--ds-hover); border-color: var(--ds-line-strong); }
-.r-button-primary {
-  background: var(--ds-text);
-  border-color: var(--ds-text);
-  color: var(--ds-bg);
-}
-/* Primary hover/active: stay inverted, just nudge contrast — never dim
-   the surface to ds-hover or the ink-on-ink swap goes illegible. */
-.r-button-primary:hover {
-  background: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
-  border-color: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
-  color: var(--ds-bg);
-}
-.r-button-primary:active {
-  background: color-mix(in oklab, var(--ds-text) 78%, var(--ds-bg));
-  border-color: color-mix(in oklab, var(--ds-text) 78%, var(--ds-bg));
-  color: var(--ds-bg);
-}
-.r-button:disabled { cursor: not-allowed; opacity: 0.38; }
-
-/* Pill variant — fully-rounded shape for "soft" actions that sit inline
-   with prose (e.g. section decisions, "Mark Viewed"). Same metrics as
-   the default; only the radius changes. */
-.r-button.is-pill {
-  border-radius: 999px;
-  padding-inline: 14px;
-}
-.r-button.is-pill.is-icon-only {
-  width: 28px;
-  min-height: 28px;
-  padding: 0;
-}
-
 /* ---- Status mark (A / M / D / R) ---- */
 .r-status-icon {
   display: inline-flex;

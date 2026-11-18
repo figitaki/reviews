@@ -13,6 +13,22 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   that profile allows (gatekeep, figitaki/gatekeep#7). See "Turnkey-held
   identity keys" in `docs/POPPY.md`.
 
+- `<.ds_button>` is the one button. It renders a link when given `navigate`,
+  `patch` or `href`, comes in `sm` (28px), `md` (32px) and `lg` (40px, the
+  height of a field), no longer lifts on hover, and keeps a 44px tap target on
+  touch screens. The `.r-button` styles are gone.
+
+- `<.input>` styles every field with the design system: a label above, 40px
+  fields with 14px text (16px on touch screens, so iOS no longer zooms in), a
+  readable placeholder, and a red border, `aria-invalid` and message on errors.
+  Callers no longer pass `class="ds-input"`.
+
+- A component playground at `/design/components` mounts the review page's
+  comment thread, composer and floating buttons from their real code with
+  sample data, in both themes and in phone and tablet frames. Replies and
+  resolving work there but save nothing. `/design` now also shows every
+  button and field state and says how each one behaves.
+
 - The "Verified agent" Token row for a DPoP-bound comment reads "Access token
   bound to agent key", so it can't be read as the Session JWT's key. The
   Bearer row is unchanged.
@@ -51,6 +67,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   Signed-out readers get the same control, and expanding it offers "Sign in
   to decide", which returns to the review with that section and its decision
   open.
+
+- Guide prose uses the same 52rem column in split and stacked diffs, so
+  switching diff style no longer changes its width. On phones, section
+  headings are 20px, the same size as on desktop.
 
 ## [0.0.2] - 2026-11-18
 
