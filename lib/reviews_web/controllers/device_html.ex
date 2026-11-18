@@ -9,7 +9,7 @@ defmodule ReviewsWeb.DeviceHTML do
   def sign_in(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="device-sign-in" class="l-page design-page">
+      <div id="device-sign-in" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow="Reviews CLI"
@@ -28,7 +28,7 @@ defmodule ReviewsWeb.DeviceHTML do
             </:actions>
           </.ds_page_header>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
@@ -36,7 +36,7 @@ defmodule ReviewsWeb.DeviceHTML do
   def entry(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="device-entry" class="l-page design-page">
+      <div id="device-entry" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow="Reviews CLI"
@@ -74,7 +74,7 @@ defmodule ReviewsWeb.DeviceHTML do
             </form>
           </.ds_card>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
@@ -82,7 +82,7 @@ defmodule ReviewsWeb.DeviceHTML do
   def confirm(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="device-confirm" class="l-page design-page">
+      <div id="device-confirm" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow="Reviews CLI"
@@ -148,7 +148,7 @@ defmodule ReviewsWeb.DeviceHTML do
             </form>
           </.ds_card>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
@@ -156,7 +156,7 @@ defmodule ReviewsWeb.DeviceHTML do
   def done(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="device-done" class="l-page design-page">
+      <div id="device-done" class="l-page design-page">
         <div class="design-main is-settings">
           <div :if={@outcome == :approved} id="device-approved">
             <.ds_empty_state
@@ -173,7 +173,7 @@ defmodule ReviewsWeb.DeviceHTML do
             />
           </div>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end
