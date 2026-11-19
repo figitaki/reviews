@@ -115,6 +115,12 @@ defmodule ReviewsWeb.SettingsLiveTest do
 
     [agent] = Accounts.list_agent_identities_for(user)
     assert has_element?(view, "#identity-agent-#{agent.id}", "@codex")
+    assert agent.provider == "Codex"
+
+    assert agent.avatar_url ==
+             ReviewsWeb.Endpoint.static_url() <> "/images/connectors/chatgpt.png"
+
+    assert has_element?(view, ~s|#identity-agent-#{agent.id} img[src="#{agent.avatar_url}"]|)
 
     view
     |> form("#mint-token-form", token: %{identity_id: agent.id, name: "codex-local"})
@@ -125,6 +131,35 @@ defmodule ReviewsWeb.SettingsLiveTest do
     assert has_element?(view, "#tokens-list", "Never used")
 
     refute render(view) =~ "token_hash"
+  end
+
+  test "a custom provider keeps its name, has no logo, and survives an error", %{conn: conn} do
+    user = user!()
+    {:ok, _} = Accounts.create_agent_identity(user, %{display_name: "Taken", handle: "taken"})
+    conn = Plug.Test.init_test_session(conn, %{current_user_id: user.id})
+    {:ok, view, _html} = live(conn, ~p"/settings")
+
+    refute has_element?(view, "#agent-custom-provider")
+    view |> form("#new-agent-identity-form", identity: %{provider: "custom"}) |> render_change()
+    assert has_element?(view, "#agent-custom-provider")
+
+    view
+    |> form("#new-agent-identity-form",
+      identity: %{display_name: "Hermes", handle: "taken", custom_provider: " Hermes "}
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#new-agent-identity-form", "has already been taken")
+    assert has_element?(view, ~s|#agent-custom-provider[value=" Hermes "]|)
+
+    view
+    |> form("#new-agent-identity-form", identity: %{handle: "hermes"})
+    |> render_submit()
+
+    agent = Enum.find(Accounts.list_agent_identities_for(user), &(&1.handle == "hermes"))
+    assert agent.provider == "Hermes"
+    assert agent.avatar_url == nil
+    assert has_element?(view, "#identity-agent-#{agent.id} .ds-avatar-mark", "H")
   end
 
   test "lists connected agents and disconnects one", %{conn: conn} do
