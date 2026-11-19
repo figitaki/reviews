@@ -23,6 +23,19 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   it. Opening the link scrolls to that thread or comment below the file
   header and highlights it briefly.
 
+- Replies no longer send a file's diff again. Marking a file viewed,
+  collapsing it, switching split or unified view and opening a section
+  decision sent every open diff back to the browser, about 590 KB on a
+  review with a 4,562-line file; they now send 1 to 3 KB.
+
+- Syntax highlighting runs in web workers. A diff shows as plain text first
+  and its colours fill in, so a large file no longer freezes the page. On a
+  4,562-line file, Mark viewed, collapse, expand and opening a thread each
+  blocked the page for about 2 s, and split or unified view for about 5 s;
+  now no frame on those actions runs longer than about 0.26 s, and large
+  files keep their colours. Switching between light and dark no longer
+  highlights files again.
+
 - Collapsing, expanding and marking a file viewed show at once, and the
   server saves the change in the background. The diff keeps its rendered,
   highlighted file while collapsed, so expanding it again does not highlight
@@ -304,6 +317,16 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
   `--update` slug, and exits 1 if there are any problems. A real push now
   also lists every packet problem at once.
 
+- Claude custom connectors, ChatGPT connectors, and other MCP clients can sign in to `/mcp` with
+  OAuth. The owner approves the app on a Reviews page, picks which of their agents it acts as (an
+  app never acts as the owner) and what it may do (read, push reviews, comment), and can disconnect
+  it in Settings. `search` and `fetch` tools let ChatGPT find and read reviews, and `reviews_list`
+  lists the account's reviews with the same filters as `reviews list`. API tokens keep working.
+  `/mcp` accepts requests from the Claude and ChatGPT origins, which
+  their connector check sends. The consent page shows Claude and ChatGPT as
+  recognized apps with their logos (one config list holds the known
+  connectors), and groups permissions into reads, always included, and writes
+  the owner can untick. See `docs/MCP.md`.
 - Personal Agents that support Poppy 1.0 can connect to Reviews. An owner approves one on a Reviews
   page and chooses which agent identity it acts as. Its comments show a "Verified agent" label with
   details that separate what was verified from what the agent says about itself. Owners can

@@ -13,8 +13,9 @@ class FakeVirtualizer {
 }
 
 class FakeVirtualizedFileDiff {
-  constructor(options) {
+  constructor(options, virtualizer, metrics, workers) {
     this.options = options
+    this.workers = workers
     calls.virtualized += 1
   }
   render() { this.options.onPostRender?.(null, this, "mount") }
@@ -25,8 +26,8 @@ class FakeVirtualizedFileDiff {
 }
 
 class FakeFileDiff extends FakeVirtualizedFileDiff {
-  constructor(options) {
-    super(options)
+  constructor(options, workers) {
+    super(options, null, null, workers)
     calls.virtualized -= 1
     calls.fileDiff += 1
   }
@@ -38,6 +39,11 @@ mock.module("@pierre/diffs", () => ({
   Virtualizer: FakeVirtualizer,
   VirtualizedFileDiff: FakeVirtualizedFileDiff,
   FileDiff: FakeFileDiff,
+}))
+const workers = { name: "worker pool" }
+mock.module("./worker_pool.js", () => ({
+  PIERRE_THEMES: { dark: "pierre-dark", light: "pierre-light" },
+  highlightWorkers: () => workers,
 }))
 const { VanillaDiffRenderer } = await import("./vanilla_renderer.js")
 const { default: DiffRendererHook } = await import("../hooks/diff_renderer.js")
@@ -172,4 +178,23 @@ test("collapsing a file shows at once, survives the server's patches, and reuses
   expect(pierre.options.collapsed).toBe(false)
   expect(calls.virtualized).toBe(1)
   expect(calls.fileDiff).toBe(0)
+})
+
+test("large and small files highlight through the worker pool in both themes", () => {
+  calls.fileDiff = 0
+  const renderer = new VanillaDiffRenderer({
+    container: fakeElement(), filePath: "big.js", rawDiff, signedIn: false,
+    threads: [], diffStyle: "split", hunkUI: null,
+  })
+  renderer.render()
+  expect(renderer.instance.workers).toBe(workers)
+  expect(renderer.instance.options.theme).toEqual({ dark: "pierre-dark", light: "pierre-light" })
+
+  const small = new VanillaDiffRenderer({
+    container: fakeElement(), filePath: "a.js", signedIn: false, threads: [], diffStyle: "split", hunkUI: null,
+    rawDiff: "diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-old\n+new\n",
+  })
+  small.render()
+  expect(calls.fileDiff).toBe(1)
+  expect(small.instance.workers).toBe(workers)
 })

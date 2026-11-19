@@ -568,6 +568,202 @@ textarea.ds-input{
   font-size: 0.8125rem;
 }
 
+/* Who is asking: a recognized app with its logo, or an unverified claim. */
+/* A short header, so the app and the form start on the first screen. */
+.ds-page-header.is-consent{
+  min-height: auto;
+  padding: var(--space-10) 0 var(--space-7);
+}
+
+.ds-page-header.is-consent h1{
+  font-size: var(--font-size-2xl);
+}
+
+.ds-page-header.is-consent .design-hero-copy{
+  margin-top: var(--space-3);
+  font-size: var(--font-size-base);
+}
+
+.consent-client{
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  margin-bottom: var(--space-7);
+}
+
+.consent-client-logo{
+  flex: none;
+  width: var(--size-control-lg);
+  height: var(--size-control-lg);
+  border-radius: var(--radius-md);
+}
+
+.consent-client-logo.is-unknown{
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--ds-line-strong);
+  color: var(--ds-faint);
+}
+
+.consent-client-text{
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.consent-client-name{
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  color: var(--ds-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-semi);
+}
+
+.consent-client-meta{
+  overflow-wrap: anywhere;
+  color: var(--ds-muted);
+  font-size: var(--font-size-sm);
+}
+
+.consent-badge{
+  gap: var(--space-1);
+  color: var(--ds-warn);
+  border-color: color-mix(in srgb, var(--ds-warn) 45%, var(--ds-line));
+}
+
+.consent-badge.is-recognized{
+  color: var(--ds-add);
+  border-color: color-mix(in srgb, var(--ds-add) 45%, var(--ds-line));
+  background: color-mix(in srgb, var(--ds-add) 10%, transparent);
+}
+
+.consent-details{
+  margin-top: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.consent-details summary{
+  width: max-content;
+  color: var(--ds-muted);
+  cursor: pointer;
+}
+
+.consent-details[open] summary{
+  margin-bottom: var(--space-4);
+}
+
+.consent-account{
+  margin: 0 0 var(--space-2);
+  color: var(--ds-muted);
+}
+
+.consent-account strong{
+  color: var(--ds-text);
+}
+
+/* Permissions, grouped into reads (always included) and writes. */
+.poppy-consent-form .consent-scopes{
+  gap: var(--space-5);
+}
+
+.consent-scope-group{
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--ds-line);
+  border-left: 3px solid var(--consent-accent);
+  border-radius: var(--radius-md);
+  background: var(--ds-panel-raised);
+  overflow: hidden;
+}
+
+.consent-scope-group.is-read{
+  --consent-accent: var(--ds-blue);
+}
+
+.consent-scope-group.is-write{
+  --consent-accent: var(--ds-warn);
+}
+
+.consent-scope-group-title{
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  border-bottom: 1px solid var(--ds-line);
+  padding: var(--space-4) var(--space-6);
+  color: var(--consent-accent);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.consent-scope-group-title span{
+  color: var(--ds-muted);
+  font-weight: var(--weight-regular);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.poppy-consent-form .consent-scope{
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+  padding: var(--space-5) var(--space-6);
+}
+
+.consent-scope + .consent-scope{
+  border-top: 1px solid var(--ds-line);
+}
+
+label.consent-scope{
+  cursor: pointer;
+}
+
+label.consent-scope:hover{
+  background: var(--ds-hover);
+}
+
+.consent-scope input[type="checkbox"]{
+  flex: none;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin-top: 0.125rem;
+  accent-color: var(--ds-add);
+}
+
+.consent-scope-mark{
+  flex: none;
+  margin-top: 0.125rem;
+  color: var(--ds-blue);
+}
+
+.consent-scope-text{
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.consent-scope-title{
+  color: var(--ds-text);
+  font-size: var(--font-size-base);
+  font-weight: var(--weight-semi);
+}
+
+.consent-scope-desc{
+  color: var(--ds-muted);
+  font-size: var(--font-size-sm);
+}
+
+.consent-scope-name{
+  justify-self: start;
+  color: var(--ds-faint);
+  font-size: var(--font-size-2xs);
+}
+
 /* CLI sign-in page (ReviewsWeb.DeviceHTML): one box per letter, 4-4. */
 .device-code{
   margin: 0;

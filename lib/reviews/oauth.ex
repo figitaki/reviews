@@ -94,7 +94,9 @@ defmodule Reviews.OAuth do
   @spec approve(User.t(), term(), Authorization.request(), [String.t()]) ::
           {:ok, String.t()} | {:error, :invalid_identity}
   def approve(%User{} = user, identity_id, request, granted_scopes) do
-    with {:ok, id} when is_integer(id) <- Ecto.Type.cast(:id, identity_id),
+    # IDs are bigints; a larger number would make the query raise.
+    with {:ok, id} when is_integer(id) and id <= 9_223_372_036_854_775_807 <-
+           Ecto.Type.cast(:id, identity_id),
          %Identity{kind: "agent"} = identity <- Accounts.get_owned_identity(user, id),
          {:ok, url} <-
            Authorization.approve(config(), request,

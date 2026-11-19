@@ -1255,6 +1255,45 @@ defmodule ReviewsWeb.ReviewLiveTest do
       %{conn: conn}
     end
 
+    test "replies send a file's diff only once", %{conn: conn, review: review} do
+      {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}/changes")
+      island = ~s|[phx-hook="DiffRenderer"][data-file-path="lib/foo.ex"]|
+      assert has_element?(view, island <> ~s|[data-raw-diff*="def bar, do: :new"]|)
+
+      # Everything the LiveView process sends to the client from here on.
+      :erlang.trace(view.pid, true, [:send])
+      hunk_id = changes_hunk_id(review, "lib/foo.ex")
+      render_click(view, "toggle_hunk_diff", %{"hunk_id" => hunk_id})
+
+      render_click(
+        view,
+        "mark_hunk_viewed",
+        hunk_view_params(review, "lib/foo.ex", 1, %{"hunk_id" => hunk_id})
+      )
+
+      render_click(view, "select_diff_style", %{"style" => "unified"})
+      :erlang.trace(view.pid, false, [:send])
+
+      sent =
+        Stream.repeatedly(fn ->
+          receive do
+            {:trace, _pid, :send, message, _to} -> message
+          after
+            0 -> nil
+          end
+        end)
+        |> Enum.take_while(& &1)
+
+      # The replies carry the state changes, and the island keeps its diff.
+      assert has_element?(
+               view,
+               island <>
+                 ~s|[data-hunk-viewed="true"][data-diff-style="unified"][data-raw-diff*="def bar"]|
+             )
+
+      refute Enum.any?(sent, &(:erlang.term_to_binary(&1) =~ "def bar, do: :new"))
+    end
+
     test "packet outline visibility is saved to the signed-in user's preferences", %{
       conn: conn,
       author: author
