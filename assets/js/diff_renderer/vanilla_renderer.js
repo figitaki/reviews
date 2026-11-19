@@ -10,6 +10,7 @@ import {
   threadStatusBadge,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { PIERRE_THEMES, highlightWorkers } from "./worker_pool.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
   annotationSideToSide,
@@ -150,19 +151,30 @@ const REVIEWS_DIFF_HEADER_CSS = `
   }
 `
 
-function currentPierreTheme() {
+// An explicit page theme wins; otherwise Pierre follows the system setting.
+function currentThemeType() {
   const explicit = document.documentElement.dataset.theme
-  if (explicit === "dark") return "pierre-dark"
-  if (explicit === "light") return "pierre-light"
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches
-    ? "pierre-dark"
-    : "pierre-light"
+  return explicit === "dark" || explicit === "light" ? explicit : "system"
+}
+
+// Pierre's highlight caches are keyed by cacheKey alone, and parsePatchFiles
+// builds it from the prefix and the file's index. Packet hunks slice the same
+// file differently, so the prefix carries a hash of the patch text.
+function contentHash(text) {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
 }
 
 export function parsePatch(rawDiff, filePath) {
   if (!rawDiff || typeof Diffs.parsePatchFiles !== "function") return null
   try {
-    const parsed = Diffs.parsePatchFiles(rawDiff, { cacheKeyPrefix: filePath || "patch" })
+    const parsed = Diffs.parsePatchFiles(rawDiff, {
+      cacheKeyPrefix: `${filePath || "patch"}:${rawDiff.length}:${contentHash(rawDiff)}`,
+    })
     const files = Array.isArray(parsed)
       ? parsed.flatMap((patch) => patch?.files || [])
       : []
@@ -679,7 +691,8 @@ export class VanillaDiffRenderer {
 
   options() {
     return {
-      theme: currentPierreTheme(),
+      theme: PIERRE_THEMES,
+      themeType: currentThemeType(),
       diffStyle: this.diffStyle,
       overflow:
         this.diffStyle === "unified" && !(this.compact() && LOCKFILE.test(this.filePath)) ? "wrap" : "scroll",
@@ -762,7 +775,7 @@ export class VanillaDiffRenderer {
         }
       }
       // One shared Pierre header stays above the notice in both modes.
-      this.headerInstance = new Diffs.FileDiff({ ...this.options(), collapsed: true })
+      this.headerInstance = new Diffs.FileDiff({ ...this.options(), collapsed: true }, highlightWorkers() ?? undefined)
       this.headerInstance.render({ ...this.renderArgs(), containerWrapper: headerContainer, lineAnnotations: [] })
       return
     }
@@ -780,7 +793,7 @@ export class VanillaDiffRenderer {
       if (this.tryRenderVirtualized(options, renderArgs)) return
     }
 
-    this.instance = new Diffs.FileDiff(options)
+    this.instance = new Diffs.FileDiff(options, highlightWorkers() ?? undefined)
     this.instance.render(renderArgs)
   }
 
@@ -807,7 +820,8 @@ export class VanillaDiffRenderer {
         {
           lineHeight: 20,
           diffHeaderHeight: 44,
-        }
+        },
+        highlightWorkers() ?? undefined
       )
       this.instance.render({ ...renderArgs, containerWrapper: contentWrapper })
       this.container.dataset.virtualized = "true"

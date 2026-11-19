@@ -13,15 +13,18 @@ class FakeVirtualizer {
 }
 
 class FakeVirtualizedFileDiff {
-  constructor(options) { this.options = options }
+  constructor(options, virtualizer, metrics, workers) {
+    this.options = options
+    this.workers = workers
+  }
   render() { this.options.onPostRender?.(null, this, "mount") }
   getLinePosition(lineNumber, side) { return side === "additions" ? { top: lineNumber * 20, height: 20 } : undefined }
   cleanUp() {}
 }
 
 class FakeFileDiff extends FakeVirtualizedFileDiff {
-  constructor(options) {
-    super(options)
+  constructor(options, workers) {
+    super(options, null, null, workers)
     calls.fileDiff += 1
   }
 }
@@ -32,6 +35,11 @@ mock.module("@pierre/diffs", () => ({
   Virtualizer: FakeVirtualizer,
   VirtualizedFileDiff: FakeVirtualizedFileDiff,
   FileDiff: FakeFileDiff,
+}))
+const workers = { name: "worker pool" }
+mock.module("./worker_pool.js", () => ({
+  PIERRE_THEMES: { dark: "pierre-dark", light: "pierre-light" },
+  highlightWorkers: () => workers,
 }))
 const { VanillaDiffRenderer } = await import("./vanilla_renderer.js")
 
@@ -111,4 +119,22 @@ test("opening a thread keeps a large file virtualized and focuses the thread aft
   expect(container.dataset.virtualized).toBe("true")
   expect(calls.fileDiff).toBe(0)
   expect(calls.scrolls).toHaveLength(1)
+})
+
+test("large and small files highlight through the worker pool in both themes", () => {
+  const renderer = new VanillaDiffRenderer({
+    container: fakeElement(), filePath: "big.js", rawDiff, signedIn: false,
+    threads: [], diffStyle: "split", hunkUI: null,
+  })
+  renderer.render()
+  expect(renderer.instance.workers).toBe(workers)
+  expect(renderer.instance.options.theme).toEqual({ dark: "pierre-dark", light: "pierre-light" })
+
+  const small = new VanillaDiffRenderer({
+    container: fakeElement(), filePath: "a.js", signedIn: false, threads: [], diffStyle: "split", hunkUI: null,
+    rawDiff: "diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-old\n+new\n",
+  })
+  small.render()
+  expect(calls.fileDiff).toBe(1)
+  expect(small.instance.workers).toBe(workers)
 })

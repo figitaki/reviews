@@ -6,6 +6,14 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Syntax highlighting runs in web workers. A diff shows as plain text first
+  and its colours fill in, so a large file no longer freezes the page. On a
+  4,562-line file, Mark viewed, collapse, expand and opening a thread each
+  blocked the page for about 2 s, and split or unified view for about 5 s;
+  now no frame on those actions runs longer than about 0.26 s, and large
+  files keep their colours. Switching between light and dark no longer
+  highlights files again.
+
 - Opening a thread in a large file keeps the file virtualized. The diff
   scrolls to the thread's line and focuses it, instead of rendering every
   row. Before, a thread on a 4,562-line file put all 4,562 rows in the page,
