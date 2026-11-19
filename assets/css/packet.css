@@ -2355,7 +2355,9 @@ details[open] > summary .review-collapse-icon,
 }
 
 /* Touch: each square gets a 44px target. The squares stay 32px and move
-   12px apart, so neighbouring targets meet without overlapping. */
+   12px apart, so neighbouring targets meet without overlapping. Where the
+   rail or strip is short of room, the rules for its orientation below
+   narrow the gaps and split the targets at their midpoints. */
 @media (pointer: coarse) {
   .review-edge-rail,
   .review-edge-rail-ticks {
@@ -2470,6 +2472,56 @@ details[open] > summary .review-collapse-icon,
 
 .review-guide-shell.is-flyout-open .review-edge-rail {
   display: none;
+}
+
+@media (min-width: 769px) {
+  /* The collapsed rail is exactly the height under the headers. If the
+     numbers do not fit, only they scroll, so the menu and close stay on
+     screen. */
+  .review-edge-rail {
+    height: calc(100dvh - var(--rev-header-h));
+    min-height: 0;
+  }
+
+  .review-edge-rail-ticks {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+}
+
+/* Touch, desktop rail: the same sharing as the phone strip, turned
+   vertical. The height left after the 32px squares becomes equal gaps of
+   4px to 12px, and each target reaches the midpoint of the gaps above and
+   below it. Only when even 4px gaps do not fit do the numbers scroll; the
+   padding keeps the scroller from clipping their targets, and the negative
+   margin cancels it visually. */
+@media (min-width: 769px) and (pointer: coarse) {
+  .review-edge-rail {
+    --guide-gap: clamp(
+      var(--space-1),
+      (100dvh - var(--rev-header-h) - 2 * var(--space-3) - var(--guide-items, 9) * var(--size-control-md)) / (var(--guide-items, 9) - 1),
+      calc(44px - var(--size-control-md))
+    );
+    --guide-hit-y: calc(var(--guide-gap) / 2);
+  }
+
+  .review-edge-rail,
+  .review-edge-rail-ticks {
+    gap: var(--guide-gap);
+  }
+
+  .review-edge-rail-ticks {
+    margin-block: calc(-1 * var(--guide-hit-y));
+    padding: var(--guide-hit-y) calc((44px - var(--size-control-md)) / 2);
+  }
+
+  .review-edge-rail-menu::after,
+  .review-edge-rail-hide::after,
+  .review-edge-tick::after {
+    inset-block: calc(-1 * (var(--guide-hit-y) + var(--border-hair)));
+  }
 }
 
 @media (min-width: 769px) {

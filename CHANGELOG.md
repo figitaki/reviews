@@ -19,7 +19,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   midpoint of the gaps beside it, so it is 44px wide with few sections and
   narrower (42px with six sections at 390px) when the row is full. Only a
   row that does not fit even with 4px gaps, such as ten sections, scrolls
-  its numbers between the menu and close.
+  its numbers between the menu and close. The collapsed desktop rail is held to
+  the height under the headers and shares its height the same way on touch
+  screens, so the close button stays on screen; with too many sections for
+  4px gaps, its numbers scroll between the menu and close.
 
 - Button labels are centred on their letters. A line box keeps the font's
   descent, so labels without descenders such as "Mark viewed" and an
