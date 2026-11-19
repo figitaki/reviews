@@ -36,8 +36,32 @@ defmodule Reviews.Markdown do
   defp text(%MDEx.CodeBlock{literal: literal}), do: [" ", literal, " "]
   defp text(%MDEx.SoftBreak{}), do: " "
   defp text(%MDEx.LineBreak{}), do: " "
-  defp text(%MDEx.HtmlBlock{literal: literal}), do: [" ", literal, " "]
+  # With `html: false` the browser reads an HTML block as ordinary Markdown
+  # whose tags are text. Escaping the opening `<` makes the block a paragraph,
+  # so its Markdown and character references read as on the page; a later
+  # line that opens another block is shorter, so this ends.
+  defp text(%MDEx.HtmlBlock{literal: literal}) do
+    [" ", literal |> String.replace(~r/\A( {0,3})</, "\\1\\\\<") |> parse() |> text(), " "]
+  end
+
   defp text(%MDEx.HtmlInline{literal: literal}), do: literal
+
+  # A destination the browser refuses is not a link there: its source stays
+  # visible as text, as `[text](url)`, `![alt](url)` or `<url>`.
+  defp text(%module{url: url, nodes: nodes} = link) when module in [MDEx.Link, MDEx.Image] do
+    children = Enum.map(nodes, &text/1)
+
+    cond do
+      allowed_link?(url) ->
+        children
+
+      autolink?(link) ->
+        ["<", url, ">"]
+
+      true ->
+        [if(module == MDEx.Image, do: "![", else: "["), children, "](", url, title(link), ")"]
+    end
+  end
 
   defp text(%{nodes: nodes} = node) do
     children = Enum.map(nodes, &text/1)
@@ -46,6 +70,26 @@ defmodule Reviews.Markdown do
 
   # Nodes the options above never produce, such as front matter or math.
   defp text(_node), do: []
+
+  defp title(%{title: ""}), do: ""
+  defp title(%{title: title}), do: [~s( "), title, ~s(")]
+
+  defp autolink?(%MDEx.Link{url: url, nodes: [%MDEx.Text{literal: text}]}),
+    do: text in [url, String.replace_prefix(url, "mailto:", "")]
+
+  defp autolink?(_), do: false
+
+  @doc """
+  Whether the browser accepts `url` as a link or image destination. Mirrors
+  `markdown.validateLink` in `assets/js/lib/markdown.js`, which checks the
+  percent-encoded URL: raw control characters and backslashes count as their
+  encoded forms.
+  """
+  def allowed_link?(url) do
+    not Regex.match?(~r/%(?:0[0-9a-f]|1[0-9a-f]|5c|7f)|[\x00-\x1f\x7f\\]/i, url) and
+      not String.starts_with?(url, "//") and
+      (Regex.match?(~r/^(?:https?:|mailto:)/i, url) or not Regex.match?(~r/^[^\/?#]*:/, url))
+  end
 
   defp inline?(%module{}),
     do:

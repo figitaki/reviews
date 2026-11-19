@@ -40,10 +40,34 @@ defmodule ReviewsWeb.LinkPreviewTest do
           # Authored HTML reads as the text the browser shows, never as markup.
           {"a <b>bold</b> word\n\n<div>\nblock\n</div>", "a <b>bold</b> word <div> block </div>"},
           {"| a | b |\n|---|---|\n| 1 | ~~2~~ |\n\nsee https://x.test",
-           "a b 1 2 see https://x.test"}
+           "a b 1 2 see https://x.test"},
+          # Destinations the browser refuses stay visible as written.
+          {"[ok](https://x.test) [rel](/docs) [mail](mailto:a@b.test)", "ok rel mail"},
+          {"[proto](//example.com) [bad](custom:evil) [slash](a%5Cb)",
+           "[proto](//example.com) [bad](custom:evil) [slash](a%5Cb)"},
+          {~s{[**t**](javascript:x "T") ![alt](data:x) <custom:evil>},
+           ~s{[t](javascript:x "T") ![alt](data:x) <custom:evil>}},
+          # HTML block tags are text, and what is between them reads as Markdown.
+          {"<div>\n**fixed** &amp;\n</div>", "<div> fixed & </div>"},
+          {"<!-- note -->\n\n<details>\n_x_\n\n</details>",
+           "<!-- note --> <details> x </details>"}
         ] do
       assert LinkPreview.plain_text(markdown) == text, "for #{inspect(markdown)}"
     end
+  end
+
+  test "review descriptions are plain text, as the page shows them" do
+    preview = fn description ->
+      review = %{title: "T", description: description, author: %{handle: "carey"}}
+      LinkPreview.build(review, [], %{}, "https://x.test/r/a").description
+    end
+
+    assert preview.("Rename __init__ and **this**\n\n  twice") ==
+             "Rename __init__ and **this** twice"
+
+    assert preview.("---") == "---"
+    assert preview.(" \n ") == "Code review by carey"
+    assert preview.(nil) == "Code review by carey"
   end
 
   test "plain_text keeps private-use characters as written" do

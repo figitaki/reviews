@@ -22,8 +22,9 @@ defmodule ReviewsWeb.LinkPreview do
   end
 
   defp review_preview(review, url) do
+    # The page shows the description as plain text, not Markdown.
     description =
-      case plain_text(review.description) do
+      case review.description |> to_string() |> one_line() do
         "" -> "Code review by #{handle(review.author)}"
         text -> text
       end
@@ -81,6 +82,12 @@ defmodule ReviewsWeb.LinkPreview do
     markdown
     |> String.slice(0, @input_limit)
     |> Reviews.Markdown.to_text()
+    |> one_line()
+  end
+
+  defp one_line(text) do
+    text
+    |> String.slice(0, @input_limit)
     |> String.replace(~r/\s+/u, " ")
     |> String.trim()
     |> truncate()
