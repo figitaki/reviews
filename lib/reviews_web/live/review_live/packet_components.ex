@@ -401,19 +401,15 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         Overview · {@outline.summary.section_count} {plural(@outline.summary.section_count, "section")} · ~{@outline.summary.time}
       </span>
       <h2 id={@title_id} class="review-guide-panel-title">{@outline.overview.title}</h2>
-      <p :if={@author} id="review-overview-author" class="review-guide-author">
-        <.ds_avatar_mark identity={@author} round />
-        <span>
-          <span class="review-guide-author-name">{@author.display_name}</span>
-          <span translate="no">@{@author.handle}</span>
-          <span :if={@author.kind == "agent"} class="ds-badge">Agent</span>
+      <p :if={@author} class="review-guide-author">
+        <.ds_identity id="review-overview-author" identity={@author}>
           <span
             :if={@author.kind == "agent" && match?(%{username: _}, @author.owner_user)}
             id="review-overview-author-owner"
           >
             owned by <span translate="no">@{@author.owner_user.username}</span>
           </span>
-        </span>
+        </.ds_identity>
       </p>
       <.markdown
         :if={@outline.overview.summary != ""}

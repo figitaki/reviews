@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { formatRelative, threadPermalink, tokenBindingText } from "./annotation_ui.js"
+import { Comment } from "../schemas.js"
 
 test("the Token row names access-token binding, Bearer, or nothing for older comments", () => {
   assert.deepEqual(tokenBindingText("dpop"), ["Access token bound to agent key", null])
@@ -29,4 +30,10 @@ test("thread and comment links keep the view and patchset and replace an older t
   const page = "https://reviews.example/r/abc/changes?patchset=2&section=3&thread=9&comment=4#x"
   assert.equal(threadPermalink(45, undefined, page), "https://reviews.example/r/abc/changes?patchset=2&thread=45")
   assert.equal(threadPermalink(45, 7, page), "https://reviews.example/r/abc/changes?patchset=2&thread=45&comment=7")
+})
+
+test("comment authors keep the name and kind that <.ds_identity> shows", () => {
+  const author = { id: 1, username: "claude", handle: "claude", display_name: "Claude", kind: "agent", avatar_url: null }
+  const comment = Comment.parse({ id: 1, body: "Hi", author, attribution: null, inserted_at: null })
+  assert.deepEqual(comment.author, author)
 })

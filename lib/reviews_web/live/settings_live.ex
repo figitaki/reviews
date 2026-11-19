@@ -502,11 +502,7 @@ defmodule ReviewsWeb.SettingsLive do
   defp identity_row(assigns) do
     ~H"""
     <article id={@id} class="ds-identity-row">
-      <.ds_avatar_mark identity={@identity} />
-      <div class="ds-identity-main">
-        <h3>{@identity.display_name}</h3>
-        <p translate="no">@{@identity.handle}</p>
-      </div>
+      <.ds_identity identity={@identity} size="lg" square stacked agent_marker={false} />
       <div class="ds-identity-meta">
         <span class="ds-badge">{String.capitalize(@identity.kind)}</span>
         <span :if={@identity.provider}>{@identity.provider}</span>
