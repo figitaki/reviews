@@ -2170,6 +2170,24 @@ details[open] > summary .review-collapse-icon,
   padding: 2px 0;
 }
 
+/* The time shares the baseline of the body's first line of text, whatever
+   block the comment starts with: a code block's or table's padding is part
+   of the body's first baseline. The meta's own baseline is the time's (its
+   first item), and the link button centres on the time; the meta's fixed
+   height below keeps the button from adding to the row's height. */
+.review-thread-comment > .review-comment-markdown,
+.review-thread-comment > .review-comment-meta {
+  align-self: baseline;
+}
+
+/* A table row with no baseline-aligned cell takes the bottom of its lowest
+   cell as its baseline, so a comment that starts with a table would put the
+   time below the header text. Baseline-aligning that first row gives it the
+   text's own baseline; one-line header cells look the same either way. */
+.review-thread-comment > .review-comment-markdown > table:first-child tr:first-child > :is(th, td) {
+  vertical-align: baseline;
+}
+
 .review-thread-comment > * {
   grid-column: 1;
 }
@@ -2180,12 +2198,11 @@ details[open] > summary .review-collapse-icon,
   gap: 6px;
 }
 
-/* As tall as the body's first line (comment text is 0.8125rem at 1.5 line
-   height), so the time and the link button centre on that line; the button
-   overflows it evenly. */
 .review-thread-comment > .review-comment-meta {
   grid-column: 2;
   grid-row: 1;
+  /* One body line tall (0.8125rem at 1.5 line height), so the 24px link
+     button overflows evenly instead of adding to each row's height. */
   height: calc(1.5 * 0.8125rem);
 }
 
