@@ -119,6 +119,50 @@ defmodule ReviewsWeb.MCP.Server do
     |> then(&("Bearer " <> &1))
   end
 
+  @doc """
+  The Reviews logo, as `serverInfo.icons` (MCP 2025-11-25) names it for
+  clients that show a server's icon. Absolute URLs, since clients fetch them.
+  """
+  def icons do
+    base = public_url()
+
+    [
+      %{"src" => base <> "/images/logo.svg", "mimeType" => "image/svg+xml", "sizes" => ["any"]},
+      %{
+        "src" => base <> "/images/icon-512.png",
+        "mimeType" => "image/png",
+        "sizes" => ["512x512"]
+      },
+      %{
+        "src" => base <> "/images/icon-192.png",
+        "mimeType" => "image/png",
+        "sizes" => ["192x192"]
+      }
+    ]
+  end
+
+  # The site's URL from config: this server starts before the endpoint, so
+  # `ReviewsWeb.Endpoint.url/0` isn't available yet.
+  defp public_url do
+    case Application.get_env(:reviews, Reviews.OAuth, [])[:issuer] do
+      issuer when is_binary(issuer) ->
+        issuer
+
+      _ ->
+        endpoint = Application.get_env(:reviews, ReviewsWeb.Endpoint, [])
+        url = endpoint[:url] || []
+        scheme = url[:scheme] || "http"
+        # As Phoenix does: the URL's port, else the port the server listens on.
+        port = url[:port] || get_in(endpoint, [:http, :port])
+
+        URI.to_string(%URI{
+          scheme: scheme,
+          host: url[:host] || "localhost",
+          port: if(port in [nil, 80, 443], do: nil, else: port)
+        })
+    end
+  end
+
   @impl true
   def server(opts) do
     writes? = writes_enabled?()
@@ -128,7 +172,8 @@ defmodule ReviewsWeb.MCP.Server do
       title: "Reviews",
       version: to_string(Application.spec(:reviews, :vsn)),
       instructions: @instructions,
-      website_url: "https://github.com/figitaki/reviews"
+      website_url: "https://github.com/figitaki/reviews",
+      icons: icons()
     })
     |> base_server()
     |> FastestMCP.add_auth(&authenticate/2)

@@ -6,6 +6,12 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The Reviews mark (the R in a rounded square from the top bar) is now the
+  favicon, the home-screen icon (`apple-touch-icon.png`, `site.webmanifest`),
+  and the icon `/mcp` advertises in `serverInfo.icons`. Claude shows a custom
+  connector with its site's favicon, so it shows this mark instead of a
+  plain letter.
+
 - Switching split or unified view, a new or updated thread, opening the
   comment box and a theme change now update a file's diff in place, instead
   of building and highlighting it again. On a 4,562-line file, switching view

@@ -89,7 +89,9 @@ Known connectors are listed in one place, `config :reviews, Reviews.MCPAuth,
 connectors: [...]`, each with its `client_id` (its client metadata document
 URL), `name`, `publisher`, `logo` (a path under `priv/static`) and `origins`.
 Only a client signing in with that exact `client_id` is recognized; a
-registered client never is. To add an MCP client, add an entry and its logo. The owner picks which of their agent identities the client
+registered client never is. To add an MCP client, add an entry and its logo.
+
+The owner picks which of their agent identities the client
 acts as. An OAuth app never acts as the owner's human identity: the page
 doesn't offer it, and an approval naming it is refused. An owner with no
 agents can create one on the consent page. A scope never widens what
@@ -170,6 +172,11 @@ says how many threads it left out; read those with `reviews_list_threads`.
 
 Prompt: `address_feedback`, which walks an agent through reading, fixing,
 replying to and resolving open threads.
+
+`serverInfo` carries the Reviews logo in `icons` (MCP 2025-11-25): the SVG
+and 512 and 192 px PNGs, by absolute URL. Claude doesn't show a custom
+connector's `serverInfo.icons` yet; it looks up the favicon of the site's
+domain instead, which is the same logo on `reviews.figitaki.dev`.
 
 Every tool has a title and sets `readOnlyHint`, `destructiveHint`,
 `idempotentHint` and `openWorldHint` explicitly, as Claude's connector docs and
