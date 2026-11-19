@@ -186,7 +186,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       phx-hook="GuideFlyout"
       aria-label="Review guide"
     >
-      <nav id="review-edge-rail" class="review-edge-rail" aria-label="Review sections">
+      <nav
+        id="review-edge-rail"
+        class="review-edge-rail"
+        style={"--guide-items: #{length(@outline.sections) + 3}"}
+        aria-label="Review sections"
+      >
         <button
           type="button"
           class="review-edge-rail-menu"

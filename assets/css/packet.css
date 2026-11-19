@@ -3178,18 +3178,47 @@ details[open] > summary .review-collapse-icon,
     flex-direction: row;
   }
 
-  /* Nine 44px targets (menu, overview, six sections, close) need 396px, more
-     than a 390px phone has. The menu and close stay put and the numbers
-     scroll between them. The padding keeps the end targets unclipped; the
-     negative margin keeps the visible 12px gaps. */
+  /* Touch phones fit the whole strip in one row. The width left after the
+     32px squares is shared out as equal gaps between 4px (the mouse gap) and
+     12px (where 44px targets fit). Each target covers its square plus half
+     of each gap, so neighbouring targets meet at the midpoint: a tap goes to
+     the nearest control, and targets narrow below 44px only when the row is
+     full. --guide-items (menu, overview, sections, close) is set on the rail.
+     Only when even 4px gaps do not fit do the numbers scroll, between the
+     menu and close, which stay put. The padding keeps the scroller from
+     clipping the targets; the negative margin cancels it visually. */
   @media (pointer: coarse) {
+    .review-guide-shell {
+      container-type: inline-size;
+    }
+
+    .review-edge-rail {
+      --guide-gap: clamp(
+        var(--space-1),
+        (100cqw - 24px - var(--guide-items, 9) * var(--size-control-md)) / (var(--guide-items, 9) - 1),
+        calc(44px - var(--size-control-md))
+      );
+      --guide-hit-x: calc(var(--guide-gap) / 2);
+    }
+
+    .review-edge-rail,
+    .review-edge-rail-ticks {
+      gap: var(--guide-gap);
+    }
+
     .review-edge-rail-ticks {
       flex: 0 1 auto;
       min-width: 0;
       overflow-x: auto;
-      margin-inline: calc((var(--size-control-md) - 44px) / 2);
-      padding: calc((44px - var(--size-control-md)) / 2);
+      margin-inline: calc(-1 * var(--guide-hit-x));
+      padding: calc((44px - var(--size-control-md)) / 2) var(--guide-hit-x);
       scrollbar-width: none;
+    }
+
+    .review-edge-rail-menu::after,
+    .review-edge-rail-hide::after,
+    .review-edge-tick::after {
+      inset-inline: calc(-1 * (var(--guide-hit-x) + var(--border-hair)));
     }
   }
 

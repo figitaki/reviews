@@ -13,10 +13,13 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   version picker drops from 44px to 32px, the account button from 44px to
   32px, and the Guide map's menu, star, numbers and close are one 32px
   square each, 4px apart, with only the selected one filled. Touch screens
-  keep a 44px tap target around each without the box growing: the Guide map
-  squares move 12px apart so their targets do not overlap, and on a phone
-  the section numbers scroll between the menu and close when nine targets
-  do not fit.
+  keep a 44px tap target around each without the box growing. On touch
+  phones the Guide map keeps the whole row on screen: the spare width is
+  split into equal gaps of 4px to 12px, and each target reaches the
+  midpoint of the gaps beside it, so it is 44px wide with few sections and
+  narrower (42px with six sections at 390px) when the row is full. Only a
+  row that does not fit even with 4px gaps, such as ten sections, scrolls
+  its numbers between the menu and close.
 
 - Button labels are centred on their letters. A line box keeps the font's
   descent, so labels without descenders such as "Mark viewed" and an
