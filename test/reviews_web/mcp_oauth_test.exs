@@ -236,6 +236,22 @@ defmodule ReviewsWeb.MCPOAuthTest do
       assert probe.("https://evil.example", :post).status == 403
     end
 
+    test "serverInfo names the Reviews logo by absolute URL, and the files are served", ctx do
+      tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
+      info = mcp(tokens["access_token"], "server/discover") |> json_response(200)
+      # 2026-07-28 puts serverInfo in every result's _meta.
+      icons = get_in(info, ["result", "_meta", "io.modelcontextprotocol/serverInfo", "icons"])
+
+      assert [%{"src" => svg, "mimeType" => "image/svg+xml"} | pngs] = icons
+      assert svg == @issuer <> "/images/logo.svg"
+      assert Enum.all?(pngs, &(&1["mimeType"] == "image/png"))
+
+      for %{"src" => src} <- icons do
+        path = URI.parse(src).path
+        assert build_conn() |> get(path) |> response(200), path
+      end
+    end
+
     test "protected resource and issuer metadata lead to the sign-in endpoints", %{conn: conn} do
       resource =
         conn |> get("/.well-known/oauth-protected-resource/mcp") |> json_response(200)

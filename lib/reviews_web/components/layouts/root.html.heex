@@ -11,6 +11,10 @@
     <meta name="diffs-worker" content={~p"/assets/js/diffs_worker.js"} />
     <meta name="theme-color" content="#fafafa" />
     <meta name="theme-color" content="#19232f" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href={~p"/favicon.ico"} sizes="48x48" />
+    <link rel="icon" href={~p"/images/logo.svg"} type="image/svg+xml" />
+    <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />
+    <link rel="manifest" href={~p"/site.webmanifest"} />
     <.live_title default="Reviews" phx-no-format>{assigns[:page_title]}</.live_title>
     <.link_preview_tags preview={assigns[:link_preview]} />
     <script phx-track-static src={~p"/assets/js/theme.js"}>

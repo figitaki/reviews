@@ -107,6 +107,7 @@ jobs:
           PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
           PREVIEW_AUTH_RELAY_SECRET: ${{ secrets.PREVIEW_AUTH_RELAY_SECRET }}
           PREVIEW_API_TOKEN: ${{ secrets.PREVIEW_API_TOKEN }}
+          PREVIEW_CODE_STORAGE_JWT_PRIVATE_KEY: ${{ secrets.PREVIEW_CODE_STORAGE_JWT_PRIVATE_KEY }}
         run: |
           # No tracing in this step: DATABASE_URL below is built from a
           # secret, and GitHub masks only the exact secret value.
@@ -143,6 +144,18 @@ jobs:
             "AUTH_RELAY_SECRET=$PREVIEW_AUTH_RELAY_SECRET" \
             "PREVIEW_API_TOKEN=$PREVIEW_API_TOKEN" \
             "PHX_HOST=$APP_HOST" | flyctl secrets import --stage --app "$APP_NAME"
+
+          # Code storage is on only when the environment has the signing key:
+          # with the adapter set and no key, the app refuses to start. The PEM
+          # goes in on one line with literal \n escapes, which the signer reads.
+          if [[ -n "$PREVIEW_CODE_STORAGE_JWT_PRIVATE_KEY" ]]; then
+            key="$(printf '%s' "$PREVIEW_CODE_STORAGE_JWT_PRIVATE_KEY" | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')"
+            printf '%s\n' \
+              "CODE_STORAGE_ADAPTER=code_storage" \
+              "CODE_STORAGE_ORG=reviews" \
+              "CODE_STORAGE_POLICY=optional" \
+              "CODE_STORAGE_JWT_PRIVATE_KEY=$key" | flyctl secrets import --stage --app "$APP_NAME"
+          fi
 
       # fly.preview.toml, not fly.toml: small DB pool and auto-stop when
       # idle. --ha=false: one machine per preview, not Fly's default of two
