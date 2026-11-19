@@ -234,6 +234,18 @@ and thread actions are now limited to the people who should make them, and
 every API speaks one set of error codes. Existing CLI configs, API tokens and
 connected agents keep working.
 
+### Fixed
+
+- Keep staging code repositories while a snapshot reservation is live or
+  provider creation is in flight; recover abandoned creations for cleanup.
+- Accept a code storage PEM key whose line breaks were stored as spaces, as
+  single-line secret inputs do. Before, signing failed and every upload fell
+  back to diff-only.
+- Fix the code.storage client crashing on every request (Req rejected
+  `:finch` together with `:connect_options`); the 5 s connect timeout applies.
+- Code storage errors use the shared `error_code` envelope, and reservation
+  checks push permission through `Reviews.Policy`.
+
 ### Added
 
 - **Sign in to the CLI from any browser.** `reviews login` shows a short
@@ -414,6 +426,19 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
   and file. Discussion buttons and thread links open Source for that visit,
   including from collapsed headers. Raw HTML, scripts and unsafe links stay
   escaped.
+- Code storage (Phase 0 and 1 of the code storage plan in #74):
+  every code-enabled patchset gets verified base/head commit IDs and scoped
+  Git refs in a provider-neutral backend. code.storage (Pierre) is the production adapter;
+  storage is off by default (`CODE_STORAGE_ADAPTER=code_storage` enables it).
+- `GET /api/v1/capabilities` for CLI feature discovery, plus
+  `POST /api/v1/code-snapshots` and `POST /api/v1/code-snapshots/:id/complete`
+  with a reserve → upload → verify → claim flow and stable error codes.
+- `reviews push` uploads a code snapshot when the server supports it:
+  resolves exact base/head OIDs, builds synthetic commits for staged or
+  tracked worktree state with a fixed `Reviews Snapshot` identity, verifies
+  the diff matches the snapshot, and pushes exactly two refs atomically with
+  a short-lived ref-scoped credential (never written to URLs, config, or
+  logs). `--no-code-storage` skips the upload where the server allows it.
 
 ### Changed
 
@@ -508,6 +533,11 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 
 ### Fixed
 
+- Enforce snapshot reservation deadlines during completion and claiming, and
+  prevent late provider results from overwriting newer snapshot states.
+- Ignore dirty submodule contents in snapshot diffs while preserving gitlink
+  changes; disclose that the advertised upload budget is not enforced.
+
 - GitHub sign-in now returns you to the page you started from, such as a
   review, instead of the home page. Only local paths are accepted; anything
   else goes home.
@@ -515,6 +545,13 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 - Decode Git-quoted filenames consistently in CLI validation, uploaded file
   metadata, and review hunk lookup, including non-ASCII paths.
 
+- `reviews push --range A...B` now records the merge base of A and B as the
+  patchset base (matching what `git diff A...B` actually compares) instead
+  of A itself.
+- Diff capture is config-neutral: local `diff.algorithm`, `core.quotePath`,
+  and external diff drivers no longer change the uploaded diff bytes.
+- Appending a patchset no longer crashes when a non-changeset error occurs
+  inside the push transaction.
 - Changed lines whose text starts with `--` or `++`, such as a removed SQL
   `-- note` comment, now count as changes. Packet coverage checks require them,
   and file and hunk +/- counts include them.

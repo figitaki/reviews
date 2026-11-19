@@ -261,6 +261,7 @@ Under **Settings → Secrets and variables → Actions**:
 | `PREVIEW_DATABASE_URL`          | Full `postgres://...` URL for the preview Postgres server. The workflow replaces the database name with `reviews_pr_<N>`. |
 | `PREVIEW_API_TOKEN`             | A bearer token of your choice (e.g. `rev_$(openssl rand -hex 24)`). Used to bootstrap a synthetic "preview" user — see "Pushing diffs to a preview" below. |
 | `PREVIEW_AUTH_RELAY_SECRET`     | _(optional)_ The relay secret that production has as `AUTH_RELAY_SECRET`. Turns on GitHub sign-in through the relay. See "GitHub sign-in on previews". |
+| `PREVIEW_CODE_STORAGE_JWT_PRIVATE_KEY` | _(optional)_ The code.storage signing key (P-256 PKCS8 PEM) for the `reviews` org. Turns on code storage with the `optional` policy. Without it, previews push diff-only. |
 
 ---
 

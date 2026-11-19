@@ -334,7 +334,8 @@ defmodule ReviewsWeb.MCP.Handlers do
 
     with_review(args, ctx, fn review, principal ->
       with :ok <- validate_diff_and_packet(args["raw_diff"], args["packet"]),
-           {:ok, ps} <- ReviewsContext.append_patchset(review, principal, push_attrs(args)) do
+           {:ok, %{patchset: ps}} <-
+             ReviewsContext.append_patchset(review, principal, push_attrs(args)) do
         %{slug: review.slug, url: review_url(review), revision: ps.number}
       else
         other -> write_error(other)
