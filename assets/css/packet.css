@@ -2460,7 +2460,8 @@ details[open] > summary .review-collapse-icon,
 
 .rev-shell {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  /* Room for a file name and its counts on one row. */
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -2797,15 +2798,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-guide-flyout-section {
-  display: flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 10px;
-  border-radius: 6px;
-  color: var(--review-text);
-  font-size: 0.8125rem;
-  font-weight: 650;
-  padding: 6px 8px;
+  font-weight: var(--weight-semi);
 }
 
 .review-guide-flyout-section:hover,
@@ -2829,45 +2822,18 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-add);
 }
 
-.review-guide-flyout-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Decision status: a fixed-width trailing badge (label for screen readers
-   only), so long titles truncate the same way on every row. */
-.review-guide-flyout-state {
-  display: inline-grid;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  place-items: center;
-}
-
 .review-guide-flyout-files {
-  display: grid;
-  gap: 2px;
-  margin: 2px 0 6px 30px;
+  margin: var(--space-1) 0 var(--space-2);
 }
 
-.review-guide-flyout-file {
-  overflow: hidden;
-  border-radius: 4px;
-  color: var(--review-muted);
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.2;
-  padding: 4px 6px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* The section tree takes most of the flyout's side padding: its rows have
+   their own, and file names need the width. */
+.review-guide-flyout-group:has(> .rev-tree-header) {
+  margin-inline: calc(-1 * var(--space-6));
 }
 
-.review-guide-flyout-file:hover,
-.review-guide-flyout-file:focus-visible {
-  color: var(--review-text);
+.review-guide-flyout-files .rev-tree-row {
+  gap: var(--space-2);
 }
 
 .review-guide-panel {
@@ -2915,6 +2881,29 @@ details[open] > summary .review-collapse-icon,
 
 .review-guide-panel-prose p + p {
   margin-top: 0.9em;
+}
+
+/* Who published the packet, and for an agent, the person who owns it. */
+.review-guide-author {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  color: var(--review-muted);
+  font-size: 0.8125rem;
+}
+
+.review-guide-author > span:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-width: 0;
+}
+
+.review-guide-author-name {
+  color: var(--review-text);
+  font-weight: 680;
 }
 
 .review-guide-panel-meta,
@@ -2970,31 +2959,271 @@ details[open] > summary .review-collapse-icon,
   background: var(--review-panel);
 }
 
-.rev-file-tree {
-  height: min(
-    calc(var(--rev-file-tree-rows, 1) * 30px + 22px),
-    calc(100vh - var(--rev-header-h) - 18px)
-  );
-  min-height: 44px;
-  border: 1px solid var(--review-line);
-  border-radius: 8px;
-  background: var(--review-panel);
-  box-sizing: border-box;
+/* Tree rows, shared by the diff view's file tree and the Guide map.
+   Folder rows: a folder icon and a muted path. File rows: a chevron, the
+   name with the rest of the path muted after it, the line counts and an
+   outlined letter. Rows are 2.75rem, a 44px tap target. */
+.rev-tree-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+  padding: 0 var(--space-3);
+}
+
+.rev-tree-scope {
+  color: var(--review-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--weight-semi);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.rev-tree-row {
+  appearance: none;
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--review-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  padding: 0 var(--space-3);
+  text-align: left;
+}
+
+.rev-tree-row:hover,
+.rev-tree-row:focus-visible {
+  background: var(--review-hover);
+}
+
+.rev-tree-row:focus-visible {
+  outline: 2px solid var(--review-focus);
+  outline-offset: -2px;
+}
+
+.rev-tree-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.rev-tree-row .review-change-stat {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+.rev-tree-label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
-  padding-top: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.rev-file-tree file-tree-container {
-  height: calc(100% - 8px);
-  color-scheme: light dark;
+/* A file row keeps the file name whole. When the row runs out of room,
+   the line counts go first, then the muted path; the name truncates only
+   when it is wider than the whole row.
+
+   The label shrinks a thousand times slower than the counts, so the counts
+   give up their width first. Both the path and the counts sit in a
+   one-line box that wraps: what does not fit drops to a hidden second
+   line instead of showing a stub such as "l…". */
+.rev-tree-row .rev-tree-label:has(> .rev-tree-name) {
+  display: flex;
+  flex: 1 0.001 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+  column-gap: var(--space-2);
+  height: 1lh;
 }
 
-.rev-file-tree-empty {
-  margin: 0;
-  border: 1px solid var(--review-line);
-  border-radius: 8px;
+.rev-tree-name {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--weight-regular);
+}
+
+.rev-tree-name + .rev-tree-dir {
+  flex: 1 1 4ch;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rev-tree-dir {
+  color: var(--review-muted);
+}
+
+.rev-tree-stats {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+  height: 1lh;
+  overflow: hidden;
+}
+
+/* An empty first item a full line tall, so the counts have a line to
+   wrap away from. */
+.rev-tree-stats::before {
+  content: "";
+  height: 100%;
+}
+
+.rev-tree-chevron,
+.rev-tree-folder-icon {
+  flex: 0 0 auto;
+  color: var(--review-faint);
+}
+
+.rev-tree-chevron {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
+.rev-tree-folder-icon {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+}
+
+/* The thin guide line down the left of a folder's children. */
+.rev-tree-children {
+  margin-left: calc(var(--space-3) + var(--size-icon-md) / 2);
+  border-left: var(--border-hair) solid var(--review-line);
+  padding-left: var(--space-1);
+}
+
+.rev-tree-children.is-root {
+  margin-left: 0;
+  border-left: 0;
+  padding-left: 0;
+}
+
+.rev-tree-folder > summary {
+  list-style: none;
+}
+
+.rev-tree-folder > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rev-tree-folder:not([open]) > summary .rev-tree-dir::after {
+  content: " …";
+}
+
+.rev-tree-badge-slot {
+  display: inline-grid;
+  width: 1.375rem;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.rev-tree-badge {
+  display: inline-grid;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border: var(--border-hair) solid currentColor;
+  border-radius: var(--radius-xs);
+  color: var(--review-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-3xs);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+.rev-tree-badge.is-modified,
+.rev-tree-badge.is-renamed {
+  color: var(--review-warn);
+}
+
+.rev-tree-badge.is-added,
+.rev-tree-badge.is-approved {
+  color: var(--review-add);
+}
+
+.rev-tree-badge.is-deleted,
+.rev-tree-badge.is-denied {
+  color: var(--review-del);
+}
+
+.rev-tree-badge.is-ignored {
+  color: var(--review-faint);
+}
+
+.rev-file-tree {
+  border: var(--border-hair) solid var(--review-line);
+  border-radius: var(--radius-md);
   background: var(--review-panel);
-  padding: 12px;
+  padding: var(--space-5) var(--space-2);
+}
+
+.rev-file-tree-toggle {
+  display: none;
+}
+
+.rev-tree-count {
+  color: var(--review-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phones and tablets: the tree folds behind a Files button above the
+   diffs, so the diffs keep the full width. */
+@media (max-width: 768px) {
+  .rev-file-tree-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: var(--space-3);
+    border: var(--border-hair) solid var(--review-line);
+    border-radius: var(--radius-md);
+    background: var(--review-panel);
+    color: var(--review-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: var(--weight-semi);
+    padding: 0 var(--space-5);
+  }
+
+  .rev-file-tree-toggle:focus-visible {
+    outline: 2px solid var(--review-focus);
+    outline-offset: 2px;
+  }
+
+  .rev-file-tree-toggle-chevron {
+    width: var(--size-icon-md);
+    height: var(--size-icon-md);
+    margin-left: auto;
+    color: var(--review-muted);
+  }
+
+  .rev-file-tree-toggle[aria-expanded="true"] .rev-file-tree-toggle-chevron {
+    transform: rotate(180deg);
+  }
+
+  .rev-file-tree {
+    display: none;
+    margin-top: var(--space-3);
+    max-height: 60svh;
+  }
+
+  .rev-file-tree.is-open {
+    display: block;
+  }
 }
 
 .rev-file-link {

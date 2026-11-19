@@ -711,6 +711,76 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
     end
 
+    test "the overview names the packet's author, and an agent's owner", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, agent} =
+        Accounts.create_agent_identity(author, %{
+          handle: "claude-bot",
+          display_name: "Claude",
+          provider: "Claude",
+          avatar_url: "/images/connectors/claude.png"
+        })
+
+      packet = %{
+        "format_version" => 1,
+        "title" => "Who wrote this",
+        "sections" => [
+          %{
+            "title" => "Only",
+            "rows" => [%{"kind" => "hunk", "path" => "lib/one.ex", "hunk_index" => 1}]
+          }
+        ]
+      }
+
+      raw_diff = """
+      diff --git a/lib/one.ex b/lib/one.ex
+      --- a/lib/one.ex
+      +++ b/lib/one.ex
+      @@ -1 +1 @@
+      -old
+      +new
+      """
+
+      open = fn identity ->
+        {:ok, %{review: review}} =
+          ReviewsCtx.create_review_with_initial_patchset(identity, %{
+            title: "Who wrote this",
+            raw_diff: raw_diff,
+            packet: packet
+          })
+
+        {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+        view
+      end
+
+      person = open.(author)
+
+      assert has_element?(
+               person,
+               "#review-split-inline-overview #review-overview-author",
+               "@carey"
+             )
+
+      refute has_element?(person, "#review-overview-author .ds-badge")
+      refute has_element?(person, "#review-overview-author-owner")
+      # Round like comment avatars, and without an image the handle's first letter.
+      assert has_element?(person, "#review-overview-author .ds-avatar-mark.is-round", "C")
+
+      robot = open.(agent)
+      assert has_element?(robot, "#review-overview-author", "Claude")
+      assert has_element?(robot, "#review-overview-author", "@claude-bot")
+      assert has_element?(robot, "#review-overview-author .ds-badge", "Agent")
+
+      assert has_element?(
+               robot,
+               ~s|#review-overview-author img[src="/images/connectors/claude.png"]|
+             )
+
+      assert has_element?(robot, "#review-overview-author-owner", "owned by @carey")
+    end
+
     test "packets land on overview and open section hunks only after selection", %{
       conn: conn,
       author: author
@@ -964,7 +1034,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       assert has_element?(changes_view, "#code-view-switcher .review-code-view-tab", "Guide")
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#diff-files .rev-file-card")
       refute has_element?(changes_view, "#diff-files .rev-file-placeholder")
 
@@ -980,7 +1050,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-unified")
       |> render_click()
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#review-guide-sidebar")
       refute has_element?(changes_view, "#review-guide-rail")
       refute has_element?(changes_view, "#changes-file-tree")
@@ -992,7 +1062,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-split")
       |> render_click()
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#review-guide-shell")
     end
 
@@ -1202,7 +1272,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff")
 
       assert has_element?(
@@ -1352,8 +1422,39 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-unified")
       |> render_click()
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
+
+      # Files sit under their folder, each with its counts, a change-type
+      # badge whose word is read out, and a jump to its diff card.
+      assert has_element?(changes_view, "#file-tree summary", "lib/")
+
+      [first, second] =
+        Enum.sort_by(
+          Reviews.Repo.preload(ReviewsCtx.latest_patchset(mixed_review), :files).files,
+          & &1.path
+        )
+
+      for file <- [first, second] do
+        row = "#file-tree-row-#{file.id}"
+        assert has_element?(changes_view, row, Path.basename(file.path))
+        assert has_element?(changes_view, row <> " .review-change-stat", "+300")
+
+        assert has_element?(
+                 changes_view,
+                 row <> " .rev-tree-badge.is-modified .sr-only",
+                 "Modified"
+               )
+
+        assert has_element?(changes_view, ~s|#{row}[phx-click*="file-#{file.id}"]|)
+        assert has_element?(changes_view, "#file-#{file.id}")
+      end
+
+      assert has_element?(
+               changes_view,
+               ~s|#file-tree-toggle[aria-controls="file-tree"][aria-expanded="false"]|
+             )
+
       refute has_element?(changes_view, "#review-guide-sidebar")
       assert has_element?(changes_view, "#diff-files")
     end
@@ -2009,7 +2110,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       # screen readers only.
       assert has_element?(
                view,
-               "#review-guide-flyout-state-0.review-section-state-mark.is-approved .sr-only",
+               "#review-guide-flyout-state-0.rev-tree-badge.is-approved .sr-only",
                "Approved"
              )
 

@@ -227,6 +227,37 @@ defmodule ReviewsWeb.DesignSystemComponents do
     """
   end
 
+  @doc """
+  An identity's avatar: its image (a person's GitHub avatar, an agent's
+  provider logo) or, without one, the first letter of its name. Decorative;
+  put the name in text next to it.
+
+  Square by default, as in Settings. `round` matches the 20px circles of
+  comment threads (`avatar()` in `diff_renderer/annotation_ui.js`), whose
+  letter comes from the handle, so an identity looks the same in both.
+  """
+  attr :identity, :map, required: true
+  attr :round, :boolean, default: false
+  attr :class, :any, default: nil
+
+  def ds_avatar_mark(assigns) do
+    ~H"""
+    <span class={["ds-avatar-mark", @round && "is-round", @class]} aria-hidden="true">
+      <img :if={@identity.avatar_url} src={@identity.avatar_url} alt="" loading="lazy" />
+      <span :if={!@identity.avatar_url}>
+        {avatar_initial(if @round, do: Map.get(@identity, :handle), else: @identity.display_name)}
+      </span>
+    </span>
+    """
+  end
+
+  defp avatar_initial(name) do
+    case name |> to_string() |> String.trim() |> String.first() do
+      nil -> "?"
+      initial -> String.upcase(initial)
+    end
+  end
+
   attr :icon, :string, required: true
   attr :title, :string, required: true
   attr :body, :string, required: true
