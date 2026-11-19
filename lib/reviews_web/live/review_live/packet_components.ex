@@ -628,15 +628,22 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               close()
             }
           }
+          // An outside click leaves focus where the reader clicked, such as a
+          // reply box; only Escape, the pill and a choice return it to the pill.
           this.onClick = event => {
-            if (this.el.dataset.editing === "true" && !control.contains(event.target)) close()
+            if (this.el.dataset.editing === "true" && !control.contains(event.target)) {
+              this.keepFocus = true
+              close()
+            }
           }
           document.addEventListener("keydown", this.onKey, true)
           document.addEventListener("click", this.onClick, true)
         },
         updated() {
           const editing = this.el.dataset.editing
-          if (editing !== this.editing) {
+          if (editing !== this.editing && this.keepFocus) {
+            this.keepFocus = false
+          } else if (editing !== this.editing) {
             const target = editing === "true"
               ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector("[aria-expanded]")
               : this.el.querySelector("[aria-expanded]")
