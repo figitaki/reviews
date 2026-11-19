@@ -36,7 +36,10 @@ defmodule Reviews.Errors do
     empty_body: {422, "body cannot be empty"},
     invalid_packet: {422, "Invalid packet"},
     validation_failed: {422, "Invalid input"},
-    write_failed: {422, "The write failed. Nothing was saved."}
+    write_failed: {422, "The write failed. Nothing was saved."},
+    method_not_allowed: {405, "Method not allowed"},
+    rate_limited: {429, "Rate limit exceeded"},
+    unavailable: {503, "Temporarily unavailable. Try again later."}
   }
 
   # Domain reasons that name the same problem as a code.
