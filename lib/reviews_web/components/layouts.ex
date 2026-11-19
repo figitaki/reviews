@@ -192,15 +192,18 @@ defmodule ReviewsWeb.Layouts do
         class="review-button review-button-secondary account-menu-button"
         aria-label={"Account menu for #{@current_user.username}"}
       >
-        <img
-          :if={@current_user.avatar_url}
-          src={@current_user.avatar_url}
-          alt=""
-          width="24"
-          height="24"
-          class="account-menu-avatar"
+        <.ds_identity
+          identity={
+            %{
+              avatar_url: @current_user.avatar_url,
+              handle: @current_user.username,
+              display_name: @current_user.username
+            }
+          }
+          size="md"
+          handle={false}
+          name_class="account-menu-name ds-label"
         />
-        <span class="account-menu-name ds-label">{@current_user.username}</span>
       </button>
       <ul tabindex="0" class="dropdown-content menu menu-sm review-menu z-20 mt-2 w-44 p-2">
         <li>

@@ -654,13 +654,16 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       person = open.(author)
 
+      # A person's display name is their GitHub username, so the handle that
+      # only repeats it is left out.
       assert has_element?(
                person,
-               "#review-split-inline-overview #review-overview-author",
-               "@carey"
+               "#review-split-inline-overview #review-overview-author .ds-identity-name",
+               "carey"
              )
 
-      refute has_element?(person, "#review-overview-author .ds-badge")
+      refute has_element?(person, "#review-overview-author .ds-identity-handle")
+      refute has_element?(person, "#review-overview-author .ds-identity-agent")
       refute has_element?(person, "#review-overview-author-owner")
       # Round like comment avatars, and without an image the handle's first letter.
       assert has_element?(person, "#review-overview-author .ds-avatar-mark.is-round", "C")
@@ -668,7 +671,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       robot = open.(agent)
       assert has_element?(robot, "#review-overview-author", "Claude")
       assert has_element?(robot, "#review-overview-author", "@claude-bot")
-      assert has_element?(robot, "#review-overview-author .ds-badge", "Agent")
+      assert has_element?(robot, "#review-overview-author .ds-identity-agent", "Agent")
 
       assert has_element?(
                robot,

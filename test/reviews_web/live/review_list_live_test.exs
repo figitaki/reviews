@@ -33,6 +33,7 @@ defmodule ReviewsWeb.ReviewListLiveTest do
     involved = review!(conner, "Billing export", at: at(10))
     comment!(involved, carey)
     hidden = review!(conner, "Not shared", at: at(5))
+    by_agent = review!(agent!(carey, "codex"), "Agent change", at: at(20))
 
     {:ok, view, _html} = conn |> sign_in(carey) |> live(~p"/reviews")
 
@@ -44,6 +45,12 @@ defmodule ReviewsWeb.ReviewListLiveTest do
     assert has_element?(view, "#review-#{mine.id} a[href='/r/#{mine.slug}']", "Speed up lookup")
     refute has_element?(view, "#review-#{mine.id}", "patchset")
     assert has_element?(view, "#review-#{involved.id} .rl-author", "@conner")
+    # Identities share <.ds_identity>: with no avatar_url, the handle's letter.
+    assert has_element?(view, "#review-#{involved.id} .rl-author .ds-avatar-mark.is-xs", "C")
+    refute has_element?(view, "#review-#{involved.id} .rl-author .ds-identity-agent")
+    assert has_element?(view, ".l-nav .account-menu .ds-avatar-mark.is-md", "C")
+    assert has_element?(view, "#review-#{by_agent.id} .rl-author .ds-identity-agent", "Agent")
+    refute has_element?(view, "#review-#{by_agent.id}", "(agent)")
     assert has_element?(view, "#review-#{involved.id} .rl-badge-open", "1 open")
     refute has_element?(view, "#review-#{mine.id} .rl-badge-open")
     # Open threads leave a row unread; a row with nothing waiting is read.
