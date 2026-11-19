@@ -1,6 +1,6 @@
 defmodule ReviewsWeb.Plugs.Parsers do
   @moduledoc """
-  `Plug.Parsers` with a smaller body limit for `/mcp`.
+  `Plug.Parsers` with a smaller body limit for `/mcp` and `/oauth`.
 
   CLI pushes send whole diffs as JSON, so the API keeps a large limit. MCP
   requests get their own limit, enforced while the body is read and before
@@ -21,6 +21,10 @@ defmodule ReviewsWeb.Plugs.Parsers do
 
   @impl true
   def call(%Plug.Conn{path_info: ["mcp" | _]} = conn, %{mcp: opts}),
+    do: Plug.Parsers.call(conn, opts)
+
+  # OAuth requests are small forms and registration JSON.
+  def call(%Plug.Conn{path_info: ["oauth" | _]} = conn, %{mcp: opts}),
     do: Plug.Parsers.call(conn, opts)
 
   def call(conn, %{default: opts}), do: Plug.Parsers.call(conn, opts)

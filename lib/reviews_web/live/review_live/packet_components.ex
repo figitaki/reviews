@@ -6,6 +6,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   alias Reviews.ReviewHunks
   alias Reviews.ReviewPacket
   alias Reviews.ReviewView
+  alias ReviewsWeb.ReviewLive.DiffIsland
 
   attr :packet, :map, required: true
   attr :review, :any, required: true
@@ -1674,40 +1675,37 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       ]}
     >
       <div class="review-packet-inline-diff">
-        <div
+        <.live_component
+          module={DiffIsland}
           id={"#{@hunk_id}-diff"}
-          phx-hook="DiffRenderer"
-          phx-update="ignore"
-          data-file-id={"hunk-#{@file.id}-#{@hunk_id}"}
-          data-file-path={@file.path}
-          data-file-status={@file.status}
-          data-side="new"
-          data-patchset-number={@selected_patchset && @selected_patchset.number}
-          data-raw-diff={@hunk.display_raw_diff}
-          data-full-diff={
+          file_id={"hunk-#{@file.id}-#{@hunk_id}"}
+          file_path={@file.path}
+          file_status={@file.status}
+          patchset_number={@selected_patchset && @selected_patchset.number}
+          raw_diff={@hunk.display_raw_diff}
+          full_diff={
             @file.status in ["added", "deleted"] &&
               String.match?(@file.path, ~r/\.(md|markdown|mdown|mkd)$/i) && @file.raw_diff
           }
-          data-threads={threads_json(@published_threads, @file.path)}
-          data-signed-in={if @current_user, do: "true", else: "false"}
-          data-diff-style={@diff_style}
-          data-hunk-id={@hunk_id}
-          data-hunk-label={@hunk_label}
-          data-hunk-details={@details}
-          data-hunk-expanded={to_string(@expanded?)}
-          data-hunk-viewed={to_string(@viewed?)}
-          data-hunk-partially-viewed={to_string(@partially_viewed?)}
-          data-hunk-view-state={@view_state && @view_state.label}
-          data-hunk-attrs={@hunk_attrs_json}
-          data-row-ref={@hunk.row_ref}
-          data-hunk-fingerprint={@hunk.hunk_fingerprint}
-          data-hunk-index={@hunk.hunk_index}
-          data-line-start={@hunk.line_start}
-          data-line-end={@hunk.line_end}
-          data-section-index={@section_index}
-          data-section-title={@section_title}
-        >
-        </div>
+          threads={threads_json(@published_threads, @file.path)}
+          signed_in={if @current_user, do: "true", else: "false"}
+          diff_style={@diff_style}
+          hunk_id={@hunk_id}
+          hunk_label={@hunk_label}
+          hunk_details={@details}
+          hunk_expanded={to_string(@expanded?)}
+          hunk_viewed={to_string(@viewed?)}
+          hunk_partially_viewed={to_string(@partially_viewed?)}
+          hunk_view_state={@view_state && @view_state.label}
+          hunk_attrs={@hunk_attrs_json}
+          row_ref={@hunk.row_ref}
+          hunk_fingerprint={@hunk.hunk_fingerprint}
+          hunk_index={@hunk.hunk_index}
+          line_start={@hunk.line_start}
+          line_end={@hunk.line_end}
+          section_index={@section_index}
+          section_title={@section_title}
+        />
       </div>
     </article>
     """
