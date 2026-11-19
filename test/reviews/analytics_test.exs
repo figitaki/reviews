@@ -61,6 +61,7 @@ defmodule Reviews.AnalyticsTest do
     assert snapshot["mcp_clients"] == [
              %{"app" => "Claude", "connected_accounts" => 0, "connections" => 0},
              %{"app" => "ChatGPT", "connected_accounts" => 0, "connections" => 0},
+             %{"app" => "Amp", "connected_accounts" => 0, "connections" => 0},
              %{"app" => "Unrecognized", "connected_accounts" => 0, "connections" => 0}
            ]
   end
@@ -74,6 +75,7 @@ defmodule Reviews.AnalyticsTest do
     assert snapshot["mcp_clients"] == [
              %{"app" => "Claude", "connected_accounts" => 1, "connections" => 2},
              %{"app" => "ChatGPT", "connected_accounts" => 1, "connections" => 1},
+             %{"app" => "Amp", "connected_accounts" => 0, "connections" => 0},
              %{"app" => "Unrecognized", "connected_accounts" => 1, "connections" => 1}
            ]
 

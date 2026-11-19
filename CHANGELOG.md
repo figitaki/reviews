@@ -6,6 +6,8 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Amp is a recognized app when it connects to `/mcp`. Its sign-in page shows
+  Amp's name and logo instead of "Not verified".
 - Disabled-by-default private aggregate export with dedicated expiring authentication,
   fixed 7/30-day windows, and active accounts deduplicated across owned identities.
   It also counts accounts and signups, and MCP connections by app (Claude, ChatGPT,
