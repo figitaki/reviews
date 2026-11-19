@@ -11,250 +11,162 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   person who owns it ("owned by @carey"). The owner comes in the same query
   that already loads the author, so the review page makes no extra request.
   Settings and the Overview share the new `<.ds_avatar_mark>`.
-- idna is now 8.0.0, which fixes EEF-CVE-2026-117678: a long Punycode
-  label in a hostname could keep the CPU busy. jsv still asks for idna 7,
-  so `mix.exs` overrides it until jsv allows 8.
-- The Reviews mark (the R in a rounded square from the top bar) is now the
-  favicon, the home-screen icon (`apple-touch-icon.png`, `site.webmanifest`),
-  and the icon `/mcp` advertises in `serverInfo.icons`. Claude shows a custom
-  connector with its site's favicon, so it shows this mark instead of a
-  plain letter.
-- MCP tools link straight to threads and comments. Every thread they return
-  has a `url` that opens the review on it (`?thread=ID`), and every comment
-  one that opens it on that comment (`?thread=ID&comment=ID`).
-  `reviews_post_comment` returns `thread_url` and `comment_url`, and the
-  feedback resource and `fetch` give each thread a link.
-- On wider screens each comment's time and link button sit at the right of
-  its row, level with its first line, so a run of comments from one person
-  lines up. Phones keep the time after the author's name.
-- Settings → New agent identity picks the provider from a list: Claude,
-  Codex, ChatGPT, Amp, Cursor, Gemini, GitHub Copilot and Grok, or Custom
-  to type another name. An agent made for a listed provider uses its logo
-  as its avatar.
-- Commenting on a range of lines no longer gets stuck. Before, after you
-  dragged the "+" across several lines and closed the comment box, the lines
-  stayed highlighted, and the "+" stayed on the last of them. Every later
-  comment then started from that range. Closing the box now clears the
-  selection.
-- The MCP `reviews_post_comment` tool and the address-feedback prompt now ask
-  agents to write comments in Simplified Technical English (ASD-STE100):
-  short sentences, active voice and common words.
-- Amp is a recognized app when it connects to `/mcp`. Its sign-in page shows
-  Amp's name and logo instead of "Not verified".
-- Disabled-by-default private aggregate export with dedicated expiring authentication,
-  fixed 7/30-day windows, and active accounts deduplicated across owned identities.
-  It also counts accounts and signups, and MCP connections by app (Claude, ChatGPT,
-  unrecognized): connected now, approved in each window, and accounts that used one.
 
-- In the Guide each section has one compact bar at the bottom of the screen
-  at every width: previous section on the left, the decision
-  pill in the middle and next section on the right. It replaces the
-  "Next:" and "Begin review" button at the end of each section and the
-  old corner decision button and shelf. The pill shows your decision on the
-  current version (Approved, Changes requested or Skipped), or "Decide".
-  Clicking it floats Request changes, Skip and Approve in a row above it,
-  with no panel around them and Skip over the pill (on phones the first
-  reads "Changes"), and reads
-  "Dismiss"; choosing one, clicking elsewhere, clicking it again or Escape
-  closes it. Readers who are not the owner see the owner-only note there.
-  Signed out, the pill reads "Sign in to decide" and goes straight to GitHub
-  sign-in, which returns to that section with the decision open. The bar is fixed to the bottom of
-  the screen, and Comments (and Sections on phones) stack in a column above
-  the next-section button. The pill shows one outline, with or without
-  keyboard focus.
+## [0.0.3] - 2026-11-19
 
-- The Guide no longer adds 72px of empty space below the page on wide
-  screens. That space ended the sticky Guide rail early, so it jumped up as
-  you reached the bottom.
+0.0.1 brought the CLI and API tokens, and 0.0.2 brought agents signing in
+with OAuth. 0.0.3 connects Claude, ChatGPT and Amp. Add
+`https://reviews.figitaki.dev/mcp` as a custom connector, sign in with GitHub,
+and choose which of your agents it acts as and what it may do. Large diffs no
+longer freeze the page, comments work properly on phones, and a review's owner
+can delete it. Existing CLI configs, API tokens and connected agents keep
+working.
 
-- Markdown Preview wraps at the same reading width as Guide prose and lines
-  up with it, in Guide and Diff mode. The diff card, Source and code diffs
-  stay full width.
+### Added
 
-- The review page's small controls share one size: the R mark, the account
-  and review menu buttons, the version picker, the revision chips, the
-  Guide/Diff and layout switchers and every square in the Guide map are
-  `--size-control-md` (32px) tall with `--radius-sm` corners. On phones the
-  version picker drops from 44px to 32px, the account button from 44px to
-  32px, and the Guide map's menu, star, numbers and close are one 32px
-  square each, 4px apart, with only the selected one filled. Touch screens
-  keep a 44px tap target around each without the box growing. On touch
-  phones the Guide map keeps the whole row on screen: the spare width is
-  split into equal gaps of 4px to 12px, and each target reaches the
-  midpoint of the gaps beside it, so it is 44px wide with few sections and
-  narrower (42px with six sections at 390px) when the row is full. Only a
-  row that does not fit even with 4px gaps, such as ten sections, scrolls
-  its numbers between the menu and close. The collapsed desktop rail is held to
-  the height under the headers and shares its height the same way on touch
-  screens, so the close button stays on screen; with too many sections for
-  4px gaps, its numbers scroll between the menu and close.
-
-- Button labels are centred on their letters. A line box keeps the font's
-  descent, so labels without descenders such as "Mark viewed" and an
-  account name sat about 2px high. The new `.ds-label` class trims a label
-  to cap height and baseline with `text-box`; `<.ds_button>` puts it on its
-  label, and so do the account button, revision chips, Guide/Diff, Guide
-  map numbers, Begin review, Mark viewed and the comment thread buttons.
-  `<.ds_button>` gains `leading` and `trailing` slots for icons that are not
-  a Heroicon before the label, such as the GitHub mark and the chevron on
-  "Older".
-
-- Comments read better on phones. Comments, Sections and the section
-  decision sit in a bottom bar instead of floating over thread cards, and
-  they step aside while you type, so they no longer cover Submit. The reply
-  box stays above the on-screen keyboard. Thread cards use the full screen
-  width, and an opened thread's header clears the sticky file header. Mark
-  viewed is an eye button on phones.
-
-- Comment times are short ("56min", "3h", "2d") and sit after the author's
-  name, so the text uses the full width. Bodies start just past the avatar,
-  with a light connector from the avatar. Resolve, Reply and Submit are the
-  same buttons as the rest of the app, and the reply box has a visible
-  border.
-
-- Each thread and comment has a small link button that copies a link to
-  it. Opening the link scrolls to that thread or comment below the file
-  header and highlights it briefly.
-
-- Switching split or unified view, a new or updated thread, opening the
-  comment box and a theme change now update a file's diff in place, instead
-  of building and highlighting it again. On a 4,562-line file, switching view
-  no longer blanks the file or loses the reading position.
-
-- Replies no longer send a file's diff again. Marking a file viewed,
-  collapsing it, switching split or unified view and opening a section
-  decision sent every open diff back to the browser, about 590 KB on a
-  review with a 4,562-line file; they now send 1 to 3 KB.
-
-- Syntax highlighting runs in web workers. A diff shows as plain text first
-  and its colours fill in, so a large file no longer freezes the page. On a
-  4,562-line file, Mark viewed, collapse, expand and opening a thread each
-  blocked the page for about 2 s, and split or unified view for about 5 s;
-  now no frame on those actions runs longer than about 0.26 s, and large
-  files keep their colours. Switching between light and dark no longer
-  highlights files again.
-
-- Collapsing, expanding and marking a file viewed show at once, and the
-  server saves the change in the background. The diff keeps its rendered,
-  highlighted file while collapsed, so expanding it again does not highlight
-  it again. On a 4,562-line file this took about 2 s each way and now takes
-  under 160 ms.
-
-- Opening a thread in a large file keeps the file virtualized. The diff
-  scrolls to the thread's line and focuses it, instead of rendering every
-  row. Before, a thread on a 4,562-line file put all 4,562 rows in the page,
-  and it stayed that way for every later update to the file.
-
-- Sizes follow the reader's browser font size. Space, radius and font-size
-  tokens and every `font-size` in the stylesheets are rem, and buttons,
-  fields and chips take their heights from new `--size-control-*` tokens.
-  Before, someone with a larger default font got larger text crammed into
-  controls that stayed the same size, while chips, small buttons and many
-  labels did not grow at all. At the default size nothing moves. A test now
-  fails on a px font size or a px space, radius or size token.
-
-- A section's review state lines up on phones: when a decision was carried
-  forward or made outdated, the history line sits under the label instead of
-  wrapping back under the status mark, here and in the decision panel.
-
-- Every top bar ends in one account control, `Layouts.account_menu`. Signed
-  in, the avatar and name open a menu with Settings and Sign out on Home, the
-  review list and Settings too, replacing their Settings link. Signed out, the
-  review page's Sign in is text only like the other pages.
-
-- The closed section decision on phones is a 48px floating button like
-  Sections and Comments, and the decision panel uses the same `--radius-lg`
-  and `--shadow-float` tokens instead of its own radius and two-layer shadow.
-  New `--size-fab` (3rem) and `--size-fab-icon` (1.375rem) tokens size all
-  three floating buttons.
-
-- Every "Sign in with GitHub" control shows the GitHub mark, as GitHub's brand
-  rules ask, through a new `<.ds_github_button>`; the comment composer's
-  sign-in prompt and the section-decision sign-in button show it too. The top
-  bar's primary Sign in stays text only. Buttons take an `icon` attribute, and
-  confirm, deny, create, revoke, copy and paging controls now have icons.
-  `/design` lists the icons in use and what each means.
-
-- The design catalog also shows the app shell (both top bars and the account
-  menu), the Pierre diff with comments, the section decision panel in each
-  state, and the phone floating buttons with the decision button. A new
-  `/design/layouts` frames the real list, review and Settings pages at desktop
-  and phone widths. All of it stays off in production.
-
-- Packets have a default section order: the core change first, then what
-  follows from it (callers, schema, tests), then glue (config, generated
-  files, lockfiles, docs). The writing-review-packets skill shows it as the
-  default, not a rule. `reviews push --dry-run` prints a note when a section
-  of only glue files comes before a section that changes code. Notes do not
-  change the exit status or stop a push.
-
+- **Claude and ChatGPT connectors.** Add `https://reviews.figitaki.dev/mcp`
+  as a custom connector in Claude or a connector in ChatGPT and sign in with
+  GitHub. On the consent page you pick which of your agent identities it
+  acts as (an app never acts as you) and what it may do: reading is always
+  included, and creating reviews, commenting and resolving threads can each
+  be left out. Claude and ChatGPT show as recognized apps with their logos;
+  any other app shows as not verified. Disconnect it any time in Settings.
+  Connectors can list the account's reviews with the same filters as
+  `reviews list`, search and fetch them, read packets, diffs and threads,
+  and post as the agent you chose. Agents and CLIs that use a Reviews API
+  token, such as Claude Code, Codex and Amp, keep working. See
+  `docs/MCP.md`.
+- **Links in MCP results.** Every thread an MCP tool returns has a `url`
+  that opens the review on that thread, and every comment one that opens it
+  on that comment. Posting a comment returns `thread_url` and `comment_url`,
+  and the feedback resource and `fetch` link each thread.
+- **The Reviews icon.** The Reviews mark, the R in a rounded square from the
+  top bar, is now the favicon, the home-screen icon and the icon `/mcp`
+  advertises in `serverInfo.icons`. Claude shows a custom connector with its
+  site's favicon, so it shows this mark instead of a plain letter.
+- **Recognized apps: Amp.** Amp joins Claude and ChatGPT as a recognized
+  app at `/mcp`. Its sign-in page shows Amp's name and logo instead of "Not
+  verified".
+- **Pick an agent's provider.** Settings → New agent identity picks the
+  provider from a list: Claude, Codex, ChatGPT, Amp, Cursor, Gemini, GitHub
+  Copilot and Grok, or Custom to type another name. An agent made for a
+  listed provider uses its logo as its avatar.
+- **Delete a review.** The owner can delete a review for good from the
+  review page's options menu, `reviews delete <slug>`, or the API. You
+  confirm by typing the slug, and the warning says when other people's or
+  agents' comments will go too. The link then shows "This review was
+  deleted".
+- **Link to a thread or comment.** Each thread and comment has a small
+  button that copies a link to it. Opening the link scrolls to it and
+  highlights it briefly.
+- **Create an agent while signing in the CLI.** Approving `reviews login` on
+  `/device` can create a new agent identity without leaving the page.
+- **A default packet order.** Packets read best with the core change first,
+  then what follows from it (callers, schema, tests), then glue (config,
+  generated files, lockfiles, docs). The packet skill shows this order, and
+  `reviews push --dry-run` notes a glue-only section placed before code. A
+  note never fails a push.
+- **Code storage (not live yet).** With code storage on, `reviews push` also
+  uploads the exact base and head commits of each revision to code.storage,
+  ready for code intelligence later. It is off unless the server sets
+  `CODE_STORAGE_*`, and it is off on reviews.figitaki.dev, so pushes there
+  stay diff-only. `--no-code-storage` skips the upload when it is optional.
 - Poppy Personal Agents whose identity key Turnkey holds show "Delegation:
-  signed by Turnkey" on their comments when the delegation matches Turnkey's
-  draft `poppy-delegation/v1` profile. They still act as the agent identity
-  their owner approved. Client assertions may carry a 256-character `jti`, as
-  that profile allows (gatekeep, figitaki/gatekeep#7). See "Turnkey-held
-  identity keys" in `docs/POPPY.md`.
+  signed by Turnkey" on their comments. See "Turnkey-held identity keys" in
+  `docs/POPPY.md`.
 
-- `<.ds_button>` is the one button. It renders a link when given `navigate`,
-  `patch` or `href`, comes in `sm` (28px), `md` (32px) and `lg` (40px, the
-  height of a field), no longer lifts on hover, and keeps a 44px tap target on
-  touch screens. The `.r-button` styles are gone.
+### Changed
 
-- `<.input>` styles every field with the design system: a label above, 40px
-  fields with 14px text (16px on touch screens, so iOS no longer zooms in), a
-  readable placeholder, and a red border, `aria-invalid` and message on errors.
-  Callers no longer pass `class="ds-input"`.
+- **Large diffs stay fast.** Syntax highlighting runs in the background, so a
+  diff shows as plain text first and its colours fill in. On a 4,562-line
+  file, Mark viewed, collapse, expand and opening a thread used to block the
+  page for about 2 s and switching split or unified view for about 5 s; now
+  no step takes longer than about a quarter of a second. Collapsing,
+  expanding and marking a file viewed show at once, switching view keeps
+  your place, and opening a thread no longer renders the whole file. Those
+  actions also send 1 to 3 KB back to the browser instead of about 590 KB.
+- **Comments on phones.** Comments, Sections and the section decision sit in
+  a bottom bar instead of floating over thread cards, and step aside while
+  you type so they no longer cover Submit. The reply box stays above the
+  keyboard, and thread cards use the full width. Comment times are short
+  ("56min", "3h", "2d") and sit after the author's name.
+- **A full-width review page.** On wide screens Comments floats in the
+  bottom-right corner instead of taking a column, and Guide diffs span the
+  page. Guide prose and Markdown Preview keep one reading width in every
+  layout.
+- **One section bar in the Guide.** Each section ends in a compact bar at the
+  bottom of the screen: previous section, your decision (Approved, Changes
+  requested, Skipped, or "Decide"), and next section. Signed out, it offers
+  "Sign in to decide" and returns you to that section with the decision open.
+- MCP comments read plainly. `reviews_post_comment` and the address-feedback
+  prompt ask agents to write in Simplified Technical English (ASD-STE100):
+  short sentences, active voice and common words.
+- On wider screens each comment's time and link button sit at the right of
+  its row, level with its first line. Phones keep the time after the
+  author's name.
+- `reviews push --range A...B` uses the merge base of A and B as the base,
+  which matches `git diff A...B`. An empty side (`main..`, `main...`) means
+  HEAD. Diff capture no longer depends on local git config such as
+  `diff.algorithm` or external diff drivers.
+- Sizes follow your browser's font size, so a larger default font gives
+  larger controls as well as larger text. At the default size nothing moves.
+- Every top bar ends in the same account menu, with Settings and Sign out.
+- A review link that doesn't exist shows "Review not found" with a 404, and
+  other unknown addresses show "Page not found" in the app's usual look.
+- Every "Sign in with GitHub" button shows the GitHub mark, and confirm,
+  deny, create, revoke, copy and paging buttons have icons.
 
-- A component playground at `/design/components` mounts the review page's
-  comment thread, composer and floating buttons from their real code with
-  sample data, in both themes and in phone and tablet frames. Replies and
-  resolving work there but save nothing. `/design` now also shows every
-  button and field state and says how each one behaves.
+### Fixed
 
-- The "Verified agent" Token row for a DPoP-bound comment reads "Access token
-  bound to agent key", so it can't be read as the Session JWT's key. The
-  Bearer row is unchanged.
+- Commenting on a range of lines no longer gets stuck. Closing the comment
+  box after dragging the "+" across several lines now clears the selection,
+  so later comments no longer start from that range.
+- Packet hunk links open their section and expand the target card on direct
+  load, repeated clicks and back and forward.
+- Comments and threads posted in the same second keep their posting order.
+- The Guide rail no longer jumps at the bottom of the page on wide screens.
+- Button labels without descenders, such as "Mark viewed", no longer sit
+  about 2px high, and the review page's small controls share one size.
+- On phones, a section's decision history sits under its label instead of
+  wrapping under the status mark.
+- The "Verified agent" details for a DPoP-bound comment read "Access token
+  bound to agent key", so they can't be mistaken for the Session JWT's key.
 
-- A review link that doesn't exist now shows a "Review not found" page with
-  a 404 status, instead of sending you to the home page with a brief message.
-  Any other unknown address shows a "Page not found" page in the app's usual
-  look, with the top bar and a link home, in place of plain "Not Found" text.
+### Security
 
-- A review's owner can delete it for good (#202), from the review page's
-  options menu, `DELETE /api/v1/reviews/:slug`, or `reviews delete <slug>`.
-  The owner confirms by typing the slug, and the warning says when other
-  people's or agents' comments will go too. Deletion removes patchsets,
-  packets, threads, comments, section decisions and viewed-hunk state. The
-  link then shows "This review was deleted" with status 410, and the API
-  answers `410` `review_deleted`.
+- idna is 8.0.0, which fixes EEF-CVE-2026-117678: a long Punycode label in a
+  hostname could keep the CPU busy (#259). jsv still asks for idna 7, so
+  `mix.exs` overrides it until jsv allows 8.
 
-- Create a new agent identity while approving `reviews login` on `/device`, without leaving the sign-in page.
+### For integrators
 
-- Packet hunk links reveal their section and expand the target card on direct
-  load, repeated clicks, and browser history navigation.
+- `/mcp` is an OAuth 2.1 protected resource. A 401 names its protected
+  resource metadata (RFC 9728); the issuer publishes authorization server
+  metadata (RFC 8414) and accepts client ID metadata documents and dynamic
+  client registration, with PKCE. Scopes are `reviews:read`,
+  `reviews:write`, `comments:write` and `threads:write`, and every tool
+  declares `readOnlyHint`, `destructiveHint`, `idempotentHint` and
+  `openWorldHint`. Known connectors are one config list
+  (`config :reviews, Reviews.MCPAuth, connectors:`). Reviews API tokens keep
+  every scope at `/mcp`.
+- `GET /api/v1/capabilities` says whether code storage is on, and
+  `POST /api/v1/code-snapshots` and `/complete` reserve and check snapshot
+  uploads. Push endpoints accept an optional `code_snapshot_id`, and the
+  review payload shows `code_snapshot_status` per revision.
+- `DELETE /api/v1/reviews/:slug` deletes a review; its link and API then
+  answer `410` with `review_deleted`.
+- `<.ds_button>` is the one button (`sm`, `md`, `lg`; renders a link with
+  `navigate`, `patch` or `href`), `<.input>` styles every field, and
+  `<.ds_github_button>` is the GitHub sign-in control. The `.r-button`
+  styles are gone.
 
-- Comments and threads keep their posting order when two share a timestamp
-  second. Order used to depend on how Postgres stored the rows.
+### Not yet live
 
-- The review page is full width at every screen width. On wide screens the
-  Comments button no longer reserves a column beside the content: it floats
-  in the bottom-right corner with its log above it, as on tablets. The log
-  starts closed (an open choice is still remembered in this browser) and
-  closes on a tap outside it, and the section decision bar stops short of the
-  button above 640px. Guide diffs span the content width; the Guide no longer
-  pads its right side to balance the section rail. Prose keeps its reading
-  width.
-
-- The section decision collapses on every screen width, as on phones: one
-  button shows the current decision (or "Decide") and expands the full bar;
-  Escape or the small close button in the bar's corner collapses it.
-  Signed-out readers get the same control, and expanding it offers "Sign in
-  to decide", which returns to the review with that section and its decision
-  open.
-
-- Guide prose uses the same 52rem column in split and stacked diffs, so
-  switching diff style no longer changes its width. On phones, section
-  headings are 20px, the same size as on desktop.
+- Code storage is off on reviews.figitaki.dev; see Added.
+- A private aggregate analytics export (accounts, signups, active accounts,
+  and MCP connections by app) is off unless its own credentials are set.
+- The design catalog at `/design`, `/design/components` and
+  `/design/layouts` is on in development and on preview apps only.
 
 ## [0.0.2] - 2026-11-18
 
@@ -427,16 +339,6 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
   `--update` slug, and exits 1 if there are any problems. A real push now
   also lists every packet problem at once.
 
-- Claude custom connectors, ChatGPT connectors, and other MCP clients can sign in to `/mcp` with
-  OAuth. The owner approves the app on a Reviews page, picks which of their agents it acts as (an
-  app never acts as the owner) and what it may do (read, push reviews, comment), and can disconnect
-  it in Settings. `search` and `fetch` tools let ChatGPT find and read reviews, and `reviews_list`
-  lists the account's reviews with the same filters as `reviews list`. API tokens keep working.
-  `/mcp` accepts requests from the Claude and ChatGPT origins, which
-  their connector check sends. The consent page shows Claude and ChatGPT as
-  recognized apps with their logos (one config list holds the known
-  connectors), and groups permissions into reads, always included, and writes
-  the owner can untick. See `docs/MCP.md`.
 - Personal Agents that support Poppy 1.0 can connect to Reviews. An owner approves one on a Reviews
   page and chooses which agent identity it acts as. Its comments show a "Verified agent" label with
   details that separate what was verified from what the agent says about itself. Owners can
