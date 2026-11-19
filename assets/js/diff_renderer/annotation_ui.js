@@ -432,7 +432,7 @@ export function signInPrompt(onCancel) {
     el("div", { style: composerActionsStyle }, [
       el("a", { href: signInHref(), className: "ds-button is-sm is-primary" }, [
         githubMark(),
-        "Sign in with GitHub",
+        el("span", { className: "ds-label" }, "Sign in with GitHub"),
       ]),
       button("Cancel", onCancel),
     ]),
