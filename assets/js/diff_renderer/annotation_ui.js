@@ -116,24 +116,11 @@ const threadRunCommentsStyle = {
   margin: "0",
   listStyle: "none",
 }
-const threadCommentStyle = {
-  display: "flex",
-  alignItems: "baseline",
-  flexWrap: "wrap",
-  gap: "2px 12px",
-  padding: "2px 0",
-}
 const threadCommentBodyStyle = {
   flex: "1 1 100%",
   minWidth: "0",
   whiteSpace: "normal",
   overflowWrap: "anywhere",
-}
-const threadCommentMetaStyle = {
-  flex: "1 1 100%",
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
 }
 const threadCommentTimeStyle = {
   color: colors.faint,
@@ -616,16 +603,21 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
   const commentRows = []
 
   for (const [index, run] of runs.entries()) {
-    // The first comment's time sits after the author name; later comments in
-    // the run get their own small line, so the body keeps the full width.
+    // Each comment's time and link sit at the right of its row on wider
+    // screens, so a run's comments line up. Phones put the first comment's
+    // time after the author name and give later ones their own small line
+    // (packet.css), so the body keeps the full width.
     const who = run.author?.username || "reviewer"
-    const commentLink = (comment) =>
-      copyLinkButton(threadPermalink(thread.id, comment.id), `Copy link to ${who}'s comment`)
+    const commentMeta = (comment, head = false) =>
+      el("div", { className: head ? "review-comment-meta is-head" : "review-comment-meta" }, [
+        commentTime(comment?.inserted_at),
+        comment && copyLinkButton(threadPermalink(thread.id, comment.id), `Copy link to ${who}'s comment`),
+      ])
     const comments = run.comments.map((comment, i) =>
       // The run's first comment is linked by the whole run, so a comment
       // link lands on the author line too.
-      el("li", { style: threadCommentStyle, dataset: i ? { commentId: comment.id } : {} }, [
-        i ? el("div", { style: threadCommentMetaStyle }, [commentTime(comment.inserted_at), commentLink(comment)]) : null,
+      el("li", { className: i ? "review-thread-comment" : "review-thread-comment is-first", dataset: i ? { commentId: comment.id } : {} }, [
+        commentMeta(comment),
         commentBody(comment.body),
         attributionDetails(comment.attribution, run.author),
       ])
@@ -636,8 +628,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
         el("header", { style: threadRunHeaderStyle }, [
           avatar(run.author),
           el("span", {}, who),
-          commentTime(run.comments[0]?.inserted_at),
-          commentLink(run.comments[0]),
+          commentMeta(run.comments[0], true),
         ]),
         el("ul", { className: "review-thread-comments", style: threadRunCommentsStyle }, comments),
       ])

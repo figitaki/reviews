@@ -2159,6 +2159,62 @@ details[open] > summary .review-collapse-icon,
   pointer-events: none;
 }
 
+/* A comment row: on wider screens the body on the left and its time and
+   link on the right, level with the body's first line, so consecutive
+   comments line up. The time after the author name is the phone layout. */
+.review-thread-comment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-items: start;
+  padding: 2px 0;
+}
+
+.review-thread-comment > * {
+  grid-column: 1;
+}
+
+.review-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* As tall as the body's first line (comment text is 0.8125rem at 1.5 line
+   height), so the time and the link button centre on that line; the button
+   overflows it evenly. */
+.review-thread-comment > .review-comment-meta {
+  grid-column: 2;
+  grid-row: 1;
+  height: calc(1.5 * 0.8125rem);
+}
+
+.review-comment-meta.is-head {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .review-thread-comment {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+  }
+
+  .review-thread-comment > .review-comment-meta {
+    flex: 1 1 100%;
+    height: auto;
+  }
+
+  .review-thread-comment.is-first > .review-comment-meta {
+    display: none;
+  }
+
+  .review-comment-meta.is-head {
+    display: flex;
+  }
+}
+
 /* Copy-link controls: a faint icon, a real link for long-press on phones. */
 .ds-button.review-copy-link {
   min-height: 24px;

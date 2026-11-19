@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- On wider screens each comment's time and link button sit at the right of
+  its row, level with its first line, so a run of comments from one person
+  lines up. Phones keep the time after the author's name.
+
 - Amp is a recognized app when it connects to `/mcp`. Its sign-in page shows
   Amp's name and logo instead of "Not verified".
 - Disabled-by-default private aggregate export with dedicated expiring authentication,
