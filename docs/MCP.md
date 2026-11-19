@@ -161,7 +161,7 @@ the whole review.
 | `reviews_get_thread` | One thread with all of its comments, in pieces when long. |
 | `reviews_create_review` | Publish a review from a unified diff and optional packet JSON. Hunk rows and `line_start`/`line_end` slices are checked against the diff, as the CLI does. |
 | `reviews_append_revision` | Upload a new revision of a review your account owns, with the same checks. |
-| `reviews_post_comment` | Reply with `thread_id`, or start a thread at `path` + `line` of a revision's diff. The line must be in that revision's diff. |
+| `reviews_post_comment` | Reply with `thread_id`, or start a thread at `path` + `line` of a revision's diff. The line must be in that revision's diff. The description asks agents to write in Simplified Technical English (ASD-STE100). |
 | `reviews_update_thread_status` | Resolve or reopen a thread. |
 
 Resource: `reviews://{slug}/feedback`, the open threads of the latest revision

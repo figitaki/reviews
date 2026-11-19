@@ -651,7 +651,8 @@ defmodule ReviewsWeb.ReviewListLive do
             id="pager-older"
             patch={list_path(@filters, @next_offset)}
           >
-            Older <.icon name="hero-chevron-right" class="ds-button-icon" />
+            Older
+            <:trailing><.icon name="hero-chevron-right" class="ds-button-icon" /></:trailing>
           </.ds_button>
         </span>
       </nav>

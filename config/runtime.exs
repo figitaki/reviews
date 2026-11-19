@@ -1,5 +1,11 @@
 import Config
 
+# Disabled unless both a SHA-256 digest and a UTC expiry (at most 90 days away) are valid.
+# Only the collector holds the raw aggregate credential; never reuse an account API token.
+config :reviews, :analytics_export,
+  token_sha256: System.get_env("REVIEWS_ANALYTICS_TOKEN_SHA256"),
+  expires_at: System.get_env("REVIEWS_ANALYTICS_TOKEN_EXPIRES_AT")
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

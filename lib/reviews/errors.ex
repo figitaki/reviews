@@ -48,7 +48,10 @@ defmodule Reviews.Errors do
     snapshot_not_ready: {422, "The code snapshot is not ready to be claimed."},
     snapshot_not_authorized:
       {403, "This identity cannot upload code for that review or snapshot."},
-    write_failed: {422, "The write failed. Nothing was saved."}
+    write_failed: {422, "The write failed. Nothing was saved."},
+    method_not_allowed: {405, "Method not allowed"},
+    rate_limited: {429, "Rate limit exceeded"},
+    unavailable: {503, "Temporarily unavailable. Try again later."}
   }
 
   # Domain reasons that name the same problem as a code.

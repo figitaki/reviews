@@ -433,6 +433,11 @@ defmodule ReviewsWeb.DesignLive do
               Disabled dims to 38% and ignores clicks. Say nearby why it is disabled.
             </li>
             <li>On touch screens every size has a 44px tap target without growing.</li>
+            <li>
+              Labels centre on their letters: <code>.ds-label</code>
+              trims the label to cap height and baseline. Put it on the label element of any
+              other flex control; bare text in a flex box cannot be trimmed.
+            </li>
           </:rules>
           <div class="dc-matrix" role="table" aria-label="Button states">
             <span></span>

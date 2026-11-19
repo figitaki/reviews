@@ -387,21 +387,19 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       sign_in_href = ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}"]}"
 
-      # Signed-out readers get the collapsible decision; expanded, it offers
-      # sign-in that returns to this section.
+      # Signed out, Decide is a sign-in link that returns to this section;
+      # there is no expanded state to open.
       section_sign_in_href =
         ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}?#{[section: 0]}"]}"
 
-      refute has_element?(view, "#packet-section-0-decision.is-readonly")
-      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
-      view |> element("#packet-section-0-decision-toggle") |> render_click()
-      assert has_element?(view, "#packet-section-0-decision.is-editing")
-
       assert has_element?(
                view,
-               ~s|#packet-section-0-decision-signin[href="#{section_sign_in_href}"]|,
+               ~s|a#packet-section-0-decision-toggle[href="#{section_sign_in_href}"][aria-label="Sign in to decide"][title]|,
                "Sign in to decide"
              )
+
+      refute has_element?(view, "#packet-section-0-decision-controls")
+      refute has_element?(view, "#packet-section-0-decision-signin")
 
       # The top bar's Sign in is the shared, text-only account control.
       assert has_element?(view, ~s|.l-nav-signin[href="#{sign_in_href}"]|, "Sign in")
@@ -410,9 +408,19 @@ defmodule ReviewsWeb.ReviewLiveTest do
       refute has_element?(view, "#packet-section-0-decision [aria-pressed]")
 
       # Coming back from sign-in opens that section with its decision expanded.
-      {:ok, returned, _html} = live(build_conn(), ~p"/r/#{packet_review.slug}?#{[section: 0]}")
+      {:ok, returned, _html} =
+        build_conn()
+        |> Plug.Test.init_test_session(%{current_user_id: author.id})
+        |> live(~p"/r/#{packet_review.slug}?#{[section: 0]}")
+
       assert has_element?(returned, "#packet-section-0.is-open")
       assert has_element?(returned, "#packet-section-0-decision.is-editing")
+      assert has_element?(returned, "#packet-section-0-decision-controls [aria-pressed]")
+
+      # The same link signed out still shows the section, but not expanded.
+      {:ok, still_out, _html} = live(build_conn(), ~p"/r/#{packet_review.slug}?#{[section: 0]}")
+      assert has_element?(still_out, "#packet-section-0.is-open")
+      refute has_element?(still_out, "#packet-section-0-decision.is-editing")
 
       assert has_element?(view, "#review-packet .review-hunk-card")
 
@@ -660,25 +668,26 @@ defmodule ReviewsWeb.ReviewLiveTest do
                ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-file-path="lib/one.ex"][data-hunk-expanded="true"]|
              )
 
-      # The decision footer leads into the next section.
+      # The section dock steps between sections; the ends lead to the overview.
+      assert has_element?(view, "#packet-section-0-prev[aria-label='Back to overview']")
+
       assert has_element?(
                view,
-               "#packet-section-0-nav .review-section-next-button",
-               "Next: 02 Second section"
+               "#packet-section-0-next[aria-label='Next section: 02 Second section']",
+               "Second section"
              )
 
-      view
-      |> element("#packet-section-0-nav .review-section-next-button")
-      |> render_click()
+      view |> element("#packet-section-0-next") |> render_click()
 
       assert has_element?(view, "#packet-section-1.is-open")
       refute has_element?(view, "#packet-section-0")
 
       assert has_element?(
                view,
-               "#packet-section-1-nav .review-section-next-button",
-               "Back to overview"
+               "#packet-section-1-prev[aria-label='Previous section: 01 First section']"
              )
+
+      assert has_element?(view, "#packet-section-1-next[aria-label='Back to overview']")
 
       view |> element("#diff-style-unified") |> render_click()
 
@@ -1813,7 +1822,10 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#review-guide-tick-0") |> render_click()
       assert has_element?(view, "#packet-section-0.is-open")
 
-      assert has_element?(view, "#packet-section-0-decision.is-pending", "Pending")
+      assert has_element?(
+               view,
+               "#packet-section-0-decision.is-pending #packet-section-0-decision-controls[aria-label^='Decision for Main change: Pending']"
+             )
 
       assert has_element?(
                view,
@@ -1824,12 +1836,17 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
       assert has_element?(view, "#packet-section-0-decision.is-ignored", "Skipped")
       view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
-      assert has_element?(view, "#packet-section-0-decision.is-pending", "Pending")
+
+      assert has_element?(
+               view,
+               "#packet-section-0-decision.is-pending #packet-section-0-decision-controls[aria-label^='Decision for Main change: Pending']"
+             )
+
       view |> element("#packet-section-0-decision-toggle") |> render_click()
 
       assert has_element?(
                view,
-               "#packet-section-0-decision-toggle[aria-expanded=true][aria-label='Close decision controls']"
+               "#packet-section-0-decision-toggle[aria-expanded=true][aria-label='Dismiss decision controls']"
              )
 
       view |> element("#review-guide-overview-tick") |> render_click()
@@ -1838,6 +1855,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#packet-section-0-decision-toggle") |> render_click()
       view |> element("#packet-section-0-decision-toggle") |> render_click()
       assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
+
+      # Two quick outside clicks or Escapes send two closes; the second must
+      # not reopen the choices.
+      view |> element("#packet-section-0-decision-toggle") |> render_click()
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=true]")
+
+      for _ <- 1..2,
+          do: render_hook(view, "toggle_section_decision", %{section_index: "0", open: "false"})
+
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
+      render_hook(view, "toggle_section_decision", %{section_index: "0", open: "true"})
+      render_hook(view, "toggle_section_decision", %{section_index: "0", open: "true"})
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=true]")
+      render_hook(view, "toggle_section_decision", %{section_index: "0", open: "false"})
+
       view |> element("#packet-section-0-decision-toggle") |> render_click()
       view |> element("#packet-section-0-decision-controls button", "Approve") |> render_click()
       assert has_element?(view, "#packet-section-0.is-open")
@@ -1846,14 +1878,14 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#packet-section-0-decision-toggle[aria-expanded=false][aria-label='Change decision: Approved']"
+               "#packet-section-0-decision-toggle[aria-expanded=false][aria-label='Approved: change decision']"
              )
 
       assert has_element?(view, "#packet-section-0-decision [aria-pressed=true]", "Approve")
 
       assert has_element?(
                view,
-               "#packet-section-0-decision [aria-pressed=true][aria-label='Approved. Select again to clear decision'] .review-section-action-result",
+               "#packet-section-0-decision-toggle .review-section-decision-toggle-label",
                "Approved"
              )
 
@@ -1906,7 +1938,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#packet-section-0-decision [aria-pressed=true] .review-section-action-result",
+               "#packet-section-0-decision-toggle .review-section-decision-toggle-label",
                "Changes requested"
              )
 
@@ -1982,8 +2014,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                latest_view,
-               "#packet-section-0-decision .review-section-decision-history",
-               "Previously approved in v1"
+               "#packet-section-0-decision-controls[aria-label='Decision for Main change: Pending for this revision. Previously approved in v1; outdated for v2.']"
              )
 
       assert has_element?(latest_view, "#packet-section-0 .review-packet-section-actions")
@@ -2043,8 +2074,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                carried_view,
-               "#packet-section-0-decision.is-ignored",
-               "Skipped (carried forward)"
+               "#packet-section-0-decision.is-ignored #packet-section-0-decision-controls[aria-label='Decision for Main change: Skipped (carried forward).']"
              )
 
       assert has_element?(
@@ -2137,9 +2167,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
       {:ok, view, _html} = live(conn, ~p"/r/#{packet_review.slug}")
       view |> element("#review-guide-tick-0") |> render_click()
 
-      assert has_element?(view, "#packet-section-0-decision.is-readonly")
+      # A non-owner can expand the decision to read the owner-only note and
+      # collapse it again, but gets no decision buttons.
+      toggle = "#packet-section-0-decision-toggle"
+      assert has_element?(view, "#{toggle}[aria-expanded=false]")
+      view |> element(toggle) |> render_click()
+
+      assert has_element?(
+               view,
+               "#{toggle}[aria-expanded=true][aria-label='Dismiss decision controls']"
+             )
+
       assert has_element?(view, "#packet-section-0-decision-owner-only", "Only the review owner")
-      refute has_element?(view, "#packet-section-0-decision button")
+      refute has_element?(view, "#packet-section-0-decision [aria-pressed]")
+      view |> element(toggle) |> render_click()
+      assert has_element?(view, "#{toggle}[aria-expanded=false]")
 
       assert render_hook(view, "set_section_status", %{
                "section_index" => "0",

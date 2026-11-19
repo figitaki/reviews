@@ -6,6 +6,69 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The MCP `reviews_post_comment` tool and the address-feedback prompt now ask
+  agents to write comments in Simplified Technical English (ASD-STE100):
+  short sentences, active voice and common words.
+- Amp is a recognized app when it connects to `/mcp`. Its sign-in page shows
+  Amp's name and logo instead of "Not verified".
+- Disabled-by-default private aggregate export with dedicated expiring authentication,
+  fixed 7/30-day windows, and active accounts deduplicated across owned identities.
+  It also counts accounts and signups, and MCP connections by app (Claude, ChatGPT,
+  unrecognized): connected now, approved in each window, and accounts that used one.
+
+- In the Guide each section has one compact bar at the bottom of the screen
+  at every width: previous section on the left, the decision
+  pill in the middle and next section on the right. It replaces the
+  "Next:" and "Begin review" button at the end of each section and the
+  old corner decision button and shelf. The pill shows your decision on the
+  current version (Approved, Changes requested or Skipped), or "Decide".
+  Clicking it floats Request changes, Skip and Approve in a row above it,
+  with no panel around them and Skip over the pill (on phones the first
+  reads "Changes"), and reads
+  "Dismiss"; choosing one, clicking elsewhere, clicking it again or Escape
+  closes it. Readers who are not the owner see the owner-only note there.
+  Signed out, the pill reads "Sign in to decide" and goes straight to GitHub
+  sign-in, which returns to that section with the decision open. The bar is fixed to the bottom of
+  the screen, and Comments (and Sections on phones) stack in a column above
+  the next-section button. The pill shows one outline, with or without
+  keyboard focus.
+
+- The Guide no longer adds 72px of empty space below the page on wide
+  screens. That space ended the sticky Guide rail early, so it jumped up as
+  you reached the bottom.
+
+- Markdown Preview wraps at the same reading width as Guide prose and lines
+  up with it, in Guide and Diff mode. The diff card, Source and code diffs
+  stay full width.
+
+- The review page's small controls share one size: the R mark, the account
+  and review menu buttons, the version picker, the revision chips, the
+  Guide/Diff and layout switchers and every square in the Guide map are
+  `--size-control-md` (32px) tall with `--radius-sm` corners. On phones the
+  version picker drops from 44px to 32px, the account button from 44px to
+  32px, and the Guide map's menu, star, numbers and close are one 32px
+  square each, 4px apart, with only the selected one filled. Touch screens
+  keep a 44px tap target around each without the box growing. On touch
+  phones the Guide map keeps the whole row on screen: the spare width is
+  split into equal gaps of 4px to 12px, and each target reaches the
+  midpoint of the gaps beside it, so it is 44px wide with few sections and
+  narrower (42px with six sections at 390px) when the row is full. Only a
+  row that does not fit even with 4px gaps, such as ten sections, scrolls
+  its numbers between the menu and close. The collapsed desktop rail is held to
+  the height under the headers and shares its height the same way on touch
+  screens, so the close button stays on screen; with too many sections for
+  4px gaps, its numbers scroll between the menu and close.
+
+- Button labels are centred on their letters. A line box keeps the font's
+  descent, so labels without descenders such as "Mark viewed" and an
+  account name sat about 2px high. The new `.ds-label` class trims a label
+  to cap height and baseline with `text-box`; `<.ds_button>` puts it on its
+  label, and so do the account button, revision chips, Guide/Diff, Guide
+  map numbers, Begin review, Mark viewed and the comment thread buttons.
+  `<.ds_button>` gains `leading` and `trailing` slots for icons that are not
+  a Heroicon before the label, such as the GitHub mark and the chevron on
+  "Older".
+
 - Comments read better on phones. Comments, Sections and the section
   decision sit in a bottom bar instead of floating over thread cards, and
   they step aside while you type, so they no longer cover Submit. The reply
