@@ -90,6 +90,9 @@ reviews, even public ones.
 - A token for your human identity lists reviews for all of your identities
   (human and agents).
 - A token for an agent identity lists only that agent's reviews.
+- At `/mcp`, the `reviews_list` tool uses the same list. An OAuth connector
+  grant (Claude, ChatGPT) lists the whole account, because it works for the
+  person who approved it. `Reviews.Policy.list_viewer/1` holds these rules.
 
 Query params (all optional):
 
@@ -448,9 +451,17 @@ go through.
 
 Streamable HTTP MCP endpoint for agents, off unless `MCP_ENABLED` is set (see
 `docs/MCP.md` for tools, flags, and client setup). It authenticates with the
-same `Authorization: Bearer <raw_token>` as the REST API and acts as the token's
-identity. Tools find reviews by link and follow the permission rules above;
-unknown slugs get a not-found result. Request bodies are
+same `Authorization: Bearer <raw_token>` as the REST API, or with an OAuth
+access token issued for the resource `https://HOST/mcp`, and acts as the
+token's identity. A 401 or 403 carries `WWW-Authenticate: Bearer
+resource_metadata="https://HOST/.well-known/oauth-protected-resource/mcp", ...`.
+`/mcp` is a resource of the OAuth issuer above (`Reviews.MCPAuth`): its
+metadata is served only while MCP is on, it takes public clients (`none`) and
+`private_key_jwt`, and its refresh tokens rotate. Its scopes are
+`reviews:read`, `reviews:write`, `comments:write`, and `threads:write`; an
+OAuth token's writes are limited to them. Tools find reviews by link and
+follow the permission rules above; `search` lists only the account's own
+reviews; unknown slugs get a not-found result. Request bodies are
 capped at 4 MB before decoding; the REST limit above does not apply.
 
 ---
@@ -531,6 +542,11 @@ Activity links use `/r/:slug?patchset=N&thread=ID`. They select and expand the
 first Guide hunk containing the thread's anchored line on its diff side. If no
 Guide hunk covers it, navigation falls back to `/r/:slug/changes` with the same
 query. Outdated discussions link to their originating revision.
+
+A thread card's copy-link buttons write the same link for the current page,
+keeping its view and `patchset`. A comment link adds `&comment=ID`; the diff
+renderer then scrolls to that comment instead of the thread header and
+highlights it briefly. A thread link highlights the whole card.
 
 The patchset-pushed banner is rendered by LiveView itself (no hook event).
 When LiveView receives `{:patchset_pushed, n}` on the `"review:<slug>"`

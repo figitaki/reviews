@@ -108,9 +108,15 @@ defmodule ReviewsWeb.DesignSystemComponents do
   Hover and press change the surface only. Keyboard focus shows a ring in
   `--ds-focus`. `disabled` dims to 38% and stops clicks.
 
-  `icon` puts a Heroicon (`"hero-plus"`) before the label. Give controls an
-  icon when it makes the action quicker to find: add, sign in, copy, page
-  through, allow or deny. Leave it off where the label already says it.
+  `icon` puts a Heroicon (`"hero-plus"`) before the label, and the `leading`
+  slot any other mark, such as the GitHub mark. The `trailing` slot puts an
+  icon after the label, such as the chevron on "Older". Put icons in these,
+  not in the label, so they keep the button's gap and centring. Give controls an icon when it
+  makes the action quicker to find: add, sign in, copy, page through, allow
+  or deny. Leave it off where the label already says it.
+
+  The label is wrapped in `.ds-label`, which centres its capitals in the
+  button instead of the font's full ascent and descent.
   """
   attr :variant, :string, default: "secondary", values: ~w(primary secondary ghost danger)
   attr :size, :string, default: "md", values: ~w(sm md lg)
@@ -120,6 +126,8 @@ defmodule ReviewsWeb.DesignSystemComponents do
   attr :rest, :global,
     include: ~w(type disabled form name value href navigate patch replace method download)
 
+  slot :leading
+  slot :trailing
   slot :inner_block, required: true
 
   def ds_button(assigns) do
@@ -136,10 +144,18 @@ defmodule ReviewsWeb.DesignSystemComponents do
 
     ~H"""
     <.link :if={@link?} class={@classes} {@rest}>
-      <.icon :if={@icon} name={@icon} class="ds-button-icon" />{render_slot(@inner_block)}
+      <.icon :if={@icon} name={@icon} class="ds-button-icon" />{render_slot(@leading)}<span class="ds-label">{render_slot(
+        @inner_block
+      )}</span>{render_slot(
+        @trailing
+      )}
     </.link>
     <button :if={!@link?} type={@rest[:type] || "button"} class={@classes} {@rest}>
-      <.icon :if={@icon} name={@icon} class="ds-button-icon" />{render_slot(@inner_block)}
+      <.icon :if={@icon} name={@icon} class="ds-button-icon" />{render_slot(@leading)}<span class="ds-label">{render_slot(
+        @inner_block
+      )}</span>{render_slot(
+        @trailing
+      )}
     </button>
     """
   end
@@ -179,7 +195,7 @@ defmodule ReviewsWeb.DesignSystemComponents do
   def ds_github_button(assigns) do
     ~H"""
     <.ds_button variant={@variant} size={@size} class={@class} {@rest}>
-      <.github_mark class="ds-button-icon" />
+      <:leading><.github_mark class="ds-button-icon" /></:leading>
       <%= if @inner_block != [] do %>
         {render_slot(@inner_block)}
       <% else %>

@@ -98,12 +98,12 @@
 
 .design-brand-mark{
   display: inline-flex;
-  width: 26px;
-  height: 26px;
+  width: var(--size-control-md);
+  height: var(--size-control-md);
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--ds-line-strong);
-  border-radius: 6px;
+  border: var(--border-hair) solid var(--ds-line-strong);
+  border-radius: var(--radius-sm);
   background: var(--ds-panel-raised);
   font-size: 0.75rem;
 }
@@ -551,7 +551,8 @@ textarea.ds-input{
 }
 
 /* The fields show only while "New agent identity" is chosen. */
-#poppy-consent-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity{
+#poppy-consent-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity,
+#device-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity{
   display: none;
 }
 
@@ -565,6 +566,202 @@ textarea.ds-input{
   margin: 0;
   color: var(--ds-muted);
   font-size: 0.8125rem;
+}
+
+/* Who is asking: a recognized app with its logo, or an unverified claim. */
+/* A short header, so the app and the form start on the first screen. */
+.ds-page-header.is-consent{
+  min-height: auto;
+  padding: var(--space-10) 0 var(--space-7);
+}
+
+.ds-page-header.is-consent h1{
+  font-size: var(--font-size-2xl);
+}
+
+.ds-page-header.is-consent .design-hero-copy{
+  margin-top: var(--space-3);
+  font-size: var(--font-size-base);
+}
+
+.consent-client{
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  margin-bottom: var(--space-7);
+}
+
+.consent-client-logo{
+  flex: none;
+  width: var(--size-control-lg);
+  height: var(--size-control-lg);
+  border-radius: var(--radius-md);
+}
+
+.consent-client-logo.is-unknown{
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--ds-line-strong);
+  color: var(--ds-faint);
+}
+
+.consent-client-text{
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.consent-client-name{
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  color: var(--ds-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-semi);
+}
+
+.consent-client-meta{
+  overflow-wrap: anywhere;
+  color: var(--ds-muted);
+  font-size: var(--font-size-sm);
+}
+
+.consent-badge{
+  gap: var(--space-1);
+  color: var(--ds-warn);
+  border-color: color-mix(in srgb, var(--ds-warn) 45%, var(--ds-line));
+}
+
+.consent-badge.is-recognized{
+  color: var(--ds-add);
+  border-color: color-mix(in srgb, var(--ds-add) 45%, var(--ds-line));
+  background: color-mix(in srgb, var(--ds-add) 10%, transparent);
+}
+
+.consent-details{
+  margin-top: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.consent-details summary{
+  width: max-content;
+  color: var(--ds-muted);
+  cursor: pointer;
+}
+
+.consent-details[open] summary{
+  margin-bottom: var(--space-4);
+}
+
+.consent-account{
+  margin: 0 0 var(--space-2);
+  color: var(--ds-muted);
+}
+
+.consent-account strong{
+  color: var(--ds-text);
+}
+
+/* Permissions, grouped into reads (always included) and writes. */
+.poppy-consent-form .consent-scopes{
+  gap: var(--space-5);
+}
+
+.consent-scope-group{
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--ds-line);
+  border-left: 3px solid var(--consent-accent);
+  border-radius: var(--radius-md);
+  background: var(--ds-panel-raised);
+  overflow: hidden;
+}
+
+.consent-scope-group.is-read{
+  --consent-accent: var(--ds-blue);
+}
+
+.consent-scope-group.is-write{
+  --consent-accent: var(--ds-warn);
+}
+
+.consent-scope-group-title{
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  border-bottom: 1px solid var(--ds-line);
+  padding: var(--space-4) var(--space-6);
+  color: var(--consent-accent);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.consent-scope-group-title span{
+  color: var(--ds-muted);
+  font-weight: var(--weight-regular);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.poppy-consent-form .consent-scope{
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+  padding: var(--space-5) var(--space-6);
+}
+
+.consent-scope + .consent-scope{
+  border-top: 1px solid var(--ds-line);
+}
+
+label.consent-scope{
+  cursor: pointer;
+}
+
+label.consent-scope:hover{
+  background: var(--ds-hover);
+}
+
+.consent-scope input[type="checkbox"]{
+  flex: none;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin-top: 0.125rem;
+  accent-color: var(--ds-add);
+}
+
+.consent-scope-mark{
+  flex: none;
+  margin-top: 0.125rem;
+  color: var(--ds-blue);
+}
+
+.consent-scope-text{
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.consent-scope-title{
+  color: var(--ds-text);
+  font-size: var(--font-size-base);
+  font-weight: var(--weight-semi);
+}
+
+.consent-scope-desc{
+  color: var(--ds-muted);
+  font-size: var(--font-size-sm);
+}
+
+.consent-scope-name{
+  justify-self: start;
+  color: var(--ds-faint);
+  font-size: var(--font-size-2xs);
 }
 
 /* CLI sign-in page (ReviewsWeb.DeviceHTML): one box per letter, 4-4. */
@@ -738,6 +935,18 @@ textarea.ds-input{
   text-decoration: none;
   white-space: nowrap;
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+/* A control's text label. Line boxes hold the font's full ascent and
+   descent, so a centred label without descenders ("Mark viewed",
+   "other-dev") reads about 2px high. Trimming the box to cap height and
+   baseline centres the letters themselves. text-box only applies to block
+   containers and inline boxes, so in a flex control put this on the label
+   element, not the control: bare text in a flex box cannot be trimmed. A
+   <button> that is not a flex box can take `text-box` itself. Browsers
+   without text-box keep the old centring. */
+.ds-label{
+  text-box: trim-both cap alphabetic;
 }
 
 /* Icons inside buttons, from the icon attr or <.github_mark>. */
@@ -999,26 +1208,36 @@ textarea.ds-input{
   .ds-shell-actions .review-button > span{
     min-width: 0;
     overflow: hidden;
+    overflow: clip visible;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 }
 
-/* Touch screens: topbar controls get a 44px tap target. */
+/* Touch screens: topbar controls get a 44px tap target. The brand link is
+   the target around its 32px mark; buttons keep their 32px box and grow
+   only their hit area, like .ds-button. */
 @media (pointer: coarse) {
-  .design-brand,
-  .ds-shell-actions .review-chip,
-  .ds-shell-actions .review-button{
-    min-height: 44px;
-  }
-
   .design-brand{
     min-width: 44px;
+    min-height: 44px;
     justify-content: center;
   }
 
-  .ds-shell-actions .review-chip{
-    min-width: 44px;
+  .ds-shell-actions :is(.review-chip, .review-button){
+    position: relative;
+  }
+
+  .ds-shell-actions :is(.review-chip, .review-button)::after{
+    content: "";
+    position: absolute;
+    inset: calc((100% - 44px) / 2) 0;
+  }
+  /* landing.css makes the signed-out button 44px tall; here it stays one
+     control tall and .ds-button's own hit area covers the 44px. */
+  .ds-shell-actions .l-nav-signin{
+    height: auto;
+    min-height: var(--size-control-md);
   }
 }
 
@@ -1033,6 +1252,22 @@ textarea.ds-input{
   max-width: 100%;
 }
 
+/* DeleteReviewComponents.review_menu: an icon-only square beside it. */
+.ds-shell-actions .review-owner-menu-button {
+  width: var(--size-control-md);
+  padding: 0;
+}
+
+/* Touch: a 44px square target. The account button sits 4px to the right,
+   so the target takes 2px there, half the gap, and the other 10px from the
+   empty bar on the left. Offsets are from the padding edge, inside the
+   1px border. */
+@media (pointer: coarse) {
+  .ds-shell-actions .review-owner-menu-button::after{
+    inset: calc((100% - 44px) / 2) calc(-2px - var(--border-hair)) calc((100% - 44px) / 2) calc(100% + 2px + var(--border-hair) - 44px);
+  }
+}
+
 .account-menu-avatar {
   flex: none;
   width: 24px;
@@ -1041,9 +1276,14 @@ textarea.ds-input{
   object-fit: cover;
 }
 
+/* The name is trimmed to cap height (.ds-label), so it clips only
+   sideways: a vertical clip would cut the "g" and "y" in "gypsy". Browsers
+   without `clip` keep `hidden`; they lack text-box too, so nothing is
+   trimmed there. */
 .account-menu-name {
   min-width: 0;
   overflow: hidden;
+  overflow: clip visible;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

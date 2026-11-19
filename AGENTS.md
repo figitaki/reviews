@@ -44,7 +44,7 @@ Run these from the PR checkout with the CLI configured for the intended review h
 - `lib/reviews_web/live/review_live.ex` is the review screen; its packet UI is in `review_live/packet_components.ex`, diff components in `review_live/diff_components.ex`. `settings_live.ex` holds identities and tokens.
 - `lib/reviews_web/mcp/` is the prototype hosted MCP server at `/mcp` (FastestMCP, off unless `MCP_ENABLED`); see `docs/MCP.md`.
 - `lib/reviews_web/controllers/api/` is the JSON API the CLI uses. `docs/CONTRACTS.md` documents it and the LiveView hook events; update it with any API change.
-- `assets/js/hooks/diff_renderer.js` mounts Pierre; rendering code is in `assets/js/diff_renderer/`; dataset parsing goes through Zod schemas in `assets/js/schemas.js`.
+- `assets/js/hooks/diff_renderer.js` mounts Pierre; rendering code is in `assets/js/diff_renderer/`; dataset parsing goes through Zod schemas in `assets/js/schemas.js`. Syntax highlighting runs in Pierre's web worker pool (`diff_renderer/worker_pool.js`, worker entry `js/diffs_worker.js`, named by `<meta name="diffs-worker">` in the root layout): diffs render as plain text first and the colours fill in, so a large file never blocks the page. Without workers Pierre highlights on the main thread.
 - `/design` (`ReviewsWeb.DesignLive`) renders the tokens and `ds_` components in both themes, with the rules for how buttons and fields behave. `/design/components` (`ReviewsWeb.DesignComponentsLive`) mounts the app shell, the diff, the comment thread and composer, the section decision and the floating buttons from their real code with sample data from `ReviewsWeb.DesignFixtures`; it answers their events without saving. `/design/layouts` (`ReviewsWeb.DesignLayoutsLive`) frames the real list, review and Settings pages at desktop and phone widths. All are on in dev and on previews. Check a design-system change there, and add new `ds_` or composite components to them. Use `<.ds_button>` and `<.input>` rather than writing `ds-button` or `ds-input` classes by hand. Size things in rem, through the `--space-*`, `--radius-*`, `--font-*` and `--size-*` tokens, so they follow the reader's font size; keep px for hairline borders, shadows and Pierre's code line height. Sign-in with GitHub is always `<.ds_github_button>` (it carries the GitHub mark); put icons on buttons with `icon="hero-…"` and reuse the meanings listed in `/design`'s Icons section.
 - `assets/css/app.css` imports `tokens.css`, `components.css`, `packet.css` (review UI, `.review-*` / `.rev-*`), `landing.css`, `product-shell.css`. Use the `--ds-*` tokens; do not add hex colours in components.
 - `.plans/` holds design plans and is tracked. Read the plan for the area you touch before changing it. `.plans/market-scan-2026-10.md` lists product ideas with prior art.
@@ -85,6 +85,5 @@ Do not reopen these without the maintainer.
 
 ## Deferred
 
-- Syntax highlighting worker pool for Pierre/Shiki.
 - Broader CSP restrictions for styles, images and connections (script/object restrictions are enabled).
 - Phoenix base-path support (`.plans/phoenix-base-path-support.md`), until a deployment needs it.

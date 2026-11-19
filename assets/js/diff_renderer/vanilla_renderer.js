@@ -10,6 +10,7 @@ import {
   threadStatusBadge,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { PIERRE_THEMES, highlightWorkers } from "./worker_pool.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
   annotationSideToSide,
@@ -123,6 +124,18 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
   }
 `
 
+// Matches the review-linked animations in packet.css.
+const LINKED_HIGHLIGHT_MS = 2400
+
+// Phones: thread cards span the line-number gutter (packet.css). Their
+// wrapper must stack above Pierre's sticky gutter, and still below the sticky
+// file header.
+const REVIEWS_ANNOTATION_CSS = `
+  @media (max-width: 640px) {
+    [data-line-annotation] { z-index: 4; }
+  }
+`
+
 // The prefix slot holds a native disclosure button stretched across Pierre's
 // header. Metadata controls sit above it as siblings, not nested buttons.
 const REVIEWS_DIFF_HEADER_CSS = `
@@ -150,19 +163,30 @@ const REVIEWS_DIFF_HEADER_CSS = `
   }
 `
 
-function currentPierreTheme() {
+// An explicit page theme wins; otherwise Pierre follows the system setting.
+function currentThemeType() {
   const explicit = document.documentElement.dataset.theme
-  if (explicit === "dark") return "pierre-dark"
-  if (explicit === "light") return "pierre-light"
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches
-    ? "pierre-dark"
-    : "pierre-light"
+  return explicit === "dark" || explicit === "light" ? explicit : "system"
+}
+
+// Pierre's highlight caches are keyed by cacheKey alone, and parsePatchFiles
+// builds it from the prefix and the file's index. Packet hunks slice the same
+// file differently, so the prefix carries a hash of the patch text.
+function contentHash(text) {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
 }
 
 export function parsePatch(rawDiff, filePath) {
   if (!rawDiff || typeof Diffs.parsePatchFiles !== "function") return null
   try {
-    const parsed = Diffs.parsePatchFiles(rawDiff, { cacheKeyPrefix: filePath || "patch" })
+    const parsed = Diffs.parsePatchFiles(rawDiff, {
+      cacheKeyPrefix: `${filePath || "patch"}:${rawDiff.length}:${contentHash(rawDiff)}`,
+    })
     const files = Array.isArray(parsed)
       ? parsed.flatMap((patch) => patch?.files || [])
       : []
@@ -211,6 +235,18 @@ function lineAnchor(lineElement, side, lineNumber) {
   return { ...anchor, kind: "token", tokenText, lineCharStart, lineCharEnd: lineCharStart + tokenText.length }
 }
 
+function eyeIcon() {
+  const ns = "http://www.w3.org/2000/svg"
+  const svg = document.createElementNS(ns, "svg")
+  svg.setAttribute("viewBox", "0 0 24 24")
+  svg.setAttribute("aria-hidden", "true")
+  svg.setAttribute("class", "reviews-diff-header-viewed-eye")
+  const path = document.createElementNS(ns, "path")
+  path.setAttribute("d", "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z")
+  svg.append(path)
+  return svg
+}
+
 export function hunkViewLabel(hunkUI) {
   if (!hunkUI) return ""
   if (hunkUI.hunkViewed) return "Viewed"
@@ -253,7 +289,7 @@ export class VanillaDiffRenderer {
     // Phones keep threads out of the diff flow: a gutter button per commented
     // line opens that line's threads inline. Lines open now, as "side:line".
     this.compactQuery = window.matchMedia(COMPACT)
-    this.onCompactChange = () => this.render()
+    this.onCompactChange = () => this.refresh()
     this.compactQuery.addEventListener("change", this.onCompactChange)
     this.openLines = new Set()
     this.composerDraft = ""
@@ -308,7 +344,7 @@ export class VanillaDiffRenderer {
 
   update({ threads }) {
     if (threads) this.threads = threads
-    this.render()
+    this.refresh()
   }
 
   updateHunkUI(hunkUI) {
@@ -316,6 +352,15 @@ export class VanillaDiffRenderer {
     if (JSON.stringify(next) === JSON.stringify(this.hunkUI)) return
     this.hunkUI = next
     const focused = this.focusedHeaderControl()
+    if (this.instance && !this.hasMarkdownPreview) {
+      // Collapse, expand and Mark viewed change only Pierre's header and its
+      // collapsed option. Keeping the instance keeps its highlighted lines, so
+      // expanding again does not tokenize the whole file again.
+      this.pendingHeaderFocus = focused
+      this.instance.setOptions(this.options())
+      this.instance.rerender()
+      return
+    }
     this.render()
     if (this.focusSourceOnExpand && !this.collapsed()) {
       this.focusSourceOnExpand = false
@@ -349,13 +394,13 @@ export class VanillaDiffRenderer {
   updateStyle(diffStyle) {
     if (diffStyle === this.diffStyle) return
     this.diffStyle = diffStyle
-    this.render()
+    this.refresh()
   }
 
   setComposerAt(composerAt) {
     this.composerAt = composerAt
     this.composerDraft = ""
-    this.render()
+    this.refresh()
   }
 
   // Pierre's gutter "+" is the only way to start a comment, so selecting text
@@ -384,7 +429,7 @@ export class VanillaDiffRenderer {
     const key = `${side}:${lineNumber}`
     if (this.openLines.has(key)) this.openLines.delete(key)
     else this.openLines.add(key)
-    this.render()
+    this.refresh()
   }
 
   // Pierre has no read-only gutter decorations, so the buttons go into its
@@ -541,10 +586,10 @@ export class VanillaDiffRenderer {
     // Threads live in Source. Navigating to one is not a saved view choice.
     this.preferredPreview = false
     this.threadUI.set(thread.id, { ...this.threadUI.get(thread.id), expanded: true })
-    this.focusedThreadId = thread.id
     this.pendingThreadFocus = thread.id
+    this.scrolledToThreadLine = false
     this.openLines.add(`${sideToAnnotationSide(thread.side)}:${thread.anchor?.line_number_hint}`)
-    this.render()
+    this.refresh()
   }
 
   focusPendingThread() {
@@ -552,21 +597,66 @@ export class VanillaDiffRenderer {
     requestAnimationFrame(() => {
       if (!this.pendingThreadFocus) return
       const target = this.container.querySelector(`[data-thread-id="${this.pendingThreadFocus}"]`)
-      if (!target) return
+      // Pierre keeps every annotation in the light DOM, but a virtualized
+      // file only slots the ones on rendered rows; the rest have no boxes.
+      if (!target?.getClientRects().length) {
+        this.scrollToPendingThreadLine()
+        return
+      }
+      const threadId = this.pendingThreadFocus
       this.pendingThreadFocus = null
-      target.style.scrollMarginTop = "calc(var(--review-main-nav-h) + 60px)"
+      // A copied comment link (?thread=…&comment=…) lands on that comment.
+      const params = new URLSearchParams(window.location.search)
+      const commentId = params.get("thread") === String(threadId) ? params.get("comment") : null
+      const linked = (commentId && target.querySelector(`[data-comment-id="${CSS.escape(commentId)}"]`)) || target
+      // Clear the sticky file header, whose height grows with 44px touch
+      // targets, so the thread's own header is never under it.
+      const fileHeader = this.container.querySelector("diffs-container")?.shadowRoot?.querySelector("[data-diffs-header]")
+      linked.style.scrollMarginTop = `calc(var(--review-main-nav-h) + ${(fileHeader?.offsetHeight || 44) + 8}px)`
+      if (params.get("thread") === String(threadId)) this.highlightLinked(threadId, linked === target ? null : commentId)
       if (this.compact()) {
         // Scroll the page only. On a lockfile's sideways-scrolling code,
         // scrollIntoView also scrolls the code to Pierre's sticky annotation
         // and hides the start of every line.
-        const margin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0
-        window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - margin, behavior: "instant" })
+        const margin = Number.parseFloat(getComputedStyle(linked).scrollMarginTop) || 0
+        window.scrollTo({ top: window.scrollY + linked.getBoundingClientRect().top - margin, behavior: "instant" })
       } else {
-        target.scrollIntoView({ block: "start", behavior: "instant" })
+        linked.scrollIntoView({ block: "start", behavior: "instant" })
       }
-      target.tabIndex = -1
-      target.focus({ preventScroll: true })
+      linked.tabIndex = -1
+      linked.focus({ preventScroll: true })
     })
+  }
+
+  // Highlight the thread or comment a copied link opened. Pierre re-creates
+  // the card while the page settles, so the highlight is a short-lived style
+  // rule keyed on the IDs rather than a class on one node.
+  highlightLinked(threadId, commentId) {
+    this.linkedStyle?.remove()
+    clearTimeout(this.linkedStyleTimer)
+    const card = `.review-thread-card[data-thread-id="${CSS.escape(String(threadId))}"]`
+    const target = commentId ? `${card} [data-comment-id="${CSS.escape(String(commentId))}"]` : card
+    const kind = commentId ? "comment" : "card"
+    const style = document.createElement("style")
+    style.textContent = `${target} { animation: review-linked-${kind} ${LINKED_HIGHLIGHT_MS}ms ease-out; }
+      @media (prefers-reduced-motion: reduce) { ${target} { animation: review-linked-${kind} ${LINKED_HIGHLIGHT_MS}ms step-end; } }`
+    document.head.append(style)
+    this.linkedStyle = style
+    this.linkedStyleTimer = setTimeout(() => style.remove(), LINKED_HIGHLIGHT_MS)
+  }
+
+  // A virtualized file renders only the rows near the viewport, so the thread
+  // may not be in the DOM yet. Scroll its line into the window once; the
+  // render that follows calls focusPendingThread again and finds it.
+  scrollToPendingThreadLine() {
+    if (!this.virtualizer || this.scrolledToThreadLine) return
+    const thread = this.threads.find(thread => String(thread.id) === String(this.pendingThreadFocus))
+    const line = thread?.anchor?.line_number_hint
+    const position = line && this.instance?.getLinePosition?.(line, sideToAnnotationSide(thread.side))
+    if (!position || !this.virtualContent) return
+    this.scrolledToThreadLine = true
+    const fileTop = this.virtualizer.getOffsetInScrollContainer(this.virtualContent)
+    this.virtualizer.scrollTo({ top: fileTop + position.top - window.innerHeight / 3, behavior: "instant" })
   }
 
   // Keep Pierre's path, status icon and counts. The disclosure button uses
@@ -650,7 +740,8 @@ export class VanillaDiffRenderer {
             onclick: (event) =>
               stopHeaderEvent(event, () => this.onSetHunkViewed?.(!viewed)),
           },
-          viewed ? [check] : viewLabel || "Mark viewed"
+          // Phones show only the eye; the label stays as the accessible name.
+          viewed ? [check] : [eyeIcon(), el("span", { className: "reviews-diff-header-viewed-label" }, viewLabel || "Mark viewed")]
         )
       )
     }
@@ -660,19 +751,27 @@ export class VanillaDiffRenderer {
 
   options() {
     return {
-      theme: currentPierreTheme(),
+      theme: PIERRE_THEMES,
+      themeType: currentThemeType(),
       diffStyle: this.diffStyle,
       overflow:
         this.diffStyle === "unified" && !(this.compact() && LOCKFILE.test(this.filePath)) ? "wrap" : "scroll",
       collapsed: this.collapsed(),
-      unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
+      unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + REVIEWS_ANNOTATION_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
       onPostRender: (_node, _instance, phase) => {
         if (phase === "unmount") return
+        // Phones let thread cards span the line-number gutter (packet.css).
+        const gutter = this.container.querySelector("diffs-container")?.shadowRoot?.querySelector("[data-gutter]")
+        if (gutter) this.container.style.setProperty("--review-thread-gutter", `${gutter.offsetWidth}px`)
         this.placeThreadMarkers()
         this.focusPendingThread()
+        if (this.pendingHeaderFocus) {
+          this.restoreHeaderFocus(this.pendingHeaderFocus)
+          this.pendingHeaderFocus = null
+        }
       },
       enableGutterUtility: true,
       onGutterUtilityClick: (range) => this.commentFromGutter(range),
@@ -690,9 +789,26 @@ export class VanillaDiffRenderer {
     return args
   }
 
-  render() {
-    // An incoming update replaces annotation DOM. Preserve only the active
-    // desktop reply editor, not every draft that happens to be open.
+  // Updates that keep the file's diff (threads, the composer, open lines,
+  // diff style, theme) reuse the Pierre instance. It keeps its highlighted
+  // lines and only lays out again, instead of tokenizing and building the
+  // whole file. Markdown previews, and a style change that moves the file
+  // between virtualized and plain rendering, build it again.
+  refresh() {
+    const virtualize = shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
+    if (!this.instance || this.hasMarkdownPreview || virtualize !== Boolean(this.virtualizer)) {
+      this.render()
+      return
+    }
+    this.keepReplyFocus()
+    this.instance.setOptions(this.options())
+    this.instance.setLineAnnotations(this.annotations())
+    this.instance.rerender()
+  }
+
+  // An incoming update replaces annotation DOM. Preserve only the active
+  // desktop reply editor, not every draft that happens to be open.
+  keepReplyFocus() {
     const active = document.activeElement
     const threadId = active?.closest?.("[data-thread-id]")?.dataset.threadId
     if (active?.tagName === "TEXTAREA" &&
@@ -704,6 +820,10 @@ export class VanillaDiffRenderer {
         ui.replySelection = [active.selectionStart, active.selectionEnd, active.selectionDirection]
       }
     }
+  }
+
+  render() {
+    this.keepReplyFocus()
     // Rebuilding empties the file for a moment. Hold its height until the new
     // diff has laid out, or the page clamps the scroll position and the reader
     // loses their line (virtualized files measure rows after render).
@@ -743,7 +863,7 @@ export class VanillaDiffRenderer {
         }
       }
       // One shared Pierre header stays above the notice in both modes.
-      this.headerInstance = new Diffs.FileDiff({ ...this.options(), collapsed: true })
+      this.headerInstance = new Diffs.FileDiff({ ...this.options(), collapsed: true }, highlightWorkers() ?? undefined)
       this.headerInstance.render({ ...this.renderArgs(), containerWrapper: headerContainer, lineAnnotations: [] })
       return
     }
@@ -754,14 +874,15 @@ export class VanillaDiffRenderer {
   renderSource(options) {
     const renderArgs = this.renderArgs()
 
+    // Large files virtualize even while collapsed, so the instance that
+    // expands them later is the one that already highlighted them.
     if (
-      !this.collapsed() && !this.focusedThreadId &&
       shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
     ) {
       if (this.tryRenderVirtualized(options, renderArgs)) return
     }
 
-    this.instance = new Diffs.FileDiff(options)
+    this.instance = new Diffs.FileDiff(options, highlightWorkers() ?? undefined)
     this.instance.render(renderArgs)
   }
 
@@ -771,6 +892,7 @@ export class VanillaDiffRenderer {
     try {
       const contentWrapper = el("div", { className: "review-virtualized-diff-content" })
       this.sourceContainer.append(contentWrapper)
+      this.virtualContent = contentWrapper
       this.virtualizer = new Diffs.Virtualizer({
         overscrollSize: 800,
         intersectionObserverMargin: 800,
@@ -787,7 +909,8 @@ export class VanillaDiffRenderer {
         {
           lineHeight: 20,
           diffHeaderHeight: 44,
-        }
+        },
+        highlightWorkers() ?? undefined
       )
       this.instance.render({ ...renderArgs, containerWrapper: contentWrapper })
       this.container.dataset.virtualized = "true"
@@ -819,6 +942,7 @@ export class VanillaDiffRenderer {
       this.virtualizer?.destroy?.()
     } finally {
       this.virtualizer = null
+      this.virtualContent = null
     }
     if (clear) this.container.replaceChildren()
   }
