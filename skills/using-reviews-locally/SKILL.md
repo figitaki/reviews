@@ -103,6 +103,8 @@ cli/target/release/reviews list --status open --json  # reviews with open thread
 
 Other flags: `--author <handle>`, `--limit <1-100>`, `--offset <n>`. An agent token lists only that agent's reviews.
 
+When the server has code storage on, `reviews push` also uploads the base and head commits. Add `--no-code-storage` to push the diff only; a server that requires code storage rejects that flag. Local servers have code storage off unless `CODE_STORAGE_*` is set.
+
 If the sandbox blocks localhost networking, rerun the CLI with escalation. If the token is rejected, mint a token in the same local database as the running server.
 
 ## Inspect and Resolve Threads

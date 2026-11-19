@@ -469,7 +469,9 @@ defmodule ReviewsWeb.MCP.Server do
         description:
           "Publishes a comment right away. Pass thread_id to reply to a thread, or path " <>
             "and line (a changed or context line of the revision's diff) to start one. " <>
-            "Comments cannot be edited. List threads before retrying after a timeout.",
+            "Comments cannot be edited. List threads before retrying after a timeout. " <>
+            "Write the body in Simplified Technical English (ASD-STE100): short sentences, " <>
+            "one idea per sentence, active voice, and common words with one meaning each.",
         input_schema:
           object(
             %{
