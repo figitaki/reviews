@@ -162,13 +162,45 @@ defmodule ReviewsWeb.DeviceHTML do
                     type="radio"
                     name="identity_id"
                     value={identity.id}
-                    checked={index == 0}
+                    checked={
+                      @selected == to_string(identity.id) or (is_nil(@selected) and index == 0)
+                    }
                     id={"device-identity-#{identity.id}"}
                   />
                   {identity.display_name} <span translate="no">(@{identity.handle})</span>
                   <span :if={identity.kind == "human"} class="ds-badge">You</span>
                   <span :if={identity.kind == "agent"} class="ds-badge">Agent</span>
                 </label>
+                <label for="device-identity-new">
+                  <input
+                    type="radio"
+                    name="identity_id"
+                    value="new"
+                    checked={@selected == "new"}
+                    id="device-identity-new"
+                  /> New agent identity
+                </label>
+                <div id="device-new-identity" class="poppy-new-identity">
+                  <.input
+                    field={@new_identity[:display_name]}
+                    id="device-new-identity-name"
+                    type="text"
+                    label="Agent name"
+                    autocomplete="off"
+                  />
+                  <.input
+                    field={@new_identity[:handle]}
+                    id="device-new-identity-handle"
+                    type="text"
+                    label="Handle"
+                    autocomplete="off"
+                    autocapitalize="none"
+                    spellcheck="false"
+                  />
+                  <p class="poppy-consent-note">
+                    Allow creates this agent and signs the CLI in as it.
+                  </p>
+                </div>
               </fieldset>
               <div class="poppy-consent-actions">
                 <.ds_button

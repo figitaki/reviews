@@ -47,7 +47,7 @@ defmodule ReviewsWeb.DeviceController do
       cond do
         is_nil(user) -> :signed_out
         not DeviceAttempts.allowed?(user.id) -> {:error, :too_many_attempts}
-        decision == "approve" -> OAuth.approve_device(user, code, params["identity_id"])
+        decision == "approve" -> approve(user, code, params)
         true -> with :ok <- OAuth.deny_device(code), do: :denied
       end
 
@@ -64,6 +64,9 @@ defmodule ReviewsWeb.DeviceController do
       {:error, :too_many_attempts} ->
         render_entry(conn, :too_many_attempts)
 
+      {:error, %Ecto.Changeset{} = changeset} ->
+        check(conn, code, "new", changeset)
+
       # The code was fine; only the choice was not one of theirs.
       {:error, :invalid_identity} ->
         conn
@@ -78,12 +81,36 @@ defmodule ReviewsWeb.DeviceController do
 
   def decide(conn, _params), do: render_entry(conn, :invalid_user_code)
 
+  defp approve(user, code, %{"identity_id" => "new"} = params) do
+    attrs =
+      case params["new_identity"] do
+        %{} = attrs -> attrs
+        _ -> %{}
+      end
+
+    # Only text fields reach both validation and HTML value rendering.
+    attrs =
+      Map.new(["display_name", "handle"], fn key ->
+        value =
+          case attrs[key] do
+            value when is_binary(value) -> value
+            _ -> ""
+          end
+
+        {key, value}
+      end)
+
+    OAuth.approve_device_new_agent(user, code, attrs)
+  end
+
+  defp approve(user, code, params), do: OAuth.approve_device(user, code, params["identity_id"])
+
   # The form has one box per letter; joined, gatekeep drops anything that
   # isn't a letter, as it does for codes typed in one piece.
   defp entered_code(boxes) when is_list(boxes), do: Enum.map_join(boxes, &to_string/1)
   defp entered_code(code), do: to_string(code)
 
-  defp check(conn, code) do
+  defp check(conn, code, selected \\ nil, new_identity \\ %{}) do
     user = conn.assigns.current_user
 
     if DeviceAttempts.allowed?(user.id) do
@@ -96,6 +123,8 @@ defmodule ReviewsWeb.DeviceController do
             seconds_left: max(DateTime.diff(request.expires_at, DateTime.utc_now()), 0),
             # Human first, so it is the default, then agents by name.
             identities: Accounts.list_identities_for(user),
+            selected: selected,
+            new_identity: Phoenix.Component.to_form(new_identity, as: :new_identity),
             page_title: "Sign in to the Reviews CLI"
           )
 

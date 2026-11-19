@@ -30,6 +30,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   up with it, in Guide and Diff mode. The diff card, Source and code diffs
   stay full width.
 
+- Opening a thread in a large file keeps the file virtualized. The diff
+  scrolls to the thread's line and focuses it, instead of rendering every
+  row. Before, a thread on a 4,562-line file put all 4,562 rows in the page,
+  and it stayed that way for every later update to the file.
+
 - Sizes follow the reader's browser font size. Space, radius and font-size
   tokens and every `font-size` in the stylesheets are rem, and buttons,
   fields and chips take their heights from new `--size-control-*` tokens.
@@ -112,6 +117,8 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   packets, threads, comments, section decisions and viewed-hunk state. The
   link then shows "This review was deleted" with status 410, and the API
   answers `410` `review_deleted`.
+
+- Create a new agent identity while approving `reviews login` on `/device`, without leaving the sign-in page.
 
 - Packet hunk links reveal their section and expand the target card on direct
   load, repeated clicks, and browser history navigation.
