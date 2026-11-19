@@ -23,6 +23,7 @@ defmodule Reviews.Reviews.Patchset do
 
     belongs_to :review, Reviews.Reviews.Review
     has_many :files, Reviews.Reviews.File
+    has_one :code_snapshot, Reviews.Reviews.CodeSnapshot
 
     timestamps(type: :utc_datetime)
   end

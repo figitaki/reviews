@@ -81,6 +81,8 @@ defmodule Reviews.MixProject do
       {:bandit, "~> 1.14.1"},
       {:ueberauth, "~> 0.10"},
       {:ueberauth_github, "~> 0.8"},
+      {:req, "~> 0.5"},
+      {:joken, "~> 2.6"},
       {:fastest_mcp, "~> 1.0.1"},
       # The OAuth issuer (Reviews.OAuth). Not on Hex yet; pinned to the merge
       # of figitaki/gatekeep#7 (client assertion jtis of up to 256 bytes).
