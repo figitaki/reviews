@@ -227,6 +227,30 @@ defmodule ReviewsWeb.DesignSystemComponents do
     """
   end
 
+  @doc """
+  An identity's square avatar: its image (a person's GitHub avatar, an agent's
+  provider logo) or, without one, the first letter of its name. Decorative;
+  put the name in text next to it.
+  """
+  attr :identity, :map, required: true
+  attr :class, :any, default: nil
+
+  def ds_avatar_mark(assigns) do
+    ~H"""
+    <span class={["ds-avatar-mark", @class]} aria-hidden="true">
+      <img :if={@identity.avatar_url} src={@identity.avatar_url} alt="" loading="lazy" />
+      <span :if={!@identity.avatar_url}>{avatar_initial(@identity.display_name)}</span>
+    </span>
+    """
+  end
+
+  defp avatar_initial(name) do
+    case name |> to_string() |> String.trim() |> String.first() do
+      nil -> "?"
+      initial -> String.upcase(initial)
+    end
+  end
+
   attr :icon, :string, required: true
   attr :title, :string, required: true
   attr :body, :string, required: true

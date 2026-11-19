@@ -81,6 +81,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
               outline={@packet_outline}
               first_section={List.first(@packet_outline.sections || [])}
               title_id="review-split-inline-overview-title"
+              author={@review.author}
             />
           </section>
 
@@ -354,6 +355,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :outline, :map, required: true
   attr :first_section, :map, default: nil
   attr :title_id, :string, default: nil
+  attr :author, :any, default: nil
 
   defp packet_guide_overview_panel(assigns) do
     ~H"""
@@ -362,6 +364,20 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         Overview · {@outline.summary.section_count} {plural(@outline.summary.section_count, "section")} · ~{@outline.summary.time}
       </span>
       <h2 id={@title_id} class="review-guide-panel-title">{@outline.overview.title}</h2>
+      <p :if={@author} id="review-overview-author" class="review-guide-author">
+        <.ds_avatar_mark identity={@author} />
+        <span>
+          <span class="review-guide-author-name">{@author.display_name}</span>
+          <span translate="no">@{@author.handle}</span>
+          <span :if={@author.kind == "agent"} class="ds-badge">Agent</span>
+          <span
+            :if={@author.kind == "agent" && match?(%{username: _}, @author.owner_user)}
+            id="review-overview-author-owner"
+          >
+            owned by <span translate="no">@{@author.owner_user.username}</span>
+          </span>
+        </span>
+      </p>
       <.markdown
         :if={@outline.overview.summary != ""}
         id={"#{@title_id}-markdown"}

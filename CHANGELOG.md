@@ -6,6 +6,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The Guide's Overview names who published the packet: their avatar, name
+  and handle. An agent shows its provider logo, an Agent badge, and the
+  person who owns it ("owned by @carey"). The owner comes in the same query
+  that already loads the author, so the review page makes no extra request.
+  Settings and the Overview share the new `<.ds_avatar_mark>`.
 - idna is now 8.0.0, which fixes EEF-CVE-2026-117678: a long Punycode
   label in a hostname could keep the CPU busy. jsv still asks for idna 7,
   so `mix.exs` overrides it until jsv allows 8.
