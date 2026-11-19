@@ -15,7 +15,7 @@ defmodule ReviewsWeb.DesignComponentsLive do
 
   alias Reviews.ReviewView
   alias ReviewsWeb.{DesignFixtures, DesignLive}
-  alias ReviewsWeb.ReviewLive.{ActivityComponents, PacketComponents}
+  alias ReviewsWeb.ReviewLive.{ActivityComponents, DiffComponents, PacketComponents}
 
   @hunk_id "dcp-hunk"
 
@@ -56,7 +56,9 @@ defmodule ReviewsWeb.DesignComponentsLive do
        hunk_id: @hunk_id,
        expanded_hunk_ids: MapSet.new([@hunk_id]),
        hunk_viewed: false,
-       opened: nil
+       opened: nil,
+       # The open section of each theme's Guide map sample.
+       tree_sections: %{"dark" => 21, "light" => 31}
      )}
   end
 
@@ -102,6 +104,15 @@ defmodule ReviewsWeb.DesignComponentsLive do
              Map.get(%{"true" => true, "false" => false}, params["open"], !decision.editing)
        }
      end)}
+  end
+
+  # The Guide map sample: a section or one of its files opens that section,
+  # as on the review page. Light-theme sections are numbered from 30.
+  def handle_event(event, %{"section_index" => index}, socket)
+      when event in ["select_guide_section", "packet_nav_jump"] do
+    index = String.to_integer(index)
+    theme = if index >= 30, do: "light", else: "dark"
+    {:noreply, update(socket, :tree_sections, &Map.put(&1, theme, index))}
   end
 
   # Selecting the current status again clears it, as on the review page.
@@ -189,6 +200,24 @@ defmodule ReviewsWeb.DesignComponentsLive do
 
         .dcp-decisions figure {
           justify-items: start;
+        }
+
+        .dcp-trees {
+          display: grid;
+          gap: var(--space-7);
+          max-width: 22rem;
+        }
+
+        /* The Guide map panel, out of its sliding overlay. */
+        .dcp-guide-tree.review-guide-flyout {
+          position: static;
+          width: auto;
+          opacity: 1;
+          transform: none;
+          border: var(--border-hair) solid var(--review-line);
+          border-radius: var(--radius-md);
+          /* The tree reaches out over this padding, as in the flyout. */
+          padding: var(--space-5) calc(var(--space-6) + var(--space-2));
         }
 
         .dcp-section-states {
@@ -445,6 +474,37 @@ defmodule ReviewsWeb.DesignComponentsLive do
             expanded_hunk_ids={@expanded_hunk_ids}
           />
         </section>
+
+        <DesignLive.catalog_section :let={theme} id="dcp-trees" title="File and section trees">
+          <:rules>
+            <li>
+              Folder rows have a folder icon and a muted path, with a thin guide line down the left
+              of their files. Guide map sections are its folder rows.
+            </li>
+            <li>
+              File rows have a chevron, the name, the rest of its path muted, the line counts and an
+              outlined letter: Modified, Added, Deleted or Renamed. A decided section shows its
+              decision there instead: Approved, Changes requested (C) or Skipped. Screen readers
+              hear the word.
+            </li>
+            <li>
+              Rows are 2.75rem, a 44px tap target. On phones the file tree folds behind a Files
+              button above the diffs.
+            </li>
+          </:rules>
+          <div class="dcp-trees">
+            <DiffComponents.file_tree
+              id={"dcp-file-tree-#{theme}"}
+              file_diffs={DesignFixtures.tree_files()}
+            />
+            <div id={"dcp-guide-tree-#{theme}"} class="review-guide-flyout dcp-guide-tree">
+              <PacketComponents.guide_map_sections
+                outline={DesignFixtures.guide_outline(if(theme == "dark", do: 20, else: 30))}
+                active_section_index={@tree_sections[theme]}
+              />
+            </div>
+          </div>
+        </DesignLive.catalog_section>
 
         <DesignLive.catalog_section :let={theme} id="dcp-section-states" title="Section review state">
           <:rules>

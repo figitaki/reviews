@@ -931,7 +931,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       assert has_element?(changes_view, "#code-view-switcher .review-code-view-tab", "Guide")
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#diff-files .rev-file-card")
       refute has_element?(changes_view, "#diff-files .rev-file-placeholder")
 
@@ -947,7 +947,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-unified")
       |> render_click()
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#review-guide-sidebar")
       refute has_element?(changes_view, "#review-guide-rail")
       refute has_element?(changes_view, "#changes-file-tree")
@@ -959,7 +959,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-split")
       |> render_click()
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#review-guide-shell")
     end
 
@@ -1169,7 +1169,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff")
 
       assert has_element?(
@@ -1319,8 +1319,39 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-unified")
       |> render_click()
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
+
+      # Files sit under their folder, each with its counts, a change-type
+      # badge whose word is read out, and a jump to its diff card.
+      assert has_element?(changes_view, "#file-tree summary", "lib/")
+
+      [first, second] =
+        Enum.sort_by(
+          Reviews.Repo.preload(ReviewsCtx.latest_patchset(mixed_review), :files).files,
+          & &1.path
+        )
+
+      for file <- [first, second] do
+        row = "#file-tree-row-#{file.id}"
+        assert has_element?(changes_view, row, Path.basename(file.path))
+        assert has_element?(changes_view, row <> " .review-change-stat", "+300")
+
+        assert has_element?(
+                 changes_view,
+                 row <> " .rev-tree-badge.is-modified .sr-only",
+                 "Modified"
+               )
+
+        assert has_element?(changes_view, ~s|#{row}[phx-click*="file-#{file.id}"]|)
+        assert has_element?(changes_view, "#file-#{file.id}")
+      end
+
+      assert has_element?(
+               changes_view,
+               ~s|#file-tree-toggle[aria-controls="file-tree"][aria-expanded="false"]|
+             )
+
       refute has_element?(changes_view, "#review-guide-sidebar")
       assert has_element?(changes_view, "#diff-files")
     end
@@ -1976,7 +2007,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       # screen readers only.
       assert has_element?(
                view,
-               "#review-guide-flyout-state-0.review-section-state-mark.is-approved .sr-only",
+               "#review-guide-flyout-state-0.rev-tree-badge.is-approved .sr-only",
                "Approved"
              )
 

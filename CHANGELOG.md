@@ -12,6 +12,12 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   person who owns it ("owned by @carey"). The owner comes in the same query
   that already loads the author, so the review page makes no extra request.
   Settings and the Overview share the new `<.ds_avatar_mark>`.
+- The diff view has a file tree again. Files sit under their folder with
+  their line counts and a letter for the change (M, A, D, R); a click
+  scrolls to the file's diff. On phones it folds behind a Files button.
+- The Guide map uses the same tree rows: sections show their decision as a
+  letter (A approved, C changes requested, S skipped), and the open
+  section's files show their path, counts and change letter. Rows are 44px.
 
 ## [0.0.3] - 2026-11-19
 

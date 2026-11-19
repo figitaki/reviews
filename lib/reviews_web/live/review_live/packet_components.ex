@@ -285,7 +285,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           <div class="review-guide-flyout-label">Packet</div>
           <button
             type="button"
-            class={["review-guide-flyout-section", is_nil(@active_section_index) && "is-active"]}
+            class={[
+              "review-guide-flyout-section rev-tree-row",
+              is_nil(@active_section_index) && "is-active"
+            ]}
             phx-click="select_packet_overview"
           >
             <span class="review-guide-flyout-num">★</span>
@@ -293,62 +296,96 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           </button>
         </div>
 
-        <div class="review-guide-flyout-group">
-          <div class="review-guide-flyout-label">Sections</div>
-          <div
-            :for={section <- @outline.sections}
-            :key={section.index}
-            class="review-guide-flyout-item"
-          >
-            <button
-              type="button"
-              class={[
-                "review-guide-flyout-section",
-                section.index == @active_section_index && "is-active"
-              ]}
-              phx-click="select_guide_section"
-              phx-value-section_index={section.index}
-              phx-value-target_id={section.target_id}
-            >
-              <span class="review-guide-flyout-num">{pad2(section.index + 1)}</span>
-              <span class="review-guide-flyout-title">{section.title}</span>
-              <%!-- A fixed slot on every row, so titles line up whether or not
-                   the section has a decision. --%>
-              <span class="review-guide-flyout-state">
-                <span
-                  :if={section.effective_status}
-                  id={"review-guide-flyout-state-#{section.index}"}
-                  class={["review-section-state-mark", "is-#{section.effective_status}"]}
-                  title={section.status_label}
-                >
-                  <.section_status_icon status={section.effective_status} />
-                  <span class="sr-only">{section.status_label}</span>
-                </span>
-              </span>
-            </button>
-
-            <div
-              :if={section.index == @active_section_index && section.files != []}
-              class="review-guide-flyout-files"
-            >
-              <button
-                :for={file <- section.files}
-                :key={file.path}
-                type="button"
-                class="review-guide-flyout-file"
-                phx-click="packet_nav_jump"
-                phx-value-section_index={section.index}
-                phx-value-target_id={file.target_id}
-                disabled={is_nil(file.target_id)}
-                translate="no"
-              >
-                {file.basename}
-              </button>
-            </div>
-          </div>
-        </div>
+        <.guide_map_sections outline={@outline} active_section_index={@active_section_index} />
       </div>
     </aside>
+    """
+  end
+
+  attr :outline, :map, required: true
+  attr :active_section_index, :integer, default: nil
+
+  # The Guide map's section tree: sections are folder rows, and the open
+  # section lists its files. Public for the design catalog.
+  def guide_map_sections(assigns) do
+    ~H"""
+    <div class="review-guide-flyout-group">
+      <div class="rev-tree-header">
+        <.change_stat additions={@outline.summary.additions} deletions={@outline.summary.deletions} />
+        <span class="rev-tree-scope">
+          Sections · {@outline.summary.file_count} {plural(@outline.summary.file_count, "file")}
+        </span>
+      </div>
+      <div
+        :for={section <- @outline.sections}
+        :key={section.index}
+        class="review-guide-flyout-item"
+      >
+        <button
+          type="button"
+          class={[
+            "review-guide-flyout-section rev-tree-row is-section",
+            section.index == @active_section_index && "is-active"
+          ]}
+          phx-click="select_guide_section"
+          phx-value-section_index={section.index}
+          phx-value-target_id={section.target_id}
+          aria-current={if(section.index == @active_section_index, do: "true")}
+        >
+          <span class="review-guide-flyout-num">{pad2(section.index + 1)}</span>
+          <span class="rev-tree-label">{section.title}</span>
+          <span class="rev-tree-badge-slot">
+            <.tree_badge
+              id={"review-guide-flyout-state-#{section.index}"}
+              status={section.effective_status}
+            />
+          </span>
+        </button>
+
+        <div
+          :if={section.index == @active_section_index && section.files != []}
+          class="review-guide-flyout-files rev-tree-children"
+        >
+          <button
+            :for={file <- section.files}
+            :key={file.path}
+            type="button"
+            class="review-guide-flyout-file rev-tree-row"
+            title={tree_row_title(file)}
+            phx-click="packet_nav_jump"
+            phx-value-section_index={section.index}
+            phx-value-target_id={file.target_id}
+            disabled={is_nil(file.target_id)}
+          >
+            <.tree_file_label name={file.basename} directory={file.directory} />
+            <span class="rev-tree-stats">
+              <.change_stat additions={file.additions} deletions={file.deletions} />
+            </span>
+            <span class="rev-tree-badge-slot"><.tree_badge status={file.status} /></span>
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc "A tree row's tooltip: the full path, and for a rename where it came from."
+  def tree_row_title(%{status: "renamed", old_path: old, path: path}) when is_binary(old),
+    do: "#{old} → #{path}"
+
+  def tree_row_title(%{path: path}), do: path
+
+  attr :name, :string, required: true
+  attr :directory, :string, default: ""
+
+  # A file row's chevron and name, with the rest of its path muted after it.
+  def tree_file_label(assigns) do
+    ~H"""
+    <.icon name="hero-chevron-right-micro" class="rev-tree-chevron" />
+    <span class="rev-tree-label" translate="no">
+      <span class="rev-tree-name">{@name}</span>
+      <span :if={@directory != ""} class="rev-tree-dir">{@directory}/</span>
+    </span>
     """
   end
 
@@ -933,6 +970,8 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       basename: Path.basename(path || ""),
       directory: outline_directory(path),
       file_id: file && file.id,
+      status: file && file.status,
+      old_path: file && file.old_path,
       target_id: target_id,
       additions: hunk.display_additions,
       deletions: hunk.display_deletions,
@@ -1350,6 +1389,37 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     </span>
     """
   end
+
+  attr :status, :string, default: nil
+  attr :rest, :global
+
+  # The outlined letter at the end of a tree row: a file's change type
+  # (Modified, Added, Deleted, Renamed) or a section's decision (Approved,
+  # Changes requested, Skipped). Screen readers get the word, not the letter.
+  def tree_badge(assigns) do
+    assigns = assign(assigns, :label, tree_badge_label(assigns.status))
+
+    ~H"""
+    <span :if={@label} class={["rev-tree-badge", "is-#{@status}"]} title={@label} {@rest}>
+      <span aria-hidden="true">{tree_badge_letter(@status, @label)}</span>
+      <span class="sr-only">{@label}</span>
+    </span>
+    """
+  end
+
+  defp tree_badge_label("modified"), do: "Modified"
+  defp tree_badge_label("added"), do: "Added"
+  defp tree_badge_label("deleted"), do: "Deleted"
+  defp tree_badge_label("renamed"), do: "Renamed"
+
+  defp tree_badge_label(status) when status in ~w(approved denied ignored),
+    do: guide_status_label(status)
+
+  defp tree_badge_label(_status), do: nil
+
+  # "C" for Changes requested, so it does not read as R for Renamed.
+  defp tree_badge_letter("denied", _label), do: "C"
+  defp tree_badge_letter(_status, label), do: String.first(label)
 
   attr :status, :string, required: true
 
