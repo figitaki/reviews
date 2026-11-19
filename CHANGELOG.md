@@ -6,6 +6,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- On wider screens each comment's time and link button sit at the right of
+  its row, level with its first line, so a run of comments from one person
+  lines up. Phones keep the time after the author's name.
 - Settings → New agent identity picks the provider from a list: Claude,
   Codex, ChatGPT, Amp, Cursor, Gemini, GitHub Copilot and Grok, or Custom
   to type another name. An agent made for a listed provider uses its logo
