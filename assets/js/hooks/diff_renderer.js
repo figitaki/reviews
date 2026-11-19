@@ -133,14 +133,14 @@ const DiffRenderer = {
       }
     })
 
-    this._themeObserver = new MutationObserver(() => this._renderer?.render())
+    this._themeObserver = new MutationObserver(() => this._renderer?.refresh())
     this._themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"],
     })
     this._systemThemeQuery = window.matchMedia?.("(prefers-color-scheme: dark)")
     this._systemThemeListener = () => {
-      if (!document.documentElement.dataset.theme) this._renderer?.render()
+      if (!document.documentElement.dataset.theme) this._renderer?.refresh()
     }
     this._systemThemeQuery?.addEventListener?.("change", this._systemThemeListener)
 

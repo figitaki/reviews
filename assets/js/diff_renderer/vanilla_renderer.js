@@ -265,7 +265,7 @@ export class VanillaDiffRenderer {
     // Phones keep threads out of the diff flow: a gutter button per commented
     // line opens that line's threads inline. Lines open now, as "side:line".
     this.compactQuery = window.matchMedia(COMPACT)
-    this.onCompactChange = () => this.render()
+    this.onCompactChange = () => this.refresh()
     this.compactQuery.addEventListener("change", this.onCompactChange)
     this.openLines = new Set()
     this.composerDraft = ""
@@ -320,7 +320,7 @@ export class VanillaDiffRenderer {
 
   update({ threads }) {
     if (threads) this.threads = threads
-    this.render()
+    this.refresh()
   }
 
   updateHunkUI(hunkUI) {
@@ -370,13 +370,13 @@ export class VanillaDiffRenderer {
   updateStyle(diffStyle) {
     if (diffStyle === this.diffStyle) return
     this.diffStyle = diffStyle
-    this.render()
+    this.refresh()
   }
 
   setComposerAt(composerAt) {
     this.composerAt = composerAt
     this.composerDraft = ""
-    this.render()
+    this.refresh()
   }
 
   // Pierre's gutter "+" is the only way to start a comment, so selecting text
@@ -405,7 +405,7 @@ export class VanillaDiffRenderer {
     const key = `${side}:${lineNumber}`
     if (this.openLines.has(key)) this.openLines.delete(key)
     else this.openLines.add(key)
-    this.render()
+    this.refresh()
   }
 
   // Pierre has no read-only gutter decorations, so the buttons go into its
@@ -565,7 +565,7 @@ export class VanillaDiffRenderer {
     this.pendingThreadFocus = thread.id
     this.scrolledToThreadLine = false
     this.openLines.add(`${sideToAnnotationSide(thread.side)}:${thread.anchor?.line_number_hint}`)
-    this.render()
+    this.refresh()
   }
 
   focusPendingThread() {
@@ -735,9 +735,26 @@ export class VanillaDiffRenderer {
     return args
   }
 
-  render() {
-    // An incoming update replaces annotation DOM. Preserve only the active
-    // desktop reply editor, not every draft that happens to be open.
+  // Updates that keep the file's diff (threads, the composer, open lines,
+  // diff style, theme) reuse the Pierre instance. It keeps its highlighted
+  // lines and only lays out again, instead of tokenizing and building the
+  // whole file. Markdown previews, and a style change that moves the file
+  // between virtualized and plain rendering, build it again.
+  refresh() {
+    const virtualize = shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
+    if (!this.instance || this.hasMarkdownPreview || virtualize !== Boolean(this.virtualizer)) {
+      this.render()
+      return
+    }
+    this.keepReplyFocus()
+    this.instance.setOptions(this.options())
+    this.instance.setLineAnnotations(this.annotations())
+    this.instance.rerender()
+  }
+
+  // An incoming update replaces annotation DOM. Preserve only the active
+  // desktop reply editor, not every draft that happens to be open.
+  keepReplyFocus() {
     const active = document.activeElement
     const threadId = active?.closest?.("[data-thread-id]")?.dataset.threadId
     if (active?.tagName === "TEXTAREA" &&
@@ -749,6 +766,10 @@ export class VanillaDiffRenderer {
         ui.replySelection = [active.selectionStart, active.selectionEnd, active.selectionDirection]
       }
     }
+  }
+
+  render() {
+    this.keepReplyFocus()
     // Rebuilding empties the file for a moment. Hold its height until the new
     // diff has laid out, or the page clamps the scroll position and the reader
     // loses their line (virtualized files measure rows after render).

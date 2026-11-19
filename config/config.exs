@@ -26,6 +26,27 @@ config :reviews, ReviewsWeb.Endpoint,
 # it, and prod reads MCP_ENABLED / MCP_WRITES_ENABLED in runtime.exs.
 config :reviews, :mcp, enabled: false, writes_enabled: false, allowed_hosts: :localhost
 
+# MCP connectors Reviews recognizes (`Reviews.MCPAuth.known_connector/1`). The
+# consent page shows their name and logo as verified, and `/mcp` accepts
+# requests from their origins. Add a client by its client metadata document URL.
+config :reviews, Reviews.MCPAuth,
+  connectors: [
+    %{
+      client_id: "https://claude.ai/oauth/mcp-oauth-client-metadata",
+      name: "Claude",
+      publisher: "Anthropic",
+      logo: "/images/connectors/claude.png",
+      origins: ["https://claude.ai", "https://claude.com"]
+    },
+    %{
+      client_id: "https://chatgpt.com/oauth/client.json",
+      name: "ChatGPT",
+      publisher: "OpenAI",
+      logo: "/images/connectors/chatgpt.png",
+      origins: ["https://chatgpt.com"]
+    }
+  ]
+
 # Design catalog at /design (ReviewsWeb.DesignLive). Off unless enabled; dev
 # and test enable it, and prod reads DESIGN_CATALOG in runtime.exs.
 config :reviews, :design_catalog, false
@@ -88,13 +109,15 @@ config :phoenix, :filter_parameters, [
 config :reviews, Reviews.OAuth,
   # Reviews.OAuth.CLI is `reviews login`: the device authorization grant,
   # approved at /device, for the CLI's own client only.
-  resources: [Reviews.Poppy, Reviews.OAuth.CLI],
+  resources: [Reviews.Poppy, Reviews.OAuth.CLI, Reviews.MCPAuth],
   default_resource: Reviews.Poppy,
   device_verification_uri: "/device",
   storage: {Gatekeep.Storage.Ecto, repo: Reviews.Repo},
   consent: ReviewsWeb.OAuthController,
   registered_client_prefix: "rvc_",
-  dpop_signing_algs: ["ES256"]
+  dpop_signing_algs: ["ES256"],
+  # ChatGPT addresses its client assertions to the token endpoint, not the issuer.
+  token_endpoint_audience_clients: ["https://chatgpt.com/oauth/client.json"]
 
 # Poppy requests go through the Turnkey adapter, which adds what it verified
 # about Turnkey-hosted agents and otherwise is the Poppy adapter. The agent
