@@ -109,7 +109,9 @@ defmodule ReviewsWeb.DesignSystemComponents do
   `--ds-focus`. `disabled` dims to 38% and stops clicks.
 
   `icon` puts a Heroicon (`"hero-plus"`) before the label, and the `leading`
-  slot any other mark, such as the GitHub mark. Give controls an icon when it
+  slot any other mark, such as the GitHub mark. The `trailing` slot puts an
+  icon after the label, such as the chevron on "Older". Put icons in these,
+  not in the label, so they keep the button's gap and centring. Give controls an icon when it
   makes the action quicker to find: add, sign in, copy, page through, allow
   or deny. Leave it off where the label already says it.
 
@@ -125,6 +127,7 @@ defmodule ReviewsWeb.DesignSystemComponents do
     include: ~w(type disabled form name value href navigate patch replace method download)
 
   slot :leading
+  slot :trailing
   slot :inner_block, required: true
 
   def ds_button(assigns) do
@@ -143,12 +146,16 @@ defmodule ReviewsWeb.DesignSystemComponents do
     <.link :if={@link?} class={@classes} {@rest}>
       <.icon :if={@icon} name={@icon} class="ds-button-icon" />{render_slot(@leading)}<span class="ds-label">{render_slot(
         @inner_block
-      )}</span>
+      )}</span>{render_slot(
+        @trailing
+      )}
     </.link>
     <button :if={!@link?} type={@rest[:type] || "button"} class={@classes} {@rest}>
       <.icon :if={@icon} name={@icon} class="ds-button-icon" />{render_slot(@leading)}<span class="ds-label">{render_slot(
         @inner_block
-      )}</span>
+      )}</span>{render_slot(
+        @trailing
+      )}
     </button>
     """
   end

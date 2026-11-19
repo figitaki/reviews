@@ -13,7 +13,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   version picker drops from 44px to 32px, the account button from 44px to
   32px, and the Guide map's menu, star, numbers and close are one 32px
   square each, 4px apart, with only the selected one filled. Touch screens
-  keep a 44px tap target around each without the box growing.
+  keep a 44px tap target around each without the box growing: the Guide map
+  squares move 12px apart so their targets do not overlap, and on a phone
+  the section numbers scroll between the menu and close when nine targets
+  do not fit.
 
 - Button labels are centred on their letters. A line box keeps the font's
   descent, so labels without descenders such as "Mark viewed" and an
@@ -21,6 +24,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   to cap height and baseline with `text-box`; `<.ds_button>` puts it on its
   label, and so do the account button, revision chips, Guide/Diff, Guide
   map numbers, Begin review, Mark viewed and the comment thread buttons.
+  `<.ds_button>` gains `leading` and `trailing` slots for icons that are not
+  a Heroicon before the label, such as the GitHub mark and the chevron on
+  "Older".
 
 - Switching split or unified view, a new or updated thread, opening the
   comment box and a theme change now update a file's diff in place, instead

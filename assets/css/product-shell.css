@@ -1208,6 +1208,7 @@ label.consent-scope:hover{
   .ds-shell-actions .review-button > span{
     min-width: 0;
     overflow: hidden;
+    overflow: clip visible;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1257,6 +1258,16 @@ label.consent-scope:hover{
   padding: 0;
 }
 
+/* Touch: a 44px square target. The account button sits 4px to the right,
+   so the target takes 2px there, half the gap, and the other 10px from the
+   empty bar on the left. Offsets are from the padding edge, inside the
+   1px border. */
+@media (pointer: coarse) {
+  .ds-shell-actions .review-owner-menu-button::after{
+    inset: calc((100% - 44px) / 2) calc(-2px - var(--border-hair)) calc((100% - 44px) / 2) calc(100% + 2px + var(--border-hair) - 44px);
+  }
+}
+
 .account-menu-avatar {
   flex: none;
   width: 24px;
@@ -1265,9 +1276,14 @@ label.consent-scope:hover{
   object-fit: cover;
 }
 
+/* The name is trimmed to cap height (.ds-label), so it clips only
+   sideways: a vertical clip would cut the "g" and "y" in "gypsy". Browsers
+   without `clip` keep `hidden`; they lack text-box too, so nothing is
+   trimmed there. */
 .account-menu-name {
   min-width: 0;
   overflow: hidden;
+  overflow: clip visible;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

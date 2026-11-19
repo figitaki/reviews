@@ -2354,6 +2354,28 @@ details[open] > summary .review-collapse-icon,
   gap: var(--space-1);
 }
 
+/* Touch: each square gets a 44px target. The squares stay 32px and move
+   12px apart, so neighbouring targets meet without overlapping. */
+@media (pointer: coarse) {
+  .review-edge-rail,
+  .review-edge-rail-ticks {
+    gap: calc(44px - var(--size-control-md));
+  }
+
+  .review-edge-rail-menu,
+  .review-edge-rail-hide {
+    position: relative;
+  }
+
+  .review-edge-rail-menu::after,
+  .review-edge-rail-hide::after,
+  .review-edge-tick::after {
+    content: "";
+    position: absolute;
+    inset: calc((100% - 44px) / 2);
+  }
+}
+
 .review-edge-rail-ticks .review-edge-tick {
   opacity: 1;
   transform: translateX(0);
@@ -3154,6 +3176,21 @@ details[open] > summary .review-collapse-icon,
   .review-edge-rail-ticks {
     flex: 0 0 auto;
     flex-direction: row;
+  }
+
+  /* Nine 44px targets (menu, overview, six sections, close) need 396px, more
+     than a 390px phone has. The menu and close stay put and the numbers
+     scroll between them. The padding keeps the end targets unclipped; the
+     negative margin keeps the visible 12px gaps. */
+  @media (pointer: coarse) {
+    .review-edge-rail-ticks {
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow-x: auto;
+      margin-inline: calc((var(--size-control-md) - 44px) / 2);
+      padding: calc((44px - var(--size-control-md)) / 2);
+      scrollbar-width: none;
+    }
   }
 
   .review-guide-flyout {
