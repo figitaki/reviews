@@ -15,6 +15,9 @@ kill_signal = 'SIGTERM'
 [env]
   PHX_HOST = 'reviews.figitaki.dev'
   PORT = '8080'
+  # Hosted MCP endpoint at /mcp, with its write tools (docs/MCP.md).
+  MCP_ENABLED = 'true'
+  MCP_WRITES_ENABLED = 'true'
 
 [http_service]
   internal_port = 8080
