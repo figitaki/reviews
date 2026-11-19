@@ -512,6 +512,11 @@ first Guide hunk containing the thread's anchored line on its diff side. If no
 Guide hunk covers it, navigation falls back to `/r/:slug/changes` with the same
 query. Outdated discussions link to their originating revision.
 
+A thread card's copy-link buttons write the same link for the current page,
+keeping its view and `patchset`. A comment link adds `&comment=ID`; the diff
+renderer then scrolls to that comment instead of the thread header and
+highlights it briefly. A thread link highlights the whole card.
+
 The patchset-pushed banner is rendered by LiveView itself (no hook event).
 When LiveView receives `{:patchset_pushed, n}` on the `"review:<slug>"`
 PubSub topic, it assigns a banner message that the HEEx template displays.
