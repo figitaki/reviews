@@ -6,6 +6,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- MCP tools link straight to threads and comments. Every thread they return
+  has a `url` that opens the review on it (`?thread=ID`), and every comment
+  one that opens it on that comment (`?thread=ID&comment=ID`).
+  `reviews_post_comment` returns `thread_url` and `comment_url`, and the
+  feedback resource and `fetch` give each thread a link.
 - On wider screens each comment's time and link button sit at the right of
   its row, level with its first line, so a run of comments from one person
   lines up. Phones keep the time after the author's name.
