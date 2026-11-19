@@ -12,6 +12,23 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   connector with its site's favicon, so it shows this mark instead of a
   plain letter.
 
+- Comments read better on phones. Comments, Sections and the section
+  decision sit in a bottom bar instead of floating over thread cards, and
+  they step aside while you type, so they no longer cover Submit. The reply
+  box stays above the on-screen keyboard. Thread cards use the full screen
+  width, and an opened thread's header clears the sticky file header. Mark
+  viewed is an eye button on phones.
+
+- Comment times are short ("56min", "3h", "2d") and sit after the author's
+  name, so the text uses the full width. Bodies start just past the avatar,
+  with a light connector from the avatar. Resolve, Reply and Submit are the
+  same buttons as the rest of the app, and the reply box has a visible
+  border.
+
+- Each thread and comment has a small link button that copies a link to
+  it. Opening the link scrolls to that thread or comment below the file
+  header and highlights it briefly.
+
 - Switching split or unified view, a new or updated thread, opening the
   comment box and a theme change now update a file's diff in place, instead
   of building and highlighting it again. On a 4,562-line file, switching view
