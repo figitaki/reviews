@@ -6,6 +6,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Replies no longer send a file's diff again. Marking a file viewed,
+  collapsing it, switching split or unified view and opening a section
+  decision sent every open diff back to the browser, about 590 KB on a
+  review with a 4,562-line file; they now send 1 to 3 KB.
+
 - Syntax highlighting runs in web workers. A diff shows as plain text first
   and its colours fill in, so a large file no longer freezes the page. On a
   4,562-line file, Mark viewed, collapse, expand and opening a thread each
