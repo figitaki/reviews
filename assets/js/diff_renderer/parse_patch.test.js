@@ -21,3 +21,12 @@ test("keeps old and new line coordinates for annotations", () => {
 test("empty patches retain the renderer fallback", () => {
   expect(parsePatch("", "a.js")).toBeNull()
 })
+
+test("patches of the same file get different cache keys, so highlight caches never mix them", () => {
+  // Packet hunks slice one file into several patches. Pierre's highlight
+  // caches are keyed by cacheKey alone.
+  const first = parsePatch(patch("a.js", "first"), "a.js")
+  const second = parsePatch(patch("a.js", "second"), "a.js")
+  expect(first.cacheKey).not.toBe(second.cacheKey)
+  expect(parsePatch(patch("a.js", "first"), "a.js").cacheKey).toBe(first.cacheKey)
+})
