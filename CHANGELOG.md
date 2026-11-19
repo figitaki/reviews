@@ -6,6 +6,25 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Syntax highlighting runs in web workers. A diff shows as plain text first
+  and its colours fill in, so a large file no longer freezes the page. On a
+  4,562-line file, Mark viewed, collapse, expand and opening a thread each
+  blocked the page for about 2 s, and split or unified view for about 5 s;
+  now no frame on those actions runs longer than about 0.26 s, and large
+  files keep their colours. Switching between light and dark no longer
+  highlights files again.
+
+- Collapsing, expanding and marking a file viewed show at once, and the
+  server saves the change in the background. The diff keeps its rendered,
+  highlighted file while collapsed, so expanding it again does not highlight
+  it again. On a 4,562-line file this took about 2 s each way and now takes
+  under 160 ms.
+
+- Opening a thread in a large file keeps the file virtualized. The diff
+  scrolls to the thread's line and focuses it, instead of rendering every
+  row. Before, a thread on a 4,562-line file put all 4,562 rows in the page,
+  and it stayed that way for every later update to the file.
+
 - Sizes follow the reader's browser font size. Space, radius and font-size
   tokens and every `font-size` in the stylesheets are rem, and buttons,
   fields and chips take their heights from new `--size-control-*` tokens.
@@ -88,6 +107,8 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   packets, threads, comments, section decisions and viewed-hunk state. The
   link then shows "This review was deleted" with status 410, and the API
   answers `410` `review_deleted`.
+
+- Create a new agent identity while approving `reviews login` on `/device`, without leaving the sign-in page.
 
 - Packet hunk links reveal their section and expand the target card on direct
   load, repeated clicks, and browser history navigation.

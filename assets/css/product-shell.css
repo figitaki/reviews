@@ -551,7 +551,8 @@ textarea.ds-input{
 }
 
 /* The fields show only while "New agent identity" is chosen. */
-#poppy-consent-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity{
+#poppy-consent-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity,
+#device-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity{
   display: none;
 }
 

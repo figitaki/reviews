@@ -10,6 +10,7 @@ import {
   threadStatusBadge,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { PIERRE_THEMES, highlightWorkers } from "./worker_pool.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
   annotationSideToSide,
@@ -150,19 +151,30 @@ const REVIEWS_DIFF_HEADER_CSS = `
   }
 `
 
-function currentPierreTheme() {
+// An explicit page theme wins; otherwise Pierre follows the system setting.
+function currentThemeType() {
   const explicit = document.documentElement.dataset.theme
-  if (explicit === "dark") return "pierre-dark"
-  if (explicit === "light") return "pierre-light"
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches
-    ? "pierre-dark"
-    : "pierre-light"
+  return explicit === "dark" || explicit === "light" ? explicit : "system"
+}
+
+// Pierre's highlight caches are keyed by cacheKey alone, and parsePatchFiles
+// builds it from the prefix and the file's index. Packet hunks slice the same
+// file differently, so the prefix carries a hash of the patch text.
+function contentHash(text) {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
 }
 
 export function parsePatch(rawDiff, filePath) {
   if (!rawDiff || typeof Diffs.parsePatchFiles !== "function") return null
   try {
-    const parsed = Diffs.parsePatchFiles(rawDiff, { cacheKeyPrefix: filePath || "patch" })
+    const parsed = Diffs.parsePatchFiles(rawDiff, {
+      cacheKeyPrefix: `${filePath || "patch"}:${rawDiff.length}:${contentHash(rawDiff)}`,
+    })
     const files = Array.isArray(parsed)
       ? parsed.flatMap((patch) => patch?.files || [])
       : []
@@ -316,6 +328,15 @@ export class VanillaDiffRenderer {
     if (JSON.stringify(next) === JSON.stringify(this.hunkUI)) return
     this.hunkUI = next
     const focused = this.focusedHeaderControl()
+    if (this.instance && !this.hasMarkdownPreview) {
+      // Collapse, expand and Mark viewed change only Pierre's header and its
+      // collapsed option. Keeping the instance keeps its highlighted lines, so
+      // expanding again does not tokenize the whole file again.
+      this.pendingHeaderFocus = focused
+      this.instance.setOptions(this.options())
+      this.instance.rerender()
+      return
+    }
     this.render()
     if (this.focusSourceOnExpand && !this.collapsed()) {
       this.focusSourceOnExpand = false
@@ -541,8 +562,8 @@ export class VanillaDiffRenderer {
     // Threads live in Source. Navigating to one is not a saved view choice.
     this.preferredPreview = false
     this.threadUI.set(thread.id, { ...this.threadUI.get(thread.id), expanded: true })
-    this.focusedThreadId = thread.id
     this.pendingThreadFocus = thread.id
+    this.scrolledToThreadLine = false
     this.openLines.add(`${sideToAnnotationSide(thread.side)}:${thread.anchor?.line_number_hint}`)
     this.render()
   }
@@ -552,7 +573,12 @@ export class VanillaDiffRenderer {
     requestAnimationFrame(() => {
       if (!this.pendingThreadFocus) return
       const target = this.container.querySelector(`[data-thread-id="${this.pendingThreadFocus}"]`)
-      if (!target) return
+      // Pierre keeps every annotation in the light DOM, but a virtualized
+      // file only slots the ones on rendered rows; the rest have no boxes.
+      if (!target?.getClientRects().length) {
+        this.scrollToPendingThreadLine()
+        return
+      }
       this.pendingThreadFocus = null
       target.style.scrollMarginTop = "calc(var(--review-main-nav-h) + 60px)"
       if (this.compact()) {
@@ -567,6 +593,20 @@ export class VanillaDiffRenderer {
       target.tabIndex = -1
       target.focus({ preventScroll: true })
     })
+  }
+
+  // A virtualized file renders only the rows near the viewport, so the thread
+  // may not be in the DOM yet. Scroll its line into the window once; the
+  // render that follows calls focusPendingThread again and finds it.
+  scrollToPendingThreadLine() {
+    if (!this.virtualizer || this.scrolledToThreadLine) return
+    const thread = this.threads.find(thread => String(thread.id) === String(this.pendingThreadFocus))
+    const line = thread?.anchor?.line_number_hint
+    const position = line && this.instance?.getLinePosition?.(line, sideToAnnotationSide(thread.side))
+    if (!position || !this.virtualContent) return
+    this.scrolledToThreadLine = true
+    const fileTop = this.virtualizer.getOffsetInScrollContainer(this.virtualContent)
+    this.virtualizer.scrollTo({ top: fileTop + position.top - window.innerHeight / 3, behavior: "instant" })
   }
 
   // Keep Pierre's path, status icon and counts. The disclosure button uses
@@ -660,7 +700,8 @@ export class VanillaDiffRenderer {
 
   options() {
     return {
-      theme: currentPierreTheme(),
+      theme: PIERRE_THEMES,
+      themeType: currentThemeType(),
       diffStyle: this.diffStyle,
       overflow:
         this.diffStyle === "unified" && !(this.compact() && LOCKFILE.test(this.filePath)) ? "wrap" : "scroll",
@@ -673,6 +714,10 @@ export class VanillaDiffRenderer {
         if (phase === "unmount") return
         this.placeThreadMarkers()
         this.focusPendingThread()
+        if (this.pendingHeaderFocus) {
+          this.restoreHeaderFocus(this.pendingHeaderFocus)
+          this.pendingHeaderFocus = null
+        }
       },
       enableGutterUtility: true,
       onGutterUtilityClick: (range) => this.commentFromGutter(range),
@@ -743,7 +788,7 @@ export class VanillaDiffRenderer {
         }
       }
       // One shared Pierre header stays above the notice in both modes.
-      this.headerInstance = new Diffs.FileDiff({ ...this.options(), collapsed: true })
+      this.headerInstance = new Diffs.FileDiff({ ...this.options(), collapsed: true }, highlightWorkers() ?? undefined)
       this.headerInstance.render({ ...this.renderArgs(), containerWrapper: headerContainer, lineAnnotations: [] })
       return
     }
@@ -754,14 +799,15 @@ export class VanillaDiffRenderer {
   renderSource(options) {
     const renderArgs = this.renderArgs()
 
+    // Large files virtualize even while collapsed, so the instance that
+    // expands them later is the one that already highlighted them.
     if (
-      !this.collapsed() && !this.focusedThreadId &&
       shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
     ) {
       if (this.tryRenderVirtualized(options, renderArgs)) return
     }
 
-    this.instance = new Diffs.FileDiff(options)
+    this.instance = new Diffs.FileDiff(options, highlightWorkers() ?? undefined)
     this.instance.render(renderArgs)
   }
 
@@ -771,6 +817,7 @@ export class VanillaDiffRenderer {
     try {
       const contentWrapper = el("div", { className: "review-virtualized-diff-content" })
       this.sourceContainer.append(contentWrapper)
+      this.virtualContent = contentWrapper
       this.virtualizer = new Diffs.Virtualizer({
         overscrollSize: 800,
         intersectionObserverMargin: 800,
@@ -787,7 +834,8 @@ export class VanillaDiffRenderer {
         {
           lineHeight: 20,
           diffHeaderHeight: 44,
-        }
+        },
+        highlightWorkers() ?? undefined
       )
       this.instance.render({ ...renderArgs, containerWrapper: contentWrapper })
       this.container.dataset.virtualized = "true"
@@ -819,6 +867,7 @@ export class VanillaDiffRenderer {
       this.virtualizer?.destroy?.()
     } finally {
       this.virtualizer = null
+      this.virtualContent = null
     }
     if (clear) this.container.replaceChildren()
   }
