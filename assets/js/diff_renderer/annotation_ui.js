@@ -110,8 +110,8 @@ const threadRunHeaderStyle = {
   gap: "6px",
   fontWeight: "600",
 }
-// The indent under the author name is in CSS (.review-thread-comments) so
-// phones can drop it.
+// The body indent and the connector from the avatar are in CSS
+// (.review-thread-comments in packet.css).
 const threadRunCommentsStyle = {
   margin: "0",
   listStyle: "none",
