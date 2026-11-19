@@ -20,6 +20,7 @@ class FakeVirtualizedFileDiff {
   }
   render() { this.options.onPostRender?.(null, this, "mount") }
   setOptions(options) { this.options = options }
+  setLineAnnotations(annotations) { this.annotations = annotations }
   rerender() { this.options.onPostRender?.(null, this, "update") }
   getLinePosition(lineNumber, side) { return side === "additions" ? { top: lineNumber * 20, height: 20 } : undefined }
   cleanUp() {}
@@ -197,4 +198,33 @@ test("large and small files highlight through the worker pool in both themes", (
   small.render()
   expect(calls.fileDiff).toBe(1)
   expect(small.instance.workers).toBe(workers)
+})
+
+test("updates that keep the diff reuse the Pierre instance", () => {
+  for (const [filePath, patch] of [
+    ["big.js", rawDiff],
+    ["a.js", "diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-old\n+new\n"],
+  ]) {
+    calls.fileDiff = 0
+    calls.virtualized = 0
+    const renderer = new VanillaDiffRenderer({
+      container: fakeElement(), filePath, rawDiff: patch, signedIn: true,
+      threads: [], diffStyle: "split", hunkUI: null,
+    })
+    renderer.render()
+    const pierre = renderer.instance
+
+    // Style, threads, the composer and open threads each lay the same
+    // instance out again instead of building and highlighting the file anew.
+    renderer.updateStyle("unified")
+    expect(pierre.options.diffStyle).toBe("unified")
+    renderer.update({ threads: [{ ...thread(9, 1), file_path: filePath }] })
+    expect(pierre.annotations.map((a) => a.lineNumber)).toEqual([1])
+    renderer.setComposerAt({ side: "additions", lineNumber: 1, kind: "comment" })
+    expect(pierre.annotations.map((a) => a.metadata.kind)).toEqual(["real", "composer"])
+    renderer.openThread(9)
+
+    expect(renderer.instance).toBe(pierre)
+    expect(calls.virtualized + calls.fileDiff).toBe(1)
+  }
 })

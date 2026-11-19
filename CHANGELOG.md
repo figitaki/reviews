@@ -6,6 +6,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Switching split or unified view, a new or updated thread, opening the
+  comment box and a theme change now update a file's diff in place, instead
+  of building and highlighting it again. On a 4,562-line file, switching view
+  no longer blanks the file or loses the reading position.
+
 - Syntax highlighting runs in web workers. A diff shows as plain text first
   and its colours fill in, so a large file no longer freezes the page. On a
   4,562-line file, Mark viewed, collapse, expand and opening a thread each
