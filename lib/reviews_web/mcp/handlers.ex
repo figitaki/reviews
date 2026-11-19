@@ -593,8 +593,10 @@ defmodule ReviewsWeb.MCP.Handlers do
     3. Make the requested changes in the working tree. Do not resolve threads you did
        not address.
     4. Reply on each thread you addressed with reviews_post_comment (pass thread_id),
-       saying what changed. Resolve it with reviews_update_thread_status only when the
-       reviewer's request is fully handled.
+       saying what changed. Write comments in Simplified Technical English
+       (ASD-STE100): short sentences, active voice, common words. Resolve the
+       thread with reviews_update_thread_status only when the reviewer's request
+       is fully handled.
     5. When the code changed, push a new revision with `reviews push --update <slug>`
        or reviews_append_revision.
 

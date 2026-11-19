@@ -6,6 +6,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The MCP `reviews_post_comment` tool and the address-feedback prompt now ask
+  agents to write comments in Simplified Technical English (ASD-STE100):
+  short sentences, active voice and common words.
 - Amp is a recognized app when it connects to `/mcp`. Its sign-in page shows
   Amp's name and logo instead of "Not verified".
 - Disabled-by-default private aggregate export with dedicated expiring authentication,
