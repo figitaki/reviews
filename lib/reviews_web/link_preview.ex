@@ -75,17 +75,50 @@ defmodule ReviewsWeb.LinkPreview do
   def plain_text(nil), do: ""
 
   def plain_text(markdown) do
-    markdown
-    |> String.replace(~r/^\s*(```|~~~).*$/m, "")
+    # Code keeps its text as written, so `__init__` stays `__init__`. Each
+    # code block or span is set aside as a placeholder while the prose loses
+    # its Markdown, then put back.
+    {prose, code} = set_aside_code(markdown)
+
+    prose
     |> String.replace(~r/!\[([^\]]*)\]\([^)]*\)/, "\\1")
     |> String.replace(~r/\[([^\]]+)\]\([^)]*\)/, "\\1")
     |> String.replace(~r/^\s{0,3}(\#{1,6}|>+|[-*+]\s+\[[ xX]\]|[-*+]|\d+[.)])\s+/m, "")
-    |> String.replace(~r/(\*\*|__|~~|`)/, "")
+    |> String.replace(~r/(\*\*|__|~~)/, "")
     |> String.replace(~r/(?<![\w*])[*_](?=\S)(.+?)(?<=\S)[*_](?![\w*])/u, "\\1")
+    |> then(
+      &Regex.replace(~r/\x{E000}(\d+)\x{E001}/u, &1, fn _, i ->
+        Enum.at(code, String.to_integer(i))
+      end)
+    )
     |> String.replace(~r/\s+/u, " ")
     |> String.trim()
     |> truncate()
   end
+
+  # Fenced blocks keep their contents without the fence lines; inline spans
+  # keep their contents without the backticks.
+  @code ~r/^[ \t]*(```|~~~)[^\n]*\n(.*?)(?:^[ \t]*\1[ \t]*$|\z)|(`+)(.+?)\3/msu
+
+  defp set_aside_code(markdown) do
+    {prose, code} =
+      @code
+      |> Regex.split(markdown, include_captures: true)
+      |> Enum.reduce({[], []}, fn part, {prose, code} ->
+        case Regex.run(@code, part) do
+          [^part | groups] ->
+            {[prose, "\u{E000}#{length(code)}\u{E001}"], code ++ [code_text(groups)]}
+
+          _ ->
+            {[prose, part], code}
+        end
+      end)
+
+    {IO.iodata_to_binary(prose), code}
+  end
+
+  defp code_text([_fence, body]), do: " #{body} "
+  defp code_text([_, _, _, inline]), do: String.trim(inline)
 
   defp truncate(text) do
     if String.length(text) <= @description_limit do
