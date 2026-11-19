@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Settings → New agent identity picks the provider from a list: Claude,
+  Codex, ChatGPT, Amp, Cursor, Gemini, GitHub Copilot and Grok, or Custom
+  to type another name. An agent made for a listed provider uses its logo
+  as its avatar.
 - Commenting on a range of lines no longer gets stuck. Before, after you
   dragged the "+" across several lines and closed the comment box, the lines
   stayed highlighted, and the "+" stayed on the last of them. Every later
