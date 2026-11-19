@@ -17,8 +17,69 @@ defmodule Reviews.Markdown do
   @doc "MDEx options matching the browser's markdown-it setup."
   def options, do: @options
 
-  @doc "Parses `markdown` into an `MDEx.Document`."
-  def parse(markdown) when is_binary(markdown), do: MDEx.parse_document!(markdown, @options)
+  @doc """
+  Parses `markdown` into an `MDEx.Document`. A reference definition whose
+  destination the browser refuses is not a definition there, so it is kept
+  as text here too, and links that name it stay unresolved.
+  """
+  def parse(markdown) when is_binary(markdown) do
+    document = MDEx.parse_document!(markdown, @options)
+
+    case keep_refused_definitions(markdown, document) do
+      ^markdown -> document
+      escaped -> MDEx.parse_document!(escaped, @options)
+    end
+  end
+
+  @definition ~r/^( {0,3})\[((?:[^\]\\]|\\.)+)\]:[ \t]*(.*)$/
+
+  # Escapes the `[` of each refused definition outside code, which makes the
+  # line a paragraph. The destination may sit on the next line.
+  defp keep_refused_definitions(markdown, document) do
+    code = code_lines(document)
+    lines = String.split(markdown, "\n")
+
+    lines
+    |> Enum.with_index(1)
+    |> Enum.map(fn {line, number} ->
+      with false <- MapSet.member?(code, number),
+           [_, indent, _label, rest] <- Regex.run(@definition, line),
+           destination when is_binary(destination) <-
+             destination(rest, Enum.at(lines, number)),
+           false <- allowed_link?(destination) do
+        indent <> "\\" <> String.trim_leading(line)
+      else
+        _ -> line
+      end
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp destination(rest, next_line) do
+    source = if String.trim(rest) == "", do: next_line || "", else: rest
+
+    case Regex.run(~r/^[ \t]*(?:<([^>\n]*)>|(\S+))/, source) do
+      [_, angle] -> angle
+      [_, "", bare] -> bare
+      _ -> nil
+    end
+  end
+
+  defp code_lines(%{nodes: nodes} = node) do
+    own =
+      case node do
+        %module{sourcepos: %{start: {first, _}, end: {last, _}}}
+        when module in [MDEx.CodeBlock, MDEx.HtmlBlock] ->
+          MapSet.new(first..last//1)
+
+        _ ->
+          MapSet.new()
+      end
+
+    Enum.reduce(nodes, own, &MapSet.union(&2, code_lines(&1)))
+  end
+
+  defp code_lines(_node), do: MapSet.new()
 
   @doc """
   The text a reader sees, with Markdown removed: code as written, links as

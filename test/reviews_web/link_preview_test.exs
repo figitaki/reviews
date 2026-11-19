@@ -47,6 +47,11 @@ defmodule ReviewsWeb.LinkPreviewTest do
            "[proto](//example.com) [bad](custom:evil) [slash](a%5Cb)"},
           {~s{[**t**](javascript:x "T") ![alt](data:x) <custom:evil>},
            ~s{[t](javascript:x "T") ![alt](data:x) <custom:evil>}},
+          # A refused reference is not a definition, so both lines stay visible.
+          {"[docs][ref]\n\n[ref]: //example.com", "[docs][ref] [ref]: //example.com"},
+          {"[docs][ref]\n\n[ref]:\n  <custom:evil>", "[docs][ref] [ref]: <custom:evil>"},
+          {"[docs][ref]\n\n[ref]: https://example.com", "docs"},
+          {"```\n[ref]: //example.com\n```", "[ref]: //example.com"},
           # HTML block tags are text, and what is between them reads as Markdown.
           {"<div>\n**fixed** &amp;\n</div>", "<div> fixed & </div>"},
           {"<!-- note -->\n\n<details>\n_x_\n\n</details>",
