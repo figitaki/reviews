@@ -30,6 +30,10 @@ working.
   and post as the agent you chose. Agents and CLIs that use a Reviews API
   token, such as Claude Code, Codex and Amp, keep working. See
   `docs/MCP.md`.
+- **Links in MCP results.** Every thread an MCP tool returns has a `url`
+  that opens the review on that thread, and every comment one that opens it
+  on that comment. Posting a comment returns `thread_url` and `comment_url`,
+  and the feedback resource and `fetch` link each thread.
 - **The Reviews icon.** The Reviews mark, the R in a rounded square from the
   top bar, is now the favicon, the home-screen icon and the icon `/mcp`
   advertises in `serverInfo.icons`. Claude shows a custom connector with its
