@@ -34,7 +34,11 @@ Before cutting a release:
 
 1. Update the version in `mix.exs`, `cli/Cargo.toml`, `cli/Cargo.lock`, and
    `assets/package.json`.
-2. Add the user-facing changes to `CHANGELOG.md`.
+2. Add the user-facing changes to `CHANGELOG.md` under a `## [<version>] -
+   <date>` heading. The CLI release's GitHub body is that section, after a
+   short header and before a compare link from the previous `cli-v*` tag
+   (`.github/scripts/release_notes.py`). The release job fails if the section
+   is missing.
 3. Tag the CLI and server release separately:
 
    ```sh

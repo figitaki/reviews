@@ -12,6 +12,7 @@ defmodule Reviews.Policy do
     * Resolve or reopen a thread: the review owner or the thread's author. A
       delegated principal also needs `threads:write`.
     * Decide a packet section: the review owner.
+    * Delete the review: the review owner.
     * List reviews (`list_viewer/1`): a human identity or an OAuth connector
       grant at `/mcp` lists the whole account's reviews; an agent identity,
       such as an agent API token, lists only its own.
@@ -32,6 +33,7 @@ defmodule Reviews.Policy do
           | :comment
           | :push
           | :decide_section
+          | :delete
           | {:update_thread_status, thread :: map()}
 
   # The scope a delegated principal needs for each write. API tokens and web
@@ -90,6 +92,8 @@ defmodule Reviews.Policy do
 
   # Explicitly added reviewers will also be allowed here once that feature exists.
   defp allowed?(%{identity: actor}, :decide_section, review), do: owner?(actor, review)
+
+  defp allowed?(%{identity: actor}, :delete, review), do: owner?(actor, review)
 
   defp allowed?(%{identity: actor}, {:update_thread_status, thread}, review) do
     owner?(actor, review) or same_account?(actor, author(thread))

@@ -90,7 +90,7 @@ Check any of these first without contacting the server by adding `--dry-run` (al
 cli/target/release/reviews push --dry-run --update <slug> --packet /path/to/packet.md
 ```
 
-It prints the target server, the review or slug, the diff files, the packet sections, and every packet problem with `file:line`. It exits 1 if the packet has problems or the review title or slug is empty. It does not need the server to be running, so it cannot check that the slug exists or that the token works.
+It prints the target server, the review or slug, the diff files, the packet sections, and every packet problem with `file:line`. It exits 1 if the packet has problems or the review title or slug is empty. Notes, such as a glue-only section placed before the core change, are printed but do not change the exit status. It does not need the server to be running, so it cannot check that the slug exists or that the token works.
 
 Find the slug of an earlier review (you wrote it or took part in it):
 
@@ -136,6 +136,7 @@ Notes:
 - `reviews threads` can run anonymously against public review JSON.
 - `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` (or `reviews login --token` with an API token).
 - `reviews resolve` and `reviews reopen` work only for the review owner or the thread's author; `reviews section` works only for the review owner. Others get HTTP 403.
+- `reviews delete <slug>` permanently deletes a review you own, with its comments. It shows what goes and asks you to type the slug; `--yes` skips the prompt for scripts. Only the review owner can delete; others get HTTP 403.
 - Thread IDs are accepted bare (`7`) or as printed by the listing (`#7`).
 - `reviews reply` appends to the thread. `reviews comment` always opens a new one.
 - `reviews show --format md` also includes thread IDs and status, which can be used as targets for reply/resolve/reopen.

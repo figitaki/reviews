@@ -28,6 +28,10 @@ import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
 import Markdown from "./hooks/markdown"
 import ReviewActivity from "./hooks/review_activity"
+import DesignPlayground from "./hooks/design_playground"
+import PacketFragments from "./hooks/packet_fragments"
+import GuideFlyout from "./hooks/guide_flyout"
+import {mountDevicePage} from "./device_code"
 
 // LiveView saves window.scrollY into history.state 100 ms after every scroll
 // so back and forward can restore it. Brave on iOS (Chromium's ios/web)
@@ -104,6 +108,9 @@ const liveSocket = new LiveSocket("/live", Socket, {
     PacketNavTree,
     Markdown,
     ReviewActivity,
+    DesignPlayground,
+    PacketFragments,
+    GuideFlyout,
   },
 })
 
@@ -203,6 +210,9 @@ window.addEventListener("phx:hunk_collapsed", ({detail}) => {
     window.requestAnimationFrame(() => scrollToReviewTargetId(detail.id))
   })
 })
+
+// The CLI sign-in page is not a LiveView; app.js is deferred, so the DOM is ready.
+mountDevicePage()
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()

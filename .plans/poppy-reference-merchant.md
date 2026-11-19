@@ -52,9 +52,37 @@ other versions or domains, and conversation, feedback, or browser endpoints.
    portal that resolves to loopback needs `--allow-private-addresses` in the validator and
    `OAUTH_ALLOW_PRIVATE_HOSTS` in Reviews.
 
+## Turnkey-held identity keys (provisional)
+
+Checked 2026-11-16 against Turnkey's public draft guides tkhq/docs#946 ("Personal Agent Protocol") and
+tkhq/docs#945 ("MPP identity attestations"), both Beta and unmerged. Only those public pages were used.
+
+| Area | Result |
+| --- | --- |
+| `client-assertion/v1` (ES256, thumbprint `kid`, `iss` = `sub`, `aud` = issuer, at most 300 s) | Already worked. The `jti` limit was 255; figitaki/gatekeep#7 raises it to 256 to match the profile. |
+| Hosted `agent.json` and `jwks.json` (same host, `private_key_jwt`, `use`/`alg` on keys) | Already worked. Gatekeep accepts empty `redirect_uris` (headless); such an agent can't use Direct Sign-In. |
+| `poppy-delegation/v1` verified as Turnkey's | New: `Reviews.Turnkey.Adapter`. Comments record and show "signed by Turnkey". |
+| MPP attestations (`turnkey.io/mpp-attestation/v1`, EdDSA) | Not used. They attest a Turnkey user to a paid API's origin, not a Personal Agent's key, and Reviews has no paid API. |
+
+Gaps:
+
+1. **No live test.** Turnkey hasn't shipped the profiles. A live test needs a Turnkey organization with
+   Mint JWT enabled, a registered agent, its identity key, and the guide's policies; then an agent that
+   mints both profiles, signs in on a preview, and comments. Check that the comment shows "signed by
+   Turnkey" and that the real `agent.json`, `jwks.json`, and tokens match the shapes in the tests.
+2. **Provisional names.** Agent host, URL layout, organization ID format, and the exact claims are from
+   the draft and configurable or marked in `Reviews.Turnkey`.
+3. **Policy isn't visible.** Reviews can't tell a profile mint from a raw signature with the same key.
+   The guide's DENY policy closes that inside Turnkey.
+4. **`jwks.jwt` not used.** The attestations guide publishes a signed key set per organization; the
+   agent guide doesn't say agents get one, so Reviews trusts the HTTPS key set like any agent's.
+5. **Delegations can't be withdrawn early** here either (guide, "Limits"). Removing the key from
+   `jwks.json` ends them once Reviews' client cache expires.
+
 ## Path to Turnkey or DID
 
-`Reviews.ExternalIdentity` is the adapter boundary. A Turnkey-issued delegation or DPoP key, or a
-did:web whose `authentication` key signs the challenge, becomes another adapter that resolves to an
-owner-approved grant of one agent identity. Comments then record that adapter's `attribution`.
+`Reviews.ExternalIdentity` is the adapter boundary. Turnkey-signed delegations now go through it (see
+above), on the same owner-approved grants. A did:web whose `authentication` key signs the challenge
+becomes another adapter that resolves to an owner-approved grant of one agent identity. Comments then
+record that adapter's `attribution`.
 Signed section decisions (#106) remain separate evidence. A Poppy login is not a signed decision.

@@ -412,6 +412,26 @@ function signInHref() {
   return `/auth/github?return_to=${encodeURIComponent(returnTo)}`
 }
 
+// GitHub's mark (Primer Octicons mark-github-16). Brand rules: keep it
+// unmodified and in one high-contrast colour, so it follows the text colour.
+const GITHUB_MARK_PATH =
+  "M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656"
+
+function githubMark() {
+  const ns = "http://www.w3.org/2000/svg"
+  const svg = document.createElementNS(ns, "svg")
+  svg.setAttribute("viewBox", "0 0 16 16")
+  svg.setAttribute("width", "14")
+  svg.setAttribute("height", "14")
+  svg.setAttribute("aria-hidden", "true")
+  svg.setAttribute("focusable", "false")
+  const path = document.createElementNS(ns, "path")
+  path.setAttribute("fill", "currentColor")
+  path.setAttribute("d", GITHUB_MARK_PATH)
+  svg.append(path)
+  return svg
+}
+
 export function signInPrompt(onCancel) {
   return el("div", { style: composerStyle }, [
     el(
@@ -427,7 +447,10 @@ export function signInPrompt(onCancel) {
       "Sign in with GitHub to leave a comment."
     ),
     el("div", { style: composerActionsStyle }, [
-      el("a", { href: signInHref(), style: primaryButtonStyle }, "Sign in with GitHub"),
+      el("a", { href: signInHref(), style: primaryButtonStyle }, [
+        githubMark(),
+        "Sign in with GitHub",
+      ]),
       button("Cancel", onCancel),
     ]),
   ])
@@ -475,7 +498,9 @@ const attributionListStyle = {
 
 // The verified agent label and its details (issue #154). Only facts the server
 // verified are stated as verified; the agent's own name and Agent ID are shown
-// as its claims, and parties Poppy 1.0 can't establish are named as such.
+// as its claims, and parties Poppy 1.0 can't establish are named as such. A
+// delegation is shown as signed by Turnkey only when the server verified it
+// against Turnkey's poppy-delegation/v1 profile.
 export function attributionDetails(attribution, author) {
   if (!attribution || attribution.provider !== "poppy") return null
   const domain = attribution.client_domain || "unknown agent"
@@ -485,6 +510,7 @@ export function attributionDetails(attribution, author) {
     el("dd", { style: { margin: "0", color: colors.text } }, detail),
   ]
   const claim = (text) => el("span", { style: { color: colors.faint } }, ` (${text})`)
+  const turnkey = attribution.delegation_signed_by === "turnkey"
 
   return el("details", { style: attributionStyle, dataset: { attribution: "poppy" } }, [
     el("summary", { style: attributionSummaryStyle, "aria-label": `Verified agent via ${domain}. Show details.` }, [
@@ -496,22 +522,36 @@ export function attributionDetails(attribution, author) {
       ...row("Acts as", `${handle}, a Reviews agent`),
       ...row("Owner", `@${attribution.owner_username}`, claim(`approved this agent ${formatDate(attribution.approved_at)}`)),
       ...row("Personal Agent", domain, claim("proved by its signing keys")),
+      ...(turnkey
+        ? row("Turnkey agent", `${attribution.turnkey_agent} in organization ${attribution.turnkey_organization_id}`, claim("its identity key is held in Turnkey"))
+        : []),
       ...row("Calls itself", attribution.client_name_claimed || "(no name)", claim("not verified")),
       ...(attribution.agent_id_claimed ? row("Agent ID", "sent", claim("not verified")) : []),
       ...row("Workload", "not established", claim("Poppy 1.0 has no workload proof")),
-      ...row("Delegation", "owner approval in Reviews", claim("no signed delegation chain")),
+      ...(turnkey
+        ? row("Delegation", "signed by Turnkey", claim("verified: the Turnkey-held identity key vouched for this request's session key"))
+        : row("Delegation", "owner approval in Reviews", claim("no signed delegation chain"))),
       ...tokenRow(attribution.token_binding, row, claim),
       ...(attribution.link_revoked ? row("Status", "Disconnected after this comment") : []),
     ]),
   ])
 }
 
-// Whether the comment's access token was bound to the agent's key. Comments
-// recorded before Reviews kept this have no row.
+// The Token row's value and its faint note: whether the comment's access token
+// was bound to the agent's key (RFC 9449). The Session JWT's key is a separate
+// check and never shows here. Comments recorded before Reviews kept this have
+// no row.
+export function tokenBindingText(binding) {
+  if (binding === "dpop") return ["Access token bound to agent key", null]
+  if (binding === "bearer") return ["Bearer", "not bound to a key"]
+  return null
+}
+
 function tokenRow(binding, row, claim) {
-  if (binding === "dpop") return row("Token", "Bound to agent key (DPoP)")
-  if (binding === "bearer") return row("Token", "Bearer", claim("not bound to a key"))
-  return []
+  const text = tokenBindingText(binding)
+  if (!text) return []
+  const [value, note] = text
+  return note ? row("Token", value, claim(note)) : row("Token", value)
 }
 
 function formatDate(iso) {
