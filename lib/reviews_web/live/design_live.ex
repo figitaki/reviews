@@ -407,6 +407,43 @@ defmodule ReviewsWeb.DesignLive do
           </div>
         </.catalog_section>
 
+        <.catalog_section id="dc-avatars" title="Identity avatars">
+          <:rules>
+            <li>
+              <code>&lt;.ds_avatar_mark&gt;</code>
+              shows a person's GitHub avatar or an agent's provider logo, else the first letter of
+              its name. It is decorative: put the name in text beside it.
+            </li>
+            <li>
+              <code>round</code>
+              matches comment-thread avatars (the Guide's byline uses it); the square one is for
+              Settings rows. The round letter comes from the handle, as in comments.
+            </li>
+          </:rules>
+          <div class="dc-specimens">
+            <.specimen name="<.ds_avatar_mark> agent logo">
+              <.ds_avatar_mark identity={
+                %{avatar_url: ~p"/images/connectors/claude.png", display_name: "Claude"}
+              } />
+            </.specimen>
+            <.specimen name="<.ds_avatar_mark> no image">
+              <.ds_avatar_mark identity={%{avatar_url: nil, display_name: "Carey"}} />
+            </.specimen>
+            <.specimen name="<.ds_avatar_mark round> agent logo">
+              <.ds_avatar_mark
+                round
+                identity={%{avatar_url: ~p"/images/connectors/amp.png", display_name: "Amp"}}
+              />
+            </.specimen>
+            <.specimen name="<.ds_avatar_mark round> no image">
+              <.ds_avatar_mark
+                round
+                identity={%{avatar_url: nil, display_name: "Reviews demo", handle: "reviews-demo"}}
+              />
+            </.specimen>
+          </div>
+        </.catalog_section>
+
         <.catalog_section id="dc-buttons" title="Buttons">
           <:rules>
             <li>

@@ -608,6 +608,76 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
     end
 
+    test "the overview names the packet's author, and an agent's owner", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, agent} =
+        Accounts.create_agent_identity(author, %{
+          handle: "claude-bot",
+          display_name: "Claude",
+          provider: "Claude",
+          avatar_url: "/images/connectors/claude.png"
+        })
+
+      packet = %{
+        "format_version" => 1,
+        "title" => "Who wrote this",
+        "sections" => [
+          %{
+            "title" => "Only",
+            "rows" => [%{"kind" => "hunk", "path" => "lib/one.ex", "hunk_index" => 1}]
+          }
+        ]
+      }
+
+      raw_diff = """
+      diff --git a/lib/one.ex b/lib/one.ex
+      --- a/lib/one.ex
+      +++ b/lib/one.ex
+      @@ -1 +1 @@
+      -old
+      +new
+      """
+
+      open = fn identity ->
+        {:ok, %{review: review}} =
+          ReviewsCtx.create_review_with_initial_patchset(identity, %{
+            title: "Who wrote this",
+            raw_diff: raw_diff,
+            packet: packet
+          })
+
+        {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+        view
+      end
+
+      person = open.(author)
+
+      assert has_element?(
+               person,
+               "#review-split-inline-overview #review-overview-author",
+               "@carey"
+             )
+
+      refute has_element?(person, "#review-overview-author .ds-badge")
+      refute has_element?(person, "#review-overview-author-owner")
+      # Round like comment avatars, and without an image the handle's first letter.
+      assert has_element?(person, "#review-overview-author .ds-avatar-mark.is-round", "C")
+
+      robot = open.(agent)
+      assert has_element?(robot, "#review-overview-author", "Claude")
+      assert has_element?(robot, "#review-overview-author", "@claude-bot")
+      assert has_element?(robot, "#review-overview-author .ds-badge", "Agent")
+
+      assert has_element?(
+               robot,
+               ~s|#review-overview-author img[src="/images/connectors/claude.png"]|
+             )
+
+      assert has_element?(robot, "#review-overview-author-owner", "owned by @carey")
+    end
+
     test "packets land on overview and open section hunks only after selection", %{
       conn: conn,
       author: author

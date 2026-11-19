@@ -2917,6 +2917,29 @@ details[open] > summary .review-collapse-icon,
   margin-top: 0.9em;
 }
 
+/* Who published the packet, and for an agent, the person who owns it. */
+.review-guide-author {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  color: var(--review-muted);
+  font-size: 0.8125rem;
+}
+
+.review-guide-author > span:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-width: 0;
+}
+
+.review-guide-author-name {
+  color: var(--review-text);
+  font-weight: 680;
+}
+
 .review-guide-panel-meta,
 .review-guide-overview-stats {
   display: flex;

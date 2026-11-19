@@ -502,17 +502,7 @@ defmodule ReviewsWeb.SettingsLive do
   defp identity_row(assigns) do
     ~H"""
     <article id={@id} class="ds-identity-row">
-      <div class="ds-avatar-mark" aria-hidden="true">
-        <img
-          :if={@identity.avatar_url}
-          src={@identity.avatar_url}
-          alt=""
-          width="36"
-          height="36"
-          loading="lazy"
-        />
-        <span :if={!@identity.avatar_url}>{identity_initial(@identity)}</span>
-      </div>
+      <.ds_avatar_mark identity={@identity} />
       <div class="ds-identity-main">
         <h3>{@identity.display_name}</h3>
         <p translate="no">@{@identity.handle}</p>
@@ -604,17 +594,6 @@ defmodule ReviewsWeb.SettingsLive do
   end
 
   defp identity_label(identity), do: "#{identity.display_name} (@#{identity.handle})"
-
-  defp identity_initial(identity) do
-    identity.display_name
-    |> to_string()
-    |> String.trim()
-    |> String.first()
-    |> case do
-      nil -> "?"
-      initial -> String.upcase(initial)
-    end
-  end
 
   defp format_date(nil), do: "unknown"
   defp format_date(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d")
