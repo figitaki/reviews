@@ -1339,11 +1339,32 @@ details[open] > summary .review-collapse-icon,
   }
 }
 
-/* Enough room for the last content to scroll clear of the dock: its bottom
-   offset, its height and a 16px gap. This sits inside the Guide shell, so
-   the sticky Guide rail still runs to the end of the page. */
+/* Enough room for the last content to scroll clear of the tallest column
+   of floating buttons: the dock's 16px offset, the stack above it and a 16px
+   gap. The stack is the dock's next button, plus Comments (shown when the
+   review has comments; on phones always), plus Sections on phones in the
+   Guide, each --size-fab with the column's 12px gap. This sits inside the
+   Guide shell, so the sticky Guide rail still runs to the end of the page. */
 .review-packet-shell.has-outline .review-packet-grid {
-  padding-bottom: calc(16px + var(--size-fab) + 16px + env(safe-area-inset-bottom));
+  --review-guide-stack: var(--size-fab);
+
+  padding-bottom: calc(16px + var(--review-guide-stack) + 16px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 641px) {
+  .review-page:has(.review-activity:not([data-empty])) .review-packet-shell.has-outline .review-packet-grid {
+    --review-guide-stack: calc(2 * var(--size-fab) + 12px);
+  }
+}
+
+@media (max-width: 640px) {
+  .review-page .review-packet-shell.has-outline .review-packet-grid {
+    --review-guide-stack: calc(2 * var(--size-fab) + 12px);
+  }
+
+  .review-page:has([data-guide-flyout-toggle]) .review-packet-shell.has-outline .review-packet-grid {
+    --review-guide-stack: calc(3 * var(--size-fab) + 24px);
+  }
 }
 
 .review-section-decision.is-approved {
@@ -3066,9 +3087,9 @@ details[open] > summary .review-collapse-icon,
     padding: 18px 16px 56px;
   }
 
-  /* The fixed section dock still needs its room in the Guide. */
+  /* The floating buttons still need their room in the Guide. */
   .review-packet-shell.has-outline .review-packet-grid {
-    padding-bottom: calc(16px + var(--size-fab) + 16px + env(safe-area-inset-bottom));
+    padding-bottom: calc(16px + var(--review-guide-stack) + 16px + env(safe-area-inset-bottom));
   }
 
   /* Diffs use the full screen width: no side borders or corners, and in the
