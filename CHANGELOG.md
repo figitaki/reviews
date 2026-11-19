@@ -9,7 +9,7 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 ## [0.0.3] - 2026-11-19
 
 0.0.1 brought the CLI and API tokens, and 0.0.2 brought agents signing in
-with OAuth. 0.0.3 connects Claude and ChatGPT. Add
+with OAuth. 0.0.3 connects Claude, ChatGPT and Amp. Add
 `https://reviews.figitaki.dev/mcp` as a custom connector, sign in with GitHub,
 and choose which of your agents it acts as and what it may do. Large diffs no
 longer freeze the page, comments work properly on phones, and a review's owner
@@ -38,6 +38,13 @@ working.
   top bar, is now the favicon, the home-screen icon and the icon `/mcp`
   advertises in `serverInfo.icons`. Claude shows a custom connector with its
   site's favicon, so it shows this mark instead of a plain letter.
+- **Recognized apps: Amp.** Amp joins Claude and ChatGPT as a recognized
+  app at `/mcp`. Its sign-in page shows Amp's name and logo instead of "Not
+  verified".
+- **Pick an agent's provider.** Settings → New agent identity picks the
+  provider from a list: Claude, Codex, ChatGPT, Amp, Cursor, Gemini, GitHub
+  Copilot and Grok, or Custom to type another name. An agent made for a
+  listed provider uses its logo as its avatar.
 - **Delete a review.** The owner can delete a review for good from the
   review page's options menu, `reviews delete <slug>`, or the API. You
   confirm by typing the slug, and the warning says when other people's or
@@ -53,6 +60,11 @@ working.
   generated files, lockfiles, docs). The packet skill shows this order, and
   `reviews push --dry-run` notes a glue-only section placed before code. A
   note never fails a push.
+- **Code storage (not live yet).** With code storage on, `reviews push` also
+  uploads the exact base and head commits of each revision to code.storage,
+  ready for code intelligence later. It is off unless the server sets
+  `CODE_STORAGE_*`, and it is off on reviews.figitaki.dev, so pushes there
+  stay diff-only. `--no-code-storage` skips the upload when it is optional.
 - Poppy Personal Agents whose identity key Turnkey holds show "Delegation:
   signed by Turnkey" on their comments. See "Turnkey-held identity keys" in
   `docs/POPPY.md`.
@@ -80,6 +92,16 @@ working.
   bottom of the screen: previous section, your decision (Approved, Changes
   requested, Skipped, or "Decide"), and next section. Signed out, it offers
   "Sign in to decide" and returns you to that section with the decision open.
+- MCP comments read plainly. `reviews_post_comment` and the address-feedback
+  prompt ask agents to write in Simplified Technical English (ASD-STE100):
+  short sentences, active voice and common words.
+- On wider screens each comment's time and link button sit at the right of
+  its row, level with its first line. Phones keep the time after the
+  author's name.
+- `reviews push --range A...B` uses the merge base of A and B as the base,
+  which matches `git diff A...B`. An empty side (`main..`, `main...`) means
+  HEAD. Diff capture no longer depends on local git config such as
+  `diff.algorithm` or external diff drivers.
 - Sizes follow your browser's font size, so a larger default font gives
   larger controls as well as larger text. At the default size nothing moves.
 - Every top bar ends in the same account menu, with Settings and Sign out.
@@ -90,6 +112,9 @@ working.
 
 ### Fixed
 
+- Commenting on a range of lines no longer gets stuck. Closing the comment
+  box after dragging the "+" across several lines now clears the selection,
+  so later comments no longer start from that range.
 - Packet hunk links open their section and expand the target card on direct
   load, repeated clicks and back and forward.
 - Comments and threads posted in the same second keep their posting order.
@@ -100,6 +125,12 @@ working.
   wrapping under the status mark.
 - The "Verified agent" details for a DPoP-bound comment read "Access token
   bound to agent key", so they can't be mistaken for the Session JWT's key.
+
+### Security
+
+- idna is 8.0.0, which fixes EEF-CVE-2026-117678: a long Punycode label in a
+  hostname could keep the CPU busy (#259). jsv still asks for idna 7, so
+  `mix.exs` overrides it until jsv allows 8.
 
 ### For integrators
 
@@ -112,6 +143,10 @@ working.
   `openWorldHint`. Known connectors are one config list
   (`config :reviews, Reviews.MCPAuth, connectors:`). Reviews API tokens keep
   every scope at `/mcp`.
+- `GET /api/v1/capabilities` says whether code storage is on, and
+  `POST /api/v1/code-snapshots` and `/complete` reserve and check snapshot
+  uploads. Push endpoints accept an optional `code_snapshot_id`, and the
+  review payload shows `code_snapshot_status` per revision.
 - `DELETE /api/v1/reviews/:slug` deletes a review; its link and API then
   answer `410` with `review_deleted`.
 - `<.ds_button>` is the one button (`sm`, `md`, `lg`; renders a link with
@@ -121,6 +156,9 @@ working.
 
 ### Not yet live
 
+- Code storage is off on reviews.figitaki.dev; see Added.
+- A private aggregate analytics export (accounts, signups, active accounts,
+  and MCP connections by app) is off unless its own credentials are set.
 - The design catalog at `/design`, `/design/components` and
   `/design/layouts` is on in development and on preview apps only.
 
@@ -131,6 +169,18 @@ list, and connect agents without leaving the consent page. Review decisions
 and thread actions are now limited to the people who should make them, and
 every API speaks one set of error codes. Existing CLI configs, API tokens and
 connected agents keep working.
+
+### Fixed
+
+- Keep staging code repositories while a snapshot reservation is live or
+  provider creation is in flight; recover abandoned creations for cleanup.
+- Accept a code storage PEM key whose line breaks were stored as spaces, as
+  single-line secret inputs do. Before, signing failed and every upload fell
+  back to diff-only.
+- Fix the code.storage client crashing on every request (Req rejected
+  `:finch` together with `:connect_options`); the 5 s connect timeout applies.
+- Code storage errors use the shared `error_code` envelope, and reservation
+  checks push permission through `Reviews.Policy`.
 
 ### Added
 
@@ -302,6 +352,19 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
   and file. Discussion buttons and thread links open Source for that visit,
   including from collapsed headers. Raw HTML, scripts and unsafe links stay
   escaped.
+- Code storage (Phase 0 and 1 of the code storage plan in #74):
+  every code-enabled patchset gets verified base/head commit IDs and scoped
+  Git refs in a provider-neutral backend. code.storage (Pierre) is the production adapter;
+  storage is off by default (`CODE_STORAGE_ADAPTER=code_storage` enables it).
+- `GET /api/v1/capabilities` for CLI feature discovery, plus
+  `POST /api/v1/code-snapshots` and `POST /api/v1/code-snapshots/:id/complete`
+  with a reserve → upload → verify → claim flow and stable error codes.
+- `reviews push` uploads a code snapshot when the server supports it:
+  resolves exact base/head OIDs, builds synthetic commits for staged or
+  tracked worktree state with a fixed `Reviews Snapshot` identity, verifies
+  the diff matches the snapshot, and pushes exactly two refs atomically with
+  a short-lived ref-scoped credential (never written to URLs, config, or
+  logs). `--no-code-storage` skips the upload where the server allows it.
 
 ### Changed
 
@@ -396,6 +459,11 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 
 ### Fixed
 
+- Enforce snapshot reservation deadlines during completion and claiming, and
+  prevent late provider results from overwriting newer snapshot states.
+- Ignore dirty submodule contents in snapshot diffs while preserving gitlink
+  changes; disclose that the advertised upload budget is not enforced.
+
 - GitHub sign-in now returns you to the page you started from, such as a
   review, instead of the home page. Only local paths are accepted; anything
   else goes home.
@@ -403,6 +471,13 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
 - Decode Git-quoted filenames consistently in CLI validation, uploaded file
   metadata, and review hunk lookup, including non-ASCII paths.
 
+- `reviews push --range A...B` now records the merge base of A and B as the
+  patchset base (matching what `git diff A...B` actually compares) instead
+  of A itself.
+- Diff capture is config-neutral: local `diff.algorithm`, `core.quotePath`,
+  and external diff drivers no longer change the uploaded diff bytes.
+- Appending a patchset no longer crashes when a non-changeset error occurs
+  inside the push transaction.
 - Changed lines whose text starts with `--` or `++`, such as a removed SQL
   `-- note` comment, now count as changes. Packet coverage checks require them,
   and file and hunk +/- counts include them.

@@ -161,8 +161,14 @@ defmodule ReviewsWeb.Router do
   end
 
   scope "/api/v1", ReviewsWeb.Api do
+    pipe_through :api
+    get "/analytics/snapshot", AnalyticsController, :show, log: false
+  end
+
+  scope "/api/v1", ReviewsWeb.Api do
     pipe_through [:api, :review_content]
 
+    get "/capabilities", CapabilityController, :show
     get "/reviews/:slug", ReviewController, :show
     get "/reviews/:slug/files", ReviewPageController, :files
     get "/reviews/:slug/threads", ReviewPageController, :threads
@@ -177,6 +183,8 @@ defmodule ReviewsWeb.Router do
     get "/reviews/:slug/deletion", ReviewController, :deletion
     delete "/reviews/:slug", ReviewController, :delete
     post "/reviews/:slug/patchsets", PatchsetController, :create
+    post "/code-snapshots", CodeSnapshotController, :create
+    post "/code-snapshots/:id/complete", CodeSnapshotController, :complete
     post "/reviews/:slug/comments", CommentController, :create
     patch "/reviews/:slug/threads/:thread_id", ThreadController, :update
     post "/reviews/:slug/sections/:section_index/decision", SectionDecisionController, :create

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26">
+  <!-- The Reviews mark from the top bar (Layouts.landing_topbar), on an opaque tile. -->
+  <rect width="26" height="26" rx="5.25" fill="#0B0B0C" />
+  <rect x="0.75" y="0.75" width="24.5" height="24.5" rx="4.6" fill="none" stroke="#F5F5F5" stroke-opacity="0.32" stroke-width="1" />
+  <path fill="#F5F5F5" d="M8.6 18.5V7.5h4.65c1.45 0 2.55 0.36 3.3 1.07 0.76 0.71 1.14 1.64 1.14 2.78 0 0.85-0.22 1.58-0.66 2.18-0.43 0.6-1.05 1.04-1.86 1.32L18.6 18.5h-2.45l-2.92-3.36h-2.18V18.5H8.6Zm2.45-5.35h2.07c0.73 0 1.3-0.17 1.7-0.5 0.4-0.34 0.6-0.81 0.6-1.42 0-0.6-0.2-1.07-0.6-1.4-0.4-0.34-0.97-0.5-1.7-0.5h-2.07v3.82Z" />
+</svg>
