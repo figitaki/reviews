@@ -224,4 +224,70 @@ defmodule ReviewsWeb.DesignFixtures do
   end
 
   defp ago(now, seconds), do: now |> DateTime.add(-seconds) |> DateTime.truncate(:second)
+
+  @tree_files [
+    {"assets/css/packet.css", "modified", 214, 61},
+    {"assets/css/tokens.css", "modified", 3, 1},
+    {"assets/js/hooks/guide_flyout.js", "added", 53, 0},
+    {"lib/reviews_web/live/review_live/diff_components.ex", "modified", 96, 4},
+    {"lib/reviews_web/live/review_live/old_outline.ex", "deleted", 0, 38},
+    {"lib/reviews_web/live/review_live/guide_outline.ex", "renamed", 2, 2},
+    {"mix.exs", "modified", 1, 1}
+  ]
+
+  @doc "Changed files for the diff view's file tree, shaped like the review page's file diffs."
+  def tree_files do
+    @tree_files
+    |> Enum.with_index(1)
+    |> Enum.map(fn {{path, status, additions, deletions}, id} ->
+      %{id: id, path: path, status: status, additions: additions, deletions: deletions}
+    end)
+  end
+
+  @doc """
+  A Guide map outline with decided and undecided sections. `offset` keeps
+  section ids unique when the catalog renders it once per theme.
+  """
+  def guide_outline(offset \\ 0) do
+    files = tree_files()
+
+    sections =
+      [
+        {"Tree row styles", "approved", Enum.slice(files, 0, 2)},
+        {"File tree in the diff view", nil, Enum.slice(files, 2, 4)},
+        {"Guide map rows", "denied", Enum.slice(files, 6, 1)},
+        {"Release notes", "ignored", []}
+      ]
+      |> Enum.with_index(offset)
+      |> Enum.map(fn {{title, status, section_files}, index} ->
+        %{
+          index: index,
+          title: title,
+          effective_status: status,
+          target_id: "dcp-tree-section-#{index}",
+          files: Enum.map(section_files, &outline_file(&1, index))
+        }
+      end)
+
+    %{
+      sections: sections,
+      summary: %{
+        additions: Enum.sum(Enum.map(files, & &1.additions)),
+        deletions: Enum.sum(Enum.map(files, & &1.deletions)),
+        file_count: length(files)
+      }
+    }
+  end
+
+  defp outline_file(file, index) do
+    %{
+      path: file.path,
+      basename: Path.basename(file.path),
+      directory: Path.dirname(file.path) |> String.replace_prefix(".", ""),
+      status: file.status,
+      additions: file.additions,
+      deletions: file.deletions,
+      target_id: "dcp-tree-section-#{index}-#{file.id}"
+    }
+  end
 end

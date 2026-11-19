@@ -15,7 +15,7 @@ defmodule ReviewsWeb.DesignComponentsLive do
 
   alias Reviews.ReviewView
   alias ReviewsWeb.{DesignFixtures, DesignLive}
-  alias ReviewsWeb.ReviewLive.{ActivityComponents, PacketComponents}
+  alias ReviewsWeb.ReviewLive.{ActivityComponents, DiffComponents, PacketComponents}
 
   @hunk_id "dcp-hunk"
 
@@ -189,6 +189,23 @@ defmodule ReviewsWeb.DesignComponentsLive do
 
         .dcp-decisions figure {
           justify-items: start;
+        }
+
+        .dcp-trees {
+          display: grid;
+          gap: var(--space-7);
+          max-width: 22rem;
+        }
+
+        /* The Guide map panel, out of its sliding overlay. */
+        .dcp-guide-tree.review-guide-flyout {
+          position: static;
+          width: auto;
+          opacity: 1;
+          transform: none;
+          border: var(--border-hair) solid var(--review-line);
+          border-radius: var(--radius-md);
+          padding: var(--space-5) var(--space-2);
         }
 
         .dcp-section-states {
@@ -445,6 +462,37 @@ defmodule ReviewsWeb.DesignComponentsLive do
             expanded_hunk_ids={@expanded_hunk_ids}
           />
         </section>
+
+        <DesignLive.catalog_section :let={theme} id="dcp-trees" title="File and section trees">
+          <:rules>
+            <li>
+              Folder rows have a folder icon and a muted path, with a thin guide line down the left
+              of their files. Guide map sections are its folder rows.
+            </li>
+            <li>
+              File rows have a chevron, the name, the rest of its path muted, the line counts and an
+              outlined letter: Modified, Added, Deleted or Renamed. A decided section shows its
+              decision there instead: Approved, Changes requested (C) or Skipped. Screen readers
+              hear the word.
+            </li>
+            <li>
+              Rows are 2.75rem, a 44px tap target. On phones the file tree folds behind a Files
+              button above the diffs.
+            </li>
+          </:rules>
+          <div class="dcp-trees">
+            <DiffComponents.file_tree
+              id={"dcp-file-tree-#{theme}"}
+              file_diffs={DesignFixtures.tree_files()}
+            />
+            <div class="review-guide-flyout dcp-guide-tree">
+              <PacketComponents.guide_map_sections
+                outline={DesignFixtures.guide_outline(if(theme == "dark", do: 20, else: 30))}
+                active_section_index={if(theme == "dark", do: 21, else: 31)}
+              />
+            </div>
+          </div>
+        </DesignLive.catalog_section>
 
         <DesignLive.catalog_section :let={theme} id="dcp-section-states" title="Section review state">
           <:rules>

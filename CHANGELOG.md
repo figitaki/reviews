@@ -6,6 +6,13 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The diff view has a file tree again. Files sit under their folder with
+  their line counts and a letter for the change (M, A, D, R); a click
+  scrolls to the file's diff. On phones it folds behind a Files button.
+- The Guide map uses the same tree rows: sections show their decision as a
+  letter (A approved, C changes requested, S skipped), and the open
+  section's files show their path, counts and change letter. Rows are 44px.
+
 - idna is now 8.0.0, which fixes EEF-CVE-2026-117678: a long Punycode
   label in a hostname could keep the CPU busy. jsv still asks for idna 7,
   so `mix.exs` overrides it until jsv allows 8.
