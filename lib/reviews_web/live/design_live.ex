@@ -407,39 +407,42 @@ defmodule ReviewsWeb.DesignLive do
           </div>
         </.catalog_section>
 
-        <.catalog_section id="dc-avatars" title="Identity avatars">
+        <.catalog_section id="dc-identities" title="Identities">
           <:rules>
             <li>
-              <code>&lt;.ds_avatar_mark&gt;</code>
-              shows a person's GitHub avatar or an agent's provider logo, else the first letter of
-              its name. It is decorative: put the name in text beside it.
+              <code>&lt;.ds_identity&gt;</code>
+              is how an identity appears everywhere: avatar, name, <code>@handle</code>
+              and, for an agent, an Agent marker. Comment threads draw the same classes in JS.
             </li>
             <li>
-              <code>round</code>
-              matches comment-thread avatars (the Guide's byline uses it); the square one is for
-              Settings rows. The round letter comes from the handle, as in comments.
+              The avatar (<code>&lt;.ds_avatar_mark&gt;</code>) is a person's GitHub avatar or an
+              agent's provider logo, else the first letter of the handle in a ringed circle.
             </li>
+            <li>
+              Sizes: <code>xs</code>
+              16px in the review list (handle only), <code>sm</code>
+              20px in comments and the Guide's byline, <code>md</code>
+              24px in the account menu (name only), <code>lg</code>
+              36px in Settings, square and stacked.
+            </li>
+            <li>The handle is left out when it only repeats the name.</li>
           </:rules>
-          <div class="dc-specimens">
-            <.specimen name="<.ds_avatar_mark> agent logo">
-              <.ds_avatar_mark identity={
-                %{avatar_url: ~p"/images/connectors/claude.png", display_name: "Claude"}
-              } />
+          <div :for={size <- ~w(xs sm md)} :key={size} class="dc-specimens is-wide">
+            <.specimen
+              :for={{label, identity} <- identity_specimens()}
+              :key={label}
+              name={~s|<.ds_identity size="#{size}"> #{label}|}
+            >
+              <.ds_identity identity={identity} size={size} />
             </.specimen>
-            <.specimen name="<.ds_avatar_mark> no image">
-              <.ds_avatar_mark identity={%{avatar_url: nil, display_name: "Carey"}} />
-            </.specimen>
-            <.specimen name="<.ds_avatar_mark round> agent logo">
-              <.ds_avatar_mark
-                round
-                identity={%{avatar_url: ~p"/images/connectors/amp.png", display_name: "Amp"}}
-              />
-            </.specimen>
-            <.specimen name="<.ds_avatar_mark round> no image">
-              <.ds_avatar_mark
-                round
-                identity={%{avatar_url: nil, display_name: "Reviews demo", handle: "reviews-demo"}}
-              />
+          </div>
+          <div class="dc-specimens is-wide">
+            <.specimen
+              :for={{label, identity} <- identity_specimens()}
+              :key={label}
+              name={~s|<.ds_identity size="lg" square stacked> #{label}|}
+            >
+              <.ds_identity identity={identity} size="lg" square stacked agent_marker={false} />
             </.specimen>
           </div>
         </.catalog_section>
@@ -740,6 +743,29 @@ defmodule ReviewsWeb.DesignLive do
       </div>
     </section>
     """
+  end
+
+  # A person with a GitHub avatar, an agent with its provider logo, and a
+  # person without avatar_url, for the identity specimens.
+  defp identity_specimens do
+    [
+      {"person",
+       %{
+         kind: "human",
+         handle: "octocat",
+         display_name: "The Octocat",
+         avatar_url: "https://avatars.githubusercontent.com/u/583231?v=4"
+       }},
+      {"agent",
+       %{
+         kind: "agent",
+         handle: "claude",
+         display_name: "Claude",
+         avatar_url: ~p"/images/connectors/claude.png"
+       }},
+      {"no avatar_url",
+       %{kind: "human", handle: "reviews-demo", display_name: "reviews-demo", avatar_url: nil}}
+    ]
   end
 
   attr :name, :string, required: true

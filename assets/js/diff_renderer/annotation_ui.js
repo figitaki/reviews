@@ -199,49 +199,32 @@ export function groupCommentsByAuthor(comments) {
   return out
 }
 
-function avatar(user, size = 20) {
+// The same markup and classes as <.ds_avatar_mark> and <.ds_identity>
+// (design_system_components.ex), styled by product-shell.css: annotations
+// live in the light DOM, so those classes apply here.
+export function avatar(user, size = "sm") {
   if (!user) return null
-  if (user.avatar_url) {
-    return el("img", {
-      src: user.avatar_url,
-      alt: "",
-      width: size,
-      height: size,
-      loading: "lazy",
-      decoding: "async",
-      style: {
-        display: "inline-block",
-        width: `${size}px`,
-        height: `${size}px`,
-        borderRadius: "50%",
-        verticalAlign: "middle",
-        background: colors.raised,
-        flex: "0 0 auto",
-      },
-    })
-  }
-  const initial = (user.username || "?").slice(0, 1).toUpperCase()
-  return el(
-    "span",
-    {
-      "aria-hidden": "true",
-      style: {
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: `${size}px`,
-        height: `${size}px`,
-        borderRadius: "50%",
-        fontSize: "11px",
-        fontWeight: "700",
-        color: colors.muted,
-        background: colors.raised,
-        border: `1px solid ${colors.line}`,
-        flex: "0 0 auto",
-      },
-    },
-    initial
-  )
+  const handle = user.handle || user.username
+  return el("span", { className: `ds-avatar-mark is-${size} is-round`, "aria-hidden": "true" }, [
+    user.avatar_url
+      ? el("img", { src: user.avatar_url, alt: "", loading: "lazy", decoding: "async" })
+      : el("span", {}, (handle || user.display_name || "?").trim().slice(0, 1).toUpperCase() || "?"),
+  ])
+}
+
+export function identity(user, size = "sm") {
+  if (!user) return el("span", { className: "ds-identity-name" }, "reviewer")
+  const handle = user.handle || user.username
+  const name = user.display_name || handle
+  const showHandle = handle && name.toLowerCase() !== handle.toLowerCase()
+  return el("span", { className: `ds-identity is-${size}` }, [
+    avatar(user, size),
+    el("span", { className: "ds-identity-text" }, [
+      el("span", { className: "ds-identity-name" }, name),
+      showHandle ? el("span", { className: "ds-identity-handle", translate: "no" }, `@${handle}`) : null,
+      user.kind === "agent" ? el("span", { className: "ds-identity-agent" }, "Agent") : null,
+    ]),
+  ])
 }
 
 export function threadStatusBadge(status) {
@@ -626,8 +609,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
     commentRows.push(
       el("li", { style: { marginTop: index ? "8px" : "0" }, dataset: { commentId: run.comments[0]?.id } }, [
         el("header", { style: threadRunHeaderStyle }, [
-          avatar(run.author),
-          el("span", {}, who),
+          identity(run.author),
           commentMeta(run.comments[0], true),
         ]),
         el("ul", { className: "review-thread-comments", style: threadRunCommentsStyle }, comments),

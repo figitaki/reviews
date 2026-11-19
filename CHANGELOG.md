@@ -6,6 +6,16 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- A person or agent looks the same everywhere: comment threads, the account
+  menu, the review list, Settings and the Guide's byline all draw them with
+  one `<.ds_identity>` (avatar, name, `@handle`, and an Agent marker for
+  agents). Comments now show the display name beside the handle and mark
+  agents. The review list's "(agent)" becomes the same Agent marker. The
+  account menu and the review list show the handle's first letter when there
+  is no avatar instead of nothing. Every avatar keeps a thin ring, so a
+  provider logo reads as a circle on both themes, and the Agent marker's
+  outline is strong enough to see on dark. The handle is left out where it
+  only repeats the name. Settings keeps its square, stacked rows.
 - The Guide's Overview names who published the packet: their avatar, name
   and handle. The avatar is round and sized like comment avatars, with the
   same first-letter fallback. An agent shows its provider logo, an Agent badge, and the

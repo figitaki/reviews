@@ -254,7 +254,6 @@
 }
 
 .ds-settings-row h3,
-.ds-identity-row h3,
 .ds-token-group h3{
   margin: 0;
   color: var(--ds-text);
@@ -263,8 +262,7 @@
   line-height: 1.25;
 }
 
-.ds-settings-row p,
-.ds-identity-row p{
+.ds-settings-row p{
   margin: 4px 0 0;
   color: var(--ds-muted);
   font-size: 0.75rem;
@@ -377,7 +375,7 @@ textarea.ds-input{
 
 .ds-identity-row{
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) minmax(0, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   gap: 12px;
   align-items: center;
   border: 1px solid var(--ds-line);
@@ -386,18 +384,25 @@ textarea.ds-input{
   padding: 12px;
 }
 
+/* <.ds_avatar_mark> and <.ds_identity>; comment threads draw the same
+   classes in JS (annotation_ui.js). Every avatar keeps its hairline ring,
+   so a provider logo on white (Claude, ChatGPT…) or on black (Amp) still
+   reads as a circle on either theme. */
 .ds-avatar-mark{
   display: inline-grid;
-  width: 36px;
-  height: 36px;
+  flex: none;
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--ds-line-strong);
-  border-radius: 8px;
-  background: var(--ds-hover);
-  color: var(--ds-text);
-  font-size: 0.8125rem;
-  font-weight: 760;
+  border-radius: var(--radius-md);
+  background: var(--ds-panel-raised);
+  color: var(--ds-muted);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ds-avatar-mark.is-round{
+  border-radius: 50%;
 }
 
 .ds-avatar-mark img{
@@ -406,25 +411,91 @@ textarea.ds-input{
   object-fit: cover;
 }
 
-/* Matches comment-thread avatars: a 20px circle, a hairline only around the letter. */
-.ds-avatar-mark.is-round{
-  flex: none;
-  width: 1.25rem;
-  height: 1.25rem;
-  border: 1px solid var(--ds-line);
-  border-radius: 50%;
-  background: var(--ds-panel-raised);
+.ds-avatar-mark.is-xs{ width: 1rem; height: 1rem; font-size: 0.5625rem; }
+.ds-avatar-mark.is-sm{ width: 1.25rem; height: 1.25rem; font-size: 0.6875rem; }
+.ds-avatar-mark.is-md{ width: 1.5rem; height: 1.5rem; font-size: 0.75rem; }
+
+/* Settings' square rows keep their raised, stronger-edged tile. */
+.ds-avatar-mark.is-lg{
+  width: 2.25rem;
+  height: 2.25rem;
+  border-color: var(--ds-line-strong);
+  background: var(--ds-hover);
+  color: var(--ds-text);
+  font-size: 0.8125rem;
+  font-weight: 760;
+}
+
+.ds-identity{
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ds-identity.is-lg{
+  gap: 0.75rem;
+}
+
+.ds-identity-text{
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-width: 0;
+}
+
+.ds-identity-name{
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ds-text);
+  font-weight: 650;
+}
+
+.ds-identity-handle{
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ds-muted);
+  font-weight: 400;
+}
+
+/* Only the name is bold, so a handle-only identity (the review list) keeps
+   the text colour it sits in. */
+.ds-identity-text > .ds-identity-handle:first-child{
+  color: inherit;
+}
+
+/* The outline mixes from the muted text colour, so it reads on both
+   themes; --ds-line is nearly invisible on dark. */
+.ds-identity-agent{
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--ds-muted) 60%, transparent);
+  border-radius: var(--radius-pill);
+  padding: 0 0.375rem;
   color: var(--ds-muted);
   font-size: 0.6875rem;
-  font-weight: 700;
+  font-weight: 650;
+  line-height: 1.45;
 }
 
-.ds-avatar-mark.is-round:has(img){
-  border: 0;
+/* Settings: the handle under the name. */
+.ds-identity.is-stacked .ds-identity-text{
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
 }
 
-.ds-identity-main{
-  min-width: 0;
+.ds-identity.is-stacked .ds-identity-name{
+  font-size: 0.875rem;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.ds-identity.is-stacked .ds-identity-handle{
+  margin-top: 4px;
+  font-size: 0.75rem;
 }
 
 .ds-identity-meta{
@@ -1175,6 +1246,12 @@ label.consent-scope:hover{
     justify-content: flex-start;
   }
 
+  /* Phones stack the avatar over the name, as before <.ds_identity>. */
+  .ds-identity-row .ds-identity{
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .ds-settings-form-submit{
     margin-bottom: 0;
   }
@@ -1285,18 +1362,20 @@ label.consent-scope:hover{
   }
 }
 
-.account-menu-avatar {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-pill);
-  object-fit: cover;
-}
-
 /* The name is trimmed to cap height (.ds-label), so it clips only
    sideways: a vertical clip would cut the "g" and "y" in "gypsy". Browsers
    without `clip` keep `hidden`; they lack text-box too, so nothing is
    trimmed there. */
+/* The name is the button's label, so it keeps the button's weight. */
+.account-menu-button .ds-identity-text {
+  flex-wrap: nowrap;
+}
+
+.account-menu-button .ds-identity-name {
+  color: inherit;
+  font-weight: inherit;
+}
+
 .account-menu-name {
   min-width: 0;
   overflow: hidden;
