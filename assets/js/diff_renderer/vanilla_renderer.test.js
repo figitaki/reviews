@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, mock, test } from "bun:test"
 // Pierre needs a real DOM, so stand-ins record what the renderer asks of it.
 // The virtualized stand-in renders only rows near the viewport: thread
 // bubbles outside that window exist but have no boxes until it scrolls there.
-const calls = { fileDiff: 0, scrolls: [] }
+const calls = { fileDiff: 0, virtualized: 0, scrolls: [] }
 
 class FakeVirtualizer {
   setup() {}
@@ -16,8 +16,11 @@ class FakeVirtualizedFileDiff {
   constructor(options, virtualizer, metrics, workers) {
     this.options = options
     this.workers = workers
+    calls.virtualized += 1
   }
   render() { this.options.onPostRender?.(null, this, "mount") }
+  setOptions(options) { this.options = options }
+  rerender() { this.options.onPostRender?.(null, this, "update") }
   getLinePosition(lineNumber, side) { return side === "additions" ? { top: lineNumber * 20, height: 20 } : undefined }
   cleanUp() {}
 }
@@ -25,6 +28,7 @@ class FakeVirtualizedFileDiff {
 class FakeFileDiff extends FakeVirtualizedFileDiff {
   constructor(options, workers) {
     super(options, null, null, workers)
+    calls.virtualized -= 1
     calls.fileDiff += 1
   }
 }
@@ -42,6 +46,7 @@ mock.module("./worker_pool.js", () => ({
   highlightWorkers: () => workers,
 }))
 const { VanillaDiffRenderer } = await import("./vanilla_renderer.js")
+const { default: DiffRendererHook } = await import("../hooks/diff_renderer.js")
 
 function fakeElement(extra = {}) {
   return {
@@ -62,7 +67,8 @@ function fakeElement(extra = {}) {
 
 const saved = {}
 beforeAll(() => {
-  for (const key of ["window", "document", "requestAnimationFrame"]) saved[key] = globalThis[key]
+  for (const key of ["window", "document", "requestAnimationFrame", "MutationObserver"]) saved[key] = globalThis[key]
+  globalThis.MutationObserver = class { observe() {} disconnect() {} }
   const media = { matches: false, addEventListener() {}, removeEventListener() {} }
   globalThis.window = { matchMedia: () => media, innerHeight: 900, location: { pathname: "/r/x" } }
   globalThis.document = {
@@ -121,7 +127,61 @@ test("opening a thread keeps a large file virtualized and focuses the thread aft
   expect(calls.scrolls).toHaveLength(1)
 })
 
+test("collapsing a file shows at once, survives the server's patches, and reuses the highlighted render", async () => {
+  calls.fileDiff = 0
+  calls.virtualized = 0
+  const dataset = {
+    filePath: "big.js", rawDiff, threads: "[]", signedIn: "true", diffStyle: "split",
+    hunkId: "file-diff-1", hunkExpanded: "true", hunkViewed: "false", hunkPartiallyViewed: "false",
+  }
+  const replies = []
+  const pushed = []
+  const hook = Object.create(DiffRendererHook)
+  Object.assign(hook, {
+    el: fakeElement({ dataset }),
+    handleEvent() {},
+    pushEvent(event, payload) {
+      pushed.push([event, payload])
+      return new Promise((resolve) => replies.push(resolve))
+    },
+  })
+  hook.mounted()
+  const pierre = hook._renderer.instance
+  expect(calls.virtualized).toBe(1)
+  expect(pierre.options.collapsed).toBe(false)
+
+  // The chevron collapses the file before the server answers.
+  hook._renderer.onToggleHunk()
+  expect(pushed).toEqual([["toggle_hunk_diff", { hunk_id: "file-diff-1" }]])
+  expect(pierre.options.collapsed).toBe(true)
+
+  // A patch that does not carry the change yet must not reopen the file.
+  hook.updated()
+  expect(pierre.options.collapsed).toBe(true)
+
+  // The server's reply patches the same state and settles the event.
+  dataset.hunkExpanded = "false"
+  hook.updated()
+  replies.shift()()
+  await Promise.resolve()
+  expect(pierre.options.collapsed).toBe(true)
+
+  // Expanding again shows at once and keeps the same Pierre instance, so the
+  // file is not highlighted again.
+  hook._renderer.onToggleHunk()
+  expect(pierre.options.collapsed).toBe(false)
+  dataset.hunkExpanded = "true"
+  hook.updated()
+  replies.shift()()
+  await Promise.resolve()
+  expect(hook._renderer.instance).toBe(pierre)
+  expect(pierre.options.collapsed).toBe(false)
+  expect(calls.virtualized).toBe(1)
+  expect(calls.fileDiff).toBe(0)
+})
+
 test("large and small files highlight through the worker pool in both themes", () => {
+  calls.fileDiff = 0
   const renderer = new VanillaDiffRenderer({
     container: fakeElement(), filePath: "big.js", rawDiff, signedIn: false,
     threads: [], diffStyle: "split", hunkUI: null,

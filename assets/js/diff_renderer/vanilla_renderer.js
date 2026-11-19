@@ -328,6 +328,15 @@ export class VanillaDiffRenderer {
     if (JSON.stringify(next) === JSON.stringify(this.hunkUI)) return
     this.hunkUI = next
     const focused = this.focusedHeaderControl()
+    if (this.instance && !this.hasMarkdownPreview) {
+      // Collapse, expand and Mark viewed change only Pierre's header and its
+      // collapsed option. Keeping the instance keeps its highlighted lines, so
+      // expanding again does not tokenize the whole file again.
+      this.pendingHeaderFocus = focused
+      this.instance.setOptions(this.options())
+      this.instance.rerender()
+      return
+    }
     this.render()
     if (this.focusSourceOnExpand && !this.collapsed()) {
       this.focusSourceOnExpand = false
@@ -705,6 +714,10 @@ export class VanillaDiffRenderer {
         if (phase === "unmount") return
         this.placeThreadMarkers()
         this.focusPendingThread()
+        if (this.pendingHeaderFocus) {
+          this.restoreHeaderFocus(this.pendingHeaderFocus)
+          this.pendingHeaderFocus = null
+        }
       },
       enableGutterUtility: true,
       onGutterUtilityClick: (range) => this.commentFromGutter(range),
@@ -786,8 +799,9 @@ export class VanillaDiffRenderer {
   renderSource(options) {
     const renderArgs = this.renderArgs()
 
+    // Large files virtualize even while collapsed, so the instance that
+    // expands them later is the one that already highlighted them.
     if (
-      !this.collapsed() &&
       shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
     ) {
       if (this.tryRenderVirtualized(options, renderArgs)) return

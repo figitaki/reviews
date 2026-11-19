@@ -65,16 +65,42 @@ const DiffRenderer = {
       }
     }
 
+    // Collapse, expand and Mark viewed show at once; the server saves them in
+    // the background. While events are in flight their change wins over the
+    // patched dataset, and the last reply hands state back to the dataset.
+    this._pending = 0
+    this._optimistic = null
+    const pushIslandChange = (change, event, payload) => {
+      this._pending += 1
+      this._optimistic = { ...this._optimistic, ...change }
+      this.syncIsland()
+      const settle = () => {
+        this._pending -= 1
+        if (this._pending > 0) return
+        this._optimistic = null
+        this.syncIsland()
+      }
+      this.pushEvent(event, payload).then(settle, settle)
+    }
+
     const onToggleHunk = () => {
       if (!this._island) return
-      this.pushEvent("toggle_hunk_diff", { hunk_id: this._island.hunkId })
+      pushIslandChange(
+        { hunkExpanded: !this._island.hunkExpanded },
+        "toggle_hunk_diff",
+        { hunk_id: this._island.hunkId }
+      )
     }
 
     const onSetHunkViewed = (viewed) => {
       if (!this._island) return
       try {
         const payload = hunkViewPayload(this._island)
-        this.pushEvent(viewed ? "mark_hunk_viewed" : "mark_hunk_unviewed", payload)
+        pushIslandChange(
+          { hunkViewed: viewed, hunkExpanded: !viewed },
+          viewed ? "mark_hunk_viewed" : "mark_hunk_unviewed",
+          payload
+        )
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error("[DiffRenderer] invalid hunk view payload:", err)
@@ -126,11 +152,16 @@ const DiffRenderer = {
   },
 
   updated() {
+    this.syncIsland()
+  },
+
+  syncIsland() {
     // Children are phx-update="ignore"; only the data-* attributes change.
     // The dataset is the single state channel: diff style and hunk UI state
-    // both sync from the patched attributes.
-    this._island = parseIsland(this.el.dataset)
-    if (!this._island) return
+    // both sync from the patched attributes, under any change still saving.
+    const island = parseIsland(this.el.dataset)
+    if (!island) return
+    this._island = { ...island, ...this._optimistic }
     this._renderer?.updateStyle(this._island.diffStyle)
     this._renderer?.updateHunkUI(this._island)
   },
