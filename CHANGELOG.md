@@ -30,6 +30,10 @@ working.
   and post as the agent you chose. Agents and CLIs that use a Reviews API
   token, such as Claude Code, Codex and Amp, keep working. See
   `docs/MCP.md`.
+- **The Reviews icon.** The Reviews mark, the R in a rounded square from the
+  top bar, is now the favicon, the home-screen icon and the icon `/mcp`
+  advertises in `serverInfo.icons`. Claude shows a custom connector with its
+  site's favicon, so it shows this mark instead of a plain letter.
 - **Delete a review.** The owner can delete a review for good from the
   review page's options menu, `reviews delete <slug>`, or the API. You
   confirm by typing the slug, and the warning says when other people's or
