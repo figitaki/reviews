@@ -588,6 +588,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           aria-controls={"packet-section-#{@section.index}-decision-controls"}
           phx-click="toggle_section_decision"
           phx-value-section_index={@section.index}
+          phx-value-open={to_string(!@editing)}
         >
           <%= cond do %>
             <% @editing -> %>
@@ -621,7 +622,19 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         mounted() {
           this.editing = this.el.dataset.editing
           const control = this.el.querySelector(".review-section-decision-control")
-          const close = () => this.el.querySelector("[aria-expanded='true']")?.click()
+          // One close at a time: a second outside click or Escape before the
+          // closed state arrives is ignored. The server also treats a repeated
+          // close as a no-op. A lost reply clears the pending flag after a
+          // few seconds, and reconnecting clears it at once.
+          const close = () => {
+            if (this.closing) return
+            const toggle = this.el.querySelector("[aria-expanded='true']")
+            if (!toggle) return
+            this.closing = true
+            clearTimeout(this.closingTimer)
+            this.closingTimer = setTimeout(() => { this.closing = false }, 4000)
+            this.pushEvent("toggle_section_decision", {section_index: toggle.getAttribute("phx-value-section_index"), open: "false"})
+          }
           // While open, Escape or a click anywhere outside the control closes it.
           this.onKey = event => {
             if (event.key === "Escape" && this.el.dataset.editing === "true") {
@@ -642,6 +655,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         },
         updated() {
           const editing = this.el.dataset.editing
+          if (editing !== "true") {
+            this.closing = false
+            clearTimeout(this.closingTimer)
+          }
           if (editing !== this.editing && this.keepFocus) {
             this.keepFocus = false
           } else if (editing !== this.editing) {
@@ -652,7 +669,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           }
           this.editing = editing
         },
+        reconnected() {
+          this.closing = false
+        },
         destroyed() {
+          clearTimeout(this.closingTimer)
           document.removeEventListener("keydown", this.onKey, true)
           document.removeEventListener("click", this.onClick, true)
         }

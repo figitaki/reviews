@@ -1855,6 +1855,21 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#packet-section-0-decision-toggle") |> render_click()
       view |> element("#packet-section-0-decision-toggle") |> render_click()
       assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
+
+      # Two quick outside clicks or Escapes send two closes; the second must
+      # not reopen the choices.
+      view |> element("#packet-section-0-decision-toggle") |> render_click()
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=true]")
+
+      for _ <- 1..2,
+          do: render_hook(view, "toggle_section_decision", %{section_index: "0", open: "false"})
+
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
+      render_hook(view, "toggle_section_decision", %{section_index: "0", open: "true"})
+      render_hook(view, "toggle_section_decision", %{section_index: "0", open: "true"})
+      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=true]")
+      render_hook(view, "toggle_section_decision", %{section_index: "0", open: "false"})
+
       view |> element("#packet-section-0-decision-toggle") |> render_click()
       view |> element("#packet-section-0-decision-controls button", "Approve") |> render_click()
       assert has_element?(view, "#packet-section-0.is-open")

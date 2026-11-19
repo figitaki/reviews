@@ -93,8 +93,15 @@ defmodule ReviewsWeb.DesignComponentsLive do
   def handle_event("mark_hunk_unviewed", _params, socket),
     do: {:noreply, assign(socket, hunk_viewed: false)}
 
-  def handle_event("toggle_section_decision", %{"section_index" => index}, socket) do
-    {:noreply, update_decision(socket, index, &%{&1 | editing: !&1.editing})}
+  def handle_event("toggle_section_decision", %{"section_index" => index} = params, socket) do
+    {:noreply,
+     update_decision(socket, index, fn decision ->
+       %{
+         decision
+         | editing:
+             Map.get(%{"true" => true, "false" => false}, params["open"], !decision.editing)
+       }
+     end)}
   end
 
   # Selecting the current status again clears it, as on the review page.
