@@ -11,6 +11,7 @@ defmodule ReviewsWeb.LinkPreview do
 
   @site_name "Reviews"
   @description_limit 300
+  @input_limit 4000
 
   @doc "Preview tags for `review`, or for the comment the params name on it."
   def build(review, threads, params, url) do
@@ -77,8 +78,15 @@ defmodule ReviewsWeb.LinkPreview do
   def plain_text(markdown) do
     # Code keeps its text as written, so `__init__` stays `__init__`. Each
     # code block or span is set aside as a placeholder while the prose loses
-    # its Markdown, then put back.
-    {prose, code} = set_aside_code(markdown)
+    # its Markdown, then put back. Only a prefix is read, since the result is
+    # cut near 300 characters anyway. The marker characters
+    # are private-use and never shown, so literal ones are dropped and only
+    # placeholders made here are put back.
+    {prose, code} =
+      markdown
+      |> String.slice(0, @input_limit)
+      |> String.replace(["\u{E000}", "\u{E001}"], "")
+      |> set_aside_code()
 
     prose
     |> String.replace(~r/!\[([^\]]*)\]\([^)]*\)/, "\\1")
@@ -88,7 +96,7 @@ defmodule ReviewsWeb.LinkPreview do
     |> String.replace(~r/(?<![\w*])[*_](?=\S)(.+?)(?<=\S)[*_](?![\w*])/u, "\\1")
     |> then(
       &Regex.replace(~r/\x{E000}(\d+)\x{E001}/u, &1, fn _, i ->
-        Enum.at(code, String.to_integer(i))
+        Map.fetch!(code, String.to_integer(i))
       end)
     )
     |> String.replace(~r/\s+/u, " ")
@@ -104,10 +112,11 @@ defmodule ReviewsWeb.LinkPreview do
     {prose, code} =
       @code
       |> Regex.split(markdown, include_captures: true)
-      |> Enum.reduce({[], []}, fn part, {prose, code} ->
+      |> Enum.reduce({[], %{}}, fn part, {prose, code} ->
         case Regex.run(@code, part) do
           [^part | groups] ->
-            {[prose, "\u{E000}#{length(code)}\u{E001}"], code ++ [code_text(groups)]}
+            index = map_size(code)
+            {[prose, "\u{E000}#{index}\u{E001}"], Map.put(code, index, code_text(groups))}
 
           _ ->
             {[prose, part], code}

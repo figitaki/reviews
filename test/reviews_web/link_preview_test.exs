@@ -22,4 +22,20 @@ defmodule ReviewsWeb.LinkPreviewTest do
       assert LinkPreview.plain_text(markdown) == text, "for #{inspect(markdown)}"
     end
   end
+
+  test "plain_text ignores literal placeholder characters in the text" do
+    assert LinkPreview.plain_text("text \u{E000}0\u{E001} only") == "text 0 only"
+
+    assert LinkPreview.plain_text("`a` then \u{E000}0\u{E001} and \u{E000}9\u{E001}") ==
+             "a then 0 and 9"
+  end
+
+  test "plain_text stays fast on a body with thousands of code spans" do
+    body = String.duplicate("x `a` ", 50_000)
+    {microseconds, text} = :timer.tc(fn -> LinkPreview.plain_text(body) end)
+
+    assert String.starts_with?(text, "x a x a")
+    assert String.ends_with?(text, "…")
+    assert microseconds < 500_000
+  end
 end
