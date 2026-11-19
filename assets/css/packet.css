@@ -1459,6 +1459,41 @@ details[open] > summary .review-collapse-icon,
   text-overflow: ellipsis;
 }
 
+/* Optical centring: each label's line box is trimmed to its x-height band
+   (top of x, baseline), so flex centring puts the lowercase letters, not the
+   line box, on the control's centre line, level with the icon. Clipping
+   labels clip only sideways, so ascenders and descenders outside the trimmed
+   box still show. Without text-box support the label moves down by the
+   measured offset instead. */
+.review-section-decision-toggle-label,
+.review-section-step-label > span,
+.review-section-decision .review-section-action .review-section-action-label {
+  text-box: trim-both ex alphabetic;
+}
+
+.review-section-step-label,
+.review-section-step-title,
+.review-section-decision .review-section-action .review-section-action-label {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.review-section-decision-toggle > svg,
+.review-section-decision-toggle > [class*="hero-"],
+.review-section-step > [class*="hero-"],
+.review-section-decision .review-section-action > * {
+  display: block;
+}
+
+@supports not (text-box: trim-both ex alphabetic) {
+  .review-section-decision-toggle-label,
+  .review-section-step-label > span,
+  .review-section-decision .review-section-action .review-section-action-label {
+    position: relative;
+    top: 0.05em;
+  }
+}
+
 /* Expanded, the choices float above the control on their own, with no
    card around them: Request changes, Skip and Approve in one row, Skip
    centred over the pill. Equal side columns keep Skip on the centre line.
