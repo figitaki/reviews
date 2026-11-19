@@ -419,6 +419,16 @@ defmodule ReviewsWeb.DesignComponentsLive do
           </div>
         </DesignLive.catalog_section>
 
+        <DesignLive.catalog_section :let={theme} id="dcp-prose" title="Packet prose">
+          <:rules>
+            <li>Packet text between hunks, as the review page renders it.</li>
+            <li>Raw HTML shows as text. Images load only from bundled <code>/images</code>.</li>
+          </:rules>
+          <div class="review-packet-row is-markdown">
+            <PacketComponents.markdown id={"dcp-prose-#{theme}"} body={DesignFixtures.markdown()} />
+          </div>
+        </DesignLive.catalog_section>
+
         <DesignLive.catalog_section :let={theme} id="dcp-composer" title="Comment composer">
           <:rules>
             <li>Comment stays disabled until there is text. ⌘ Enter or Ctrl Enter posts.</li>

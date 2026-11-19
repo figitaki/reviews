@@ -48,8 +48,36 @@ defmodule ReviewsWeb.DesignFixtures do
       |> Map.merge(%{resolved_by: carey, resolved_at: ago(now, 3 * 86_400 - 600)}),
       thread(103, "open", 44, "new", carey, [
         comment(1007, carey, ago(now, 90), "Nit: `relocate/3` reads better than `move/3`.")
-      ])
+      ]),
+      thread(104, "open", 45, "new", sam, [comment(1008, sam, ago(now, 60), markdown())])
     ]
+  end
+
+  @doc "Markdown with every block the packet and comments render, for comparing renderers."
+  def markdown do
+    """
+    ### Retry once, then give up
+
+    The anchor can move when a revision rewrites nearby lines. See the
+    [anchoring plan](https://github.com/figitaki/reviews) and `Anchoring.relocate/3`.
+
+    - Retry **once**, then mark the thread *outdated*
+    - Keep `{:error, :outdated}` for callers
+      1. A nested step
+
+    > Threads carry across revisions by content, not line numbers.
+
+    | Case | Result |
+    | --- | --- |
+    | Anchor found | `{:ok, anchor}` |
+    | Anchor moved | retry |
+
+    ```elixir
+    case Anchoring.relocate(anchor, patchset) do
+      {:ok, anchor} -> update_anchor(thread, anchor)
+    end
+    ```
+    """
   end
 
   @diff """
