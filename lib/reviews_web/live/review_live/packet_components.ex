@@ -486,20 +486,24 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           id={"packet-section-#{@section.index}-decision-controls"}
           class="review-section-decision-panel"
           role="group"
-          aria-label={"Decision for #{@section.title}"}
+          aria-label={
+            Enum.join(
+              [
+                "Decision for #{@section.title}: #{section_decision_state_label(@section)}.",
+                @section.decision_history
+              ]
+              |> Enum.reject(&is_nil/1),
+              " "
+            )
+          }
         >
-          <p class="review-section-decision-prompt" role="status">
-            <span class="review-section-decision-heading">Section decision:</span>
-            <span>{section_decision_state_label(@section)}</span>
-          </p>
-          <p :if={@section.decision_history} class="review-section-decision-history">
-            {@section.decision_history}
-          </p>
+          <%!-- The choices float on their own, Request changes, Skip, Approve,
+          with Skip above the pill. The state is in the header and the label. --%>
           <div class="review-packet-section-actions">
             <%= cond do %>
               <% @can_decide -> %>
                 <button
-                  :for={status <- ~w(approved denied ignored)}
+                  :for={status <- ~w(denied ignored approved)}
                   :key={status}
                   type="button"
                   class={[
@@ -524,7 +528,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 >
                   <.section_status_icon status={status} />
                   <span class="review-section-action-label" aria-hidden="true">
-                    {section_status_label(status)}
+                    <span class="review-section-action-full">{section_status_label(status)}</span>
+                    <span :if={status == "denied"} class="review-section-action-short">
+                      Changes
+                    </span>
                   </span>
                 </button>
               <% @current_user -> %>

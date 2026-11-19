@@ -1455,21 +1455,17 @@ details[open] > summary .review-collapse-icon,
   text-overflow: ellipsis;
 }
 
-/* Expanded, the decisions open above the control. */
+/* Expanded, the choices float above the control on their own, with no
+   card around them: Request changes, Skip and Approve in one row, Skip
+   centred over the pill. Equal side columns keep Skip on the centre line.
+   Each choice and note brings its own solid background and shadow so it
+   stays readable over code and prose. */
 .review-section-decision-panel {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 12px);
   left: 50%;
-  display: grid;
-  justify-items: center;
-  gap: 8px;
   width: max-content;
   max-width: calc(100vw - 32px);
-  border: 1px solid var(--review-line-strong);
-  border-radius: var(--radius-lg);
-  padding: 12px;
-  background: var(--review-panel-raised);
-  box-shadow: var(--shadow-float);
   transform: translateX(-50%);
 }
 
@@ -1477,33 +1473,19 @@ details[open] > summary .review-collapse-icon,
   display: none;
 }
 
-.review-section-decision-prompt {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px;
-  margin: 0;
-  color: var(--review-text);
-  font-size: var(--font-meta-size);
-  font-weight: var(--font-ui-weight);
-  line-height: var(--font-meta-leading);
-}
-
-.review-section-decision-heading {
-  color: var(--review-muted);
-}
-
-.review-section-decision-history {
-  margin: 0;
-  color: var(--review-warn);
-  font-size: var(--font-meta-size);
-  font-weight: var(--font-meta-weight);
-  line-height: var(--font-meta-leading);
-  text-align: center;
-}
-
 .review-section-decision .review-packet-section-actions {
-  justify-content: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.review-section-decision .review-section-action.is-denied {
+  justify-self: end;
+}
+
+.review-section-decision .review-section-action.is-approved {
+  justify-self: start;
 }
 
 .review-section-decision .review-section-action,
@@ -1511,9 +1493,21 @@ details[open] > summary .review-collapse-icon,
 .review-section-decision .review-section-action:focus-visible,
 .review-section-decision .review-section-action.is-active {
   width: auto;
-  height: 36px;
+  height: 40px;
   gap: 6px;
-  padding: 0 12px 0 10px;
+  padding: 0 14px 0 12px;
+  background-color: var(--review-panel-raised);
+  box-shadow: var(--shadow-float);
+}
+
+/* The hover and selected tints are translucent; layer them on the solid
+   background so code never shows through. */
+.review-section-decision .review-section-action.is-approved:is(:hover, .is-active) {
+  background: linear-gradient(color-mix(in oklab, var(--review-add) 16%, transparent) 0 0), var(--review-panel-raised);
+}
+
+.review-section-decision .review-section-action.is-denied:is(:hover, .is-active) {
+  background: linear-gradient(color-mix(in oklab, var(--review-del) 16%, transparent) 0 0), var(--review-panel-raised);
 }
 
 .review-section-decision .review-section-action .review-section-action-label {
@@ -1521,8 +1515,45 @@ details[open] > summary .review-collapse-icon,
   opacity: 1;
 }
 
+/* As on the pill, focus covers the border so it shows one outline. */
+.review-section-decision .review-section-action:focus-visible,
+.review-section-decision .review-packet-section-signin:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -1px;
+}
+
+.review-section-action-short {
+  display: none;
+}
+
+/* Phones: three full-size choices with Skip centred need ~420px, so
+   Request changes shows "Changes"; its accessible name stays in full. */
+@media (max-width: 640px) {
+  .review-section-decision .review-section-action.is-denied .review-section-action-full {
+    display: none;
+  }
+
+  .review-section-decision .review-section-action.is-denied .review-section-action-short {
+    display: inline;
+  }
+}
+
+/* Non-owners get the owner-only note and signed-out readers the sign-in
+   button, each floating alone on the centre line like the choices. */
+.review-section-decision .review-packet-section-note,
+.review-section-decision .review-packet-section-signin {
+  grid-column: 1 / -1;
+  justify-self: center;
+  box-shadow: var(--shadow-float);
+}
+
 .review-section-decision .review-packet-section-note {
-  max-width: 18rem;
+  max-width: min(20rem, calc(100vw - 32px));
+  box-sizing: border-box;
+  border: 1px solid var(--review-line-strong);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  background: var(--review-panel-raised);
   text-align: center;
 }
 

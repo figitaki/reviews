@@ -12,7 +12,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   "Next:" and "Begin review" button at the end of each section and the
   old corner decision button and shelf. The pill shows your decision on the
   current version (Approved, Changes requested or Skipped), or "Decide".
-  Clicking it opens Approve, Request changes and Skip above it and reads
+  Clicking it floats Request changes, Skip and Approve in a row above it,
+  with no panel around them and Skip over the pill (on phones the first
+  reads "Changes"), and reads
   "Dismiss"; choosing one, clicking elsewhere, clicking it again or Escape
   closes it. Readers who are not the owner see the owner-only note there,
   and signed-out readers a sign-in link. The bar is fixed to the bottom of

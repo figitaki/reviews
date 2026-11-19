@@ -1774,7 +1774,10 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#review-guide-tick-0") |> render_click()
       assert has_element?(view, "#packet-section-0.is-open")
 
-      assert has_element?(view, "#packet-section-0-decision.is-pending", "Pending")
+      assert has_element?(
+               view,
+               "#packet-section-0-decision.is-pending #packet-section-0-decision-controls[aria-label^='Decision for Main change: Pending']"
+             )
 
       assert has_element?(
                view,
@@ -1785,7 +1788,12 @@ defmodule ReviewsWeb.ReviewLiveTest do
       view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
       assert has_element?(view, "#packet-section-0-decision.is-ignored", "Skipped")
       view |> element("#packet-section-0-decision-controls button", "Skip") |> render_click()
-      assert has_element?(view, "#packet-section-0-decision.is-pending", "Pending")
+
+      assert has_element?(
+               view,
+               "#packet-section-0-decision.is-pending #packet-section-0-decision-controls[aria-label^='Decision for Main change: Pending']"
+             )
+
       view |> element("#packet-section-0-decision-toggle") |> render_click()
 
       assert has_element?(
@@ -1943,8 +1951,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                latest_view,
-               "#packet-section-0-decision .review-section-decision-history",
-               "Previously approved in v1"
+               "#packet-section-0-decision-controls[aria-label='Decision for Main change: Pending for this revision. Previously approved in v1; outdated for v2.']"
              )
 
       assert has_element?(latest_view, "#packet-section-0 .review-packet-section-actions")
@@ -2004,8 +2011,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                carried_view,
-               "#packet-section-0-decision.is-ignored",
-               "Skipped (carried forward)"
+               "#packet-section-0-decision.is-ignored #packet-section-0-decision-controls[aria-label='Decision for Main change: Skipped (carried forward).']"
              )
 
       assert has_element?(
