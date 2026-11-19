@@ -11,7 +11,7 @@ defmodule ReviewsWeb.ReviewLive.DeleteReviewComponents do
       <button
         tabindex="0"
         type="button"
-        class="review-button review-button-secondary"
+        class="review-button review-button-secondary review-owner-menu-button"
         aria-label="Review options"
         title="Review options"
       >

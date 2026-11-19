@@ -37,8 +37,8 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
           phx-click="toggle_packet_outline"
           aria-label="Show section navigation"
         >
-          <span class="review-outline-toggle-full">Show navigation</span>
-          <span class="review-outline-toggle-short" aria-hidden="true">Sections</span>
+          <span class="review-outline-toggle-full ds-label">Show navigation</span>
+          <span class="review-outline-toggle-short ds-label" aria-hidden="true">Sections</span>
         </button>
         <.form
           :if={@nav.revision_count > 1}
@@ -98,7 +98,7 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
                 )
               }
             >
-              v{revision.number}
+              <span class="ds-label">v{revision.number}</span>
             </button>
           </div>
           <button
@@ -133,7 +133,7 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
             aria-selected={if(@live_action != :changes, do: "true", else: "false")}
           >
             <.icon name="hero-book-open" class="review-code-view-icon size-[18px]" />
-            <span class="review-code-view-label">Guide</span>
+            <span class="review-code-view-label ds-label">Guide</span>
           </.link>
           <.link
             id="code-view-diff"
@@ -145,7 +145,7 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
             aria-selected={if(@live_action == :changes, do: "true", else: "false")}
           >
             <.icon name="hero-code-bracket" class="review-code-view-icon size-[18px]" />
-            <span class="review-code-view-label">Diff</span>
+            <span class="review-code-view-label ds-label">Diff</span>
           </.link>
         </div>
         <.diff_style_switcher diff_style={@diff_style} />
