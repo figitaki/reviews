@@ -6,6 +6,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The Reviews mark (the R in a rounded square from the top bar) is now the
+  favicon, the home-screen icon (`apple-touch-icon.png`, `site.webmanifest`),
+  and the icon `/mcp` advertises in `serverInfo.icons`. Claude shows a custom
+  connector with its site's favicon, so it shows this mark instead of a
+  plain letter.
 - MCP tools link straight to threads and comments. Every thread they return
   has a `url` that opens the review on it (`?thread=ID`), and every comment
   one that opens it on that comment (`?thread=ID&comment=ID`).
