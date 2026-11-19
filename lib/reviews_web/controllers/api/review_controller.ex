@@ -24,7 +24,7 @@ defmodule ReviewsWeb.Api.ReviewController do
   def index(conn, params) do
     case ReviewIndex.normalize_filters(params) do
       {:ok, filters} ->
-        viewer = list_viewer(conn.assigns.current_user, conn.assigns.current_identity)
+        viewer = Reviews.Policy.list_viewer(conn.assigns.current_principal)
         result = ReviewsContext.list_reviews(viewer, filters)
 
         json(conn, %{
@@ -40,9 +40,6 @@ defmodule ReviewsWeb.Api.ReviewController do
         |> json(%{errors: errors})
     end
   end
-
-  defp list_viewer(user, %{kind: "human"}), do: user
-  defp list_viewer(_user, identity), do: identity
 
   defp render_list_entry(entry) do
     review = entry.review
