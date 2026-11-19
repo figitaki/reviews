@@ -91,6 +91,7 @@ defmodule ReviewsWeb.LinkPreview do
     prose
     |> String.replace(~r/!\[([^\]]*)\]\([^)]*\)/, "\\1")
     |> String.replace(~r/\[([^\]]+)\]\([^)]*\)/, "\\1")
+    |> resolve_references()
     |> String.replace(~r/^\s{0,3}(\#{1,6}|>+|[-*+]\s+\[[ xX]\]|[-*+]|\d+[.)])\s+/m, "")
     |> String.replace(~r/(\*\*|__|~~)/, "")
     |> String.replace(~r/(?<![\w*])[*_](?=\S)(.+?)(?<=\S)[*_](?![\w*])/u, "\\1")
@@ -104,30 +105,104 @@ defmodule ReviewsWeb.LinkPreview do
     |> truncate()
   end
 
-  # Fenced blocks keep their contents without the fence lines; inline spans
-  # keep their contents without the backticks.
-  @code ~r/^[ \t]*(```|~~~)[^\n]*\n(.*?)(?:^[ \t]*\1[ \t]*$|\z)|(`+)(.+?)\3/msu
+  # `[text][ref]`, `[text][]` and `[ref]` read as their text when `ref` is
+  # defined, and definition lines (`[ref]: url`) are dropped, as the
+  # renderer does. Undefined references stay as written, as they render.
+  @reference_definition ~r/^ {0,3}\[([^\]]+)\]:[ \t]*\S.*$/m
 
+  defp resolve_references(prose) do
+    labels =
+      @reference_definition
+      |> Regex.scan(prose)
+      |> MapSet.new(fn [_, label] -> reference_label(label) end)
+
+    defined? = &MapSet.member?(labels, reference_label(&1))
+
+    prose = String.replace(prose, @reference_definition, "")
+
+    prose =
+      Regex.replace(~r/\[([^\]]+)\]\[([^\]]*)\]/, prose, fn whole, text, ref ->
+        if defined?.(if ref == "", do: text, else: ref), do: text, else: whole
+      end)
+
+    Regex.replace(~r/\[([^\]]+)\](?![\[(])/, prose, fn whole, text ->
+      if defined?.(text), do: text, else: whole
+    end)
+  end
+
+  defp reference_label(label),
+    do: label |> String.downcase() |> String.replace(~r/\s+/u, " ") |> String.trim()
+
+  # Code blocks keep their contents without fences or indentation, and inline
+  # spans without their backticks. A fence closes only on a line of the same
+  # character at least as long as the one that opened it; an indented block
+  # cannot interrupt a paragraph.
   defp set_aside_code(markdown) do
-    {prose, code} =
-      @code
-      |> Regex.split(markdown, include_captures: true)
-      |> Enum.reduce({[], %{}}, fn part, {prose, code} ->
-        case Regex.run(@code, part) do
-          [^part | groups] ->
-            index = map_size(code)
-            {[prose, "\u{E000}#{index}\u{E001}"], Map.put(code, index, code_text(groups))}
+    {lines, code} = code_blocks(String.split(markdown, "\n"), :blank, [], %{})
+    code_spans(lines |> Enum.reverse() |> Enum.join("\n"), code)
+  end
 
-          _ ->
-            {[prose, part], code}
+  defp code_blocks([], _previous, lines, code), do: {lines, code}
+
+  defp code_blocks([line | rest], previous, lines, code) do
+    cond do
+      fence = opening_fence(line) ->
+        {body, rest} = Enum.split_while(rest, &(not closing_fence?(&1, fence)))
+        {lines, code} = put_code(lines, code, " #{Enum.join(body, "\n")} ")
+        code_blocks(Enum.drop(rest, 1), :blank, lines, code)
+
+      previous == :blank and indented?(line) ->
+        {body, rest} = Enum.split_while([line | rest], &(indented?(&1) or blank?(&1)))
+        body = Enum.map_join(body, "\n", &String.replace(&1, ~r/^( {4}|\t)/, ""))
+        {lines, code} = put_code(lines, code, " #{body} ")
+        code_blocks(rest, :blank, lines, code)
+
+      blank?(line) ->
+        code_blocks(rest, :blank, [line | lines], code)
+
+      true ->
+        code_blocks(rest, :text, [line | lines], code)
+    end
+  end
+
+  defp opening_fence(line) do
+    case Regex.run(~r/^ {0,3}(`{3,}|~{3,})(.*)$/, line) do
+      ["", _, _] -> nil
+      [_, "`" <> _ = run, info] -> if String.contains?(info, "`"), do: nil, else: run
+      [_, run, _info] -> run
+      nil -> nil
+    end
+  end
+
+  defp closing_fence?(line, run) do
+    mark = Regex.escape(String.first(run))
+    Regex.match?(~r/^ {0,3}#{mark}{#{byte_size(run)},}[ \t]*$/, line)
+  end
+
+  defp indented?(line), do: String.starts_with?(line, ["    ", "\t"]) and not blank?(line)
+  defp blank?(line), do: String.trim(line) == ""
+
+  @code_span ~r/(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/su
+
+  defp code_spans(prose, code) do
+    {prose, code} =
+      @code_span
+      |> Regex.split(prose, include_captures: true)
+      |> Enum.reduce({[], code}, fn part, {prose, code} ->
+        case Regex.run(@code_span, part) do
+          [^part, _run, body] -> put_code(prose, code, String.trim(body))
+          _ -> {[part | prose], code}
         end
       end)
 
-    {IO.iodata_to_binary(prose), code}
+    {prose |> Enum.reverse() |> IO.iodata_to_binary(), code}
   end
 
-  defp code_text([_fence, body]), do: " #{body} "
-  defp code_text([_, _, _, inline]), do: String.trim(inline)
+  # Block code is padded with spaces so it never joins the prose beside it.
+  defp put_code(parts, code, text) do
+    index = map_size(code)
+    {["\u{E000}#{index}\u{E001}" | parts], Map.put(code, index, text)}
+  end
 
   defp truncate(text) do
     if String.length(text) <= @description_limit do

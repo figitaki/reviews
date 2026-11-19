@@ -17,7 +17,19 @@ defmodule ReviewsWeb.LinkPreviewTest do
           {"snake_case_name and qos_p256_key stay", "snake_case_name and qos_p256_key stay"},
           # Outside code, Markdown reads __dunder__ as bold, as the app renders it.
           {"__dunder__ outside code", "dunder outside code"},
-          {"> quoted\n- [x] done\n1. see [docs](https://x.test)", "quoted done see docs"}
+          {"> quoted\n- [x] done\n1. see [docs](https://x.test)", "quoted done see docs"},
+          # Reference links read as their text; definitions are dropped.
+          {"See [docs][ref].\n\n[ref]: https://example.com", "See docs."},
+          {"[Docs][] and [guide], not [missing][nope]\n\n[docs]: /d\n[Guide]: /g 'Title'",
+           "Docs and guide, not [missing][nope]"},
+          {"`[a][r]` stays\n\n[r]: /x", "[a][r] stays"},
+          # Indented code keeps its text, but cannot interrupt a paragraph.
+          {"Before:\n\n    __init__(**kw)\n    _x_\n\nAfter **b**",
+           "Before: __init__(**kw) _x_ After b"},
+          {"para\n    __lazy__ continuation", "para lazy continuation"},
+          # A fence closes only on the same character, at least as long.
+          {"````\n```\n**literal**\n```\n````\nAfter *em*", "``` **literal** ``` After em"},
+          {"```\n**a**\n~~~\n**b**\n```", "**a** ~~~ **b**"}
         ] do
       assert LinkPreview.plain_text(markdown) == text, "for #{inspect(markdown)}"
     end
