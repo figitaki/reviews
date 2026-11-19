@@ -324,7 +324,7 @@
   /* Phones without the Guide's section dock (Diff mode): Sections and
      Comments sit in their own bar along the bottom, so they never cover
      thread cards or the end of a comment. The content reserves the bar's
-     height, and section decisions stick just above it. In the Guide they
+     height; section decisions stay in the page flow. In the Guide they
      stay stacked above the dock's next button. */
   .review-page:not(:has(.review-section-decision.has-nav)) .review-activity {
     left: 0;
@@ -339,9 +339,6 @@
   }
   .review-page:not(:has(.review-section-decision.has-nav)) .review-workspace-content {
     padding-bottom: calc(var(--size-fab) + 32px + env(safe-area-inset-bottom));
-  }
-  .review-page:not(:has(.review-section-decision.has-nav)) .review-section-decision {
-    bottom: calc(var(--size-fab) + 28px + env(safe-area-inset-bottom));
   }
   .review-page:not(:has(.review-section-decision.has-nav)) .review-activity-body { bottom: calc(100% + 8px); }
   .review-page:not(:has(.review-section-decision.has-nav)) .review-activity:has(details[open]) .review-quick-button { visibility: visible; }
