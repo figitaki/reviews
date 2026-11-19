@@ -23,6 +23,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   it. Opening the link scrolls to that thread or comment below the file
   header and highlights it briefly.
 
+- Switching split or unified view, a new or updated thread, opening the
+  comment box and a theme change now update a file's diff in place, instead
+  of building and highlighting it again. On a 4,562-line file, switching view
+  no longer blanks the file or loses the reading position.
+
 - Replies no longer send a file's diff again. Marking a file viewed,
   collapsing it, switching split or unified view and opening a section
   decision sent every open diff back to the browser, about 590 KB on a
