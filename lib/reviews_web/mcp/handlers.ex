@@ -249,7 +249,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         }
 
         {threads, count} =
-          fill_threads(projected, comment_counts, room!(args, header))
+          fill_threads(review, projected, comment_counts, room!(args, header))
 
         cond do
           count == 0 and page != [] ->
@@ -278,8 +278,11 @@ defmodule ReviewsWeb.MCP.Handlers do
         comments = Threads.list_comment_page(thread.id, start_id - 1, @page_fetch)
 
         header =
-          projected
-          |> thread_summary(Threads.comment_counts([thread.id]) |> Map.get(thread.id, 0))
+          review
+          |> thread_summary(
+            projected,
+            Threads.comment_counts([thread.id]) |> Map.get(thread.id, 0)
+          )
           |> Map.merge(%{slug: review.slug, revision: selected.number, next_cursor: nil})
 
         {page, next} =
@@ -288,7 +291,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             start,
             room!(args, header),
             & &1.id,
-            &comment_parts/1
+            &comment_parts(review, &1)
           )
 
         # A full page of comments may have more after it.
@@ -356,7 +359,9 @@ defmodule ReviewsWeb.MCP.Handlers do
           path: thread.file_path,
           side: thread.side,
           line: thread.anchor["line_number_hint"],
-          url: review_url(review)
+          url: review_url(review),
+          thread_url: thread_url(review, thread.id),
+          comment_url: thread_url(review, thread.id, comment.id)
         }
       else
         {:error, :thread_not_found} ->
@@ -380,6 +385,7 @@ defmodule ReviewsWeb.MCP.Handlers do
           %{
             slug: review.slug,
             thread_id: thread.id,
+            thread_url: thread_url(review, thread.id),
             status: thread.status,
             resolved_by: identity_payload(thread.resolved_by)
           }
@@ -965,17 +971,22 @@ defmodule ReviewsWeb.MCP.Handlers do
     end
   end
 
-  defp comment_parts(comment) do
-    meta = comment |> ReviewsWeb.Payloads.comment(:compact) |> Map.delete(:body)
+  defp comment_parts(review, comment) do
+    meta =
+      comment
+      |> ReviewsWeb.Payloads.comment(:compact)
+      |> Map.delete(:body)
+      |> Map.put(:url, thread_url(review, comment.thread_id, comment.id))
 
     {meta, :body, comment.body || ""}
   end
 
-  defp thread_summary(thread, comment_count) do
+  defp thread_summary(review, thread, comment_count) do
     thread
     |> ReviewsWeb.Payloads.thread()
     |> Map.take([:id, :path, :side, :line, :anchor_status, :originating_revision, :status])
     |> Map.merge(%{
+      url: thread_url(review, thread.id),
       line_text: Budget.cap(thread.original_anchor["line_text"], @line_text_cap),
       resolved_by: identity_payload(thread.resolved_by),
       comment_count: comment_count
@@ -984,14 +995,14 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   # Threads go in whole while they fit. A first thread too big for the page
   # comes with fewer comment previews, so every page makes progress.
-  defp fill_threads(threads, comment_counts, left) do
+  defp fill_threads(review, threads, comment_counts, left) do
     Enum.reduce_while(threads, {[], 0, left}, fn thread, {acc, count, left} ->
       comment_count = Map.get(comment_counts, thread.id, 0)
       previews = if count == 0, do: @listed_comments..0//-1, else: [@listed_comments]
 
       fitting =
         Enum.find_value(previews, fn n ->
-          item = listed_thread(thread, comment_count, n)
+          item = listed_thread(review, thread, comment_count, n)
           cost = Budget.cost(item) + 4
           if cost <= left, do: {item, cost}
         end)
@@ -1004,7 +1015,7 @@ defmodule ReviewsWeb.MCP.Handlers do
     |> then(fn {acc, count, _left} -> {Enum.reverse(acc), count} end)
   end
 
-  defp listed_thread(thread, comment_count, previews) do
+  defp listed_thread(review, thread, comment_count, previews) do
     comments =
       thread.id
       |> Threads.list_comment_page(0, previews)
@@ -1012,6 +1023,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         comment
         |> ReviewsWeb.Payloads.comment(:compact)
         |> Map.merge(%{
+          url: thread_url(review, thread.id, comment.id),
           body: Budget.cap(comment.body, @listed_comment_cap),
           body_truncated: byte_size(comment.body || "") > @listed_comment_cap
         })
@@ -1020,14 +1032,21 @@ defmodule ReviewsWeb.MCP.Handlers do
     complete =
       comment_count <= length(comments) and not Enum.any?(comments, & &1.body_truncated)
 
-    thread
-    |> thread_summary(comment_count)
+    review
+    |> thread_summary(thread, comment_count)
     |> Map.merge(%{comments: comments, comments_complete: complete})
   end
 
   defp identity_payload(identity), do: ReviewsWeb.Payloads.identity(identity, :compact)
 
   defp review_url(review), do: ReviewsWeb.Endpoint.url() <> "/r/" <> review.slug
+
+  # The review page opened on one thread, or one comment in it: the links its
+  # copy-link buttons make (`?thread=ID`, `?thread=ID&comment=ID`).
+  defp thread_url(review, thread_id, comment_id \\ nil) do
+    query = if comment_id, do: [thread: thread_id, comment: comment_id], else: [thread: thread_id]
+    review_url(review) <> "?" <> URI.encode_query(query)
+  end
 
   # Bounded like the tools: at most @feedback_threads threads and
   # @feedback_limit bytes, with a note naming what was left out.
@@ -1053,7 +1072,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         threads,
         {[], 0, true, @feedback_limit - byte_size(header)},
         fn thread, {acc, shown, all?, left} ->
-          {text, complete?} = render_feedback_thread(thread)
+          {text, complete?} = render_feedback_thread(review, thread)
 
           if byte_size(text) <= left,
             do: {:cont, {[text | acc], shown + 1, all? and complete?, left - byte_size(text)}},
@@ -1072,7 +1091,7 @@ defmodule ReviewsWeb.MCP.Handlers do
      shown == total and all_comments?}
   end
 
-  defp render_feedback_thread(thread) do
+  defp render_feedback_thread(review, thread) do
     location =
       case thread.anchor do
         %{"line_number_hint" => line} ->
@@ -1105,8 +1124,8 @@ defmodule ReviewsWeb.MCP.Handlers do
             "reviews_get_thread (thread_id #{thread.id})._\n",
         else: ""
 
-    {"## Thread #{thread.id} at `#{location}` (#{thread.side})\n\n#{comments}\n#{note}",
-     not incomplete?}
+    {"## Thread #{thread.id} at `#{location}` (#{thread.side})\n\n" <>
+       "Link: #{thread_url(review, thread.id)}\n\n#{comments}\n#{note}", not incomplete?}
   end
 
   ## Write helpers
