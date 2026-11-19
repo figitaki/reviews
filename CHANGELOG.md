@@ -6,15 +6,17 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
-- In the Guide the section decision is a floating button in the bottom-right
-  corner at every width, with Comments stacked above it, as on phones. It
-  opens into a panel from that corner and hides Comments while open, so it
-  no longer covers the Comments log. Desktop and phones share one set of
-  styles; only sizes differ.
-
-- Readers who are not the review's owner can collapse the section decision
-  too. Every reader now gets the same decision button and close button; the
-  expanded panel shows the owner-only note instead of the decision actions.
+- In the Guide each section ends with one compact bar centred at the bottom
+  of the screen at every width: previous section on the left, the decision
+  pill in the middle and next section on the right. It replaces the
+  "Next:" and "Begin review" button at the end of each section and the
+  old corner decision button and shelf. The pill shows your decision on the
+  current version (Approved, Changes requested or Skipped), or "Decide".
+  Clicking it opens Approve, Request changes and Skip above it and reads
+  "Dismiss"; choosing one, clicking elsewhere, clicking it again or Escape
+  closes it. Readers who are not the owner see the owner-only note there,
+  and signed-out readers a sign-in link. Comments sits above the
+  next-section button.
 
 - The Guide no longer adds 72px of empty space below the page on wide
   screens. That space ended the sticky Guide rail early, so it jumped up as

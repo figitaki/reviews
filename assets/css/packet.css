@@ -1221,9 +1221,7 @@ details[open] > summary .review-collapse-icon,
 .review-packet-section-summary,
 .review-packet-section-summary-text,
 .review-packet-row.is-markdown,
-.review-section-header,
-.review-section-decision,
-.review-section-next {
+.review-section-header {
   width: min(100%, var(--guide-measure));
   margin-inline: auto;
   justify-self: center;
@@ -1301,24 +1299,31 @@ details[open] > summary .review-collapse-icon,
   line-height: var(--font-meta-leading);
 }
 
+/* The section dock: previous section, the decision control and next
+   section, pinned to the bottom of the section at every width. Phones only
+   change sizes. */
 .review-section-decision {
-  --review-decision-action-padding: 0 12px 0 10px;
-
   position: sticky;
-  bottom: calc(16px + env(safe-area-inset-bottom));
+  bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: var(--z-decision);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-3);
   margin-top: 24px;
-  border: 1px solid var(--review-line-strong);
-  border-radius: var(--radius-lg);
-  padding: 16px 20px;
-  background: var(--review-panel-raised);
-  box-shadow: var(--shadow-float);
+  pointer-events: none;
   --decision-accent: var(--ds-warn);
+}
+
+.review-section-decision > * {
+  pointer-events: auto;
+}
+
+/* At the end of a section the dock leaves the bottom of the screen and sits
+   in the flow; the grid's bottom padding keeps it above the floating buttons
+   in the corner (Comments, and Sections on phones). */
+.review-packet-shell.has-outline .review-packet-grid {
+  padding-bottom: calc(12px + 40px + 12px + var(--size-fab) + 16px + env(safe-area-inset-bottom));
 }
 
 .review-section-decision.is-approved {
@@ -1333,224 +1338,185 @@ details[open] > summary .review-collapse-icon,
   --decision-accent: var(--ds-muted);
 }
 
-.review-section-decision-copy {
-  display: grid;
-  gap: 6px;
+.review-section-decision-control {
+  position: relative;
+  grid-column: 2;
+  display: flex;
+  justify-content: center;
 }
 
-.review-section-decision-heading {
-  color: var(--review-muted);
-  font-size: var(--font-meta-size);
-}
-
-/* In the Guide the decision is a floating button in the bottom-right corner,
-   below Comments, at every width, and expands into a panel from there. The
-   same rules serve phones; their media query only changes sizes. */
-.review-packet-shell.has-outline .review-section-decision {
-  position: fixed;
-  right: calc(16px + env(safe-area-inset-right));
-  margin: 0;
-}
-
-/* The grid's bottom padding lets the last lines scroll clear of the
-   decision and Comments buttons stacked in the corner. */
-.review-packet-shell.has-outline .review-packet-grid {
-  padding-bottom: calc(2 * var(--size-fab) + 44px + env(safe-area-inset-bottom));
-}
-
-.review-packet-shell.has-outline .review-section-decision.is-editing {
-  width: min(28rem, calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
-}
-
-/* The closed decision is a floating button like Sections and Comments:
-   --size-fab, --radius-lg and --shadow-float. */
-.review-section-decision:not(.is-editing) {
-  width: var(--size-fab);
-  margin-left: auto;
-  margin-right: 0;
-  justify-self: end;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.review-section-decision:not(.is-editing) .review-section-decision-copy,
-.review-section-decision:not(.is-editing) .review-packet-section-actions {
-  display: none;
+.review-section-step,
+.review-section-decision-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  border: 1px solid var(--review-line-strong);
+  border-radius: 999px;
+  background: var(--review-panel-raised);
+  box-shadow: var(--shadow-float);
+  color: var(--review-text);
+  cursor: pointer;
+  font-size: var(--font-ui-size);
+  font-weight: var(--font-ui-weight);
+  line-height: var(--font-ui-leading);
+  white-space: nowrap;
 }
 
 .review-section-decision-toggle {
-  display: inline-flex;
-  flex: 0 0 var(--size-fab);
-  align-items: center;
-  justify-content: center;
-  width: var(--size-fab);
-  height: var(--size-fab);
-  border: 1px solid var(--review-line-strong);
-  border-radius: var(--radius-lg);
-  background: var(--review-panel-raised);
-  color: var(--decision-accent);
-  cursor: pointer;
-  box-shadow: var(--shadow-float);
+  padding: 0 16px 0 12px;
 }
 
+.review-section-decision-toggle > [class*="hero-"],
+.review-section-decision-toggle > .review-section-state-icon,
+.review-section-step > [class*="hero-"] {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.review-section-decision-toggle > :first-child {
+  color: var(--decision-accent);
+}
+
+.review-section-decision.is-editing .review-section-decision-toggle > :first-child {
+  color: var(--review-muted);
+}
+
+.review-section-step:hover,
 .review-section-decision-toggle:hover {
   background: var(--review-hover);
 }
 
+.review-section-step:focus-visible,
 .review-section-decision-toggle:focus-visible {
-  outline: 2px solid var(--decision-accent);
+  outline: 2px solid var(--ds-focus);
   outline-offset: 3px;
 }
 
-.review-section-decision-toggle > span {
-  width: var(--size-fab-icon);
-  height: var(--size-fab-icon);
-}
-
-/* Expanded, the toggle is a small close button in the panel's top-right
-   corner, out of the panel's flex layout. */
-.review-section-decision.is-editing .review-section-decision-toggle {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
+.review-section-step {
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 14px;
   color: var(--review-muted);
 }
 
-.review-section-decision.is-editing .review-section-decision-toggle:hover {
-  background: var(--review-hover);
-  color: var(--review-text);
+.review-section-step.is-prev {
+  grid-column: 1;
+  justify-self: start;
 }
 
-.review-section-decision.is-editing .review-section-decision-toggle > span {
-  width: 14px;
-  height: 14px;
+.review-section-step.is-next {
+  grid-column: 3;
+  justify-self: end;
 }
 
-.review-section-decision.is-editing .review-section-decision-copy {
-  flex: 1;
+.review-section-step-label {
+  display: inline-flex;
   min-width: 0;
-  padding-right: 28px;
+  gap: 6px;
+  overflow: hidden;
 }
 
-.review-section-decision .review-packet-section-actions {
-  width: 100%;
-  flex-basis: 100%;
-  justify-content: flex-start;
+.review-section-step-number {
+  font-family: var(--font-mono);
+  color: var(--review-faint);
+}
+
+.review-section-step-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Expanded, the decisions open above the control. */
+.review-section-decision-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  border: 1px solid var(--review-line-strong);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  background: var(--review-panel-raised);
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+}
+
+.review-section-decision:not(.is-editing) .review-section-decision-panel {
+  display: none;
 }
 
 .review-section-decision-prompt {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
   margin: 0;
   color: var(--review-text);
-  font-size: var(--font-ui-size);
+  font-size: var(--font-meta-size);
   font-weight: var(--font-ui-weight);
-  line-height: var(--font-ui-leading);
+  line-height: var(--font-meta-leading);
 }
 
-/* Lines up under the prompt's label, past its 15px icon and 8px gap. */
+.review-section-decision-heading {
+  color: var(--review-muted);
+}
+
 .review-section-decision-history {
   margin: 0;
-  padding-left: calc(15px + 8px);
   color: var(--review-warn);
   font-size: var(--font-meta-size);
   font-weight: var(--font-meta-weight);
   line-height: var(--font-meta-leading);
+  text-align: center;
 }
 
 .review-section-decision .review-packet-section-actions {
-  max-width: 100%;
+  justify-content: center;
 }
 
-.review-section-decision-prompt .review-section-state-icon {
-  color: var(--decision-accent);
-}
-
-/* Decision buttons in the footer read as explicit labeled actions instead of
-   the icon-only, expand-on-hover form. */
 .review-section-decision .review-section-action,
 .review-section-decision .review-section-action:hover,
 .review-section-decision .review-section-action:focus-visible,
 .review-section-decision .review-section-action.is-active {
   width: auto;
-  height: 32px;
+  height: 36px;
   gap: 6px;
-  padding: var(--review-decision-action-padding);
+  padding: 0 12px 0 10px;
 }
 
 .review-section-decision .review-section-action .review-section-action-label {
-  display: inline-grid;
-  max-width: 160px;
-  opacity: 1;
-  transition: max-width 180ms ease, opacity 160ms ease;
-}
-
-.review-section-decision .review-section-action {
-  transition: gap 180ms ease, padding 180ms ease,
-    background-color 160ms ease, border-color 160ms ease, color 160ms ease;
-}
-
-.review-section-action-verb,
-.review-section-action-result {
-  grid-area: 1 / 1;
-  max-width: 160px;
-  overflow: hidden;
-  transition: max-width 180ms ease, opacity 160ms ease;
-}
-
-.review-section-action-result,
-.review-section-action.is-active .review-section-action-verb {
-  max-width: 0;
-  opacity: 0;
-}
-
-.review-section-action.is-active .review-section-action-result {
-  max-width: 160px;
+  max-width: none;
   opacity: 1;
 }
 
-.review-section-decision:not(.is-pending):not(.is-editing)
-  .review-section-action:not(.is-active):not(:hover):not(:focus-visible) {
-  gap: 0;
-  padding: 0 8px;
-}
-
-.review-section-decision:not(.is-pending):not(.is-editing)
-  .review-section-action:not(.is-active):not(:hover):not(:focus-visible)
-  .review-section-action-label {
-  max-width: 0;
-  opacity: 0;
+.review-section-decision .review-packet-section-note {
+  max-width: 18rem;
+  text-align: center;
 }
 
 @media (max-width: 640px) {
   .review-packet-shell.has-outline .review-packet-grid {
-    padding-bottom: calc(88px + env(safe-area-inset-bottom));
-  }
-
-  .review-packet-shell.has-outline .review-section-decision.is-editing {
-    width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    padding-bottom: calc(12px + 40px + 12px + 2 * var(--size-fab) + 12px + 16px + env(safe-area-inset-bottom));
   }
 
   .review-section-decision {
-    --review-decision-action-padding: 0 8px;
-
-    padding: 12px;
-    gap: 12px;
+    gap: var(--space-2);
   }
 
-  .review-section-decision.is-editing .review-section-decision-toggle {
-    width: 32px;
-    height: 32px;
+  /* Phones show only the arrows for previous and next. */
+  .review-section-step {
+    width: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .review-section-step-label {
+    display: none;
   }
 
   .review-section-decision .review-section-action {
@@ -2590,23 +2556,6 @@ details[open] > summary .review-collapse-icon,
 }
 
 /* Linear flow: after the decision, the next section is one click away. */
-.review-section-next {
-  display: flex;
-  flex-basis: 100%;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.review-section-next-button {
-  margin-top: 4px;
-}
-
-.review-section-next-button.is-overview {
-  border: 1px solid var(--review-line-strong);
-  background: transparent;
-  color: var(--review-text);
-}
-
 .review-guide-begin {
   display: inline-flex;
   align-items: center;
@@ -3158,9 +3107,7 @@ details[open] > summary .review-collapse-icon,
   .review-section-action,
   .review-section-action-label,
   .review-section-decision .review-section-action,
-  .review-section-decision .review-section-action .review-section-action-label,
-  .review-section-action-verb,
-  .review-section-action-result {
+  .review-section-decision .review-section-action .review-section-action-label {
     transition: none;
   }
 }

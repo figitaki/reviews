@@ -476,9 +476,9 @@ defmodule ReviewsWeb.DesignComponentsLive do
               and the Guide map in the review page layouts.
             </li>
             <li>
-              The section decision opens its controls in place. Selecting the current decision again
-              clears it. On phones it is a floating button whose panel spans the screen, and Escape
-              closes it.
+              The section decision is a pill between the previous and next section buttons. It opens
+              its choices above itself and reads Dismiss while open; a choice, a click elsewhere,
+              the pill again or Escape closes it. Selecting the current decision again clears it.
             </li>
             <li>
               Someone who is not the owner sees a note instead of controls; signed out, a sign-in link.

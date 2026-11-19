@@ -124,6 +124,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                 current_user={@current_user}
                 can_decide={@can_decide_sections}
                 return_to={@return_to}
+                prev_section={@packet_outline_sections_by_index[section.index - 1]}
                 next_section={@packet_outline_sections_by_index[section.index + 1]}
                 show_nav={@show_packet_outline}
               />
@@ -443,17 +444,24 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :current_user, :any, default: nil
   attr :can_decide, :boolean, default: false
   attr :return_to, :string, default: "/"
+  attr :prev_section, :map, default: nil
   attr :next_section, :map, default: nil
   attr :show_nav, :boolean, default: false
   attr :editing, :boolean, default: false
 
+  # The section dock: previous section, a compact decision control and next
+  # section, pinned to the bottom of the section at every width. The control
+  # shows your decision on this revision (or "Decide") and expands the three
+  # decisions above itself; non-owners get the owner-only note and signed-out
+  # readers a sign-in link in the same place.
   # Public for the component playground (/design/components).
   def packet_section_decision(assigns) do
-    # Every reader gets the same collapsible control: owners decide, other
-    # signed-in readers see the owner-only note, signed-out readers sign in.
+    decided = assigns.section.effective_status in ~w(approved denied ignored)
+
     assigns =
       assigns
       |> assign(:sign_in_return_to, section_return_to(assigns.return_to, assigns.section.index))
+      |> assign(:decided, decided)
 
     ~H"""
     <footer
@@ -461,159 +469,205 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       class={[
         "review-section-decision",
         "is-#{@section.effective_status || "pending"}",
-        @editing && "is-editing"
+        @editing && "is-editing",
+        @show_nav && "has-nav"
       ]}
       phx-hook=".SectionDecision"
       data-editing={to_string(@editing)}
     >
-      <div class="review-section-decision-copy">
-        <span class="review-section-decision-heading">Section decision</span>
-        <p class="review-section-decision-prompt" role="status">
-          <.section_status_icon status={@section.effective_status} />
-          <span>{section_decision_state_label(@section)}</span>
-        </p>
-        <p :if={@section.decision_history} class="review-section-decision-history">
-          {@section.decision_history}
-        </p>
+      <.section_step
+        :if={@show_nav}
+        id={"packet-section-#{@section.index}-prev"}
+        direction="prev"
+        section={@prev_section}
+      />
+      <div class="review-section-decision-control">
+        <div
+          id={"packet-section-#{@section.index}-decision-controls"}
+          class="review-section-decision-panel"
+          role="group"
+          aria-label={"Decision for #{@section.title}"}
+        >
+          <p class="review-section-decision-prompt" role="status">
+            <span class="review-section-decision-heading">Section decision:</span>
+            <span>{section_decision_state_label(@section)}</span>
+          </p>
+          <p :if={@section.decision_history} class="review-section-decision-history">
+            {@section.decision_history}
+          </p>
+          <div class="review-packet-section-actions">
+            <%= cond do %>
+              <% @can_decide -> %>
+                <button
+                  :for={status <- ~w(approved denied ignored)}
+                  :key={status}
+                  type="button"
+                  class={[
+                    "review-section-action",
+                    @section.effective_status == status && "is-active",
+                    "is-#{status}"
+                  ]}
+                  title={
+                    if @section.effective_status == status,
+                      do: "Clear decision",
+                      else: section_status_label(status)
+                  }
+                  aria-label={
+                    if @section.effective_status == status,
+                      do: "#{guide_status_label(status)}. Select again to clear decision",
+                      else: section_status_label(status)
+                  }
+                  aria-pressed={to_string(@section.effective_status == status)}
+                  phx-click="set_section_status"
+                  phx-value-section_index={@section.index}
+                  phx-value-status={status}
+                >
+                  <.section_status_icon status={status} />
+                  <span class="review-section-action-label" aria-hidden="true">
+                    {section_status_label(status)}
+                  </span>
+                </button>
+              <% @current_user -> %>
+                <p
+                  id={"packet-section-#{@section.index}-decision-owner-only"}
+                  class="review-packet-section-note"
+                >
+                  Only the review owner can record section decisions.
+                </p>
+              <% true -> %>
+                <.link
+                  id={"packet-section-#{@section.index}-decision-signin"}
+                  href={~p"/auth/github?#{[return_to: @sign_in_return_to]}"}
+                  class="review-button review-button-primary review-packet-section-signin"
+                >
+                  <.github_mark /> Sign in to decide
+                </.link>
+            <% end %>
+          </div>
+        </div>
+        <button
+          id={"packet-section-#{@section.index}-decision-toggle"}
+          type="button"
+          class="review-section-decision-toggle"
+          aria-label={
+            cond do
+              @editing ->
+                "Dismiss decision controls"
+
+              @decided and @can_decide ->
+                "#{guide_status_label(@section.effective_status)}: change decision"
+
+              @decided ->
+                "#{guide_status_label(@section.effective_status)}: show section decision"
+
+              true ->
+                "Decide section"
+            end
+          }
+          aria-expanded={to_string(@editing)}
+          aria-controls={"packet-section-#{@section.index}-decision-controls"}
+          phx-click="toggle_section_decision"
+          phx-value-section_index={@section.index}
+        >
+          <%= cond do %>
+            <% @editing -> %>
+              <.icon name="hero-x-mark" />
+            <% @decided -> %>
+              <.section_status_icon status={@section.effective_status} />
+            <% true -> %>
+              <.icon name="hero-pencil-square" />
+          <% end %>
+          <span class="review-section-decision-toggle-label" aria-hidden="true">
+            <%= cond do %>
+              <% @editing -> %>
+                Dismiss
+              <% @decided -> %>
+                {guide_status_label(@section.effective_status)}
+              <% true -> %>
+                Decide
+            <% end %>
+          </span>
+        </button>
       </div>
-      <button
-        id={"packet-section-#{@section.index}-decision-toggle"}
-        type="button"
-        class="review-section-decision-toggle"
-        aria-label={
-          cond do
-            @editing ->
-              "Close decision controls"
-
-            !@can_decide ->
-              "Show section decision"
-
-            @section.effective_status in ~w(approved denied ignored) ->
-              "Change decision: #{section_decision_state_label(@section)}"
-
-            true ->
-              "Decide section"
-          end
-        }
-        aria-expanded={to_string(@editing)}
-        aria-controls={"packet-section-#{@section.index}-decision-controls"}
-        phx-click="toggle_section_decision"
-        phx-value-section_index={@section.index}
-      >
-        <%= cond do %>
-          <% @editing -> %>
-            <.icon name="hero-x-mark" />
-          <% @section.effective_status in ~w(approved denied ignored) -> %>
-            <.section_status_icon status={@section.effective_status} />
-          <% true -> %>
-            <.icon name="hero-pencil-square" />
-        <% end %>
-      </button>
-      <div
-        id={"packet-section-#{@section.index}-decision-controls"}
-        class="review-packet-section-actions"
-        role="group"
-        aria-label={"Decision for #{@section.title}"}
-      >
-        <%= cond do %>
-          <% @can_decide -> %>
-            <button
-              :for={status <- ~w(approved denied ignored)}
-              :key={status}
-              type="button"
-              class={[
-                "review-section-action",
-                @section.effective_status == status && "is-active",
-                "is-#{status}"
-              ]}
-              title={
-                if @section.effective_status == status,
-                  do: "Clear decision",
-                  else: section_status_label(status)
-              }
-              aria-label={
-                if @section.effective_status == status,
-                  do: "#{guide_status_label(status)}. Select again to clear decision",
-                  else: section_status_label(status)
-              }
-              aria-pressed={to_string(@section.effective_status == status)}
-              phx-click="set_section_status"
-              phx-value-section_index={@section.index}
-              phx-value-status={status}
-            >
-              <.section_status_icon status={status} />
-              <span class="review-section-action-label" aria-hidden="true">
-                <span class="review-section-action-verb">{section_status_label(status)}</span>
-                <span class="review-section-action-result">{guide_status_label(status)}</span>
-              </span>
-            </button>
-          <% @current_user -> %>
-            <p
-              id={"packet-section-#{@section.index}-decision-owner-only"}
-              class="review-packet-section-note"
-            >
-              Only the review owner can record section decisions.
-            </p>
-          <% true -> %>
-            <.link
-              id={"packet-section-#{@section.index}-decision-signin"}
-              href={~p"/auth/github?#{[return_to: @sign_in_return_to]}"}
-              class="review-button review-button-primary review-packet-section-signin"
-            >
-              <.github_mark /> Sign in to decide
-            </.link>
-        <% end %>
-      </div>
+      <.section_step
+        :if={@show_nav}
+        id={"packet-section-#{@section.index}-next"}
+        direction="next"
+        section={@next_section}
+      />
     </footer>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".SectionDecision">
       export default {
         mounted() {
           this.editing = this.el.dataset.editing
-          this.el.addEventListener("keydown", event => {
+          const control = this.el.querySelector(".review-section-decision-control")
+          const close = () => this.el.querySelector("[aria-expanded='true']")?.click()
+          // While open, Escape or a click anywhere outside the control closes it.
+          this.onKey = event => {
             if (event.key === "Escape" && this.el.dataset.editing === "true") {
               event.stopPropagation()
-              this.el.querySelector("[aria-expanded]").click()
+              close()
             }
-          })
+          }
+          this.onClick = event => {
+            if (this.el.dataset.editing === "true" && !control.contains(event.target)) close()
+          }
+          document.addEventListener("keydown", this.onKey, true)
+          document.addEventListener("click", this.onClick, true)
         },
         updated() {
           const editing = this.el.dataset.editing
           if (editing !== this.editing) {
             const target = editing === "true"
-              ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector(".review-packet-section-signin")
+              ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector(".review-packet-section-signin") || this.el.querySelector("[aria-expanded]")
               : this.el.querySelector("[aria-expanded]")
             target?.focus({preventScroll: true})
           }
           this.editing = editing
+        },
+        destroyed() {
+          document.removeEventListener("keydown", this.onKey, true)
+          document.removeEventListener("click", this.onClick, true)
         }
       }
     </script>
-    <nav
-      :if={@show_nav}
-      id={"packet-section-#{@section.index}-nav"}
-      class="review-section-next"
-      aria-label="Section navigation"
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :direction, :string, required: true
+  attr :section, :map, default: nil
+
+  # Previous or next section; at either end of the packet it leads back to
+  # the overview.
+  defp section_step(assigns) do
+    ~H"""
+    <button
+      id={@id}
+      type="button"
+      class={["review-section-step", "is-#{@direction}"]}
+      aria-label={
+        cond do
+          is_nil(@section) -> "Back to overview"
+          @direction == "prev" -> "Previous section: #{pad2(@section.index + 1)} #{@section.title}"
+          true -> "Next section: #{pad2(@section.index + 1)} #{@section.title}"
+        end
+      }
+      phx-click={if @section, do: "select_guide_section", else: "select_packet_overview"}
+      phx-value-section_index={@section && @section.index}
+      phx-value-target_id={@section && @section.target_id}
     >
-      <button
-        :if={@next_section}
-        type="button"
-        class="review-guide-begin review-section-next-button"
-        phx-click="select_guide_section"
-        phx-value-section_index={@next_section.index}
-        phx-value-target_id={@next_section.target_id}
-      >
-        Next: {pad2(@next_section.index + 1)} {@next_section.title}
-        <span aria-hidden="true">→</span>
-      </button>
-      <button
-        :if={is_nil(@next_section)}
-        type="button"
-        class="review-guide-begin review-section-next-button is-overview"
-        phx-click="select_packet_overview"
-      >
-        Back to overview
-      </button>
-    </nav>
+      <.icon :if={@direction == "prev"} name="hero-arrow-left" />
+      <span class="review-section-step-label" aria-hidden="true">
+        <%= if @section do %>
+          <span class="review-section-step-number">{pad2(@section.index + 1)}</span>
+          <span class="review-section-step-title">{@section.title}</span>
+        <% else %>
+          Overview
+        <% end %>
+      </span>
+      <.icon :if={@direction == "next"} name="hero-arrow-right" />
+    </button>
     """
   end
 

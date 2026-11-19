@@ -822,7 +822,7 @@ defmodule ReviewsWeb.ReviewLive do
       |> assign(:editing_decision_index, section_index)
       |> update(:expanded_section_ids, &MapSet.put(&1, section_index))
       |> auto_open_section_hunks(section_index)
-      |> push_event("packet_nav_jump", %{id: "packet-section-#{section_index}-decision"})
+      |> push_event("packet_nav_jump", %{id: "packet-section-#{section_index}"})
     else
       _ -> socket
     end

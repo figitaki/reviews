@@ -659,25 +659,26 @@ defmodule ReviewsWeb.ReviewLiveTest do
                ~s|#packet-section-0 [phx-hook="DiffRenderer"][data-file-path="lib/one.ex"][data-hunk-expanded="true"]|
              )
 
-      # The decision footer leads into the next section.
+      # The section dock steps between sections; the ends lead to the overview.
+      assert has_element?(view, "#packet-section-0-prev[aria-label='Back to overview']")
+
       assert has_element?(
                view,
-               "#packet-section-0-nav .review-section-next-button",
-               "Next: 02 Second section"
+               "#packet-section-0-next[aria-label='Next section: 02 Second section']",
+               "Second section"
              )
 
-      view
-      |> element("#packet-section-0-nav .review-section-next-button")
-      |> render_click()
+      view |> element("#packet-section-0-next") |> render_click()
 
       assert has_element?(view, "#packet-section-1.is-open")
       refute has_element?(view, "#packet-section-0")
 
       assert has_element?(
                view,
-               "#packet-section-1-nav .review-section-next-button",
-               "Back to overview"
+               "#packet-section-1-prev[aria-label='Previous section: 01 First section']"
              )
+
+      assert has_element?(view, "#packet-section-1-next[aria-label='Back to overview']")
 
       view |> element("#diff-style-unified") |> render_click()
 
@@ -1789,7 +1790,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#packet-section-0-decision-toggle[aria-expanded=true][aria-label='Close decision controls']"
+               "#packet-section-0-decision-toggle[aria-expanded=true][aria-label='Dismiss decision controls']"
              )
 
       view |> element("#review-guide-overview-tick") |> render_click()
@@ -1806,14 +1807,14 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#packet-section-0-decision-toggle[aria-expanded=false][aria-label='Change decision: Approved']"
+               "#packet-section-0-decision-toggle[aria-expanded=false][aria-label='Approved: change decision']"
              )
 
       assert has_element?(view, "#packet-section-0-decision [aria-pressed=true]", "Approve")
 
       assert has_element?(
                view,
-               "#packet-section-0-decision [aria-pressed=true][aria-label='Approved. Select again to clear decision'] .review-section-action-result",
+               "#packet-section-0-decision-toggle .review-section-decision-toggle-label",
                "Approved"
              )
 
@@ -1866,7 +1867,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#packet-section-0-decision [aria-pressed=true] .review-section-action-result",
+               "#packet-section-0-decision-toggle .review-section-decision-toggle-label",
                "Changes requested"
              )
 
@@ -2105,7 +2106,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#{toggle}[aria-expanded=true][aria-label='Close decision controls']"
+               "#{toggle}[aria-expanded=true][aria-label='Dismiss decision controls']"
              )
 
       assert has_element?(view, "#packet-section-0-decision-owner-only", "Only the review owner")
