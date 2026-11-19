@@ -368,14 +368,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     """
   end
 
-  attr :name, :string, required: true
-  attr :directory, :string, default: ""
-
   @doc "A tree row's tooltip: the full path, and for a rename where it came from."
   def tree_row_title(%{status: "renamed", old_path: old, path: path}) when is_binary(old),
     do: "#{old} → #{path}"
 
   def tree_row_title(%{path: path}), do: path
+
+  attr :name, :string, required: true
+  attr :directory, :string, default: ""
 
   # A file row's chevron and name, with the rest of its path muted after it.
   def tree_file_label(assigns) do
