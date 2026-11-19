@@ -25,8 +25,10 @@ With the endpoint off, `/mcp` returns 404. Requests for another host get 403;
 elsewhere with its token. Each identity may make 5 requests a second, with
 bursts of 20. With writes off, the write tools are
 not listed and are refused on every call, including from clients that cached
-an older tool list. Requests must use the host in `PHX_HOST`; browser requests
-from other origins are rejected. MCP request bodies are capped at 4 MB before
+an older tool list. Requests must use the host in `PHX_HOST`. Requests with an
+`Origin` header are rejected unless it is that host or one of the connector
+apps (`https://claude.ai`, `https://claude.com`, `https://chatgpt.com`), which
+also get CORS headers. MCP request bodies are capped at 4 MB before
 JSON decoding. The CLI's 50 MB REST limit is unchanged.
 
 ## Authentication and access

@@ -182,7 +182,8 @@ defmodule ReviewsWeb.Router do
     pipe_through :mcp
 
     forward "/mcp", ReviewsWeb.MCP.Server,
-      allowed_hosts: {ReviewsWeb.MCP.Server, :allowed_hosts, []}
+      allowed_hosts: {ReviewsWeb.MCP.Server, :allowed_hosts, []},
+      cors: [origins: {ReviewsWeb.MCP.Server, :cors_origins, []}]
   end
 
   # Enable LiveDashboard in development

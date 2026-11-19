@@ -200,6 +200,42 @@ defmodule ReviewsWeb.MCPOAuthTest do
       assert challenge(conn) =~ ~s(error="invalid_token")
     end
 
+    @tag :capture_log
+    test "Claude's and ChatGPT's origins get the 401 challenge; other sites a 403" do
+      probe = fn origin, method ->
+        %{build_conn() | host: "localhost"}
+        |> put_req_header("origin", origin)
+        |> put_req_header("accept", "application/json, text/event-stream")
+        |> put_req_header("content-type", "application/json")
+        |> dispatch(
+          ReviewsWeb.Endpoint,
+          method,
+          "/mcp",
+          ~s({"jsonrpc":"2.0","id":0,"method":"initialize","params":{}})
+        )
+      end
+
+      for origin <- ["https://claude.ai", "https://claude.com", "https://chatgpt.com"],
+          method <- [:post, :get] do
+        conn = probe.(origin, method)
+        assert conn.status == 401, "#{method} from #{origin}"
+        assert challenge(conn) =~ ~s(resource_metadata="#{@metadata_url}")
+        assert get_resp_header(conn, "access-control-allow-origin") == [origin]
+        assert hd(get_resp_header(conn, "access-control-expose-headers")) =~ "www-authenticate"
+      end
+
+      preflight =
+        %{build_conn() | host: "localhost"}
+        |> put_req_header("origin", "https://claude.ai")
+        |> put_req_header("access-control-request-method", "POST")
+        |> options("/mcp")
+
+      assert preflight.status == 204
+      assert hd(get_resp_header(preflight, "access-control-allow-headers")) =~ "authorization"
+
+      assert probe.("https://evil.example", :post).status == 403
+    end
+
     test "protected resource and issuer metadata lead to the sign-in endpoints", %{conn: conn} do
       resource =
         conn |> get("/.well-known/oauth-protected-resource/mcp") |> json_response(200)

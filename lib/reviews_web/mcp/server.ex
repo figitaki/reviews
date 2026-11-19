@@ -39,6 +39,12 @@ defmodule ReviewsWeb.MCP.Server do
   def enabled?, do: Keyword.get(config(), :enabled, false)
   def writes_enabled?, do: enabled?() and Keyword.get(config(), :writes_enabled, false)
   def allowed_hosts, do: Keyword.get(config(), :allowed_hosts, :localhost)
+
+  # Claude and ChatGPT send their app's Origin when they check and call a
+  # connector. Without it here, the DNS-rebinding check answers 403 before the
+  # 401 that leads them to sign-in. Tokens still authenticate every call.
+  def cors_origins, do: ~w(https://claude.ai https://claude.com https://chatgpt.com)
+
   defp config, do: Application.get_env(:reviews, :mcp, [])
 
   @doc """
