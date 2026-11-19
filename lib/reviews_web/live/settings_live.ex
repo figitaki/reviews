@@ -137,7 +137,7 @@ defmodule ReviewsWeb.SettingsLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <main id="settings-page" class="l-page design-page">
+      <div id="settings-page" class="l-page design-page">
         <Layouts.landing_topbar current_user={@current_user} return_to={~p"/settings"} />
 
         <div class="design-main is-settings">
@@ -148,13 +148,12 @@ defmodule ReviewsWeb.SettingsLive do
             class="is-compact"
           >
             <:actions>
-              <.link
+              <.ds_github_button
                 :if={!@current_user}
                 href={~p"/auth/github?return_to=/settings"}
-                class="ds-button is-primary"
               >
                 Sign in with GitHub
-              </.link>
+              </.ds_github_button>
             </:actions>
           </.ds_page_header>
 
@@ -223,7 +222,6 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Agent Name"
                         placeholder="Claude"
                         autocomplete="off"
-                        class="ds-input"
                       />
                       <.input
                         field={@agent_form[:handle]}
@@ -232,7 +230,6 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Handle"
                         placeholder="claude"
                         autocomplete="off"
-                        class="ds-input"
                       />
                       <.input
                         field={@agent_form[:provider]}
@@ -241,10 +238,15 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Provider"
                         placeholder="Claude, Codex, custom"
                         autocomplete="off"
-                        class="ds-input"
                       />
-                      <.ds_button type="submit" variant="primary" class="ds-settings-form-submit">
-                        <.icon name="hero-plus" class="size-4" /> New agent identity
+                      <.ds_button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        class="ds-settings-form-submit"
+                        icon="hero-plus"
+                      >
+                        New agent identity
                       </.ds_button>
                     </form>
                   </.ds_card>
@@ -284,6 +286,7 @@ defmodule ReviewsWeb.SettingsLive do
                         <.ds_button
                           id={"sign-out-cli-#{session.id}"}
                           variant="danger"
+                          icon="hero-arrow-right-start-on-rectangle"
                           phx-click="sign_out_cli"
                           phx-value-id={session.id}
                           data-confirm="Sign this CLI out? Its tokens stop working at once."
@@ -338,6 +341,7 @@ defmodule ReviewsWeb.SettingsLive do
                           :if={!link.revoked_at}
                           id={"revoke-agent-link-#{link.id}"}
                           variant="danger"
+                          icon="hero-link-slash"
                           phx-click="revoke_agent_link"
                           phx-value-id={link.id}
                           data-confirm="Disconnect this agent? Its tokens stop working at once."
@@ -366,7 +370,6 @@ defmodule ReviewsWeb.SettingsLive do
                         type="select"
                         label="Acting Identity"
                         options={identity_options(@identities)}
-                        class="ds-input"
                       />
                       <.input
                         field={@token_form[:name]}
@@ -375,10 +378,15 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Token Name"
                         placeholder="laptop"
                         autocomplete="off"
-                        class="ds-input"
                       />
-                      <.ds_button type="submit" variant="primary" class="ds-settings-form-submit">
-                        <.icon name="hero-key" class="size-4" /> Generate token
+                      <.ds_button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        class="ds-settings-form-submit"
+                        icon="hero-key"
+                      >
+                        Generate token
                       </.ds_button>
                     </form>
 
@@ -433,6 +441,7 @@ defmodule ReviewsWeb.SettingsLive do
                             <.ds_button
                               id={"revoke-token-#{token.id}"}
                               variant="danger"
+                              icon="hero-no-symbol"
                               phx-click="revoke_token"
                               phx-value-id={token.id}
                               data-confirm="Revoke this token? Anything using it will lose API access."
@@ -456,15 +465,15 @@ defmodule ReviewsWeb.SettingsLive do
                 body="Settings are tied to your GitHub account so identities and credentials can be managed safely."
               >
                 <:actions>
-                  <.link href={~p"/auth/github?return_to=/settings"} class="ds-button is-primary">
+                  <.ds_github_button href={~p"/auth/github?return_to=/settings"}>
                     Sign in with GitHub
-                  </.link>
+                  </.ds_github_button>
                 </:actions>
               </.ds_empty_state>
             </div>
           <% end %>
         </div>
-      </main>
+      </div>
     </Layouts.app>
     """
   end

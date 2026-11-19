@@ -67,11 +67,15 @@ config :reviews, Reviews.OAuth,
     Reviews.OAuthTestResource,
     Reviews.OAuthTestResource.KeysOnly,
     Reviews.Poppy,
-    Reviews.OAuth.CLI
+    Reviews.OAuth.CLI,
+    Reviews.MCPAuth
   ],
+  token_endpoint_audience_clients: ["https://chatgpt.com/oauth/client.json"],
   default_resource: Reviews.Poppy
 
 # Raise on LiveView test-time template problems instead of warning.
 config :phoenix_live_view, :test_warnings,
   duplicate_id: :raise,
   missing_form_id: :raise
+
+config :reviews, :design_catalog, true

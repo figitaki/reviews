@@ -432,6 +432,17 @@ fn dry_run_report(
         }
     }
 
+    if !check.notes.is_empty() {
+        let _ = writeln!(
+            out,
+            "\nPacket has {}. Notes do not stop a push:",
+            plural(check.notes.len(), "note")
+        );
+        for line in check.note_lines(&display) {
+            let _ = writeln!(out, "  {line}");
+        }
+    }
+
     let has_problems = write_problems(&mut out, problems);
     if check.is_valid() {
         let next = if has_problems {

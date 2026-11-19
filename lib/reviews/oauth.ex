@@ -94,7 +94,9 @@ defmodule Reviews.OAuth do
   @spec approve(User.t(), term(), Authorization.request(), [String.t()]) ::
           {:ok, String.t()} | {:error, :invalid_identity}
   def approve(%User{} = user, identity_id, request, granted_scopes) do
-    with {:ok, id} when is_integer(id) <- Ecto.Type.cast(:id, identity_id),
+    # IDs are bigints; a larger number would make the query raise.
+    with {:ok, id} when is_integer(id) and id <= 9_223_372_036_854_775_807 <-
+           Ecto.Type.cast(:id, identity_id),
          %Identity{kind: "agent"} = identity <- Accounts.get_owned_identity(user, id),
          {:ok, url} <-
            Authorization.approve(config(), request,
@@ -106,6 +108,28 @@ defmodule Reviews.OAuth do
     else
       _ -> {:error, :invalid_identity}
     end
+  end
+
+  @doc """
+  Creates an agent identity for `user` from `attrs` (`handle`,
+  `display_name`), as Settings does, and approves `request` for it, in one
+  transaction: if either step fails, neither is kept. Returns the redirect
+  back to the client,
+  `{:error, changeset}` when the identity is not valid, or
+  `{:error, :invalid_identity}` when the approval is refused.
+  """
+  @spec approve_new_agent(User.t(), map(), Authorization.request(), [String.t()]) ::
+          {:ok, String.t()} | {:error, Ecto.Changeset.t() | :invalid_identity}
+  def approve_new_agent(%User{} = user, attrs, request, granted_scopes) when is_map(attrs) do
+    Repo.transaction(fn ->
+      with {:ok, identity} <-
+             Accounts.create_agent_identity(user, Map.take(attrs, ["handle", "display_name"])),
+           {:ok, url} <- approve(user, identity.id, request, granted_scopes) do
+        url
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 
   ## Device sign-in (the Reviews CLI)
@@ -138,6 +162,28 @@ defmodule Reviews.OAuth do
         {:error, :invalid_scopes} -> {:error, :invalid_user_code}
         result -> result
       end
+    end
+  end
+
+  @doc "Creates an owned agent and approves the CLI sign-in atomically."
+  @spec approve_device_new_agent(User.t(), term(), map()) ::
+          :ok | {:error, term()}
+  def approve_device_new_agent(%User{} = user, user_code, attrs) when is_map(attrs) do
+    Ecto.Multi.new()
+    |> Ecto.Multi.run(:request, fn _repo, _changes -> lookup_device(user_code) end)
+    |> Ecto.Multi.run(:identity, fn _repo, _changes ->
+      Accounts.create_agent_identity(user, Map.take(attrs, ["handle", "display_name"]))
+    end)
+    |> Ecto.Multi.run(:approval, fn _repo, %{identity: identity} ->
+      case approve_device(user, user_code, identity.id) do
+        :ok -> {:ok, :approved}
+        {:error, reason} -> {:error, reason}
+      end
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, _changes} -> :ok
+      {:error, _step, reason, _changes} -> {:error, reason}
     end
   end
 

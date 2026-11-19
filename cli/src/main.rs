@@ -34,6 +34,9 @@ enum Command {
     /// Preview the diff that would be pushed, without uploading
     Diff(commands::diff::DiffArgs),
 
+    /// List reviews you wrote or took part in (requires `reviews login`)
+    List(commands::list::ListArgs),
+
     /// Fetch a review by slug as JSON or Markdown
     Show(commands::show::ShowArgs),
 
@@ -54,6 +57,9 @@ enum Command {
 
     /// Approve, deny, ignore, or reset a packet section to pending
     Section(commands::section::SectionArgs),
+
+    /// Permanently delete a review you own, after typing its slug to confirm
+    Delete(commands::delete::DeleteArgs),
 }
 
 fn main() {
@@ -70,6 +76,7 @@ fn run() -> Result<()> {
         Command::Whoami => commands::whoami::run(),
         Command::Push(args) => commands::push::run(args),
         Command::Diff(args) => commands::diff::run(args),
+        Command::List(args) => commands::list::run(args),
         Command::Show(args) => commands::show::run(args),
         Command::Comment(args) => commands::comment::run(args),
         Command::Threads(args) => commands::threads::run(args),
@@ -77,5 +84,6 @@ fn run() -> Result<()> {
         Command::Resolve(args) => commands::thread_status::run(args, "resolved"),
         Command::Reopen(args) => commands::thread_status::run(args, "open"),
         Command::Section(args) => commands::section::run(args),
+        Command::Delete(args) => commands::delete::run(args),
     }
 }

@@ -6,58 +6,160 @@
   line-height: var(--font-meta-leading);
 }
 
-.review-activity-panel {
-  border: 1px solid var(--ds-line);
-  border-radius: var(--radius-md);
-  background: var(--ds-panel);
-  overflow: hidden;
-}
 
 .review-activity-summary {
-  cursor: pointer;
-  padding: var(--space-3) var(--space-4);
-  font-weight: var(--weight-medium);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
   min-height: 44px;
+  padding: 0 var(--space-3);
+  cursor: pointer;
+  font-weight: var(--weight-medium);
   white-space: nowrap;
+  list-style: none;
+}
+.review-activity-summary::-webkit-details-marker { display: none; }
+
+.review-activity-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.review-activity-count,
-.review-activity-read {
-  color: var(--ds-blue);
+.review-activity-close {
+  display: none;
+  flex: none;
+  fill: none;
+  stroke: var(--ds-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.review-activity-panel[open] .review-activity-close { display: block; }
+
+/* No comments renders nothing, except on phones, where the Comments and
+   Sections buttons always show. */
+@media (min-width: 641px) {
+  .review-activity[data-empty] { display: none; }
+}
+
+.review-activity-count {
+  color: var(--ds-muted);
   font-size: var(--font-label-size);
   font-variant-numeric: tabular-nums;
 }
-.review-activity-count { margin-inline-start: var(--space-3); }
-.review-activity-body { padding: 0 var(--space-3) var(--space-3); }
-.review-activity-note { color: var(--ds-muted); margin: var(--space-3); }
+[data-unread="true"] .review-activity-count { color: var(--ds-blue); }
+.review-activity-body {
+  display: flex;
+  flex-direction: column;
+}
 
 .review-activity-mark-all {
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
+  order: 2;
+  align-self: flex-end;
+  min-height: 32px;
+  padding: 0 var(--space-2);
   border: 0;
+  border-radius: var(--radius-sm);
   color: var(--ds-muted);
   background: transparent;
   font: inherit;
+  font-size: var(--font-label-size);
   cursor: pointer;
 }
 .review-activity-mark-all:disabled { display: none; }
-.review-activity-list { list-style: none; padding: 0; margin: 0; }
+
+/* A chat-style log: oldest at the top, newest at the bottom, scrolling on
+   its own so the page does not move. */
+.review-activity-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 50dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
 .review-activity-entry {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
+  gap: 2px;
+  padding: var(--space-2) var(--space-2) var(--space-2) 14px;
   border-radius: var(--radius-sm);
-  color: var(--ds-muted);
+  color: var(--ds-text);
   text-decoration: none;
   font: inherit;
 }
+.is-unread > .review-activity-entry::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ds-blue);
+}
+.review-activity-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--ds-muted);
+  font-size: var(--font-label-size);
+  white-space: nowrap;
+}
+.review-activity-author {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ds-text);
+  font-weight: var(--weight-medium);
+}
+.review-activity-time { flex: none; }
+.review-activity-anchor {
+  flex: 0 100 auto;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+  background: var(--ds-hover);
+  font-family: var(--font-mono);
+}
+.review-activity-entry:hover .review-activity-anchor { color: var(--ds-blue); }
+/* Replies quote the comment they answer, in one line. */
+.review-activity-quote {
+  overflow: hidden;
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--ds-line);
+  color: var(--ds-muted);
+  font-size: var(--font-label-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The first two lines of the comment, fading out. */
+.review-activity-body-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  mask-image: linear-gradient(to bottom, #000 45%, transparent);
+}
+.is-own > .review-activity-entry .review-activity-body-text { color: var(--ds-muted); }
 .review-activity-entry:hover,
-.review-activity-mark-all:enabled:hover { background: var(--ds-hover); color: var(--ds-text); }
-.review-activity-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.review-activity-location { font-family: var(--font-mono); font-size: var(--font-label-size); white-space: nowrap; }
+.review-activity-mark-all:enabled:hover { background: var(--ds-hover); }
 .review-activity-summary:focus-visible,
 .review-activity-mark-all:focus-visible,
 .review-activity-entry:focus-visible {
@@ -65,29 +167,215 @@
   outline-offset: -2px;
 }
 
+/* The Comments button: a small fixed button in the bottom-right corner that
+   never changes size. Opening it shows the log as a separate panel floating
+   above it. */
+.review-activity-panel {
+  position: relative;
+  width: var(--size-fab);
+  height: var(--size-fab);
+  box-sizing: border-box;
+  border: 1px solid var(--review-line-strong, var(--ds-line));
+  border-radius: var(--radius-lg);
+  background: var(--ds-panel-raised, var(--ds-panel));
+  color: var(--ds-text);
+  box-shadow: var(--shadow-float);
+}
+.review-activity-panel[data-unread="true"] {
+  border-color: var(--ds-blue);
+  box-shadow: 0 0 0 1px var(--ds-blue), var(--shadow-float);
+}
+.review-activity-summary {
+  position: relative;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border-radius: inherit;
+}
+.review-activity-label { @apply sr-only; }
+.review-activity-icon,
+.review-activity-close { width: 22px; height: 22px; margin: 0; }
+.review-activity-panel[open] .review-activity-icon,
+.review-activity-panel[open] .review-activity-count { display: none; }
+.review-activity-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border: 1px solid var(--review-line-strong, var(--ds-line));
+  border-radius: var(--radius-pill);
+  background: var(--ds-panel-raised, var(--ds-panel));
+  font-size: 0.6875rem;
+  line-height: 18px;
+  text-align: center;
+}
+.review-activity-panel[data-unread="true"] .review-activity-count { border-color: var(--ds-blue); }
+.review-activity-count:empty { display: none; }
+
+.review-activity-body {
+  position: absolute;
+  right: -1px;
+  bottom: calc(100% + 12px);
+  width: min(320px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  box-sizing: border-box;
+  padding: var(--space-2);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--radius-md);
+  background: var(--ds-panel);
+  box-shadow: var(--shadow-panel);
+  transform-origin: bottom right;
+  animation: review-activity-open 160ms ease-out;
+}
+.review-activity-heading {
+  margin: 0;
+  padding: 2px var(--space-2) var(--space-1);
+  color: var(--ds-muted);
+  font-size: var(--font-label-size);
+  font-weight: var(--weight-medium);
+}
+@keyframes review-activity-open {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .review-activity-body { animation: none; }
+}
+
+/* The button floats over the content at every width; the review content
+   stays full width. */
+.review-activity {
+  --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
+  --review-quick-right: calc(16px + env(safe-area-inset-right));
+
+  position: fixed;
+  right: var(--review-quick-right);
+  bottom: var(--review-quick-bottom);
+  z-index: var(--z-fab);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+/* Leave room so the button never covers the last lines of code. */
+.review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+
+/* Above phones the sticky section decision bar stops short of the button. */
+@media (min-width: 641px) {
+  .review-page:has(.review-activity:not([data-empty])) .review-section-decision { margin-right: 64px; }
+}
+
 @media (min-width: 1200px) {
-  .review-activity {
-    width: 224px;
-    position: sticky;
-    top: calc(var(--review-main-nav-h) + var(--review-section-sticky-h) + var(--space-5));
-    align-self: start;
-  }
-  .review-activity:not(:has(details[open])) { width: auto; }
-  .review-activity-body {
-    max-height: calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 96px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+  .review-activity-body { width: 300px; }
+  .review-activity-log {
+    max-height: min(60dvh, calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 120px));
   }
 }
-@media (max-width: 1199px) {
-  .review-activity-body { max-height: 50dvh; overflow-y: auto; }
+
+/* The Sections button exists only on phones. */
+.review-quick-button { display: none; }
+
+/* Phones: icon-only floating buttons, Sections (Guide only) above Comments,
+   stacked above the section decision button, all three --size-fab. */
+@media (max-width: 640px) {
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
+    --review-quick-right: calc(16px + env(safe-area-inset-right));
+    --review-quick-bottom: calc(16px + var(--size-fab) + 12px + env(safe-area-inset-bottom));
+  }
+  /* Sections scrolls the Guide map in below the sticky review toolbar, so its
+     close button stays visible. */
+  #review-guide-shell { scroll-margin-top: var(--rev-header-h, 48px); }
+  /* The open decision panel spans the screen. */
+  .review-page:has(.review-section-decision.is-editing) .review-activity { display: none; }
+  /* The Guide grid already reserves space for the decision button. */
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
+    padding-bottom: 72px;
+  }
+
+  .review-quick-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--size-fab);
+    height: var(--size-fab);
+    padding: 0;
+    border: 1px solid var(--review-line-strong, var(--ds-line));
+    border-radius: var(--radius-lg);
+    background: var(--ds-panel-raised, var(--ds-panel));
+    color: var(--ds-text);
+    box-shadow: var(--shadow-float);
+    cursor: pointer;
+  }
+  .review-page:not(:has([data-guide-flyout-toggle])) .review-quick-button { display: none; }
+  .review-quick-icon { width: var(--size-fab-icon); height: var(--size-fab-icon); }
+  .review-quick-button:focus-visible {
+    outline: 2px solid var(--ds-focus);
+    outline-offset: 2px;
+  }
+  /* The open log covers the Sections button's spot. */
+  .review-activity:has(details[open]) .review-quick-button { visibility: hidden; }
+  .review-activity-body {
+    width: calc(100vw - var(--review-quick-right) - 16px - env(safe-area-inset-left));
+  }
+  .review-activity-log { max-height: calc(60svh - var(--review-quick-bottom)); }
+
+  /* Phones: Sections and Comments sit in their own bar along the bottom, so
+     they never cover thread cards or the end of a comment. The content
+     reserves the bar's height. */
+  .review-activity {
+    --review-bar-h: calc(var(--size-fab) + 16px + env(safe-area-inset-bottom));
+
+    left: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 8px var(--review-quick-right) calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--ds-line);
+    background: var(--ds-panel);
+  }
+  .review-workspace-content,
+  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
+    padding-bottom: calc(var(--review-bar-h, 64px) + 16px);
+  }
+  /* Decisions stick just above the bar. In the Guide, which shows one
+     section, the closed decision button joins the bar on its left. */
+  .review-page .review-section-decision { bottom: calc(var(--size-fab) + 28px + env(safe-area-inset-bottom)); }
+  .review-page .review-packet-shell.has-outline .review-section-decision:not(.is-editing):not(.is-readonly) {
+    position: fixed;
+    right: auto;
+    left: calc(16px + env(safe-area-inset-left));
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    /* Above the bar's own background, which comes later in the page. */
+    z-index: calc(var(--z-fab) + 1);
+    margin: 0;
+  }
+  /* Let that z-index reach the page: the grid's own stacking context would
+     keep the button under the bar. Its children still sit below the bar,
+     Guide and toolbar layers. */
+  .review-packet-shell.has-outline .review-packet-grid { z-index: auto; }
+  .review-activity-body { bottom: calc(100% + 8px); }
+  .review-activity:has(details[open]) .review-quick-button { visibility: visible; }
+}
+
+/* While someone types a comment or reply, or the on-screen keyboard is up,
+   the floating controls step aside so they never cover the box or Submit. */
+@media (max-width: 640px) {
+  .review-page:has(.review-hunk-card textarea:focus) :is(.review-activity, .review-section-decision),
+  html.is-keyboard-open .review-page :is(.review-activity, .review-section-decision) {
+    display: none;
+  }
 }
 
 /* Comments use the same escaped Markdown renderer as the Guide, at UI scale. */
-.review-rich-markdown.review-comment-markdown { font-size: 13px; line-height: 1.5; }
+.review-rich-markdown.review-comment-markdown { padding: 0; font-size: 0.8125rem; line-height: 1.5; }
 .review-comment-markdown > :first-child { margin-top: 0; }
 .review-comment-markdown > :last-child { margin-bottom: 0; }
 .review-comment-markdown :is(p, ul, ol, blockquote, pre, table) { margin-block: 0.5em; }
 .review-comment-markdown :is(h1, h2, h3, h4, h5, h6) { font-size: 1em; margin-block: 0.75em 0.25em; }
-.review-comment-markdown pre { max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.review-comment-markdown pre { max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.75rem; }
 .review-comment-markdown table { display: block; max-width: 100%; overflow-x: auto; }

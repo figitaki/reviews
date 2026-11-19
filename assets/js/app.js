@@ -28,6 +28,76 @@ import DiffRenderer from "./hooks/diff_renderer"
 import PacketNavTree from "./hooks/packet_nav_tree"
 import Markdown from "./hooks/markdown"
 import ReviewActivity from "./hooks/review_activity"
+import DesignPlayground from "./hooks/design_playground"
+import PacketFragments from "./hooks/packet_fragments"
+import GuideFlyout from "./hooks/guide_flyout"
+import {mountDevicePage} from "./device_code"
+import {watchKeyboard} from "./lib/keyboard_inset"
+
+// LiveView saves window.scrollY into history.state 100 ms after every scroll
+// so back and forward can restore it. Brave on iOS (Chromium's ios/web)
+// treats each replaceState as a navigation and expands its toolbars, so the
+// bars came back whenever a scroll stopped. Keep those scroll-only writes in
+// memory, keyed by the entry's LiveView history position, and store them only
+// when needed: before a new entry is pushed, with any other replaceState, and
+// when the page is hidden. Back and forward within the page skip history.state
+// and hand the held position to LiveView's popstate handler instead.
+const deferScrollHistoryWrites = () => {
+  const {pushState, replaceState} = History.prototype
+  const pendingScroll = new Map()
+  const entryKey = state => state?.position ?? null
+
+  const isScrollOnly = (state, current, url) => {
+    if (!state || typeof state.scroll !== "number") return false
+    if (url != null && new URL(url, window.location.href).href !== window.location.href) return false
+    current = current || {}
+    const keys = new Set([...Object.keys(state), ...Object.keys(current)])
+    keys.delete("scroll")
+    return [...keys].every(key => state[key] === current[key])
+  }
+
+  // A state copied from history.state carries the old scroll; one that sets
+  // its own scroll (LiveView does for redirects) keeps it.
+  const withPendingScroll = (state, current) => {
+    const key = entryKey(current)
+    if (!pendingScroll.has(key) || !state || typeof state !== "object") return state
+    const scroll = state.scroll === current?.scroll ? pendingScroll.get(key) : state.scroll
+    pendingScroll.delete(key)
+    return {...state, scroll}
+  }
+
+  const flush = () => {
+    const current = history.state || {}
+    if (!pendingScroll.has(entryKey(current))) return
+    replaceState.call(history, withPendingScroll({...current}, current), "", window.location.href)
+  }
+
+  History.prototype.replaceState = function (state, title, url) {
+    if (isScrollOnly(state, this.state, url)) {
+      pendingScroll.set(entryKey(this.state), state.scroll)
+      return
+    }
+    return replaceState.call(this, withPendingScroll(state, this.state), title, url)
+  }
+
+  History.prototype.pushState = function (...args) {
+    flush()
+    // A new entry can reuse the position of a forward entry it replaces.
+    pendingScroll.delete(entryKey(args[0]))
+    return pushState.apply(this, args)
+  }
+
+  // Registered before LiveSocket binds its own popstate listener, so it runs
+  // first and LiveView restores the held position.
+  window.addEventListener("popstate", event => {
+    const key = entryKey(event.state)
+    if (event.state && pendingScroll.has(key)) event.state.scroll = pendingScroll.get(key)
+  })
+
+  window.addEventListener("pagehide", flush)
+}
+
+deferScrollHistoryWrites()
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -39,6 +109,9 @@ const liveSocket = new LiveSocket("/live", Socket, {
     PacketNavTree,
     Markdown,
     ReviewActivity,
+    DesignPlayground,
+    PacketFragments,
+    GuideFlyout,
   },
 })
 
@@ -139,8 +212,12 @@ window.addEventListener("phx:hunk_collapsed", ({detail}) => {
   })
 })
 
+// The CLI sign-in page is not a LiveView; app.js is deferred, so the DOM is ready.
+mountDevicePage()
+
 // connect if there are any LiveViews on the page
 liveSocket.connect()
+watchKeyboard()
 
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()

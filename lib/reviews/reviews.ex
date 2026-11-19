@@ -12,7 +12,8 @@ defmodule Reviews.Reviews do
   alias Reviews.Policy
   alias Reviews.Principal
   alias Reviews.Repo
-  alias Reviews.Reviews.{File, Patchset, Review}
+  alias Reviews.Reviews.{DeletedReview, DeletionHook, File, Patchset, Review}
+  alias Reviews.Threads.{Comment, Thread}
 
   ## Reviews
 
@@ -39,6 +40,134 @@ defmodule Reviews.Reviews do
   end
 
   def owned_by?(%Review{}, _actor), do: false
+
+  ## Deletion
+
+  @doc "True when a review with this slug existed and its owner deleted it."
+  def deleted?(slug) when is_binary(slug),
+    do: Repo.exists?(from d in DeletedReview, where: d.slug == ^slug)
+
+  @doc """
+  Why no review has this slug: `:review_deleted` when its owner deleted it,
+  otherwise `:review_not_found`. Surfaces pass it to `Reviews.Errors`.
+  """
+  def not_found_reason(slug) when is_binary(slug),
+    do: if(deleted?(slug), do: :review_deleted, else: :review_not_found)
+
+  @doc """
+  What deleting the review would remove, for the confirmation warning:
+  counts of patchsets, threads and comments, and the comments written by
+  other accounts (people or their agents), with those authors' handles.
+  """
+  def deletion_summary(%Review{id: review_id, author_id: author_id}) do
+    owner_id = Repo.one(from i in Identity, where: i.id == ^author_id, select: i.owner_user_id)
+
+    comments =
+      from c in Comment,
+        join: t in Thread,
+        on: t.id == c.thread_id,
+        join: i in Identity,
+        on: i.id == c.author_id,
+        where: t.review_id == ^review_id
+
+    others = from [_c, _t, i] in comments, where: i.owner_user_id != ^owner_id
+
+    %{
+      patchsets: Repo.aggregate(from(p in Patchset, where: p.review_id == ^review_id), :count),
+      threads: Repo.aggregate(from(t in Thread, where: t.review_id == ^review_id), :count),
+      comments: Repo.aggregate(comments, :count),
+      other_comments: Repo.aggregate(others, :count),
+      other_authors:
+        Repo.all(from [_c, _t, i] in others, distinct: true, select: i.handle, order_by: i.handle)
+    }
+  end
+
+  @doc """
+  Permanently deletes a review and everything it owns: patchsets and their
+  files and packets, threads and every comment on them (other people's
+  included), section decisions and viewed-hunk state. Only the review owner's
+  account may delete. Keeps the slug in `deleted_reviews` so the link can say
+  the review was deleted.
+
+  Runs `Reviews.Reviews.DeletionHook`s in the same transaction. Broadcasts
+  `{:review_deleted, slug}` on `"review:<slug>"` after it commits.
+
+  Returns `{:ok, review}`, `{:error, :forbidden}` without writing, or
+  `{:error, :review_deleted}` when another request deleted it first.
+  """
+  def delete_review(%Review{} = review, actor) do
+    if Policy.can?(actor, :delete, review) do
+      review |> delete_review_transaction() |> broadcast_deleted()
+    else
+      {:error, :forbidden}
+    end
+  end
+
+  defp delete_review_transaction(%Review{id: id, slug: slug}) do
+    Repo.transaction(fn ->
+      # The row lock makes concurrent comments and pushes, whose foreign keys
+      # need this row, wait for the deletion and then fail.
+      with %Review{} = review <-
+             Repo.one(from r in Review, where: r.id == ^id, lock: "FOR UPDATE"),
+           :ok <- DeletionHook.run(review) do
+        # Threads first: their originating patchset references are RESTRICT,
+        # so deleting them explicitly keeps the patchset cascade from depending
+        # on the order Postgres runs cascades in. Comments cascade from threads;
+        # patchsets, files, section decisions and viewed-hunk rows cascade
+        # from the review.
+        Repo.delete_all(from t in Thread, where: t.review_id == ^id)
+        Repo.delete!(review)
+
+        Repo.insert!(
+          %DeletedReview{slug: slug, deleted_at: DateTime.utc_now(:second)},
+          on_conflict: {:replace, [:deleted_at]},
+          conflict_target: :slug
+        )
+
+        review
+      else
+        nil -> Repo.rollback(:review_deleted)
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp broadcast_deleted({:ok, %Review{slug: slug}} = result) do
+    Phoenix.PubSub.broadcast(Reviews.PubSub, "review:#{slug}", {:review_deleted, slug})
+    result
+  end
+
+  defp broadcast_deleted(error), do: error
+
+  @doc """
+  Reviews the actor's account owns whose title, description, or slug contains
+  `query` (any case), newest first, at most `limit`. A blank query lists the
+  newest.
+  """
+  def search_owned_reviews(%Identity{owner_user_id: owner_id}, query, limit)
+      when is_binary(query) and is_integer(limit) do
+    pattern = "%" <> String.replace(String.trim(query), ~r/[\\%_]/, "\\\\\\0") <> "%"
+
+    Repo.all(
+      from r in Review,
+        join: i in Identity,
+        on: i.id == r.author_id,
+        where: i.owner_user_id == ^owner_id,
+        where:
+          ilike(r.title, ^pattern) or ilike(coalesce(r.description, ""), ^pattern) or
+            ilike(r.slug, ^pattern),
+        order_by: [desc: r.updated_at, desc: r.id],
+        limit: ^limit,
+        # Descriptions have no length limit; the results need only these.
+        select: struct(r, [:id, :slug, :title, :updated_at])
+    )
+  end
+
+  @doc """
+  Lists the reviews `viewer` wrote or took part in. See `Reviews.ReviewIndex`
+  for the filters, the visibility rule, and the result shape.
+  """
+  defdelegate list_reviews(viewer, filters \\ %{}), to: Reviews.ReviewIndex, as: :list
 
   @doc """
   Creates a review along with its initial patchset (#1) in a single transaction.

@@ -6,6 +6,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   alias Reviews.ReviewHunks
   alias Reviews.ReviewPacket
   alias Reviews.ReviewView
+  alias ReviewsWeb.ReviewLive.DiffIsland
 
   attr :packet, :map, required: true
   attr :review, :any, required: true
@@ -20,6 +21,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :return_to, :string, default: "/"
   attr :diff_style, :string, required: true
   attr :expanded_hunk_ids, :any, required: true
+  attr :editing_decision_index, :integer, default: nil
   attr :show_packet_outline, :boolean, default: true
   attr :active_section_index, :integer, default: nil
 
@@ -119,6 +121,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
               <.packet_section_decision
                 section={section}
+                editing={@editing_decision_index == section.index}
                 current_user={@current_user}
                 can_decide={@can_decide_sections}
                 return_to={@return_to}
@@ -180,7 +183,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     <aside
       id="review-guide-shell"
       class="review-guide-shell is-packet-guide"
-      phx-hook=".GuideFlyout"
+      phx-hook="GuideFlyout"
       aria-label="Review guide"
     >
       <nav id="review-edge-rail" class="review-edge-rail" aria-label="Review sections">
@@ -302,11 +305,18 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             >
               <span class="review-guide-flyout-num">{pad2(section.index + 1)}</span>
               <span class="review-guide-flyout-title">{section.title}</span>
-              <span
-                :if={section.effective_status}
-                class={["review-guide-flyout-state", "is-#{section.effective_status}"]}
-              >
-                <.section_status_icon status={section.effective_status} /> {section.status_label}
+              <%!-- A fixed slot on every row, so titles line up whether or not
+                   the section has a decision. --%>
+              <span class="review-guide-flyout-state">
+                <span
+                  :if={section.effective_status}
+                  id={"review-guide-flyout-state-#{section.index}"}
+                  class={["review-section-state-mark", "is-#{section.effective_status}"]}
+                  title={section.status_label}
+                >
+                  <.section_status_icon status={section.effective_status} />
+                  <span class="sr-only">{section.status_label}</span>
+                </span>
               </span>
             </button>
 
@@ -332,79 +342,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         </div>
       </div>
     </aside>
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".GuideFlyout">
-      export default {
-        mounted() {
-          const savedOpen = localStorage.getItem("reviews:guide-map-open")
-          this.open = savedOpen === null
-            ? window.matchMedia("(min-width: 769px)").matches
-            : savedOpen === "true"
-          this.toggle = this.el.querySelector("[data-guide-flyout-toggle]")
-          this.panel = this.el.querySelector("[data-guide-flyout-panel]")
-          this.ticks = this.el.querySelector(".review-edge-rail-ticks")
-
-          // Reveal the rail before restoring focus to its menu button.
-          this.setOpen = (open, {focusToggle = false} = {}) => {
-            if (open === this.open) return
-            this.open = open
-            localStorage.setItem("reviews:guide-map-open", String(open))
-            this.sync()
-            if (!open && focusToggle) this.toggle?.focus({preventScroll: true})
-          }
-
-          this.onToggle = event => {
-            event.preventDefault()
-            this.setOpen(!this.open)
-            if (!this.open) return
-            // Inert is lifted in this same task; focus after the next frame so
-            // the browser sees the panel as focusable again.
-            window.requestAnimationFrame(() => {
-              if (!this.open) return
-              const first =
-                this.panel?.querySelector(".review-guide-flyout-section") ||
-                this.panel?.querySelector("[data-guide-flyout-close]")
-              first?.focus({preventScroll: true})
-            })
-          }
-
-          this.onKeyDown = event => {
-            if (event.key !== "Escape" || !this.open) return
-            this.setOpen(false, {focusToggle: true})
-          }
-
-          this.onPanelClick = event => {
-            if (event.target.closest("[data-guide-flyout-close]")) {
-              this.setOpen(false, {focusToggle: true})
-            }
-          }
-
-          this.toggle?.addEventListener("click", this.onToggle)
-          this.panel?.addEventListener("click", this.onPanelClick)
-          window.addEventListener("keydown", this.onKeyDown)
-          this.sync()
-        },
-
-        updated() {
-          // LiveView patches reset the server-rendered attributes; reapply.
-          this.sync()
-        },
-
-        destroyed() {
-          this.toggle?.removeEventListener("click", this.onToggle)
-          this.panel?.removeEventListener("click", this.onPanelClick)
-          window.removeEventListener("keydown", this.onKeyDown)
-        },
-
-        sync() {
-          const open = this.open
-          this.el.classList.toggle("is-flyout-open", open)
-          if (this.panel) this.panel.inert = !open
-          if (this.ticks) this.ticks.inert = open
-          this.toggle?.setAttribute("aria-expanded", open ? "true" : "false")
-          this.toggle?.setAttribute("aria-label", open ? "Close guide map" : "Open guide map")
-        },
-      }
-    </script>
     """
   end
 
@@ -451,13 +388,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :section_count, :integer, required: true
   attr :current_user, :any, default: nil
 
-  defp packet_section_header(assigns) do
+  # Public for the design catalog (/design/components).
+  def packet_section_header(assigns) do
     assigns =
-      assign(assigns, :title_id, "review-split-section-overview-title-#{assigns.section.index}")
+      assign(assigns, :title_id, "review-section-header-title-#{assigns.section.index}")
 
     ~H"""
     <header
-      id={"review-split-section-overview-#{@section.index}"}
+      id={"review-section-header-#{@section.index}"}
       class="review-section-header"
       aria-labelledby={@title_id}
     >
@@ -508,40 +446,111 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :return_to, :string, default: "/"
   attr :next_section, :map, default: nil
   attr :show_nav, :boolean, default: false
+  attr :editing, :boolean, default: false
 
-  defp packet_section_decision(assigns) do
+  # Public for the component playground (/design/components).
+  def packet_section_decision(assigns) do
+    # Signed-out readers get the same collapsible control, with a sign-in CTA.
+    assigns =
+      assigns
+      |> assign(:collapsible, assigns.can_decide or is_nil(assigns.current_user))
+      |> assign(:sign_in_return_to, section_return_to(assigns.return_to, assigns.section.index))
+
     ~H"""
     <footer
       id={"packet-section-#{@section.index}-decision"}
-      class={["review-section-decision", !@can_decide && "is-readonly"]}
+      class={[
+        "review-section-decision",
+        "is-#{@section.effective_status || "pending"}",
+        @editing && "is-editing",
+        !@collapsible && "is-readonly"
+      ]}
+      phx-hook=".SectionDecision"
+      data-editing={to_string(@editing)}
     >
       <div class="review-section-decision-copy">
-        <span class="review-guide-eyebrow">Section decision</span>
-        <p class="review-section-decision-prompt">{section_decision_prompt(@section)}</p>
+        <span class="review-section-decision-heading">Section decision</span>
+        <p class="review-section-decision-prompt" role="status">
+          <.section_status_icon status={@section.effective_status} />
+          <span>{section_decision_state_label(@section)}</span>
+        </p>
         <p :if={@section.decision_history} class="review-section-decision-history">
           {@section.decision_history}
         </p>
       </div>
-      <div class="review-packet-section-actions" aria-label={"Decision for #{@section.title}"}>
+      <button
+        :if={@collapsible}
+        id={"packet-section-#{@section.index}-decision-toggle"}
+        type="button"
+        class="review-section-decision-toggle"
+        aria-label={
+          cond do
+            @editing ->
+              "Close decision controls"
+
+            @section.effective_status in ~w(approved denied ignored) ->
+              "Change decision: #{section_decision_state_label(@section)}"
+
+            true ->
+              "Decide section"
+          end
+        }
+        aria-expanded={to_string(@editing)}
+        aria-controls={"packet-section-#{@section.index}-decision-controls"}
+        phx-click="toggle_section_decision"
+        phx-value-section_index={@section.index}
+      >
+        <%= cond do %>
+          <% @editing -> %>
+            <.icon name="hero-x-mark" />
+          <% @section.effective_status in ~w(approved denied ignored) -> %>
+            <.section_status_icon status={@section.effective_status} />
+          <% true -> %>
+            <.icon name="hero-pencil-square" />
+        <% end %>
+        <span :if={!@editing} class="review-section-decision-toggle-label" aria-hidden="true">
+          {if @section.effective_status in ~w(approved denied ignored),
+            do: guide_status_label(@section.effective_status),
+            else: "Decide"}
+        </span>
+      </button>
+      <div
+        id={"packet-section-#{@section.index}-decision-controls"}
+        class="review-packet-section-actions"
+        role="group"
+        aria-label={"Decision for #{@section.title}"}
+      >
         <%= cond do %>
           <% @can_decide -> %>
             <button
               :for={status <- ~w(approved denied ignored)}
+              :key={status}
               type="button"
               class={[
                 "review-section-action",
                 @section.effective_status == status && "is-active",
                 "is-#{status}"
               ]}
-              title={section_status_label(status)}
-              aria-label={section_status_label(status)}
+              title={
+                if @section.effective_status == status,
+                  do: "Clear decision",
+                  else: section_status_label(status)
+              }
+              aria-label={
+                if @section.effective_status == status,
+                  do: "#{guide_status_label(status)}. Select again to clear decision",
+                  else: section_status_label(status)
+              }
               aria-pressed={to_string(@section.effective_status == status)}
               phx-click="set_section_status"
               phx-value-section_index={@section.index}
               phx-value-status={status}
             >
               <.section_status_icon status={status} />
-              <span class="review-section-action-label">{section_status_label(status)}</span>
+              <span class="review-section-action-label" aria-hidden="true">
+                <span class="review-section-action-verb">{section_status_label(status)}</span>
+                <span class="review-section-action-result">{guide_status_label(status)}</span>
+              </span>
             </button>
           <% @current_user -> %>
             <p
@@ -552,14 +561,38 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             </p>
           <% true -> %>
             <.link
-              href={~p"/auth/github?#{[return_to: @return_to]}"}
-              class="review-packet-section-signin"
+              id={"packet-section-#{@section.index}-decision-signin"}
+              href={~p"/auth/github?#{[return_to: @sign_in_return_to]}"}
+              class="review-button review-button-primary review-packet-section-signin"
             >
-              Sign in to record a section decision
+              <.github_mark /> Sign in to decide
             </.link>
         <% end %>
       </div>
     </footer>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".SectionDecision">
+      export default {
+        mounted() {
+          this.editing = this.el.dataset.editing
+          this.el.addEventListener("keydown", event => {
+            if (event.key === "Escape" && this.el.dataset.editing === "true") {
+              event.stopPropagation()
+              this.el.querySelector("[aria-expanded]").click()
+            }
+          })
+        },
+        updated() {
+          const editing = this.el.dataset.editing
+          if (editing !== this.editing) {
+            const target = editing === "true"
+              ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector(".review-packet-section-signin")
+              : this.el.querySelector("[aria-expanded]")
+            target?.focus({preventScroll: true})
+          }
+          this.editing = editing
+        }
+      }
+    </script>
     <nav
       :if={@show_nav}
       id={"packet-section-#{@section.index}-nav"}
@@ -728,15 +761,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   defp section_decision_state_label(%{previous: %{}}), do: "Pending for this revision"
   defp section_decision_state_label(_section), do: "Pending"
 
-  defp section_decision_prompt(%{status: status})
-       when status in ~w(approved denied ignored),
-       do: "Current decision: #{guide_status_label(status)}."
-
-  defp section_decision_prompt(%{effective_status: status})
-       when status in ~w(approved denied ignored),
-       do: "Current decision: #{guide_status_label(status)} (carried forward)."
-
-  defp section_decision_prompt(_section), do: "Ready to decide?"
+  # Brings a signed-out reader back to this section with its decision open.
+  defp section_return_to(return_to, section_index) do
+    uri = URI.parse(return_to)
+    query = Map.put(URI.decode_query(uri.query || ""), "section", to_string(section_index))
+    URI.to_string(%{uri | query: URI.encode_query(query)})
+  end
 
   defp pad2(value), do: String.pad_leading(Integer.to_string(value), 2, "0")
 
@@ -1325,6 +1355,34 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     "#{row_id}--#{hunk.id}"
   end
 
+  @doc "Resolves a fragment only against hunk cards in this packet and patchset."
+  def fragment_target(packet, hunks_by_path, id) when is_binary(id) do
+    packet
+    |> ReviewPacket.sections()
+    |> Enum.find_value(fn section ->
+      section
+      |> packet_units(hunks_by_path)
+      |> Enum.find_value(fn
+        %{kind: :hunk_group, hunk: hunk, row_id: row_id, row_ids: row_ids} ->
+          cond do
+            id in row_ids ->
+              %{section_index: section.index, hunk_id: hunk.id, id: row_id}
+
+            id in [hunk.id, "#{hunk.id}-summary", "#{hunk.id}-diff"] ->
+              %{section_index: section.index, hunk_id: hunk.id, id: "#{hunk.id}-summary"}
+
+            true ->
+              nil
+          end
+
+        _ ->
+          nil
+      end)
+    end)
+  end
+
+  def fragment_target(_packet, _hunks_by_path, _id), do: nil
+
   def packet_units(section, hunks_by_path) do
     section.rows
     |> Enum.with_index()
@@ -1541,40 +1599,37 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       ]}
     >
       <div class="review-packet-inline-diff">
-        <div
+        <.live_component
+          module={DiffIsland}
           id={"#{@hunk_id}-diff"}
-          phx-hook="DiffRenderer"
-          phx-update="ignore"
-          data-file-id={"hunk-#{@file.id}-#{@hunk_id}"}
-          data-file-path={@file.path}
-          data-file-status={@file.status}
-          data-side="new"
-          data-patchset-number={@selected_patchset && @selected_patchset.number}
-          data-raw-diff={@hunk.display_raw_diff}
-          data-full-diff={
+          file_id={"hunk-#{@file.id}-#{@hunk_id}"}
+          file_path={@file.path}
+          file_status={@file.status}
+          patchset_number={@selected_patchset && @selected_patchset.number}
+          raw_diff={@hunk.display_raw_diff}
+          full_diff={
             @file.status in ["added", "deleted"] &&
               String.match?(@file.path, ~r/\.(md|markdown|mdown|mkd)$/i) && @file.raw_diff
           }
-          data-threads={threads_json(@published_threads, @file.path)}
-          data-signed-in={if @current_user, do: "true", else: "false"}
-          data-diff-style={@diff_style}
-          data-hunk-id={@hunk_id}
-          data-hunk-label={@hunk_label}
-          data-hunk-details={@details}
-          data-hunk-expanded={to_string(@expanded?)}
-          data-hunk-viewed={to_string(@viewed?)}
-          data-hunk-partially-viewed={to_string(@partially_viewed?)}
-          data-hunk-view-state={@view_state && @view_state.label}
-          data-hunk-attrs={@hunk_attrs_json}
-          data-row-ref={@hunk.row_ref}
-          data-hunk-fingerprint={@hunk.hunk_fingerprint}
-          data-hunk-index={@hunk.hunk_index}
-          data-line-start={@hunk.line_start}
-          data-line-end={@hunk.line_end}
-          data-section-index={@section_index}
-          data-section-title={@section_title}
-        >
-        </div>
+          threads={threads_json(@published_threads, @file.path)}
+          signed_in={if @current_user, do: "true", else: "false"}
+          diff_style={@diff_style}
+          hunk_id={@hunk_id}
+          hunk_label={@hunk_label}
+          hunk_details={@details}
+          hunk_expanded={to_string(@expanded?)}
+          hunk_viewed={to_string(@viewed?)}
+          hunk_partially_viewed={to_string(@partially_viewed?)}
+          hunk_view_state={@view_state && @view_state.label}
+          hunk_attrs={@hunk_attrs_json}
+          row_ref={@hunk.row_ref}
+          hunk_fingerprint={@hunk.hunk_fingerprint}
+          hunk_index={@hunk.hunk_index}
+          line_start={@hunk.line_start}
+          line_end={@hunk.line_end}
+          section_index={@section_index}
+          section_title={@section_title}
+        />
       </div>
     </article>
     """

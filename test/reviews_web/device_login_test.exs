@@ -79,11 +79,20 @@ defmodule ReviewsWeb.DeviceLoginTest do
     html = user |> signed_in() |> get(~p"/device?#{[user_code: user_code]}") |> html_response(200)
     assert html =~ ~s(id="device-confirm-code")
     assert html =~ user_code
+    # The countdown starts near the code's 10 minutes.
+    [_, left] = Regex.run(~r/id="device-confirm-expiry"[^>]*data-seconds-left="(\d+)"/, html)
+    assert String.to_integer(left) in 590..600
     wait()
     assert error(poll(device_code)) == {400, "authorization_pending"}
 
-    # Typed the way people type it.
-    typed = user_code |> String.downcase() |> String.replace("-", "")
+    # The entry form has a box per letter, accepting only the code's letters.
+    html = user |> signed_in() |> get(~p"/device") |> html_response(200)
+    assert html =~ ~s(data-alphabet="BCDFGHJKLMNPQRSTVWXZ")
+    assert length(Regex.scan(~r/id="device-user-code-\d"/, html)) == 8
+    assert html =~ "Codes expire 10 minutes after"
+
+    # Typed into the boxes, the way people type it.
+    typed = user_code |> String.downcase() |> String.replace("-", "") |> String.graphemes()
     html = user |> signed_in() |> post(~p"/device", %{"user_code" => typed}) |> html_response(200)
     assert html =~ ~s(id="device-confirm-form")
     # The picker offers the human identity first, chosen by default.
@@ -132,6 +141,141 @@ defmodule ReviewsWeb.DeviceLoginTest do
     conn = me(refreshed["access_token"])
     assert conn.status == 401
     assert get_resp_header(conn, "www-authenticate") == [~s(Bearer error="invalid_token")]
+  end
+
+  describe "creating an agent during device approval" do
+    defp new_agent_post(user, code, attrs, decision \\ "approve") do
+      user
+      |> signed_in()
+      |> post(~p"/device/decide", %{
+        "user_code" => code,
+        "decision" => decision,
+        "identity_id" => "new",
+        "new_identity" => attrs
+      })
+    end
+
+    test "offers creation without changing the human default and issues agent tokens", %{
+      user: user
+    } do
+      %{"device_code" => device, "user_code" => code} = start!()
+      html = user |> signed_in() |> get(~p"/device?#{[user_code: code]}") |> html_response(200)
+      assert html =~ ~s(id="device-identity-new")
+      assert Accounts.list_agent_identities_for(user) == []
+
+      html =
+        new_agent_post(user, code, %{
+          "display_name" => "My helper",
+          "handle" => "helper",
+          "owner_user_id" => "-1",
+          "kind" => "human",
+          "provider" => "forged"
+        })
+        |> html_response(200)
+
+      assert html =~ ~s(id="device-approved")
+      [agent] = Accounts.list_agent_identities_for(user)
+      assert agent.owner_user_id == user.id
+      assert agent.kind == "agent"
+      assert agent.provider == nil
+      tokens = poll(device) |> json_response(200)
+      assert tokens["scope"] == "cli"
+      assert (tokens["access_token"] |> me() |> json_response(200))["identity"]["id"] == agent.id
+
+      # A repeated form submission must not leave a second identity behind.
+      assert new_agent_post(user, code, %{"display_name" => "Duplicate", "handle" => "second"}).status ==
+               400
+
+      assert [^agent] = Accounts.list_agent_identities_for(user)
+    end
+
+    test "invalid fields preserve the new choice and values, and allow correction", %{user: user} do
+      %{"device_code" => device, "user_code" => code} = start!()
+
+      for handle <- ["", "bad handle"] do
+        html =
+          new_agent_post(user, code, %{"display_name" => "My helper", "handle" => handle})
+          |> html_response(200)
+
+        assert html =~ ~r/<input[^>]*checked[^>]*id="device-identity-new"/
+        assert html =~ ~s(value="My helper")
+        assert Accounts.list_agent_identities_for(user) == []
+        assert {:ok, _} = OAuth.lookup_device(code)
+      end
+
+      assert new_agent_post(user, code, %{"display_name" => "My helper", "handle" => "valid"}).status ==
+               200
+
+      assert poll(device).status == 200
+    end
+
+    test "malformed fields are validation errors, not crashes", %{user: user} do
+      %{"user_code" => code} = start!()
+
+      for attrs <- [nil, "not a map", [], %{"display_name" => [], "handle" => %{}}] do
+        html = new_agent_post(user, code, attrs) |> html_response(200)
+        assert html =~ ~s(id="device-new-identity")
+        assert Accounts.list_agent_identities_for(user) == []
+        assert {:ok, _} = OAuth.lookup_device(code)
+      end
+    end
+
+    test "failure after identity insertion rolls it back", %{user: user} do
+      %{"user_code" => code} = start!()
+      # Lookup succeeds, but Gatekeep refuses an approval with no scopes.
+      Repo.update_all(DeviceCode, set: [scopes: []])
+      assert {:ok, _} = OAuth.lookup_device(code)
+
+      assert {:error, :invalid_user_code} =
+               OAuth.approve_device_new_agent(user, code, %{
+                 "display_name" => "Helper",
+                 "handle" => "rollback"
+               })
+
+      assert Accounts.list_agent_identities_for(user) == []
+      assert {:ok, _} = OAuth.lookup_device(code)
+    end
+
+    test "a taken handle stays pending and leaves existing agents untouched", %{user: user} do
+      {:ok, agent} =
+        Accounts.create_agent_identity(user, %{"display_name" => "Existing", "handle" => "taken"})
+
+      %{"user_code" => code} = start!()
+
+      html =
+        new_agent_post(user, code, %{"display_name" => "New helper", "handle" => "TAKEN"})
+        |> html_response(200)
+
+      assert html =~ "has already been taken"
+      assert [^agent] = Accounts.list_agent_identities_for(user)
+      assert {:ok, _} = OAuth.lookup_device(code)
+    end
+
+    test "deny, expired, signed-out and rate-limited requests create nothing", %{user: user} do
+      attrs = %{"display_name" => "Helper", "handle" => "helper"}
+      %{"user_code" => code} = start!()
+      assert new_agent_post(user, code, attrs, "deny").status == 200
+      assert Accounts.list_agent_identities_for(user) == []
+      %{"user_code" => code} = start!()
+
+      html =
+        build_conn()
+        |> post(~p"/device/decide", %{
+          "user_code" => code,
+          "decision" => "approve",
+          "identity_id" => "new",
+          "new_identity" => attrs
+        })
+        |> html_response(200)
+
+      assert html =~ ~s(id="device-sign-in")
+      Repo.update_all(DeviceCode, set: [expires_at: DateTime.add(DateTime.utc_now(:second), -1)])
+      assert new_agent_post(user, code, attrs).status == 400
+      %{"user_code" => code} = start!()
+      for _ <- 1..10, do: DeviceAttempts.record_failure(user.id)
+      assert new_agent_post(user, code, attrs).status == 400
+      assert Accounts.list_agent_identities_for(user) == []
+    end
   end
 
   test "denying stops the CLI with access_denied", %{user: user} do

@@ -6,14 +6,61 @@ defmodule ReviewsWeb.Api.ReviewController do
   user should open. Bearer-token auth via `Plugs.RequireApiToken` (mounted
   in the router pipeline).
 
+  `GET /api/v1/reviews` lists the reviews the token's actor wrote or took
+  part in (see `Reviews.ReviewIndex`). Bearer-token auth. A human-identity
+  token lists reviews for all of the owner's identities. An agent-identity
+  token lists only that agent's reviews.
+
   `GET /api/v1/reviews/:slug` is the read counterpart — public (matches the
   anonymous web view) and returns a JSON snapshot intended for agents
   consuming reviews from the CLI.
   """
   use ReviewsWeb, :controller
 
-  alias Reviews.{ReviewNavigation, ReviewPacket, ReviewView}
+  alias Reviews.{ReviewIndex, ReviewNavigation, ReviewPacket, ReviewView}
   alias Reviews.Reviews, as: ReviewsContext
+
+  @doc "GET /api/v1/reviews"
+  def index(conn, params) do
+    case ReviewIndex.normalize_filters(params) do
+      {:ok, filters} ->
+        viewer = Reviews.Policy.list_viewer(conn.assigns.current_principal)
+        result = ReviewsContext.list_reviews(viewer, filters)
+
+        json(conn, %{
+          reviews: Enum.map(result.entries, &render_list_entry/1),
+          limit: result.limit,
+          offset: result.offset,
+          next_offset: result.next_offset
+        })
+
+      {:error, errors} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{errors: errors})
+    end
+  end
+
+  defp render_list_entry(entry) do
+    review = entry.review
+
+    %{
+      slug: review.slug,
+      title: review.title,
+      url: url(~p"/r/#{review.slug}"),
+      author: ReviewsWeb.Payloads.identity(review.author),
+      role: entry.role,
+      patchset_count: entry.patchset_count,
+      latest_patchset_number: entry.latest_patchset_number,
+      last_pushed_at: entry.last_pushed_at,
+      updated_at: entry.updated_at,
+      thread_count: entry.thread_count,
+      open_thread_count: entry.open_thread_count,
+      last_activity_at: entry.last_activity_at,
+      has_new_patchset: entry.has_new_patchset,
+      created_at: review.inserted_at
+    }
+  end
 
   @doc "GET /api/v1/reviews/:slug"
   def show(conn, %{"slug" => slug} = params) do
@@ -23,9 +70,7 @@ defmodule ReviewsWeb.Api.ReviewController do
       json(conn, render_review(snapshot))
     else
       {:error, :not_found} ->
-        conn
-        |> put_status(:not_found)
-        |> json(ReviewsWeb.ApiErrors.detail(:review_not_found, "Review not found"))
+        ReviewsWeb.ApiErrors.render(conn, ReviewsContext.not_found_reason(slug))
 
       {:error, :patchset_not_found} ->
         conn
@@ -145,6 +190,45 @@ defmodule ReviewsWeb.Api.ReviewController do
         |> json(ReviewsWeb.ApiErrors.detail(:invalid_request, "Invalid request"))
     end
   end
+
+  @doc """
+  GET /api/v1/reviews/:slug/deletion
+
+  What deleting the review would remove, so a client can warn before it
+  deletes. Owner only, like the deletion itself.
+  """
+  def deletion(conn, %{"slug" => slug}) do
+    with {:ok, review} <- fetch_review(conn, slug) do
+      if Reviews.Policy.can?(conn.assigns.current_principal, :delete, review) do
+        summary = ReviewsContext.deletion_summary(review)
+        json(conn, Map.merge(%{slug: review.slug, title: review.title}, summary))
+      else
+        forbidden(conn)
+      end
+    end
+  end
+
+  @doc "DELETE /api/v1/reviews/:slug"
+  def delete(conn, %{"slug" => slug}) do
+    with {:ok, review} <- fetch_review(conn, slug) do
+      case ReviewsContext.delete_review(review, conn.assigns.current_principal) do
+        {:ok, review} -> json(conn, %{slug: review.slug, deleted: true})
+        {:error, :forbidden} -> forbidden(conn)
+        {:error, reason} -> ReviewsWeb.ApiErrors.render(conn, reason)
+      end
+    end
+  end
+
+  # A deleted review's slug gets 410 `review_deleted`, an unknown one 404.
+  defp fetch_review(conn, slug) do
+    case ReviewsContext.get_review_by_slug(slug) do
+      nil -> ReviewsWeb.ApiErrors.render(conn, ReviewsContext.not_found_reason(slug))
+      review -> {:ok, review}
+    end
+  end
+
+  defp forbidden(conn),
+    do: ReviewsWeb.ApiErrors.render(conn, :forbidden, "Only the review owner can delete it.")
 
   defp normalize_params(params) when is_map(params) do
     %{

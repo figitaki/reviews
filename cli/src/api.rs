@@ -3,6 +3,7 @@
 //! Endpoints (see docs/CONTRACTS.md):
 //!   GET  /api/v1/me
 //!   GET  /api/v1/capabilities
+//!   GET  /api/v1/reviews
 //!   POST /api/v1/reviews
 //!   POST /api/v1/reviews/:slug/patchsets
 //!   POST /api/v1/code-snapshots
@@ -11,6 +12,8 @@
 //!   POST /api/v1/reviews/:slug/comments (new thread or reply)
 //!   PATCH /api/v1/reviews/:slug/threads/:thread_id
 //!   POST /api/v1/reviews/:slug/sections/:section_index/decision
+//!   GET  /api/v1/reviews/:slug/deletion
+//!   DELETE /api/v1/reviews/:slug
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::blocking::{Client, RequestBuilder, Response};
@@ -233,6 +236,35 @@ pub struct SectionDecisionResponse {
     pub status: Option<String>,
 }
 
+/// What deleting a review would remove (`GET /api/v1/reviews/:slug/deletion`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeletionPreview {
+    pub slug: String,
+    pub title: String,
+    pub patchsets: i64,
+    pub threads: i64,
+    pub comments: i64,
+    pub other_comments: i64,
+    pub other_authors: Vec<String>,
+}
+
+/// Filters for `GET /api/v1/reviews`. `None` fields are left out of the query.
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct ListReviewsQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub q: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<u32>,
+}
+
 impl ApiClient {
     pub fn new(base_url: impl Into<String>, token: impl Into<String>) -> Result<Self> {
         Self::build(base_url.into(), Some(token.into()))
@@ -393,6 +425,19 @@ impl ApiClient {
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 
+    pub fn list_reviews(&self, query: &ListReviewsQuery) -> Result<Value> {
+        let path = "/api/v1/reviews";
+        let _ = self.require_token(&format!("GET {path}"))?;
+        let resp = self
+            .auth(self.http.get(self.url(path)))
+            .query(query)
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<Value>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
     pub fn show_review(&self, slug: &str, patchset: Option<i64>) -> Result<Value> {
         let path = format!("/api/v1/reviews/{slug}");
         let mut req = self.auth(self.http.get(self.url(&path)));
@@ -424,6 +469,29 @@ impl ApiClient {
         resp.json::<SectionDecisionResponse>()
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
+
+    pub fn deletion_preview(&self, slug: &str) -> Result<DeletionPreview> {
+        let path = format!("/api/v1/reviews/{slug}/deletion");
+        let _ = self.require_token(&format!("GET {path}"))?;
+        let resp = self
+            .auth(self.http.get(self.url(&path)))
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<DeletionPreview>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
+    pub fn delete_review(&self, slug: &str) -> Result<()> {
+        let path = format!("/api/v1/reviews/{slug}");
+        let _ = self.require_token(&format!("DELETE {path}"))?;
+        let resp = self
+            .auth(self.http.delete(self.url(&path)))
+            .send()
+            .with_context(|| format!("could not reach server for DELETE {path}"))?;
+        check_status(resp, &format!("DELETE {path}"))?;
+        Ok(())
+    }
 }
 
 fn check_status(resp: Response, what: &str) -> Result<Response> {
@@ -440,15 +508,17 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
     let hint = match code {
         Some("invalid_anchor") => " — choose a line or token selection in the selected revision.",
         Some("patchset_not_found") => " — select a revision that belongs to this review.",
+        Some("review_deleted") => " — this review was deleted.",
         _ => match status {
         StatusCode::UNAUTHORIZED => {
             " — the server rejected your sign-in. Run `reviews login` again."
         }
         StatusCode::FORBIDDEN => {
-            " — this identity is not allowed to do that on this review. Only the review owner can push revisions or decide sections; the owner or the thread's author can resolve or reopen a thread."
+            " — this identity is not allowed to do that on this review. Only the review owner can push revisions, decide sections or delete the review; the owner or the thread's author can resolve or reopen a thread."
         }
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",
+        StatusCode::BAD_REQUEST => " — the server did not accept a parameter. See the body.",
         _ => "",
     },
     };
@@ -960,6 +1030,63 @@ mod tests {
         let cs = resp.code_snapshot.unwrap();
         assert_eq!(cs.status, "skipped");
         assert_eq!(cs.code.as_deref(), Some("snapshot_not_ready"));
+    }
+
+    #[test]
+    fn list_reviews_sends_filters_and_token() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("GET", "/api/v1/reviews")
+            .match_header("authorization", "Bearer tok")
+            .match_query(mockito::Matcher::AllOf(vec![
+                mockito::Matcher::UrlEncoded("role".into(), "involved".into()),
+                mockito::Matcher::UrlEncoded("q".into(), "billing export".into()),
+                mockito::Matcher::UrlEncoded("limit".into(), "5".into()),
+            ]))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"reviews":[],"limit":5,"offset":0,"next_offset":null}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let body = client
+            .list_reviews(&ListReviewsQuery {
+                role: Some("involved".into()),
+                q: Some("billing export".into()),
+                limit: Some(5),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(body["limit"], 5);
+        mock.assert();
+    }
+
+    #[test]
+    fn list_reviews_requires_token() {
+        let client = ApiClient::anonymous("http://example.invalid").unwrap();
+        let err = client
+            .list_reviews(&ListReviewsQuery::default())
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("reviews login"));
+    }
+
+    #[test]
+    fn list_reviews_400_shows_hint() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/api/v1/reviews")
+            .match_query(mockito::Matcher::Any)
+            .with_status(400)
+            .with_body(r#"{"errors":{"role":"must be one of: all, authored, involved"}}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let err = client
+            .list_reviews(&ListReviewsQuery::default())
+            .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("400"), "msg = {msg}");
+        assert!(msg.contains("must be one of"), "msg = {msg}");
     }
 
     #[test]

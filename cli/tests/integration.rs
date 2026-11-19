@@ -743,3 +743,116 @@ fn comments_pin_revisions_and_replies_do_not_fetch_snapshots() {
     reply.assert();
     no_get.assert();
 }
+
+mod delete {
+    use super::bin;
+    use mockito::{Matcher, Server};
+    use std::io::Write;
+    use std::process::{Output, Stdio};
+
+    const PREVIEW: &str = r#"{"slug":"k7m2qz","title":"Pushed by mistake","patchsets":1,"threads":1,"comments":2,"other_comments":1,"other_authors":["erin"]}"#;
+
+    fn home(server_url: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg_dir = dir.path().join(".config").join("reviews");
+        std::fs::create_dir_all(&cfg_dir).unwrap();
+        std::fs::write(
+            cfg_dir.join("config.toml"),
+            format!("[default]\nserver_url = \"{server_url}\"\napi_token = \"tok\"\n"),
+        )
+        .unwrap();
+        dir
+    }
+
+    fn delete(home: &std::path::Path, args: &[&str], stdin: &str) -> Output {
+        let mut child = bin()
+            .arg("delete")
+            .args(args)
+            .env("HOME", home)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("run reviews delete");
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(stdin.as_bytes())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    }
+
+    #[test]
+    fn typing_the_slug_deletes_after_the_warning() {
+        let mut server = Server::new();
+        let home = home(&server.url());
+        let preview = server
+            .mock("GET", "/api/v1/reviews/k7m2qz/deletion")
+            .match_header("authorization", "Bearer tok")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(PREVIEW)
+            .create();
+        let delete_mock = server
+            .mock("DELETE", "/api/v1/reviews/k7m2qz")
+            .match_header("authorization", "Bearer tok")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"slug":"k7m2qz","deleted":true}"#)
+            .create();
+
+        let out = delete(home.path(), &["k7m2qz"], "k7m2qz\n");
+
+        assert!(out.status.success(), "{out:?}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("1 comment by other people or agents will be deleted too (erin)"),
+            "{stderr}"
+        );
+        assert!(String::from_utf8_lossy(&out.stdout).contains("Deleted review k7m2qz."));
+        preview.assert();
+        delete_mock.assert();
+    }
+
+    #[test]
+    fn a_wrong_answer_sends_no_delete() {
+        let mut server = Server::new();
+        let home = home(&server.url());
+        let _preview = server
+            .mock("GET", "/api/v1/reviews/k7m2qz/deletion")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(PREVIEW)
+            .create();
+        let no_delete = server.mock("DELETE", Matcher::Any).expect(0).create();
+
+        let out = delete(home.path(), &["k7m2qz"], "yes\n");
+
+        assert!(!out.status.success(), "{out:?}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("not deleted"));
+        no_delete.assert();
+    }
+
+    #[test]
+    fn yes_skips_the_prompt_and_a_refusal_is_explained() {
+        let mut server = Server::new();
+        let home = home(&server.url());
+        let no_preview = server.mock("GET", Matcher::Any).expect(0).create();
+        let refused = server
+            .mock("DELETE", "/api/v1/reviews/k7m2qz")
+            .with_status(403)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"errors":{"detail":"Only the review owner can delete it."},"error_code":"forbidden","error_detail":"Only the review owner can delete it."}"#)
+            .create();
+
+        let out = delete(home.path(), &["k7m2qz", "--yes"], "");
+
+        assert!(!out.status.success(), "{out:?}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("[forbidden]"), "{stderr}");
+        assert!(stderr.contains("delete the review"), "{stderr}");
+        no_preview.assert();
+        refused.assert();
+    }
+}

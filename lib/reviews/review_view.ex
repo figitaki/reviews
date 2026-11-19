@@ -275,7 +275,10 @@ defmodule Reviews.ReviewView do
       owner_username: a["owner_username"],
       approved_at: a["approved_at"],
       link_revoked: match?(%{revoked_at: %DateTime{}}, grant),
-      token_binding: token_binding(a)
+      token_binding: token_binding(a),
+      delegation_signed_by: a["delegation_signed_by"],
+      turnkey_organization_id: a["turnkey_organization_id"],
+      turnkey_agent: a["turnkey_agent"]
     }
   end
 

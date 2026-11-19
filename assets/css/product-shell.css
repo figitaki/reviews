@@ -63,7 +63,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 18px;
   align-items: center;
-  min-height: 64px;
+  min-height: 4rem;
   border-bottom: 1px solid var(--ds-line);
   background: color-mix(in srgb, var(--ds-bg) 88%, transparent);
   padding: 0 16px;
@@ -91,7 +91,7 @@
   align-items: center;
   gap: 9px;
   color: var(--ds-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-decoration: none;
 }
@@ -105,7 +105,7 @@
   border: 1px solid var(--ds-line-strong);
   border-radius: 6px;
   background: var(--ds-panel-raised);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .design-kicker{
@@ -118,7 +118,7 @@
   background: color-mix(in srgb, var(--ds-panel-raised) 82%, transparent);
   padding: 7px 11px;
   color: var(--ds-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 650;
 }
 
@@ -140,7 +140,7 @@
   max-width: 690px;
   margin-top: 22px;
   color: var(--ds-muted);
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1.6;
 }
 
@@ -158,7 +158,7 @@
   max-width: 880px;
   margin: 0;
   color: var(--ds-text);
-  font-size: clamp(48px, 8vw, 108px);
+  font-size: clamp(3rem, 8vw, 6.75rem);
   font-weight: 760;
   letter-spacing: 0;
   line-height: 0.9;
@@ -175,7 +175,7 @@
 
 .ds-page-header.is-compact h1{
   max-width: 720px;
-  font-size: 42px;
+  font-size: 2.625rem;
   line-height: 1.02;
 }
 
@@ -204,7 +204,7 @@
 .ds-section-heading .ds-section-eyebrow{
   margin-bottom: 14px;
   color: var(--ds-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -213,7 +213,7 @@
   max-width: 640px;
   margin-top: 10px;
   color: var(--ds-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 400;
   line-height: 1.55;
   text-transform: none;
@@ -221,7 +221,7 @@
 
 .ds-section-heading h2{
   max-width: 760px;
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 720;
   line-height: 1.08;
 }
@@ -258,7 +258,7 @@
 .ds-token-group h3{
   margin: 0;
   color: var(--ds-text);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 720;
   line-height: 1.25;
 }
@@ -267,7 +267,7 @@
 .ds-identity-row p{
   margin: 4px 0 0;
   color: var(--ds-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .ds-settings-form{
@@ -280,29 +280,90 @@
   padding-top: 18px;
 }
 
-.ds-settings-form .fieldset{
+/* Fields (<.input>). A label above, the control, then any error. /design
+   shows each state; [data-state] lets it show focus without a pointer. */
+.ds-field{
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
   margin: 0;
+}
+
+.ds-field > label{
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.ds-field-label{
+  color: var(--ds-muted);
+  font-size: var(--font-meta-size);
+  font-weight: var(--weight-medium);
+}
+
+.ds-field-error{
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--ds-del);
+  font-size: var(--font-meta-size);
 }
 
 .ds-input{
   width: 100%;
-  min-height: 40px;
-  border: 1px solid var(--ds-line-strong);
-  border-radius: 6px;
+  min-height: var(--size-control-lg);
+  border: var(--border-hair) solid var(--ds-line-input);
+  border-radius: var(--radius-sm);
   background: var(--ds-panel);
   color: var(--ds-text);
-  padding: 0 10px;
-  font-size: 13px;
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-size: var(--font-ui-size);
+  font-weight: var(--weight-regular);
   outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 textarea.ds-input{
-  padding-top: 8px;
+  min-height: 6rem;
+  padding-block: var(--space-3);
+  resize: vertical;
 }
 
-.ds-input:focus{
+.ds-input::placeholder{
+  color: var(--ds-faint);
+  opacity: 1;
+}
+
+.ds-input:is(:focus, [data-state=focus]){
   border-color: var(--ds-focus);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-focus) 18%, transparent);
+}
+
+.ds-input.is-error{
+  border-color: var(--ds-del);
+}
+
+.ds-input.is-error:focus{
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-del) 22%, transparent);
+}
+
+.ds-input:is(:disabled, [readonly]){
+  border-style: dashed;
+  background: transparent;
+  color: var(--ds-muted);
+}
+
+.ds-input:disabled{
+  cursor: not-allowed;
+}
+
+/* COARSE (tokens.css): iOS zooms the page into any field under 16px. */
+@media (pointer: coarse) {
+  .ds-input{
+    font-size: 1rem;
+  }
 }
 
 .ds-settings-form-submit{
@@ -335,7 +396,7 @@ textarea.ds-input{
   border-radius: 8px;
   background: var(--ds-hover);
   color: var(--ds-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 760;
 }
 
@@ -355,7 +416,7 @@ textarea.ds-input{
   justify-content: flex-end;
   gap: 6px;
   color: var(--ds-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .ds-badge{
@@ -367,8 +428,56 @@ textarea.ds-input{
   background: var(--ds-panel);
   color: var(--ds-muted);
   padding: 0 8px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
+}
+
+/* Filter and toggle chips (<.ds_chip>). Same family as .ds-badge: a
+   pill with a hairline border, but interactive and a little larger. */
+.ds-chip{
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--size-control-sm);
+  border: var(--border-hair) solid var(--ds-line);
+  border-radius: var(--radius-pill);
+  background: var(--ds-panel);
+  color: var(--ds-muted);
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.ds-chip:hover{
+  border-color: var(--ds-line-strong);
+  background: var(--ds-hover);
+  color: var(--ds-text);
+}
+
+.ds-chip:focus-visible{
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+.ds-chip.is-selected{
+  border-color: var(--ds-text);
+  background: var(--ds-text);
+  color: var(--ds-bg);
+}
+
+/* COARSE (tokens.css): a 44px tap target around the 28px pill. */
+@media (pointer: coarse) {
+  .ds-chip::after{
+    content: "";
+    position: absolute;
+    inset: -8px 0;
+  }
 }
 
 /* OAuth consent page (ReviewsWeb.OAuthHTML). */
@@ -377,7 +486,7 @@ textarea.ds-input{
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 8px 16px;
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .poppy-facts > div{
@@ -412,7 +521,7 @@ textarea.ds-input{
   margin: 0;
   border: 0;
   padding: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .poppy-consent-form legend{
@@ -428,10 +537,283 @@ textarea.ds-input{
   color: var(--ds-text);
 }
 
+.poppy-new-identity{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-left: 21px;
+}
+
+.poppy-consent-form .poppy-new-identity label{
+  display: grid;
+  gap: 4px;
+  color: var(--ds-muted);
+}
+
+/* The fields show only while "New agent identity" is chosen. */
+#poppy-consent-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity,
+#device-identity:not(:has(input[value="new"]:checked)) .poppy-new-identity{
+  display: none;
+}
+
+@media (max-width: 640px){
+  .poppy-new-identity{
+    grid-template-columns: 1fr;
+  }
+}
+
 .poppy-consent-note{
   margin: 0;
   color: var(--ds-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
+}
+
+/* Who is asking: a recognized app with its logo, or an unverified claim. */
+/* A short header, so the app and the form start on the first screen. */
+.ds-page-header.is-consent{
+  min-height: auto;
+  padding: var(--space-10) 0 var(--space-7);
+}
+
+.ds-page-header.is-consent h1{
+  font-size: var(--font-size-2xl);
+}
+
+.ds-page-header.is-consent .design-hero-copy{
+  margin-top: var(--space-3);
+  font-size: var(--font-size-base);
+}
+
+.consent-client{
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  margin-bottom: var(--space-7);
+}
+
+.consent-client-logo{
+  flex: none;
+  width: var(--size-control-lg);
+  height: var(--size-control-lg);
+  border-radius: var(--radius-md);
+}
+
+.consent-client-logo.is-unknown{
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--ds-line-strong);
+  color: var(--ds-faint);
+}
+
+.consent-client-text{
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.consent-client-name{
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  color: var(--ds-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-semi);
+}
+
+.consent-client-meta{
+  overflow-wrap: anywhere;
+  color: var(--ds-muted);
+  font-size: var(--font-size-sm);
+}
+
+.consent-badge{
+  gap: var(--space-1);
+  color: var(--ds-warn);
+  border-color: color-mix(in srgb, var(--ds-warn) 45%, var(--ds-line));
+}
+
+.consent-badge.is-recognized{
+  color: var(--ds-add);
+  border-color: color-mix(in srgb, var(--ds-add) 45%, var(--ds-line));
+  background: color-mix(in srgb, var(--ds-add) 10%, transparent);
+}
+
+.consent-details{
+  margin-top: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.consent-details summary{
+  width: max-content;
+  color: var(--ds-muted);
+  cursor: pointer;
+}
+
+.consent-details[open] summary{
+  margin-bottom: var(--space-4);
+}
+
+.consent-account{
+  margin: 0 0 var(--space-2);
+  color: var(--ds-muted);
+}
+
+.consent-account strong{
+  color: var(--ds-text);
+}
+
+/* Permissions, grouped into reads (always included) and writes. */
+.poppy-consent-form .consent-scopes{
+  gap: var(--space-5);
+}
+
+.consent-scope-group{
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--ds-line);
+  border-left: 3px solid var(--consent-accent);
+  border-radius: var(--radius-md);
+  background: var(--ds-panel-raised);
+  overflow: hidden;
+}
+
+.consent-scope-group.is-read{
+  --consent-accent: var(--ds-blue);
+}
+
+.consent-scope-group.is-write{
+  --consent-accent: var(--ds-warn);
+}
+
+.consent-scope-group-title{
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  border-bottom: 1px solid var(--ds-line);
+  padding: var(--space-4) var(--space-6);
+  color: var(--consent-accent);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.consent-scope-group-title span{
+  color: var(--ds-muted);
+  font-weight: var(--weight-regular);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.poppy-consent-form .consent-scope{
+  display: flex;
+  gap: var(--space-5);
+  align-items: flex-start;
+  padding: var(--space-5) var(--space-6);
+}
+
+.consent-scope + .consent-scope{
+  border-top: 1px solid var(--ds-line);
+}
+
+label.consent-scope{
+  cursor: pointer;
+}
+
+label.consent-scope:hover{
+  background: var(--ds-hover);
+}
+
+.consent-scope input[type="checkbox"]{
+  flex: none;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+  margin-top: 0.125rem;
+  accent-color: var(--ds-add);
+}
+
+.consent-scope-mark{
+  flex: none;
+  margin-top: 0.125rem;
+  color: var(--ds-blue);
+}
+
+.consent-scope-text{
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.consent-scope-title{
+  color: var(--ds-text);
+  font-size: var(--font-size-base);
+  font-weight: var(--weight-semi);
+}
+
+.consent-scope-desc{
+  color: var(--ds-muted);
+  font-size: var(--font-size-sm);
+}
+
+.consent-scope-name{
+  justify-self: start;
+  color: var(--ds-faint);
+  font-size: var(--font-size-2xs);
+}
+
+/* CLI sign-in page (ReviewsWeb.DeviceHTML): one box per letter, 4-4. */
+.device-code{
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.device-code legend{
+  margin-bottom: 8px;
+  color: var(--ds-text);
+  font-size: 0.8125rem;
+  font-weight: 720;
+}
+
+.device-code-boxes{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 44px)) 12px repeat(4, minmax(0, 44px));
+  gap: 6px;
+  align-items: center;
+}
+
+.device-code-dash{
+  color: var(--ds-muted);
+  text-align: center;
+}
+
+.device-code-box{
+  min-height: 52px;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 1.375rem;
+  font-weight: 650;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.device-expiry{
+  margin: 14px 0 10px;
+  color: var(--ds-muted);
+  font-size: 0.8125rem;
+}
+
+.device-expiry strong{
+  color: var(--ds-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.device-expiry.is-urgent strong,
+.device-expiry.is-expired{
+  color: var(--ds-warn);
 }
 
 .poppy-consent-actions{
@@ -445,7 +827,7 @@ textarea.ds-input{
   gap: 8px;
   margin-top: 12px;
   color: var(--ds-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .ds-token-callout{
@@ -467,20 +849,20 @@ textarea.ds-input{
 
 .ds-token-callout strong{
   color: var(--ds-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .ds-token-callout span,
 .ds-token-callout em{
   color: var(--ds-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-style: normal;
 }
 
 .ds-token-callout code{
   color: var(--ds-text);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
 }
 
@@ -513,7 +895,7 @@ textarea.ds-input{
   border-radius: 6px;
   padding: 8px 10px;
   color: var(--ds-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .ds-token-row-name{
@@ -525,48 +907,79 @@ textarea.ds-input{
 
 .ds-card h3{
   color: var(--ds-text);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 720;
   line-height: 1.3;
 }
 
+/* Buttons (<.ds_button>). One rule set for every button; /design shows each
+   state. The [data-state] selectors only exist so the catalog can show a
+   state without a pointer on it. */
 .ds-button{
+  position: relative;
   display: inline-flex;
-  min-height: 32px;
+  min-height: var(--size-control-md);
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border: 1px solid var(--ds-line-strong);
-  border-radius: 6px;
+  gap: var(--space-3);
+  border: var(--border-hair) solid var(--ds-line-strong);
+  border-radius: var(--radius-sm);
   background: var(--ds-panel);
   color: var(--ds-text);
+  padding: 0 var(--space-5);
   font: inherit;
   font-size: var(--font-ui-size);
   font-weight: var(--font-ui-weight);
   line-height: var(--font-ui-leading);
-  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
-.ds-button{
-  padding: 0 12px;
+/* Icons inside buttons, from the icon attr or <.github_mark>. */
+.ds-github-mark{
+  width:1em;
+  height:1em;
+  flex:none;
+  vertical-align:-0.125em;
 }
 
-.ds-button:hover{
+.ds-button-icon{
+  flex-shrink: 0;
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+}
+
+.ds-button.is-sm .ds-button-icon{
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
+.ds-button.is-sm{
+  min-height: var(--size-control-sm);
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-xs);
+}
+
+/* Regular: the same 40px as a field, for forms and page calls to action. */
+.ds-button.is-lg{
+  min-height: var(--size-control-lg);
+  padding: 0 var(--space-7);
+}
+
+.ds-button:is(:hover, [data-state=hover]){
   border-color: color-mix(in srgb, var(--ds-text) 46%, var(--ds-line));
   background: var(--ds-hover);
-  transform: translateY(-1px);
 }
 
-.ds-button:focus-visible{
-  outline: 2px solid var(--ds-text);
+.ds-button:is(:active, [data-state=active]){
+  background: color-mix(in srgb, var(--ds-text) 10%, var(--ds-panel));
+}
+
+.ds-button:is(:focus-visible, [data-state=focus]){
+  outline: 2px solid var(--ds-focus);
   outline-offset: 2px;
-}
-
-.ds-button:disabled{
-  cursor: not-allowed;
-  opacity: 0.38;
-  transform: none;
 }
 
 .ds-button.is-primary{
@@ -575,14 +988,47 @@ textarea.ds-input{
   color: var(--ds-bg);
 }
 
+/* Primary stays inverted on hover and press; only its contrast moves, so
+   the label never sits on a hover-grey surface. */
+.ds-button.is-primary:is(:hover, [data-state=hover]){
+  border-color: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
+  background: color-mix(in oklab, var(--ds-text) 88%, var(--ds-bg));
+}
+
+.ds-button.is-primary:is(:active, [data-state=active]){
+  border-color: color-mix(in oklab, var(--ds-text) 78%, var(--ds-bg));
+  background: color-mix(in oklab, var(--ds-text) 78%, var(--ds-bg));
+}
+
 .ds-button.is-ghost{
   border-color: transparent;
   background: transparent;
   color: var(--ds-muted);
 }
 
+.ds-button.is-ghost:is(:hover, [data-state=hover]){
+  border-color: transparent;
+  background: var(--ds-hover);
+  color: var(--ds-text);
+}
+
 .ds-button.is-danger{
   color: var(--ds-del);
+}
+
+.ds-button:is(:disabled, [aria-disabled=true]){
+  cursor: not-allowed;
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+/* COARSE (tokens.css): every size keeps a 44px tap target. */
+@media (pointer: coarse) {
+  .ds-button::after{
+    content: "";
+    position: absolute;
+    inset: -8px 0;
+  }
 }
 
 .design-state-focus{
@@ -608,7 +1054,7 @@ textarea.ds-input{
   text-align: center;
 }
 
-.ds-empty-state svg{
+.ds-empty-icon{
   margin-bottom: 18px;
   color: var(--ds-blue);
 }
@@ -616,14 +1062,14 @@ textarea.ds-input{
 .ds-empty-state h3{
   margin: 0;
   color: var(--ds-text);
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 720;
 }
 
 .ds-empty-state p{
   margin: 10px 0 0;
   color: var(--ds-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.55;
 }
 
@@ -673,7 +1119,7 @@ textarea.ds-input{
   }
 
   .ds-page-header h1{
-    font-size: 48px;
+    font-size: 3rem;
   }
 
   .design-main.is-settings{
@@ -685,7 +1131,7 @@ textarea.ds-input{
   }
 
   .ds-page-header.is-compact h1{
-    font-size: 34px;
+    font-size: 2.125rem;
   }
 
   .ds-settings-row,
@@ -716,7 +1162,8 @@ textarea.ds-input{
 /* Narrow phones (#6): keep the topbar on one row down to 320px. The brand
    collapses to its mark (the link keeps its aria-label), the actions may
    shrink, and a long account name truncates instead of pushing the row
-   past the right edge. DOM order, and so focus order, does not change. */
+   past the right edge. DOM order, and so focus order, does not change.
+   480px, not 640px: above it the full brand label still fits (tokens.css). */
 @media (max-width: 480px) {
   .ds-shell-topbar{
     gap: 8px;
@@ -770,4 +1217,30 @@ textarea.ds-input{
   .ds-shell-actions .review-chip{
     min-width: 44px;
   }
+}
+
+/* Layouts.account_menu: the one account control in every top bar. A long
+   name truncates instead of widening the bar. */
+.account-menu {
+  min-width: 0;
+}
+
+.account-menu-button {
+  gap: 8px;
+  max-width: 100%;
+}
+
+.account-menu-avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+}
+
+.account-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

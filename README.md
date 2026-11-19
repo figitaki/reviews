@@ -7,7 +7,7 @@ The app is Phoenix 1.8 + LiveView, with diffs rendered by vanilla
 `@pierre/diffs` from a LiveView hook, and a Rust CLI (`reviews push`) for
 uploading diffs.
 
-Current version: `0.0.1`.
+Current version: `0.0.2`.
 
 ## What It Provides
 
@@ -219,7 +219,10 @@ but it does not contact the server and does not write files. It prints the
 server, the review title or target slug, the diff files and hunks, and the
 packet sections. It lists every packet problem with `file:line`, flags an
 empty review title or `--update` slug, and exits with status 1 if there are
-any problems. It cannot check that the slug exists or that your token works.
+any problems. It also prints notes that do not change the exit status, such as
+a section of only config, docs, lockfiles or generated files placed before a
+section that changes code. It cannot check that the slug exists or that your
+token works.
 
 ## MCP (prototype)
 
@@ -233,6 +236,16 @@ claude mcp add --transport http reviews http://localhost:4000/mcp \
 ```
 
 See [docs/MCP.md](docs/MCP.md) for the tools, access rules, and other clients.
+
+List the reviews you wrote or took part in:
+
+```sh
+reviews list
+reviews list --status updated      # a newer patchset since your last action
+reviews list --role involved -q billing --json
+```
+
+The same list is on the web at `/reviews`.
 
 ## Layout
 
