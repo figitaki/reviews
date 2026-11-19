@@ -6,6 +6,86 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- In the Guide each section has one compact bar at the bottom of the screen
+  at every width: previous section on the left, the decision
+  pill in the middle and next section on the right. It replaces the
+  "Next:" and "Begin review" button at the end of each section and the
+  old corner decision button and shelf. The pill shows your decision on the
+  current version (Approved, Changes requested or Skipped), or "Decide".
+  Clicking it floats Request changes, Skip and Approve in a row above it,
+  with no panel around them and Skip over the pill (on phones the first
+  reads "Changes"), and reads
+  "Dismiss"; choosing one, clicking elsewhere, clicking it again or Escape
+  closes it. Readers who are not the owner see the owner-only note there.
+  Signed out, the pill reads "Sign in to decide" and goes straight to GitHub
+  sign-in, which returns to that section with the decision open. The bar is fixed to the bottom of
+  the screen, and Comments (and Sections on phones) stack in a column above
+  the next-section button. The pill shows one outline, with or without
+  keyboard focus.
+
+- The Guide no longer adds 72px of empty space below the page on wide
+  screens. That space ended the sticky Guide rail early, so it jumped up as
+  you reached the bottom.
+
+- Markdown Preview wraps at the same reading width as Guide prose and lines
+  up with it, in Guide and Diff mode. The diff card, Source and code diffs
+  stay full width.
+
+- The review page's small controls share one size: the R mark, the account
+  and review menu buttons, the version picker, the revision chips, the
+  Guide/Diff and layout switchers and every square in the Guide map are
+  `--size-control-md` (32px) tall with `--radius-sm` corners. On phones the
+  version picker drops from 44px to 32px, the account button from 44px to
+  32px, and the Guide map's menu, star, numbers and close are one 32px
+  square each, 4px apart, with only the selected one filled. Touch screens
+  keep a 44px tap target around each without the box growing. On touch
+  phones the Guide map keeps the whole row on screen: the spare width is
+  split into equal gaps of 4px to 12px, and each target reaches the
+  midpoint of the gaps beside it, so it is 44px wide with few sections and
+  narrower (42px with six sections at 390px) when the row is full. Only a
+  row that does not fit even with 4px gaps, such as ten sections, scrolls
+  its numbers between the menu and close. The collapsed desktop rail is held to
+  the height under the headers and shares its height the same way on touch
+  screens, so the close button stays on screen; with too many sections for
+  4px gaps, its numbers scroll between the menu and close.
+
+- Button labels are centred on their letters. A line box keeps the font's
+  descent, so labels without descenders such as "Mark viewed" and an
+  account name sat about 2px high. The new `.ds-label` class trims a label
+  to cap height and baseline with `text-box`; `<.ds_button>` puts it on its
+  label, and so do the account button, revision chips, Guide/Diff, Guide
+  map numbers, Begin review, Mark viewed and the comment thread buttons.
+  `<.ds_button>` gains `leading` and `trailing` slots for icons that are not
+  a Heroicon before the label, such as the GitHub mark and the chevron on
+  "Older".
+
+- Comments read better on phones. Comments, Sections and the section
+  decision sit in a bottom bar instead of floating over thread cards, and
+  they step aside while you type, so they no longer cover Submit. The reply
+  box stays above the on-screen keyboard. Thread cards use the full screen
+  width, and an opened thread's header clears the sticky file header. Mark
+  viewed is an eye button on phones.
+
+- Comment times are short ("56min", "3h", "2d") and sit after the author's
+  name, so the text uses the full width. Bodies start just past the avatar,
+  with a light connector from the avatar. Resolve, Reply and Submit are the
+  same buttons as the rest of the app, and the reply box has a visible
+  border.
+
+- Each thread and comment has a small link button that copies a link to
+  it. Opening the link scrolls to that thread or comment below the file
+  header and highlights it briefly.
+
+- Switching split or unified view, a new or updated thread, opening the
+  comment box and a theme change now update a file's diff in place, instead
+  of building and highlighting it again. On a 4,562-line file, switching view
+  no longer blanks the file or loses the reading position.
+
+- Replies no longer send a file's diff again. Marking a file viewed,
+  collapsing it, switching split or unified view and opening a section
+  decision sent every open diff back to the browser, about 590 KB on a
+  review with a 4,562-line file; they now send 1 to 3 KB.
+
 - Syntax highlighting runs in web workers. A diff shows as plain text first
   and its colours fill in, so a large file no longer freezes the page. On a
   4,562-line file, Mark viewed, collapse, expand and opening a thread each

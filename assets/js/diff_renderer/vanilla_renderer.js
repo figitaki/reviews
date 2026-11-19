@@ -124,6 +124,18 @@ const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
   }
 `
 
+// Matches the review-linked animations in packet.css.
+const LINKED_HIGHLIGHT_MS = 2400
+
+// Phones: thread cards span the line-number gutter (packet.css). Their
+// wrapper must stack above Pierre's sticky gutter, and still below the sticky
+// file header.
+const REVIEWS_ANNOTATION_CSS = `
+  @media (max-width: 640px) {
+    [data-line-annotation] { z-index: 4; }
+  }
+`
+
 // The prefix slot holds a native disclosure button stretched across Pierre's
 // header. Metadata controls sit above it as siblings, not nested buttons.
 const REVIEWS_DIFF_HEADER_CSS = `
@@ -223,6 +235,18 @@ function lineAnchor(lineElement, side, lineNumber) {
   return { ...anchor, kind: "token", tokenText, lineCharStart, lineCharEnd: lineCharStart + tokenText.length }
 }
 
+function eyeIcon() {
+  const ns = "http://www.w3.org/2000/svg"
+  const svg = document.createElementNS(ns, "svg")
+  svg.setAttribute("viewBox", "0 0 24 24")
+  svg.setAttribute("aria-hidden", "true")
+  svg.setAttribute("class", "reviews-diff-header-viewed-eye")
+  const path = document.createElementNS(ns, "path")
+  path.setAttribute("d", "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z")
+  svg.append(path)
+  return svg
+}
+
 export function hunkViewLabel(hunkUI) {
   if (!hunkUI) return ""
   if (hunkUI.hunkViewed) return "Viewed"
@@ -265,7 +289,7 @@ export class VanillaDiffRenderer {
     // Phones keep threads out of the diff flow: a gutter button per commented
     // line opens that line's threads inline. Lines open now, as "side:line".
     this.compactQuery = window.matchMedia(COMPACT)
-    this.onCompactChange = () => this.render()
+    this.onCompactChange = () => this.refresh()
     this.compactQuery.addEventListener("change", this.onCompactChange)
     this.openLines = new Set()
     this.composerDraft = ""
@@ -320,7 +344,7 @@ export class VanillaDiffRenderer {
 
   update({ threads }) {
     if (threads) this.threads = threads
-    this.render()
+    this.refresh()
   }
 
   updateHunkUI(hunkUI) {
@@ -370,13 +394,13 @@ export class VanillaDiffRenderer {
   updateStyle(diffStyle) {
     if (diffStyle === this.diffStyle) return
     this.diffStyle = diffStyle
-    this.render()
+    this.refresh()
   }
 
   setComposerAt(composerAt) {
     this.composerAt = composerAt
     this.composerDraft = ""
-    this.render()
+    this.refresh()
   }
 
   // Pierre's gutter "+" is the only way to start a comment, so selecting text
@@ -405,7 +429,7 @@ export class VanillaDiffRenderer {
     const key = `${side}:${lineNumber}`
     if (this.openLines.has(key)) this.openLines.delete(key)
     else this.openLines.add(key)
-    this.render()
+    this.refresh()
   }
 
   // Pierre has no read-only gutter decorations, so the buttons go into its
@@ -565,7 +589,7 @@ export class VanillaDiffRenderer {
     this.pendingThreadFocus = thread.id
     this.scrolledToThreadLine = false
     this.openLines.add(`${sideToAnnotationSide(thread.side)}:${thread.anchor?.line_number_hint}`)
-    this.render()
+    this.refresh()
   }
 
   focusPendingThread() {
@@ -579,20 +603,46 @@ export class VanillaDiffRenderer {
         this.scrollToPendingThreadLine()
         return
       }
+      const threadId = this.pendingThreadFocus
       this.pendingThreadFocus = null
-      target.style.scrollMarginTop = "calc(var(--review-main-nav-h) + 60px)"
+      // A copied comment link (?thread=…&comment=…) lands on that comment.
+      const params = new URLSearchParams(window.location.search)
+      const commentId = params.get("thread") === String(threadId) ? params.get("comment") : null
+      const linked = (commentId && target.querySelector(`[data-comment-id="${CSS.escape(commentId)}"]`)) || target
+      // Clear the sticky file header, whose height grows with 44px touch
+      // targets, so the thread's own header is never under it.
+      const fileHeader = this.container.querySelector("diffs-container")?.shadowRoot?.querySelector("[data-diffs-header]")
+      linked.style.scrollMarginTop = `calc(var(--review-main-nav-h) + ${(fileHeader?.offsetHeight || 44) + 8}px)`
+      if (params.get("thread") === String(threadId)) this.highlightLinked(threadId, linked === target ? null : commentId)
       if (this.compact()) {
         // Scroll the page only. On a lockfile's sideways-scrolling code,
         // scrollIntoView also scrolls the code to Pierre's sticky annotation
         // and hides the start of every line.
-        const margin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0
-        window.scrollTo({ top: window.scrollY + target.getBoundingClientRect().top - margin, behavior: "instant" })
+        const margin = Number.parseFloat(getComputedStyle(linked).scrollMarginTop) || 0
+        window.scrollTo({ top: window.scrollY + linked.getBoundingClientRect().top - margin, behavior: "instant" })
       } else {
-        target.scrollIntoView({ block: "start", behavior: "instant" })
+        linked.scrollIntoView({ block: "start", behavior: "instant" })
       }
-      target.tabIndex = -1
-      target.focus({ preventScroll: true })
+      linked.tabIndex = -1
+      linked.focus({ preventScroll: true })
     })
+  }
+
+  // Highlight the thread or comment a copied link opened. Pierre re-creates
+  // the card while the page settles, so the highlight is a short-lived style
+  // rule keyed on the IDs rather than a class on one node.
+  highlightLinked(threadId, commentId) {
+    this.linkedStyle?.remove()
+    clearTimeout(this.linkedStyleTimer)
+    const card = `.review-thread-card[data-thread-id="${CSS.escape(String(threadId))}"]`
+    const target = commentId ? `${card} [data-comment-id="${CSS.escape(String(commentId))}"]` : card
+    const kind = commentId ? "comment" : "card"
+    const style = document.createElement("style")
+    style.textContent = `${target} { animation: review-linked-${kind} ${LINKED_HIGHLIGHT_MS}ms ease-out; }
+      @media (prefers-reduced-motion: reduce) { ${target} { animation: review-linked-${kind} ${LINKED_HIGHLIGHT_MS}ms step-end; } }`
+    document.head.append(style)
+    this.linkedStyle = style
+    this.linkedStyleTimer = setTimeout(() => style.remove(), LINKED_HIGHLIGHT_MS)
   }
 
   // A virtualized file renders only the rows near the viewport, so the thread
@@ -690,7 +740,8 @@ export class VanillaDiffRenderer {
             onclick: (event) =>
               stopHeaderEvent(event, () => this.onSetHunkViewed?.(!viewed)),
           },
-          viewed ? [check] : viewLabel || "Mark viewed"
+          // Phones show only the eye; the label stays as the accessible name.
+          viewed ? [check] : [eyeIcon(), el("span", { className: "reviews-diff-header-viewed-label" }, viewLabel || "Mark viewed")]
         )
       )
     }
@@ -706,12 +757,15 @@ export class VanillaDiffRenderer {
       overflow:
         this.diffStyle === "unified" && !(this.compact() && LOCKFILE.test(this.filePath)) ? "wrap" : "scroll",
       collapsed: this.collapsed(),
-      unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
+      unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + REVIEWS_ANNOTATION_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
       onPostRender: (_node, _instance, phase) => {
         if (phase === "unmount") return
+        // Phones let thread cards span the line-number gutter (packet.css).
+        const gutter = this.container.querySelector("diffs-container")?.shadowRoot?.querySelector("[data-gutter]")
+        if (gutter) this.container.style.setProperty("--review-thread-gutter", `${gutter.offsetWidth}px`)
         this.placeThreadMarkers()
         this.focusPendingThread()
         if (this.pendingHeaderFocus) {
@@ -735,9 +789,26 @@ export class VanillaDiffRenderer {
     return args
   }
 
-  render() {
-    // An incoming update replaces annotation DOM. Preserve only the active
-    // desktop reply editor, not every draft that happens to be open.
+  // Updates that keep the file's diff (threads, the composer, open lines,
+  // diff style, theme) reuse the Pierre instance. It keeps its highlighted
+  // lines and only lays out again, instead of tokenizing and building the
+  // whole file. Markdown previews, and a style change that moves the file
+  // between virtualized and plain rendering, build it again.
+  refresh() {
+    const virtualize = shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
+    if (!this.instance || this.hasMarkdownPreview || virtualize !== Boolean(this.virtualizer)) {
+      this.render()
+      return
+    }
+    this.keepReplyFocus()
+    this.instance.setOptions(this.options())
+    this.instance.setLineAnnotations(this.annotations())
+    this.instance.rerender()
+  }
+
+  // An incoming update replaces annotation DOM. Preserve only the active
+  // desktop reply editor, not every draft that happens to be open.
+  keepReplyFocus() {
     const active = document.activeElement
     const threadId = active?.closest?.("[data-thread-id]")?.dataset.threadId
     if (active?.tagName === "TEXTAREA" &&
@@ -749,6 +820,10 @@ export class VanillaDiffRenderer {
         ui.replySelection = [active.selectionStart, active.selectionEnd, active.selectionDirection]
       }
     }
+  }
+
+  render() {
+    this.keepReplyFocus()
     // Rebuilding empties the file for a moment. Hold its height until the new
     // diff has laid out, or the page clamps the scroll position and the reader
     // loses their line (virtualized files measure rows after render).

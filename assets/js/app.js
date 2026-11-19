@@ -32,6 +32,7 @@ import DesignPlayground from "./hooks/design_playground"
 import PacketFragments from "./hooks/packet_fragments"
 import GuideFlyout from "./hooks/guide_flyout"
 import {mountDevicePage} from "./device_code"
+import {watchKeyboard} from "./lib/keyboard_inset"
 
 // LiveView saves window.scrollY into history.state 100 ms after every scroll
 // so back and forward can restore it. Brave on iOS (Chromium's ios/web)
@@ -216,6 +217,7 @@ mountDevicePage()
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
+watchKeyboard()
 
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()
