@@ -33,7 +33,8 @@ defmodule ReviewsWeb.MCP.Server do
   with threaded line comments. Use these tools to read a review you or your agents pushed \
   (outline, packet sections, file diffs) and the feedback on it (open threads), then reply \
   to or resolve threads and push revisions. Reviews are identified by slug or /r/<slug> URL. \
-  Comments publish immediately under the token's identity.\
+  Comments publish immediately under the token's identity. Every tool works on its own: \
+  there is no need to call reviews_whoami first. To find a review, use reviews_list or search.\
   """
 
   def enabled?, do: Keyword.get(config(), :enabled, false)
@@ -43,7 +44,7 @@ defmodule ReviewsWeb.MCP.Server do
   # Claude and ChatGPT send their app's Origin when they check and call a
   # connector. Without it here, the DNS-rebinding check answers 403 before the
   # 401 that leads them to sign-in. Tokens still authenticate every call.
-  def cors_origins, do: ~w(https://claude.ai https://claude.com https://chatgpt.com)
+  def cors_origins, do: MCPAuth.connector_origins()
 
   defp config, do: Application.get_env(:reviews, :mcp, [])
 
@@ -164,7 +165,12 @@ defmodule ReviewsWeb.MCP.Server do
 
   defp add_read_tools(server) do
     read = [
-      annotations: %{readOnlyHint: true, destructiveHint: false, openWorldHint: false},
+      annotations: %{
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      },
       meta: security("reviews:read"),
       authorization: Authorization.require_scopes("reviews:read")
     ]
@@ -261,8 +267,9 @@ defmodule ReviewsWeb.MCP.Server do
       [
         title: "Who am I",
         description:
-          "Returns the Reviews identity behind this connection's token (human or agent) " <>
-            "and whether write tools are enabled.",
+          "Returns the Reviews identity this connection acts as (human or agent), its " <>
+            "scopes, and whether write tools are on. Other tools don't need it; call it " <>
+            "only when the user asks who they are on Reviews.",
         input_schema: object(%{})
       ] ++ read
     )

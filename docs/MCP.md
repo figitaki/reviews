@@ -26,9 +26,9 @@ elsewhere with its token. Each identity may make 5 requests a second, with
 bursts of 20. With writes off, the write tools are
 not listed and are refused on every call, including from clients that cached
 an older tool list. Requests must use the host in `PHX_HOST`. Requests with an
-`Origin` header are rejected unless it is that host or one of the connector
-apps (`https://claude.ai`, `https://claude.com`, `https://chatgpt.com`), which
-also get CORS headers. MCP request bodies are capped at 4 MB before
+`Origin` header are rejected unless it is that host or the origin of a known
+connector (`https://claude.ai`, `https://claude.com`, `https://chatgpt.com`),
+which also gets CORS headers. MCP request bodies are capped at 4 MB before
 JSON decoding. The CLI's 50 MB REST limit is unchanged.
 
 ## Authentication and access
@@ -76,9 +76,18 @@ Tools a token lacks the scope for are not listed. Calling one gets 403 with an
 `insufficient_scope` challenge naming the scope, so a client can ask for it.
 
 Signing in sends the owner to `/oauth/authorize`. After GitHub sign-in, the
-consent page shows the client's verified domain (or says it has none, for a
-registered client), the host it returns to, a warning for loopback redirects,
-and the scopes. The owner picks which of their agent identities the client
+consent page shows who is asking, the host it returns to, a warning for
+loopback redirects, and the scopes. A known connector shows its name, publisher
+and logo as a recognized app. Any other client shows what it calls itself as
+"Not verified", with its verified domain, or a note that it has none if it
+registered itself. Reads are always part of the grant. Each write scope is a
+checkbox, ticked by default, so the owner can leave it out.
+
+Known connectors are listed in one place, `config :reviews, Reviews.MCPAuth,
+connectors: [...]`, each with its `client_id` (its client metadata document
+URL), `name`, `publisher`, `logo` (a path under `priv/static`) and `origins`.
+Only a client signing in with that exact `client_id` is recognized; a
+registered client never is. To add an MCP client, add an entry and its logo. The owner picks which of their agent identities the client
 acts as. An OAuth app never acts as the owner's human identity: the page
 doesn't offer it, and an approval naming it is refused. An owner with no
 agents can create one on the consent page. A scope never widens what
@@ -160,9 +169,14 @@ says how many threads it left out; read those with `reviews_list_threads`.
 Prompt: `address_feedback`, which walks an agent through reading, fixing,
 replying to and resolving open threads.
 
-Every tool sets `readOnlyHint`, `destructiveHint` and `openWorldHint`
-explicitly, as ChatGPT's app review asks. Writes add to a review and never
-delete, so none is destructive. Each tool's `_meta.securitySchemes` names the
+Every tool has a title and sets `readOnlyHint`, `destructiveHint`,
+`idempotentHint` and `openWorldHint` explicitly, as Claude's connector docs and
+ChatGPT's app review ask. Reads are read-only and idempotent. Writes add to a
+review and never delete, so none is destructive; only resolving or reopening a
+thread is idempotent. Claude sorts tools into read-only and write groups by
+these hints, but whether it asks before a call is the user's setting per tool
+or group (Always allow, Needs approval, Blocked). No tool needs
+`reviews_whoami` first, and the server instructions say so. Each tool's `_meta.securitySchemes` names the
 OAuth scope it needs.
 
 Writes publish immediately and are not idempotent. Clients should not retry a

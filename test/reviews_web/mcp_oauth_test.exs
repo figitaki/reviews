@@ -280,6 +280,66 @@ defmodule ReviewsWeb.MCPOAuthTest do
              |> Enum.any?()
     end
 
+    test "Claude's real document is recognized; a lookalike that calls itself Claude is not",
+         ctx do
+      client_id = "https://claude.ai/oauth/mcp-oauth-client-metadata"
+      redirect_uri = "https://claude.ai/api/mcp/auth_callback"
+
+      # As https://claude.ai/oauth/mcp-oauth-client-metadata served it on 2026-11-19.
+      Fetcher.put(client_id, %{
+        "client_id" => client_id,
+        "client_name" => "Claude",
+        "client_uri" => "https://claude.ai",
+        "redirect_uris" => [redirect_uri],
+        "grant_types" => [
+          "authorization_code",
+          "refresh_token",
+          "urn:ietf:params:oauth:grant-type:jwt-bearer"
+        ],
+        "response_types" => ["code"],
+        "token_endpoint_auth_method" => "none"
+      })
+
+      consent = fn client ->
+        {_verifier, challenge} = Client.pkce()
+
+        build_conn()
+        |> init_test_session(current_user_id: ctx.owner.id)
+        |> get(~p"/oauth/authorize", authorize_params(client, challenge))
+        |> html_response(200)
+        |> LazyHTML.from_document()
+      end
+
+      doc = consent.(%{client_id: client_id, redirect_uri: redirect_uri})
+      known = doc |> LazyHTML.query("#poppy-consent-known") |> LazyHTML.text()
+      assert known =~ "Claude"
+      assert known =~ "Recognized app"
+      assert known =~ "Anthropic"
+      refute doc |> LazyHTML.query("#poppy-consent-client") |> LazyHTML.text() =~ "Not verified"
+
+      assert doc |> LazyHTML.query("#poppy-consent-known img") |> LazyHTML.attribute("src") ==
+               ["/images/connectors/claude.png"]
+
+      # Reads are always part of the grant; each write can be left out.
+      assert doc
+             |> LazyHTML.query("#poppy-consent-scopes input[type=hidden]")
+             |> LazyHTML.attribute("value") == ["reviews:read"]
+
+      assert doc
+             |> LazyHTML.query("#poppy-consent-scopes input[type=checkbox]")
+             |> LazyHTML.attribute("value") == [
+               "reviews:write",
+               "comments:write",
+               "threads:write"
+             ]
+
+      lookalike = consent.(ctx.claude)
+      refute lookalike |> LazyHTML.query("#poppy-consent-known") |> Enum.any?()
+
+      assert lookalike |> LazyHTML.query("#poppy-consent-client") |> LazyHTML.text() =~
+               "Not verified"
+    end
+
     test "the connector acts as the agent the owner chose, with the scopes granted", ctx do
       {query, verifier} = approve(ctx.claude, ctx.owner, ctx.agent)
       assert %{"code" => code, "state" => "st_9", "iss" => @issuer} = query
@@ -674,21 +734,49 @@ defmodule ReviewsWeb.MCPOAuthTest do
       assert doc["text"] =~ "reviews_get_thread"
     end
 
-    test "every tool declares readOnlyHint, destructiveHint, and openWorldHint", ctx do
+    test "every tool has a title and accurate hints, so clients can sort reads from writes",
+         ctx do
       tokens = sign_in(ctx.claude, ctx.owner, ctx.agent)
       tools = mcp(tokens["access_token"], "tools/list") |> json_response(200)
 
       for tool <- tools["result"]["tools"] do
-        hints = Map.take(tool["annotations"], ~w(readOnlyHint destructiveHint openWorldHint))
-        assert map_size(hints) == 3, tool["name"]
-        assert Enum.all?(Map.values(hints), &is_boolean/1), tool["name"]
+        assert is_binary(tool["title"]) and tool["title"] != "", tool["name"]
         assert [%{"type" => "oauth2"}] = tool["_meta"]["securitySchemes"]
       end
 
-      by_name = Map.new(tools["result"]["tools"], &{&1["name"], &1["annotations"]})
-      assert by_name["search"]["readOnlyHint"] == true
-      assert by_name["fetch"]["readOnlyHint"] == true
-      assert by_name["reviews_post_comment"]["readOnlyHint"] == false
+      hints =
+        Map.new(tools["result"]["tools"], fn tool ->
+          {tool["name"],
+           Map.take(
+             tool["annotations"],
+             ~w(readOnlyHint destructiveHint idempotentHint openWorldHint)
+           )}
+        end)
+
+      writes = %{
+        "reviews_create_review" => false,
+        "reviews_append_revision" => false,
+        "reviews_post_comment" => false,
+        "reviews_update_thread_status" => true
+      }
+
+      for {name, hint} <- hints do
+        assert hint["destructiveHint"] == false, name
+        assert hint["openWorldHint"] == false, name
+
+        case Map.fetch(writes, name) do
+          {:ok, idempotent?} ->
+            assert hint["readOnlyHint"] == false, name
+            assert hint["idempotentHint"] == idempotent?, name
+
+          :error ->
+            assert hint["readOnlyHint"] == true, name
+            assert hint["idempotentHint"] == true, name
+        end
+      end
+
+      assert Enum.all?(Map.keys(writes), &Map.has_key?(hints, &1))
+      assert Enum.all?(~w(reviews_whoami reviews_list search fetch), &Map.has_key?(hints, &1))
     end
   end
 end

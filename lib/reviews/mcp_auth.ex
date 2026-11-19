@@ -16,14 +16,16 @@ defmodule Reviews.MCPAuth do
   """
   @behaviour Reviews.OAuth.Resource
 
-  # In the order the consent page and metadata list them.
+  # In the order the consent page and metadata list them: {name, title,
+  # description}. The consent page groups `:read` scopes apart from the rest.
   @scopes [
-    {"reviews:read", "Read reviews: packets, diffs, and comment threads."},
-    {"reviews:write",
-     "Create reviews and push new revisions to reviews your account owns, as the agent you choose."},
-    {"comments:write", "Post comments and replies, as the agent you choose."},
-    {"threads:write",
-     "Resolve or reopen threads on your reviews and threads your account started, as the agent you choose."}
+    {"reviews:read", "Read reviews",
+     "See reviews, their packets and diffs, and comment threads."},
+    {"reviews:write", "Create and update reviews",
+     "Push new reviews, and new revisions of reviews your account owns."},
+    {"comments:write", "Post comments", "Comment on reviews and reply to threads."},
+    {"threads:write", "Resolve threads",
+     "Resolve or reopen threads on your reviews and threads your account started."}
   ]
 
   @doc "Whether `/mcp` is on (`config :reviews, :mcp, enabled: true`)."
@@ -31,6 +33,23 @@ defmodule Reviews.MCPAuth do
 
   @doc "Every scope name, in order."
   def scope_names, do: Enum.map(@scopes, &elem(&1, 0))
+
+  @impl true
+  def scope_titles, do: Map.new(@scopes, fn {name, title, _} -> {name, title} end)
+
+  @doc """
+  The connector Reviews recognizes by this `client_id`, from
+  `config :reviews, Reviews.MCPAuth, connectors: [...]`: its `:name`,
+  `:publisher`, `:logo` and `:origins`. Nil for any other client.
+  """
+  @impl true
+  def known_client(client_id), do: Enum.find(connectors(), &(&1.client_id == client_id))
+
+  @doc "The origins of every known connector, which `/mcp` accepts."
+  def connector_origins, do: Enum.flat_map(connectors(), & &1.origins)
+
+  defp connectors,
+    do: :reviews |> Application.get_env(__MODULE__, []) |> Keyword.get(:connectors, [])
 
   @doc "The MCP endpoint's canonical URL, the audience of its tokens."
   def resource, do: Reviews.OAuth.issuer() <> "/mcp"
@@ -44,7 +63,7 @@ defmodule Reviews.MCPAuth do
     [
       id: resource(),
       name: "Reviews",
-      scopes: @scopes,
+      scopes: Enum.map(@scopes, fn {name, _, description} -> {name, description} end),
       client_auth_methods: ["none", "private_key_jwt"],
       rotate_refresh_tokens: true,
       enabled: enabled?(),
@@ -60,7 +79,7 @@ defmodule Reviews.MCPAuth do
       sign_in:
         "#{client_label} wants to use your Reviews account. Sign in with GitHub to choose what it may do.",
       description:
-        "#{client_label} wants to read reviews and post as one of your Reviews agents. Continue only if you just asked it to connect.",
+        "#{client_label} wants to read your reviews and post as one of your Reviews agents. Continue only if you just asked it to connect.",
       note:
         "What it posts shows as the agent you pick, never as you. You can disconnect it at any time in Settings."
     }

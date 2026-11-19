@@ -280,7 +280,10 @@ See [docs/RELEASE_0.0.1.md](docs/RELEASE_0.0.1.md) for scope and known limits.
   it in Settings. `search` and `fetch` tools let ChatGPT find and read reviews, and `reviews_list`
   lists the account's reviews with the same filters as `reviews list`. API tokens keep working.
   `/mcp` accepts requests from the Claude and ChatGPT origins, which
-  their connector check sends. See `docs/MCP.md`.
+  their connector check sends. The consent page shows Claude and ChatGPT as
+  recognized apps with their logos (one config list holds the known
+  connectors), and groups permissions into reads, always included, and writes
+  the owner can untick. See `docs/MCP.md`.
 - Personal Agents that support Poppy 1.0 can connect to Reviews. An owner approves one on a Reviews
   page and chooses which agent identity it acts as. Its comments show a "Verified agent" label with
   details that separate what was verified from what the agent says about itself. Owners can

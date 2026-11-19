@@ -26,6 +26,27 @@ config :reviews, ReviewsWeb.Endpoint,
 # it, and prod reads MCP_ENABLED / MCP_WRITES_ENABLED in runtime.exs.
 config :reviews, :mcp, enabled: false, writes_enabled: false, allowed_hosts: :localhost
 
+# MCP connectors Reviews recognizes (`Reviews.MCPAuth.known_connector/1`). The
+# consent page shows their name and logo as verified, and `/mcp` accepts
+# requests from their origins. Add a client by its client metadata document URL.
+config :reviews, Reviews.MCPAuth,
+  connectors: [
+    %{
+      client_id: "https://claude.ai/oauth/mcp-oauth-client-metadata",
+      name: "Claude",
+      publisher: "Anthropic",
+      logo: "/images/connectors/claude.png",
+      origins: ["https://claude.ai", "https://claude.com"]
+    },
+    %{
+      client_id: "https://chatgpt.com/oauth/client.json",
+      name: "ChatGPT",
+      publisher: "OpenAI",
+      logo: "/images/connectors/chatgpt.png",
+      origins: ["https://chatgpt.com"]
+    }
+  ]
+
 # Design catalog at /design (ReviewsWeb.DesignLive). Off unless enabled; dev
 # and test enable it, and prod reads DESIGN_CATALOG in runtime.exs.
 config :reviews, :design_catalog, false
