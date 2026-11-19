@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Expand unchanged code above or below a diff hunk, 20 lines at a time. Context
+  loads on demand from the patchset's source snapshot; diff-only uploads show
+  an unavailable message. Expanding a packet slice stops at other changed code.
+
 - The favicon and the web app manifest now load in production. The page
   linked their digested names, such as `/site-<hash>.webmanifest`, which
   the static file allowlist refused with a 404.

@@ -53,6 +53,58 @@ defmodule Reviews.CodeStorage.CodeDotStorage.Client do
     end
   end
 
+  @doc "Read raw file bytes at an immutable commit; the range bounds provider transfer."
+  def get_file(config, token, repo_path, oid, file_path, max_bytes) do
+    opts = [
+      params: [ref: oid, path: file_path],
+      headers: [{"range", "bytes=0-#{max_bytes}"}],
+      decode_body: false,
+      into: fn {:data, data}, {req, resp} ->
+        body = (resp.body || "") <> data
+
+        if byte_size(body) > max_bytes do
+          {:halt, {req, %{resp | status: 413, body: ""}}}
+        else
+          {:cont, {req, %{resp | body: body}}}
+        end
+      end
+    ]
+
+    case request(config, token, :get, "/repos/#{encode(repo_path)}/file", opts) do
+      {:ok, %{status: status, body: body} = response}
+      when status in [200, 206] and is_binary(body) ->
+        # A partial response with more bytes still available is not a complete file.
+        truncated? =
+          Enum.any?(Req.Response.get_header(response, "content-range"), fn range ->
+            case String.split(range, "/") do
+              [_, size] ->
+                case Integer.parse(size) do
+                  {total, ""} -> total > max_bytes
+                  _ -> true
+                end
+
+              _ ->
+                true
+            end
+          end)
+
+        cond do
+          byte_size(body) > max_bytes or truncated? -> {:error, :too_large}
+          not String.valid?(body) or String.contains?(body, <<0>>) -> {:error, :not_text}
+          true -> {:ok, body}
+        end
+
+      {:ok, %{status: 404}} ->
+        {:error, :not_found}
+
+      {:ok, %{status: 413}} ->
+        {:error, :too_large}
+
+      other ->
+        request_error(other)
+    end
+  end
+
   @doc "Permanently retire a repository. Idempotent on 404."
   def delete_repo(config, token, repo_path) do
     case request(config, token, :delete, "/repos/#{encode(repo_path)}", []) do

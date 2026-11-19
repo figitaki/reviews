@@ -171,6 +171,7 @@ defmodule ReviewsWeb.Router do
     get "/capabilities", CapabilityController, :show
     get "/reviews/:slug", ReviewController, :show
     get "/reviews/:slug/files", ReviewPageController, :files
+    get "/reviews/:slug/patchsets/:number/files/:file_id/context", FileContextController, :show
     get "/reviews/:slug/threads", ReviewPageController, :threads
     get "/reviews/:slug/threads/:thread_id/comments", ReviewPageController, :comments
   end

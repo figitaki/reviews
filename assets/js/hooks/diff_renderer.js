@@ -107,11 +107,17 @@ const DiffRenderer = {
       }
     }
 
+    const reviewSlug = window.location.pathname.match(/^\/r\/([^/]+)/)?.[1]
+    const contextUrl = reviewSlug && this._island?.sourceFileId && this._island?.patchsetNumber
+      ? `/api/v1/reviews/${reviewSlug}/patchsets/${this._island.patchsetNumber}/files/${this._island.sourceFileId}/context`
+      : null
+
     this._renderer = new VanillaDiffRenderer({
       container: this.el,
       filePath,
       rawDiff,
       fullDiff: ds.fullDiff,
+      contextUrl,
       signedIn,
       threads: initialThreads,
       diffStyle: initialDiffStyle,

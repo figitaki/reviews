@@ -20,6 +20,7 @@ defmodule ReviewsWeb.ReviewLive.DiffIsland do
       phx-update="ignore"
       data-file-id={@file_id}
       data-file-path={@file_path}
+      data-source-file-id={@source_file_id}
       data-file-status={@file_status}
       data-side="new"
       data-patchset-number={@patchset_number}

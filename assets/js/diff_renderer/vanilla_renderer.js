@@ -10,6 +10,7 @@ import {
   threadStatusBadge,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { availableContext, expandContext, loadFileContext } from "./context_expansion.js"
 import { PIERRE_THEMES, highlightWorkers } from "./worker_pool.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
@@ -260,6 +261,7 @@ export class VanillaDiffRenderer {
     filePath,
     rawDiff,
     fullDiff,
+    contextUrl = null,
     signedIn,
     threads,
     diffStyle,
@@ -282,6 +284,8 @@ export class VanillaDiffRenderer {
     this.onSetHunkViewed = onSetHunkViewed
     this.composerAt = null
     this.fileDiff = parsePatch(rawDiff, filePath)
+    this.commentHunks = this.fileDiff?.hunks || []
+    this.contextUrl = contextUrl && ["change", "rename-changed"].includes(this.fileDiff?.type) ? contextUrl : null
     this.instance = null
     this.headerInstance = null
     this.virtualizer = null
@@ -412,8 +416,16 @@ export class VanillaDiffRenderer {
   // the line where the gesture ended.
   commentFromGutter(range) {
     const side = range.endSide || range.side
+    if (!this.commentable(side, range.end)) return
     const anchor = lineAnchor(this.renderedLine(side, range.end), side, range.end)
     this.setComposerAt(this.signedIn ? anchor : { ...anchor, kind: "signin" })
+  }
+
+  commentable(side, lineNumber) {
+    if (!this.contextUrl) return true
+    const prefix = side === "deletions" ? "deletion" : "addition"
+    return this.commentHunks.some(hunk => lineNumber >= hunk[`${prefix}Start`] &&
+      lineNumber < hunk[`${prefix}Start`] + hunk[`${prefix}Count`])
   }
 
   renderedLine(side, lineNumber, attribute = "line") {
@@ -491,6 +503,7 @@ export class VanillaDiffRenderer {
     const root = this.sourceContainer?.querySelector("diffs-container")?.shadowRoot
     const button = root?.querySelector("[data-utility-button]")
     if (!line || !button) return
+    button.style.visibility = this.commentable(line.side, line.lineNumber) ? "" : "hidden"
     button.setAttribute("aria-label", `Comment on line ${line.lineNumber}`)
     button.title = button.getAttribute("aria-label")
   }
@@ -753,8 +766,115 @@ export class VanillaDiffRenderer {
     return el("div", { className: "reviews-diff-header-metadata" }, children)
   }
 
+  contextButton(index, direction) {
+    if (!availableContext(this.fileDiff, this.contextSource, index, direction)) return null
+    return el("button", {
+      type: "button", className: "reviews-context-button",
+      dataset: { contextIndex: index, contextDirection: direction },
+      onclick: event => { event.stopPropagation(); this.expandContext(index, direction) },
+    }, `Expand ${direction}`)
+  }
+
+  contextSeparator({ hunkIndex, lines }) {
+    const controls = el("div", { className: "reviews-context-controls" }, [
+      hunkIndex > 0 ? this.contextButton(hunkIndex - 1, "below") : null,
+      el("span", {}, `${lines} hidden lines`),
+      this.contextButton(hunkIndex, "above"),
+      el("span", { role: "status", "data-context-status": "" }),
+    ])
+    return controls
+  }
+
+  updateContextControls() {
+    if (!this.contextUrl) return
+    if (this.contextFooter) this.contextFooter.hidden = this.collapsed()
+    this.container.querySelectorAll("[data-context-index]").forEach(button => {
+      button.disabled = Boolean(this.contextLoading || this.contextUnavailable)
+      button.hidden = !availableContext(this.fileDiff, this.contextSource,
+        Number(button.dataset.contextIndex), button.dataset.contextDirection)
+    })
+    this.container.querySelectorAll("[data-context-status]").forEach(status => {
+      status.textContent = this.contextLoading ? "Loading context…" : this.contextError || ""
+    })
+    if (this.contextStatus) this.contextStatus.textContent = this.contextLoading ? "Loading context…" : this.contextError || (this.contextSource ? "Expanded context is read-only." : "")
+    this.restoreContextFocus()
+  }
+
+  clearContextFocus() {
+    const focus = this.pendingContextFocus
+    if (!focus) return
+    document.removeEventListener("focusin", focus.onFocus, true)
+    document.removeEventListener("pointerdown", focus.cancel, true)
+    document.removeEventListener("keydown", focus.cancel, true)
+    this.pendingContextFocus = null
+  }
+
+  restoreContextFocus() {
+    const focus = this.pendingContextFocus
+    if (!focus || this.contextLoading) return
+    if (document.activeElement !== focus.button && document.activeElement !== document.body) {
+      this.clearContextFocus()
+      return
+    }
+    const selector = `[data-context-index="${focus.index}"][data-context-direction="${focus.direction}"]:not([disabled]):not([hidden])`
+    const button = (!this.collapsed() && this.container.querySelector(selector)) ||
+      this.container.querySelector(".reviews-diff-header-toggle")
+    if (button) {
+      focus.button = button
+      button.focus({ preventScroll: true })
+    }
+  }
+
+  async expandContext(index, direction) {
+    if (this.contextLoading || this.disposed) return
+    this.clearContextFocus()
+    const button = document.activeElement
+    if (this.container.contains(button) && button?.dataset.contextIndex === String(index) &&
+        button.dataset.contextDirection === direction) {
+      const cancel = () => this.clearContextFocus()
+      const onFocus = event => {
+        if (event.target !== this.pendingContextFocus?.button && event.target !== document.body) cancel()
+      }
+      this.pendingContextFocus = { index, direction, button, cancel, onFocus }
+      document.addEventListener("focusin", onFocus, true)
+      document.addEventListener("pointerdown", cancel, true)
+      document.addEventListener("keydown", cancel, true)
+    }
+    this.contextLoading = true
+    this.contextError = null
+    this.updateContextControls()
+    const line = this.fileDiff.hunks[index].additionStart
+    const anchor = this.renderedLine("additions", line)
+    const top = anchor?.getBoundingClientRect().top
+    try {
+      this.contextSource ||= await loadFileContext(this.contextUrl)
+      if (this.disposed) return
+      const raw = expandContext(this.rawDiff, this.fileDiff, this.contextSource, index, direction)
+      if (raw !== this.rawDiff) {
+        this.rawDiff = raw
+        this.fileDiff = parsePatch(raw, this.filePath)
+        const virtualize = shouldVirtualize({ rawDiff: raw, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
+        if (virtualize !== Boolean(this.virtualizer)) this.render()
+        else this.instance?.render(this.renderArgs())
+        if (direction === "above" && top != null) {
+          requestAnimationFrame(() => {
+            const moved = this.renderedLine("additions", line)?.getBoundingClientRect().top
+            if (moved != null) window.scrollBy(0, moved - top)
+          })
+        }
+      }
+    } catch (error) {
+      this.contextUnavailable = Boolean(error.unavailable)
+      this.contextError = error.message || "Could not load context. Try again."
+    } finally {
+      this.contextLoading = false
+      if (!this.disposed) this.updateContextControls()
+    }
+  }
+
   options() {
     return {
+      ...(this.contextUrl ? { hunkSeparators: hunk => this.contextSeparator(hunk) } : {}),
       theme: PIERRE_THEMES,
       themeType: currentThemeType(),
       diffStyle: this.diffStyle,
@@ -770,6 +890,7 @@ export class VanillaDiffRenderer {
         // Phones let thread cards span the line-number gutter (packet.css).
         const gutter = this.container.querySelector("diffs-container")?.shadowRoot?.querySelector("[data-gutter]")
         if (gutter) this.container.style.setProperty("--review-thread-gutter", `${gutter.offsetWidth}px`)
+        this.updateContextControls()
         this.placeThreadMarkers()
         this.focusPendingThread()
         if (this.pendingHeaderFocus) {
@@ -877,17 +998,21 @@ export class VanillaDiffRenderer {
 
   renderSource(options) {
     const renderArgs = this.renderArgs()
-
-    // Large files virtualize even while collapsed, so the instance that
-    // expands them later is the one that already highlighted them.
-    if (
-      shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
-    ) {
-      if (this.tryRenderVirtualized(options, renderArgs)) return
+    const virtualized = shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle }) &&
+      this.tryRenderVirtualized(options, renderArgs)
+    if (!virtualized) {
+      this.instance = new Diffs.FileDiff(options, highlightWorkers() ?? undefined)
+      this.instance.render(renderArgs)
     }
-
-    this.instance = new Diffs.FileDiff(options, highlightWorkers() ?? undefined)
-    this.instance.render(renderArgs)
+    if (this.contextUrl) {
+      this.contextFooter = el("div", { className: "reviews-context-controls reviews-context-footer" })
+      this.contextStatus = el("span", { role: "status" })
+      const below = this.contextButton(this.fileDiff.hunks.length - 1, "below")
+      if (below) this.contextFooter.append(below)
+      this.contextFooter.append(this.contextStatus)
+      this.sourceContainer.append(this.contextFooter)
+      this.updateContextControls()
+    }
   }
 
   tryRenderVirtualized(options, renderArgs) {
@@ -929,7 +1054,11 @@ export class VanillaDiffRenderer {
   }
 
   cleanUp(clear = true) {
+    this.contextFooter = null
+    this.contextStatus = null
     if (clear) {
+      this.disposed = true
+      this.clearContextFocus()
       this.container.removeEventListener("pointerdown", this.onPointerDown)
       this.compactQuery.removeEventListener("change", this.onCompactChange)
       this.threadUI.clear()

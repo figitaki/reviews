@@ -16,6 +16,7 @@ Current version: `0.0.3`.
 - Review packets: markdown guides that group hunks with prose for humans.
 - Lazy hunk rendering so large diffs do not eagerly mount every diff island.
 - Explicit hunk viewed state shared between packet and Changes views.
+- Expand unchanged code above and below hunks when source snapshots are available.
 - Packet section decisions for approve, deny, or ignore.
 - Line and token comments that every viewer sees as soon as they are posted.
 
@@ -137,8 +138,9 @@ explaining what to set.
 
 ## Code Storage (optional)
 
-Reviews can store each patchset's base and head commits as Git refs, so later
-features can read the source around a hunk. The backend is
+Reviews can store each patchset's base and head commits as Git refs, so reviewers
+can expand unchanged source around a hunk. Context expansion reads only changed
+files and makes their surrounding source visible to anyone with the review link. The backend is
 [code.storage](https://code.storage). Storage is off by default, and pushes
 work diff-only when it is off.
 

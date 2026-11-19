@@ -603,6 +603,7 @@ unique DOM id, and `phx-update="ignore"` (the hook owns its DOM tree).
 | Attribute              | Type     | Description                                              |
 | ---------------------- | -------- | -------------------------------------------------------- |
 | `data-file-id`         | string   | DOM-unique id for this file/hunk mount.                  |
+| `data-source-file-id`  | string   | Stored file ID, scoped by review slug and patchset number for on-demand context reads. |
 | `data-file-path`       | string   | The file's path in the diff (`lib/foo.ex`).              |
 | `data-file-status`     | string   | `"added"`, `"modified"`, `"deleted"`, or `"renamed"`.    |
 | `data-patchset-number` | string   | The patchset number this file belongs to.                |
@@ -780,3 +781,25 @@ Native anchor navigation owns URL/history; returning to an empty fragment sends
 discussion when present, or Overview otherwise. Modified clicks, external links,
 and different URLs retain native browser behavior. This does not enable packet fragments on the raw
 `/changes` view or make hunk IDs stable across changed packet contents.
+
+## File context
+
+`GET /api/v1/reviews/:slug/patchsets/:number/files/:file_id/context` follows
+link-based review read access and returns `{old, new, raw_diff}`: complete old
+and new UTF-8 source strings and the canonical file patch. Only files belonging
+to that review and revision can be read; paths and commit IDs come from the
+server's stored file and claimed snapshot, never request parameters. Reads use
+verified commit OIDs, including the old path for renames. An added or deleted
+side is an empty string. Source reads are capped at 1 MiB per side. Responses
+use `Cache-Control: no-store`; clients may share an in-memory result across
+islands of the same file and revision.
+
+Errors return `{error: message}`: 404 for a missing review, revision, file or
+source; 409 when no source snapshot is available; 413 for files over the limit;
+422 for binary or non-UTF-8 source; 502 for provider failures. Existing diff-only
+reviews continue to render without source. No source requests run until the
+reader asks to expand context. Link holders can then read surrounding unchanged
+code in changed files; this does not expose other files in the repository.
+
+Newly revealed source is read-only; comment anchors remain limited to the uploaded
+diff. Expansion does not change packet coverage, hunk fingerprints or viewed state.

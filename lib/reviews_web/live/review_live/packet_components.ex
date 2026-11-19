@@ -1788,6 +1788,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           id={"#{@hunk_id}-diff"}
           file_id={"hunk-#{@file.id}-#{@hunk_id}"}
           file_path={@file.path}
+          source_file_id={@file.id}
           file_status={@file.status}
           patchset_number={@selected_patchset && @selected_patchset.number}
           raw_diff={@hunk.display_raw_diff}
