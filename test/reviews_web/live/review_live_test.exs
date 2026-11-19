@@ -387,20 +387,19 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       sign_in_href = ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}"]}"
 
-      # Signed-out readers get the collapsible decision; expanded, it offers
-      # sign-in that returns to this section.
+      # Signed out, Decide is a sign-in link that returns to this section;
+      # there is no expanded state to open.
       section_sign_in_href =
         ~p"/auth/github?#{[return_to: ~p"/r/#{packet_review.slug}?#{[section: 0]}"]}"
 
-      assert has_element?(view, "#packet-section-0-decision-toggle[aria-expanded=false]")
-      view |> element("#packet-section-0-decision-toggle") |> render_click()
-      assert has_element?(view, "#packet-section-0-decision.is-editing")
-
       assert has_element?(
                view,
-               ~s|#packet-section-0-decision-signin[href="#{section_sign_in_href}"]|,
+               ~s|a#packet-section-0-decision-toggle[href="#{section_sign_in_href}"][aria-label="Sign in to decide"][title]|,
                "Sign in to decide"
              )
+
+      refute has_element?(view, "#packet-section-0-decision-controls")
+      refute has_element?(view, "#packet-section-0-decision-signin")
 
       # The top bar's Sign in is the shared, text-only account control.
       assert has_element?(view, ~s|.l-nav-signin[href="#{sign_in_href}"]|, "Sign in")
@@ -409,9 +408,19 @@ defmodule ReviewsWeb.ReviewLiveTest do
       refute has_element?(view, "#packet-section-0-decision [aria-pressed]")
 
       # Coming back from sign-in opens that section with its decision expanded.
-      {:ok, returned, _html} = live(build_conn(), ~p"/r/#{packet_review.slug}?#{[section: 0]}")
+      {:ok, returned, _html} =
+        build_conn()
+        |> Plug.Test.init_test_session(%{current_user_id: author.id})
+        |> live(~p"/r/#{packet_review.slug}?#{[section: 0]}")
+
       assert has_element?(returned, "#packet-section-0.is-open")
       assert has_element?(returned, "#packet-section-0-decision.is-editing")
+      assert has_element?(returned, "#packet-section-0-decision-controls [aria-pressed]")
+
+      # The same link signed out still shows the section, but not expanded.
+      {:ok, still_out, _html} = live(build_conn(), ~p"/r/#{packet_review.slug}?#{[section: 0]}")
+      assert has_element?(still_out, "#packet-section-0.is-open")
+      refute has_element?(still_out, "#packet-section-0-decision.is-editing")
 
       assert has_element?(view, "#review-packet .review-hunk-card")
 

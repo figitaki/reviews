@@ -450,10 +450,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :editing, :boolean, default: false
 
   # The section dock: previous section, a compact decision control and next
-  # section, pinned to the bottom of the section at every width. The control
-  # shows your decision on this revision (or "Decide") and expands the three
-  # decisions above itself; non-owners get the owner-only note and signed-out
-  # readers a sign-in link in the same place.
+  # section. In the Guide (show_nav) it is fixed to the bottom of the screen
+  # at every width; in Diff mode and the design playground the control sits
+  # in the page flow without prev/next. The control shows your decision on
+  # this revision (or "Decide") and floats the three choices above itself;
+  # non-owners get the owner-only note there, and for signed-out readers the
+  # control is a link straight to sign-in that returns to this section.
   # Public for the component playground (/design/components).
   def packet_section_decision(assigns) do
     decided = assigns.section.effective_status in ~w(approved denied ignored)
@@ -462,6 +464,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       assigns
       |> assign(:sign_in_return_to, section_return_to(assigns.return_to, assigns.section.index))
       |> assign(:decided, decided)
+      |> assign(:editing, assigns.editing && assigns.current_user != nil)
 
     ~H"""
     <footer
@@ -482,7 +485,23 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         section={@prev_section}
       />
       <div class="review-section-decision-control">
+        <%!-- Signed out, Decide goes straight to sign-in and comes back to this
+        section with the decision open. --%>
+        <.link
+          :if={!@current_user}
+          id={"packet-section-#{@section.index}-decision-toggle"}
+          href={~p"/auth/github?#{[return_to: @sign_in_return_to]}"}
+          class="review-section-decision-toggle is-signin"
+          aria-label="Sign in to decide"
+          title="Sign in with GitHub to decide this section"
+        >
+          <.github_mark />
+          <span class="review-section-decision-toggle-label" aria-hidden="true">
+            Sign in to decide
+          </span>
+        </.link>
         <div
+          :if={@current_user}
           id={"packet-section-#{@section.index}-decision-controls"}
           class="review-section-decision-panel"
           role="group"
@@ -534,25 +553,18 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                     </span>
                   </span>
                 </button>
-              <% @current_user -> %>
+              <% true -> %>
                 <p
                   id={"packet-section-#{@section.index}-decision-owner-only"}
                   class="review-packet-section-note"
                 >
                   Only the review owner can record section decisions.
                 </p>
-              <% true -> %>
-                <.link
-                  id={"packet-section-#{@section.index}-decision-signin"}
-                  href={~p"/auth/github?#{[return_to: @sign_in_return_to]}"}
-                  class="review-button review-button-primary review-packet-section-signin"
-                >
-                  <.github_mark /> Sign in to decide
-                </.link>
             <% end %>
           </div>
         </div>
         <button
+          :if={@current_user}
           id={"packet-section-#{@section.index}-decision-toggle"}
           type="button"
           class="review-section-decision-toggle"
@@ -626,7 +638,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           const editing = this.el.dataset.editing
           if (editing !== this.editing) {
             const target = editing === "true"
-              ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector(".review-packet-section-signin") || this.el.querySelector("[aria-expanded]")
+              ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector("[aria-expanded]")
               : this.el.querySelector("[aria-expanded]")
             target?.focus({preventScroll: true})
           }

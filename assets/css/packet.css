@@ -1096,10 +1096,6 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-text);
 }
 
-.review-packet-section-signin {
-  text-decoration: none;
-}
-
 .review-packet-section-note {
   margin: 0;
   color: var(--review-muted);
@@ -1394,6 +1390,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-section-decision-toggle > [class*="hero-"],
 .review-section-decision-toggle > .review-section-state-icon,
+.review-section-decision-toggle > .ds-github-mark,
 .review-section-step > [class*="hero-"] {
   flex: none;
   width: 18px;
@@ -1404,6 +1401,13 @@ details[open] > summary .review-collapse-icon,
   color: var(--decision-accent);
 }
 
+/* Signed out the pill is a sign-in link. GitHub's mark stays in the text
+   colour, as its guidelines require. */
+.review-section-decision-toggle.is-signin {
+  text-decoration: none;
+}
+
+.review-section-decision-toggle.is-signin > :first-child,
 .review-section-decision.is-editing .review-section-decision-toggle > :first-child {
   color: var(--review-muted);
 }
@@ -1516,8 +1520,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 /* As on the pill, focus covers the border so it shows one outline. */
-.review-section-decision .review-section-action:focus-visible,
-.review-section-decision .review-packet-section-signin:focus-visible {
+.review-section-decision .review-section-action:focus-visible {
   outline: 2px solid var(--ds-focus);
   outline-offset: -1px;
 }
@@ -1538,10 +1541,9 @@ details[open] > summary .review-collapse-icon,
   }
 }
 
-/* Non-owners get the owner-only note and signed-out readers the sign-in
-   button, each floating alone on the centre line like the choices. */
-.review-section-decision .review-packet-section-note,
-.review-section-decision .review-packet-section-signin {
+/* Non-owners get the owner-only note, floating alone on the centre line
+   like the choices. */
+.review-section-decision .review-packet-section-note {
   grid-column: 1 / -1;
   justify-self: center;
   box-shadow: var(--shadow-float);

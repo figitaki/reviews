@@ -16,8 +16,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   with no panel around them and Skip over the pill (on phones the first
   reads "Changes"), and reads
   "Dismiss"; choosing one, clicking elsewhere, clicking it again or Escape
-  closes it. Readers who are not the owner see the owner-only note there,
-  and signed-out readers a sign-in link. The bar is fixed to the bottom of
+  closes it. Readers who are not the owner see the owner-only note there.
+  Signed out, the pill reads "Sign in to decide" and goes straight to GitHub
+  sign-in, which returns to that section with the decision open. The bar is fixed to the bottom of
   the screen, and Comments (and Sections on phones) stack in a column above
   the next-section button. The pill shows one outline, with or without
   keyboard focus.
