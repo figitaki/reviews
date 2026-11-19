@@ -4,7 +4,7 @@ defmodule Reviews.MixProject do
   def project do
     [
       app: :reviews,
-      version: "0.0.2",
+      version: "0.0.3",
       elixir: "~> 1.20",
       description: "Code-review tool for arbitrary diffs (Phoenix + Rust CLI).",
       package: [
