@@ -129,6 +129,26 @@ defmodule ReviewsWeb.DesignLiveTest do
     assert has_element?(view, "#packet-section-0-decision.is-pending")
   end
 
+  test "the Guide map sample opens the section a reader clicks", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/design/components")
+    dark = "#dcp-guide-tree-dark"
+
+    assert has_element?(view, "#{dark} .review-guide-flyout-section.is-active", "File tree")
+    view |> element("#{dark} .review-guide-flyout-section", "Guide map rows") |> render_click()
+    assert has_element?(view, "#{dark} .review-guide-flyout-section.is-active", "Guide map rows")
+    assert has_element?(view, "#{dark} .review-guide-flyout-file", "mix.exs")
+    # The other theme's sample keeps its own open section.
+    assert has_element?(
+             view,
+             "#dcp-guide-tree-light .review-guide-flyout-section.is-active",
+             "File tree"
+           )
+
+    # A file row opens its section too, instead of crashing the catalog.
+    view |> element("#{dark} .review-guide-flyout-file", "mix.exs") |> render_click()
+    assert has_element?(view, "#{dark} .review-guide-flyout-section.is-active", "Guide map rows")
+  end
+
   test "page layouts frame the real list, review and settings pages", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/design/layouts")
 

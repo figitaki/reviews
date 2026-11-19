@@ -350,14 +350,16 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             :key={file.path}
             type="button"
             class="review-guide-flyout-file rev-tree-row"
-            title={file.path}
+            title={tree_row_title(file)}
             phx-click="packet_nav_jump"
             phx-value-section_index={section.index}
             phx-value-target_id={file.target_id}
             disabled={is_nil(file.target_id)}
           >
             <.tree_file_label name={file.basename} directory={file.directory} />
-            <.change_stat additions={file.additions} deletions={file.deletions} />
+            <span class="rev-tree-stats">
+              <.change_stat additions={file.additions} deletions={file.deletions} />
+            </span>
             <span class="rev-tree-badge-slot"><.tree_badge status={file.status} /></span>
           </button>
         </div>
@@ -368,6 +370,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
 
   attr :name, :string, required: true
   attr :directory, :string, default: ""
+
+  @doc "A tree row's tooltip: the full path, and for a rename where it came from."
+  def tree_row_title(%{status: "renamed", old_path: old, path: path}) when is_binary(old),
+    do: "#{old} → #{path}"
+
+  def tree_row_title(%{path: path}), do: path
 
   # A file row's chevron and name, with the rest of its path muted after it.
   def tree_file_label(assigns) do
@@ -947,6 +955,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       directory: outline_directory(path),
       file_id: file && file.id,
       status: file && file.status,
+      old_path: file && file.old_path,
       target_id: target_id,
       additions: hunk.display_additions,
       deletions: hunk.display_deletions,

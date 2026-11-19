@@ -2460,7 +2460,8 @@ details[open] > summary .review-collapse-icon,
 
 .rev-shell {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  /* Room for a file name and its counts on one row. */
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -2825,6 +2826,16 @@ details[open] > summary .review-collapse-icon,
   margin: var(--space-1) 0 var(--space-2);
 }
 
+/* The section tree takes most of the flyout's side padding: its rows have
+   their own, and file names need the width. */
+.review-guide-flyout-group:has(> .rev-tree-header) {
+  margin-inline: calc(-1 * var(--space-6));
+}
+
+.review-guide-flyout-files .rev-tree-row {
+  gap: var(--space-2);
+}
+
 .review-guide-panel {
   min-width: 0;
   max-height: calc(100vh - var(--rev-header-h));
@@ -2981,6 +2992,7 @@ details[open] > summary .review-collapse-icon,
 
 .rev-tree-row .review-change-stat {
   flex: 0 0 auto;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
 }
@@ -2993,30 +3005,58 @@ details[open] > summary .review-collapse-icon,
   white-space: nowrap;
 }
 
-/* The name keeps its room; the muted path after it gets what is left. */
-.rev-tree-label:has(> .rev-tree-name) {
+/* A file row keeps the file name whole. When the row runs out of room,
+   the line counts go first, then the muted path; the name truncates only
+   when it is wider than the whole row.
+
+   The label shrinks a thousand times slower than the counts, so the counts
+   give up their width first. Both the path and the counts sit in a
+   one-line box that wraps: what does not fit drops to a hidden second
+   line instead of showing a stub such as "l…". */
+.rev-tree-row .rev-tree-label:has(> .rev-tree-name) {
   display: flex;
-  gap: var(--space-2);
+  flex: 1 0.001 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+  column-gap: var(--space-2);
+  height: 1lh;
 }
 
-.rev-tree-name,
+.rev-tree-name {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--weight-regular);
+}
+
 .rev-tree-name + .rev-tree-dir {
+  flex: 1 1 4ch;
+  width: 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.rev-tree-name {
-  flex: 0 1 auto;
-  font-weight: var(--weight-regular);
-}
-
-.rev-tree-name + .rev-tree-dir {
-  flex: 1 1 0;
-}
-
 .rev-tree-dir {
   color: var(--review-muted);
+}
+
+.rev-tree-stats {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+  height: 1lh;
+  overflow: hidden;
+}
+
+/* An empty first item a full line tall, so the counts have a line to
+   wrap away from. */
+.rev-tree-stats::before {
+  content: "";
+  height: 100%;
 }
 
 .rev-tree-chevron,

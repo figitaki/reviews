@@ -123,7 +123,7 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
         id={"#{@tree_id}-row-#{fd.id}"}
         type="button"
         class="rev-tree-row"
-        title={fd.path}
+        title={PacketComponents.tree_row_title(fd)}
         phx-click={
           JS.dispatch("phx:packet_nav_jump", detail: %{id: "file-#{fd.id}"})
           |> JS.remove_class("is-open", to: "##{@tree_id}")
@@ -131,7 +131,9 @@ defmodule ReviewsWeb.ReviewLive.DiffComponents do
         }
       >
         <PacketComponents.tree_file_label name={Path.basename(fd.path)} directory={rest} />
-        <PacketComponents.change_stat additions={fd.additions} deletions={fd.deletions} />
+        <span class="rev-tree-stats">
+          <PacketComponents.change_stat additions={fd.additions} deletions={fd.deletions} />
+        </span>
         <span class="rev-tree-badge-slot">
           <PacketComponents.tree_badge status={fd.status} />
         </span>

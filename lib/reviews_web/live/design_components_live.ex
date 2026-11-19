@@ -56,7 +56,9 @@ defmodule ReviewsWeb.DesignComponentsLive do
        hunk_id: @hunk_id,
        expanded_hunk_ids: MapSet.new([@hunk_id]),
        hunk_viewed: false,
-       opened: nil
+       opened: nil,
+       # The open section of each theme's Guide map sample.
+       tree_sections: %{"dark" => 21, "light" => 31}
      )}
   end
 
@@ -102,6 +104,15 @@ defmodule ReviewsWeb.DesignComponentsLive do
              Map.get(%{"true" => true, "false" => false}, params["open"], !decision.editing)
        }
      end)}
+  end
+
+  # The Guide map sample: a section or one of its files opens that section,
+  # as on the review page. Light-theme sections are numbered from 30.
+  def handle_event(event, %{"section_index" => index}, socket)
+      when event in ["select_guide_section", "packet_nav_jump"] do
+    index = String.to_integer(index)
+    theme = if index >= 30, do: "light", else: "dark"
+    {:noreply, update(socket, :tree_sections, &Map.put(&1, theme, index))}
   end
 
   # Selecting the current status again clears it, as on the review page.
@@ -205,7 +216,8 @@ defmodule ReviewsWeb.DesignComponentsLive do
           transform: none;
           border: var(--border-hair) solid var(--review-line);
           border-radius: var(--radius-md);
-          padding: var(--space-5) var(--space-2);
+          /* The tree reaches out over this padding, as in the flyout. */
+          padding: var(--space-5) calc(var(--space-6) + var(--space-2));
         }
 
         .dcp-section-states {
@@ -485,10 +497,10 @@ defmodule ReviewsWeb.DesignComponentsLive do
               id={"dcp-file-tree-#{theme}"}
               file_diffs={DesignFixtures.tree_files()}
             />
-            <div class="review-guide-flyout dcp-guide-tree">
+            <div id={"dcp-guide-tree-#{theme}"} class="review-guide-flyout dcp-guide-tree">
               <PacketComponents.guide_map_sections
                 outline={DesignFixtures.guide_outline(if(theme == "dark", do: 20, else: 30))}
-                active_section_index={if(theme == "dark", do: 21, else: 31)}
+                active_section_index={@tree_sections[theme]}
               />
             </div>
           </div>
