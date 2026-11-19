@@ -541,8 +541,8 @@ export class VanillaDiffRenderer {
     // Threads live in Source. Navigating to one is not a saved view choice.
     this.preferredPreview = false
     this.threadUI.set(thread.id, { ...this.threadUI.get(thread.id), expanded: true })
-    this.focusedThreadId = thread.id
     this.pendingThreadFocus = thread.id
+    this.scrolledToThreadLine = false
     this.openLines.add(`${sideToAnnotationSide(thread.side)}:${thread.anchor?.line_number_hint}`)
     this.render()
   }
@@ -552,7 +552,12 @@ export class VanillaDiffRenderer {
     requestAnimationFrame(() => {
       if (!this.pendingThreadFocus) return
       const target = this.container.querySelector(`[data-thread-id="${this.pendingThreadFocus}"]`)
-      if (!target) return
+      // Pierre keeps every annotation in the light DOM, but a virtualized
+      // file only slots the ones on rendered rows; the rest have no boxes.
+      if (!target?.getClientRects().length) {
+        this.scrollToPendingThreadLine()
+        return
+      }
       this.pendingThreadFocus = null
       target.style.scrollMarginTop = "calc(var(--review-main-nav-h) + 60px)"
       if (this.compact()) {
@@ -567,6 +572,20 @@ export class VanillaDiffRenderer {
       target.tabIndex = -1
       target.focus({ preventScroll: true })
     })
+  }
+
+  // A virtualized file renders only the rows near the viewport, so the thread
+  // may not be in the DOM yet. Scroll its line into the window once; the
+  // render that follows calls focusPendingThread again and finds it.
+  scrollToPendingThreadLine() {
+    if (!this.virtualizer || this.scrolledToThreadLine) return
+    const thread = this.threads.find(thread => String(thread.id) === String(this.pendingThreadFocus))
+    const line = thread?.anchor?.line_number_hint
+    const position = line && this.instance?.getLinePosition?.(line, sideToAnnotationSide(thread.side))
+    if (!position || !this.virtualContent) return
+    this.scrolledToThreadLine = true
+    const fileTop = this.virtualizer.getOffsetInScrollContainer(this.virtualContent)
+    this.virtualizer.scrollTo({ top: fileTop + position.top - window.innerHeight / 3, behavior: "instant" })
   }
 
   // Keep Pierre's path, status icon and counts. The disclosure button uses
@@ -755,7 +774,7 @@ export class VanillaDiffRenderer {
     const renderArgs = this.renderArgs()
 
     if (
-      !this.collapsed() && !this.focusedThreadId &&
+      !this.collapsed() &&
       shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
     ) {
       if (this.tryRenderVirtualized(options, renderArgs)) return
@@ -771,6 +790,7 @@ export class VanillaDiffRenderer {
     try {
       const contentWrapper = el("div", { className: "review-virtualized-diff-content" })
       this.sourceContainer.append(contentWrapper)
+      this.virtualContent = contentWrapper
       this.virtualizer = new Diffs.Virtualizer({
         overscrollSize: 800,
         intersectionObserverMargin: 800,
@@ -819,6 +839,7 @@ export class VanillaDiffRenderer {
       this.virtualizer?.destroy?.()
     } finally {
       this.virtualizer = null
+      this.virtualContent = null
     }
     if (clear) this.container.replaceChildren()
   }
