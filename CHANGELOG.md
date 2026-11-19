@@ -6,6 +6,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Review links now unfurl in Slack, iMessage, Discord and other apps (Open
+  Graph and Twitter card tags). A link to a comment shows who wrote it, the
+  file and line, and the comment as plain text. Page titles no longer end in
+  "· Phoenix Framework". A comment link that opens the Changes view now keeps
+  `comment`, so it still lands on that comment.
 - The MCP `reviews_post_comment` tool and the address-feedback prompt now ask
   agents to write comments in Simplified Technical English (ASD-STE100):
   short sentences, active voice and common words.
