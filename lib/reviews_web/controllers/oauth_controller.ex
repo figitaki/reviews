@@ -31,6 +31,7 @@ defmodule ReviewsWeb.OAuthController do
   alias Gatekeep.{Authorization, DeviceAuthorization, Registration, TokenEndpoint}
   alias Reviews.Accounts
   alias Reviews.OAuth
+  alias ReviewsWeb.OAuthHTML
 
   def authorize(conn, _params), do: Gatekeep.Plug.Authorize.call(conn, OAuth)
 
@@ -122,6 +123,8 @@ defmodule ReviewsWeb.OAuthController do
               as: :new_identity
             ),
           scopes: request.scope_descriptions,
+          scope_titles: OAuthHTML.scope_titles(request),
+          known: OAuthHTML.known_client(request),
           current_user: user,
           page_title: "Connect an agent"
         )

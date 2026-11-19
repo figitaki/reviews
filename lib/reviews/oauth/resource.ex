@@ -35,5 +35,19 @@ defmodule Reviews.OAuth.Resource do
   @doc "Fields this resource adds to the issuer's metadata (RFC 8414 §2)."
   @callback authorization_server_metadata() :: map()
 
-  @optional_callbacks authorization_server_metadata: 0
+  @doc """
+  A short title for each scope, for the consent page, which shows the
+  description under it. Scopes without one are titled by name.
+  """
+  @callback scope_titles() :: %{String.t() => String.t()}
+
+  @doc """
+  A client this resource recognizes by its `client_id`, or nil. The consent
+  page names a recognized client with its `:name`, `:publisher` and `:logo`
+  (a static path) instead of what the client calls itself.
+  """
+  @callback known_client(client_id :: String.t()) ::
+              %{name: String.t(), publisher: String.t(), logo: String.t()} | nil
+
+  @optional_callbacks authorization_server_metadata: 0, scope_titles: 0, known_client: 1
 end
