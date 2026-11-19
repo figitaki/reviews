@@ -2103,6 +2103,128 @@ details[open] > summary .review-collapse-icon,
   }
 }
 
+.reviews-diff-header-viewed-eye {
+  display: none;
+}
+
+/* Phones: the file header stays one compact row. Mark viewed becomes an
+   eye button that looks 32px but keeps a 44px tap area. */
+@media (max-width: 640px) {
+  .reviews-diff-header-viewed,
+  .reviews-diff-header-viewed[aria-pressed="true"] {
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    min-height: 32px;
+    padding: 0;
+  }
+  .reviews-diff-header-viewed::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+  }
+  .reviews-diff-header-viewed-eye {
+    display: block;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .reviews-diff-header-viewed-label {
+    display: none;
+  }
+}
+
+/* Thread cards. Comment bodies start just past the avatar; a light rounded
+   connector runs from under the avatar into the first line of the body, so
+   the text reads as the author's. */
+.review-thread-comments {
+  position: relative;
+  padding: 0 0 0 18px;
+}
+
+.review-thread-comments::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 9px;
+  width: 6px;
+  height: calc(0.8em + 2px);
+  border-left: 1.5px solid var(--ds-line);
+  border-bottom: 1.5px solid var(--ds-line);
+  border-bottom-left-radius: 6px;
+  pointer-events: none;
+}
+
+/* Copy-link controls: a faint icon, a real link for long-press on phones. */
+.ds-button.review-copy-link {
+  min-height: 24px;
+  width: 24px;
+  padding: 0;
+  color: var(--ds-faint);
+}
+
+.ds-button.review-copy-link svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.ds-button.review-copy-link:is(:hover, :focus-visible) {
+  color: var(--ds-text);
+}
+
+/* A thread or comment opened from a copied link: a ring on the card, or a
+   tint behind the comment, that fades out. The renderer applies them with a
+   short-lived rule (highlightLinked in vanilla_renderer.js); with reduced
+   motion they hold, then end without fading. */
+@keyframes review-linked-card {
+  0%,
+  40% {
+    box-shadow: inset 0 0 0 2px var(--ds-blue);
+  }
+
+  to {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+}
+
+@keyframes review-linked-comment {
+  0%,
+  40% {
+    background: color-mix(in srgb, var(--ds-blue) 16%, transparent);
+  }
+
+  to {
+    background: transparent;
+  }
+}
+
+.review-thread-card [data-comment-id] {
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 640px) {
+  .ds-button.review-copy-link {
+    min-height: 28px;
+    width: 28px;
+  }
+  /* A 44px tap target around the small icon. */
+  .ds-button.review-copy-link::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+  }
+  .review-thread-card {
+    margin-left: calc(-1 * var(--review-thread-gutter, 0px));
+    border-inline-width: 0 !important;
+    border-radius: 0 !important;
+  }
+}
+
 .review-packet-task,
 .review-packet-question {
   display: flex;

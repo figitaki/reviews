@@ -37,31 +37,6 @@ const bubbleBaseStyle = {
 
 const composerStyle = { ...bubbleBaseStyle, padding: "10px 12px", marginBottom: "0" }
 
-const buttonStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "6px",
-  minHeight: "30px",
-  cursor: "pointer",
-  border: "1px solid transparent",
-  borderRadius: "6px",
-  background: colors.raised,
-  color: colors.text,
-  font: "inherit",
-  fontFamily: fontStack,
-  fontSize: "12px",
-  padding: "0 12px",
-  textDecoration: "none",
-}
-
-const primaryButtonStyle = {
-  ...buttonStyle,
-  background: colors.text,
-  borderColor: colors.text,
-  color: "var(--ds-bg, #050505)",
-}
-
 const textareaStyle = {
   minHeight: "56px",
   width: "100%",
@@ -135,9 +110,10 @@ const threadRunHeaderStyle = {
   gap: "6px",
   fontWeight: "600",
 }
+// The body indent and the connector from the avatar are in CSS
+// (.review-thread-comments in packet.css).
 const threadRunCommentsStyle = {
   margin: "0",
-  padding: "0 0 0 26px",
   listStyle: "none",
 }
 const threadCommentStyle = {
@@ -148,15 +124,21 @@ const threadCommentStyle = {
   padding: "2px 0",
 }
 const threadCommentBodyStyle = {
-  flex: "1 1 180px",
+  flex: "1 1 100%",
   minWidth: "0",
   whiteSpace: "normal",
   overflowWrap: "anywhere",
 }
+const threadCommentMetaStyle = {
+  flex: "1 1 100%",
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+}
 const threadCommentTimeStyle = {
-  flex: "0 0 auto",
   color: colors.faint,
   fontSize: "11px",
+  fontWeight: "400",
 }
 const threadFooterStyle = {
   marginTop: "8px",
@@ -170,42 +152,43 @@ const composerActionsStyle = {
   alignItems: "center",
 }
 
-// The label is its own box so text-box can trim it to cap height; a flex
-// button's bare text cannot be trimmed. Same as `.ds-label` in the app CSS.
+// Annotations are slotted into Pierre's shadow DOM but live in the light DOM,
+// so the shared <.ds_button> classes apply to them. The label gets its own
+// `.ds-label` box, as in <.ds_button>, so text-box can trim it to cap height;
+// a flex button's bare text cannot be trimmed.
 function button(label, onClick, attrs = {}) {
-  return baseButton(el("span", { style: { textBox: "trim-both cap alphabetic" } }, label), onClick, {
-    ...attrs,
-    style: buttonStyle,
-    primaryStyle: primaryButtonStyle,
-  })
+  const node = baseButton(el("span", { className: "ds-label" }, label), onClick, attrs)
+  node.className = ["ds-button", "is-sm", attrs.primary && "is-primary", attrs.ghost && "is-ghost"].filter(Boolean).join(" ")
+  return node
 }
 
+// `short` is the compact label shown after the author ("56min", "3h");
+// `relative` is the spoken form ("3 hours ago") for the tooltip and
+// screen readers.
 export function formatRelative(iso, now = Date.now()) {
-  if (!iso) return { relative: "", absolute: "" }
+  const empty = { short: "", relative: "", absolute: "" }
+  if (!iso) return empty
   const t = Date.parse(iso)
-  if (Number.isNaN(t)) return { relative: "", absolute: "" }
+  if (Number.isNaN(t)) return empty
   const diffMs = t - now
-  const absSec = Math.round(Math.abs(diffMs) / 1000)
+  const absSec = Math.abs(diffMs) / 1000
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
   const units = [
-    ["year", 60 * 60 * 24 * 365],
-    ["month", 60 * 60 * 24 * 30],
-    ["week", 60 * 60 * 24 * 7],
-    ["day", 60 * 60 * 24],
-    ["hour", 60 * 60],
-    ["minute", 60],
-    ["second", 1],
+    ["year", "y", 60 * 60 * 24 * 365],
+    ["month", "mo", 60 * 60 * 24 * 30],
+    ["week", "w", 60 * 60 * 24 * 7],
+    ["day", "d", 60 * 60 * 24],
+    ["hour", "h", 60 * 60],
+    ["minute", "min", 60],
   ]
-  for (const [unit, sec] of units) {
-    if (absSec >= sec || unit === "second") {
-      const v = Math.round(diffMs / 1000 / sec)
-      return {
-        relative: rtf.format(v, unit),
-        absolute: new Date(t).toISOString(),
-      }
+  const absolute = new Date(t).toISOString()
+  for (const [unit, abbr, sec] of units) {
+    if (absSec >= sec) {
+      const n = Math.floor(absSec / sec)
+      return { short: `${n}${abbr}`, relative: rtf.format(Math.sign(diffMs) * n, unit), absolute }
     }
   }
-  return { relative: "", absolute: "" }
+  return { short: "now", relative: rtf.format(0, "second"), absolute }
 }
 
 export function anchorPinpoint(anchor, side) {
@@ -328,8 +311,12 @@ export function commentComposer({
   autoFocus = true,
   focusSelection,
 }) {
+  // The reply box inside a thread card is a bordered ds-input; the new-comment
+  // composer is its own bordered card.
+  const fieldStyle = embedded ? { minHeight: "56px", resize: "vertical", lineHeight: "1.5", display: "block" } : textareaStyle
   const textarea = el("textarea", {
-    style: touch() ? { ...textareaStyle, fontSize: "16px" } : textareaStyle,
+    className: embedded ? "ds-input" : null,
+    style: touch() ? { ...fieldStyle, fontSize: "16px" } : fieldStyle,
     rows: 2,
     placeholder,
     "aria-label": saveLabel === "Reply" ? "Reply to thread" : "Comment",
@@ -362,8 +349,6 @@ export function commentComposer({
   const saveButton = button(saveLabel, submit, { primary: true })
   const updateSave = () => {
     saveButton.disabled = submitted || !textarea.value.trim()
-    saveButton.style.opacity = saveButton.disabled ? "0.45" : "1"
-    saveButton.style.cursor = saveButton.disabled ? "default" : "pointer"
   }
   textarea.addEventListener("input", () => {
     updateSave()
@@ -391,14 +376,10 @@ export function commentComposer({
 
   // Emphasize the existing edge instead of nesting the browser's focus ring
   // inside another border. Inline styles also work in Pierre's shadow DOM.
-  textarea.addEventListener("focus", () => {
-    if (embedded) textarea.style.boxShadow = `0 1px 0 ${colors.lineStrong}`
-    else node.style.borderColor = "var(--ds-focus, #fff)"
-  })
-  textarea.addEventListener("blur", () => {
-    textarea.style.boxShadow = "none"
-    node.style.borderColor = colors.line
-  })
+  if (!embedded) {
+    textarea.addEventListener("focus", () => { node.style.borderColor = "var(--ds-focus, #fff)" })
+    textarea.addEventListener("blur", () => { node.style.borderColor = colors.line })
+  }
 
   if (autoFocus) window.requestAnimationFrame(() => {
     if (textarea.isConnected) {
@@ -449,7 +430,7 @@ export function signInPrompt(onCancel) {
       "Sign in with GitHub to leave a comment."
     ),
     el("div", { style: composerActionsStyle }, [
-      el("a", { href: signInHref(), style: primaryButtonStyle }, [
+      el("a", { href: signInHref(), className: "ds-button is-sm is-primary" }, [
         githubMark(),
         "Sign in with GitHub",
       ]),
@@ -458,17 +439,77 @@ export function signInPrompt(onCancel) {
   ])
 }
 
+// A link to this page that opens one thread, or one comment in it. It keeps
+// the current view and patchset.
+export function threadPermalink(threadId, commentId, href = window.location.href) {
+  const url = new URL(href)
+  url.hash = ""
+  for (const key of ["thread", "comment", "section"]) url.searchParams.delete(key)
+  url.searchParams.set("thread", threadId)
+  if (commentId != null) url.searchParams.set("comment", commentId)
+  return url.toString()
+}
+
+function strokeIcon(paths) {
+  const ns = "http://www.w3.org/2000/svg"
+  const svg = document.createElementNS(ns, "svg")
+  for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", width: "14", height: "14", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false" })) svg.setAttribute(k, v)
+  for (const d of paths) {
+    const path = document.createElementNS(ns, "path")
+    path.setAttribute("d", d)
+    svg.append(path)
+  }
+  return svg
+}
+const LINK_ICON = ["M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71", "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"]
+const CHECK_ICON = ["M20 6 9 17l-5-5"]
+
+// A small link icon. Clicking copies the link; it is a real <a>, so a long
+// press on a phone also offers the system's Copy Link.
+function copyLinkButton(href, label) {
+  const status = el("span", { className: "sr-only", role: "status" })
+  const icon = strokeIcon(LINK_ICON)
+  const link = el("a", {
+    href,
+    className: "ds-button is-sm is-ghost review-copy-link",
+    title: label,
+    "aria-label": label,
+    onClick: async (event) => {
+      event.preventDefault()
+      let copied = false
+      try {
+        await navigator.clipboard.writeText(href)
+        copied = true
+      } catch {
+        // No clipboard access: put the link in the address bar instead.
+        window.history.replaceState(window.history.state, "", href)
+      }
+      status.textContent = copied ? "Link copied" : "Link is in the address bar"
+      link.title = status.textContent
+      icon.replaceWith(strokeIcon(CHECK_ICON))
+      clearTimeout(link._reset)
+      link._reset = setTimeout(() => {
+        link.querySelector("svg")?.replaceWith(icon)
+        link.title = label
+        status.textContent = ""
+      }, 1600)
+    },
+  }, [icon, status])
+  return link
+}
+
 function commentTime(iso, prefix = "") {
-  const { relative, absolute } = formatRelative(iso)
-  if (!relative) return null
+  const { short, relative, absolute } = formatRelative(iso)
+  if (!short) return null
   return el(
     "time",
     {
       style: threadCommentTimeStyle,
       dateTime: absolute,
-      title: absolute,
+      title: `${relative} · ${absolute}`,
+      "aria-label": `${prefix}${relative}`,
     },
-    `${prefix}${relative}`
+    `${prefix}${short}`
   )
 }
 
@@ -575,27 +616,37 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
   const commentRows = []
 
   for (const [index, run] of runs.entries()) {
-    const comments = run.comments.map((comment) =>
-      el("li", { style: threadCommentStyle }, [
+    // The first comment's time sits after the author name; later comments in
+    // the run get their own small line, so the body keeps the full width.
+    const who = run.author?.username || "reviewer"
+    const commentLink = (comment) =>
+      copyLinkButton(threadPermalink(thread.id, comment.id), `Copy link to ${who}'s comment`)
+    const comments = run.comments.map((comment, i) =>
+      // The run's first comment is linked by the whole run, so a comment
+      // link lands on the author line too.
+      el("li", { style: threadCommentStyle, dataset: i ? { commentId: comment.id } : {} }, [
+        i ? el("div", { style: threadCommentMetaStyle }, [commentTime(comment.inserted_at), commentLink(comment)]) : null,
         commentBody(comment.body),
-        commentTime(comment.inserted_at),
         attributionDetails(comment.attribution, run.author),
       ])
     )
 
     commentRows.push(
-      el("li", { style: { marginTop: index ? "8px" : "0" } }, [
+      el("li", { style: { marginTop: index ? "8px" : "0" }, dataset: { commentId: run.comments[0]?.id } }, [
         el("header", { style: threadRunHeaderStyle }, [
           avatar(run.author),
-          el("span", {}, run.author?.username || "reviewer"),
+          el("span", {}, who),
+          commentTime(run.comments[0]?.inserted_at),
+          commentLink(run.comments[0]),
         ]),
-        el("ul", { style: threadRunCommentsStyle }, comments),
+        el("ul", { className: "review-thread-comments", style: threadRunCommentsStyle }, comments),
       ])
     )
   }
 
   let replyButton
   const root = el("div", {
+    className: "review-thread-card",
     style: { ...bubbleBaseStyle, padding: "0", overflow: "hidden" },
     role: "group",
     "aria-label": `Thread by ${thread.author?.username || "reviewer"}`,
@@ -608,12 +659,14 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
     const header = el("header", {
       style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", minHeight: "36px", padding: "3px 4px 3px 12px", borderBottom: `1px solid ${colors.line}` },
     }, [bubbleAnchorLink({ anchor: thread.anchor, side: thread.side, status: thread.status, commentCount: thread.comments?.length || 0 })])
+    const threadLink = copyLinkButton(threadPermalink(thread.id), `Copy link to thread on line ${where}`)
+    threadLink.style.marginLeft = "auto"
+    header.append(threadLink)
     if (onUpdateStatus && ["open", "resolved"].includes(thread.status)) {
       const status = button(resolved ? "Reopen" : "Resolve", () => {
         ui.expanded = false
         onUpdateStatus(thread, resolved ? "open" : "resolved")
       }, { ariaLabel: `${resolved ? "Reopen" : "Resolve"} thread on line ${where}` })
-      Object.assign(status.style, { marginLeft: "auto", background: "transparent", minHeight: touch() ? "44px" : "28px" })
       header.append(status)
     }
     root.replaceChildren(header)
@@ -670,8 +723,8 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
         ui.replyOpen = true
         ui.focusReply = true
         render()
-      }, { ariaLabel: `Reply to thread on line ${where}` })
-      Object.assign(replyButton.style, { width: "100%", justifyContent: "flex-start", minHeight: touch() ? "44px" : "34px", padding: "0 12px", background: "transparent", color: colors.muted, borderRadius: "0" })
+      }, { ariaLabel: `Reply to thread on line ${where}`, ghost: true })
+      Object.assign(replyButton.style, { width: "100%", justifyContent: "flex-start", borderRadius: "0" })
       footer.append(replyButton)
     }
   }
