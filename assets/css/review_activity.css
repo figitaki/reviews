@@ -263,10 +263,11 @@
 /* Leave room so the button never covers the last lines of code. */
 .review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 
-/* In the Guide the section dock holds next section in the bottom-right
-   corner, so Comments stacks above it: dock offset + 40px dock + 12px gap. */
+/* In the Guide the fixed section dock holds next section in the
+   bottom-right corner, so Comments (and Sections on phones) stack above it:
+   dock offset + dock height + the column's 12px gap. */
 .review-page:has(.review-section-decision.has-nav) .review-activity {
-  --review-quick-bottom: calc(12px + 40px + 12px + env(safe-area-inset-bottom));
+  --review-quick-bottom: calc(16px + var(--size-fab) + 12px + env(safe-area-inset-bottom));
 }
 
 /* The Guide grid's own bottom padding already clears the buttons. Padding

@@ -6,8 +6,8 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
-- In the Guide each section ends with one compact bar centred at the bottom
-  of the screen at every width: previous section on the left, the decision
+- In the Guide each section has one compact bar at the bottom of the screen
+  at every width: previous section on the left, the decision
   pill in the middle and next section on the right. It replaces the
   "Next:" and "Begin review" button at the end of each section and the
   old corner decision button and shelf. The pill shows your decision on the
@@ -15,8 +15,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   Clicking it opens Approve, Request changes and Skip above it and reads
   "Dismiss"; choosing one, clicking elsewhere, clicking it again or Escape
   closes it. Readers who are not the owner see the owner-only note there,
-  and signed-out readers a sign-in link. Comments sits above the
-  next-section button.
+  and signed-out readers a sign-in link. The bar is fixed to the bottom of
+  the screen, and Comments (and Sections on phones) stack in a column above
+  the next-section button. The pill shows one outline, with or without
+  keyboard focus.
 
 - The Guide no longer adds 72px of empty space below the page on wide
   screens. That space ended the sticky Guide rail early, so it jumped up as

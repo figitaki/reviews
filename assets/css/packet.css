@@ -1300,11 +1300,13 @@ details[open] > summary .review-collapse-icon,
 }
 
 /* The section dock: previous section, the decision control and next
-   section, pinned to the bottom of the section at every width. Phones only
-   change sizes. */
+   section, fixed to the bottom of the screen at every width. It spans the
+   content beside the Guide rail; its right edge and bottom match the
+   floating Comments and Sections buttons, which stack above next section.
+   Phones only change sizes. Without section nav (Diff mode, the design
+   playground) the control sits in the flow below its section. */
 .review-section-decision {
-  position: sticky;
-  bottom: calc(12px + env(safe-area-inset-bottom));
+  position: relative;
   z-index: var(--z-decision);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -1319,11 +1321,33 @@ details[open] > summary .review-collapse-icon,
   pointer-events: auto;
 }
 
-/* At the end of a section the dock leaves the bottom of the screen and sits
-   in the flow; the grid's bottom padding keeps it above the floating buttons
-   in the corner (Comments, and Sections on phones). */
+.review-section-decision.has-nav {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: calc(var(--guide-rail-w) + 16px);
+  margin: 0;
+}
+
+/* The open Guide map covers the left of the content, so the dock starts
+   beside it. */
+.review-packet-shell:has(> .review-guide-shell.is-flyout-open) .review-section-decision.has-nav {
+  left: calc(var(--guide-flyout-w) + 16px);
+}
+
+/* At 768px and below the Guide rail runs across the top. */
+@media (max-width: 768px) {
+  .review-section-decision.has-nav,
+  .review-packet-shell:has(> .review-guide-shell.is-flyout-open) .review-section-decision.has-nav {
+    left: calc(16px + env(safe-area-inset-left));
+  }
+}
+
+/* Enough room for the last content to scroll clear of the dock: its bottom
+   offset, its height and a 16px gap. This sits inside the Guide shell, so
+   the sticky Guide rail still runs to the end of the page. */
 .review-packet-shell.has-outline .review-packet-grid {
-  padding-bottom: calc(12px + 40px + 12px + var(--size-fab) + 16px + env(safe-area-inset-bottom));
+  padding-bottom: calc(16px + var(--size-fab) + 16px + env(safe-area-inset-bottom));
 }
 
 .review-section-decision.is-approved {
@@ -1350,7 +1374,8 @@ details[open] > summary .review-collapse-icon,
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
+  height: var(--size-fab);
+  box-sizing: border-box;
   border: 1px solid var(--review-line-strong);
   border-radius: 999px;
   background: var(--review-panel-raised);
@@ -1388,10 +1413,12 @@ details[open] > summary .review-collapse-icon,
   background: var(--review-hover);
 }
 
+/* The focus ring replaces the border rather than circling it, so the
+   control keeps one outline when focus returns to it on collapse. */
 .review-section-step:focus-visible,
 .review-section-decision-toggle:focus-visible {
   outline: 2px solid var(--ds-focus);
-  outline-offset: 3px;
+  outline-offset: -1px;
 }
 
 .review-section-step {
@@ -1500,19 +1527,17 @@ details[open] > summary .review-collapse-icon,
 }
 
 @media (max-width: 640px) {
-  .review-packet-shell.has-outline .review-packet-grid {
-    padding-bottom: calc(12px + 40px + 12px + 2 * var(--size-fab) + 12px + 16px + env(safe-area-inset-bottom));
-  }
-
   .review-section-decision {
     gap: var(--space-2);
   }
 
-  /* Phones show only the arrows for previous and next. */
+  /* Phones show only the arrows for previous and next, as the same square
+     buttons as Comments and Sections stacked above next. */
   .review-section-step {
-    width: 40px;
+    width: var(--size-fab);
     justify-content: center;
     padding: 0;
+    border-radius: var(--radius-lg);
   }
 
   .review-section-step-label {
@@ -2971,6 +2996,11 @@ details[open] > summary .review-collapse-icon,
   .review-packet-grid,
   .review-packet-shell.has-outline .review-packet-grid {
     padding: 18px 16px 56px;
+  }
+
+  /* The fixed section dock still needs its room in the Guide. */
+  .review-packet-shell.has-outline .review-packet-grid {
+    padding-bottom: calc(16px + var(--size-fab) + 16px + env(safe-area-inset-bottom));
   }
 
   /* Diffs use the full screen width: no side borders or corners, and in the
