@@ -321,12 +321,12 @@
   }
   .review-activity-log { max-height: calc(60svh - var(--review-quick-bottom)); }
 
-  /* Phones: Sections and Comments sit in their own bar along the bottom, so
-     they never cover thread cards or the end of a comment. The content
-     reserves the bar's height. */
-  .review-activity {
-    --review-bar-h: calc(var(--size-fab) + 16px + env(safe-area-inset-bottom));
-
+  /* Phones without the Guide's section dock (Diff mode): Sections and
+     Comments sit in their own bar along the bottom, so they never cover
+     thread cards or the end of a comment. The content reserves the bar's
+     height, and section decisions stick just above it. In the Guide they
+     stay stacked above the dock's next button. */
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-activity {
     left: 0;
     right: 0;
     bottom: 0;
@@ -337,28 +337,14 @@
     border-top: 1px solid var(--ds-line);
     background: var(--ds-panel);
   }
-  .review-workspace-content,
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
-    padding-bottom: calc(var(--review-bar-h, 64px) + 16px);
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-workspace-content {
+    padding-bottom: calc(var(--size-fab) + 32px + env(safe-area-inset-bottom));
   }
-  /* Decisions stick just above the bar. In the Guide, which shows one
-     section, the closed decision button joins the bar on its left. */
-  .review-page .review-section-decision { bottom: calc(var(--size-fab) + 28px + env(safe-area-inset-bottom)); }
-  .review-page .review-packet-shell.has-outline .review-section-decision:not(.is-editing):not(.is-readonly) {
-    position: fixed;
-    right: auto;
-    left: calc(16px + env(safe-area-inset-left));
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    /* Above the bar's own background, which comes later in the page. */
-    z-index: calc(var(--z-fab) + 1);
-    margin: 0;
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-section-decision {
+    bottom: calc(var(--size-fab) + 28px + env(safe-area-inset-bottom));
   }
-  /* Let that z-index reach the page: the grid's own stacking context would
-     keep the button under the bar. Its children still sit below the bar,
-     Guide and toolbar layers. */
-  .review-packet-shell.has-outline .review-packet-grid { z-index: auto; }
-  .review-activity-body { bottom: calc(100% + 8px); }
-  .review-activity:has(details[open]) .review-quick-button { visibility: visible; }
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-activity-body { bottom: calc(100% + 8px); }
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-activity:has(details[open]) .review-quick-button { visibility: visible; }
 }
 
 /* While someone types a comment or reply, or the on-screen keyboard is up,
