@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Settings → New agent identity picks the provider from a list: Claude,
+  Codex, ChatGPT, Amp, Cursor, Gemini, GitHub Copilot and Grok, or Custom
+  to type another name. An agent made for a listed provider uses its logo
+  as its avatar.
 - Amp is a recognized app when it connects to `/mcp`. Its sign-in page shows
   Amp's name and logo instead of "Not verified".
 - Disabled-by-default private aggregate export with dedicated expiring authentication,

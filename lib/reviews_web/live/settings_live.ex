@@ -5,6 +5,7 @@ defmodule ReviewsWeb.SettingsLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.Accounts
+  alias Reviews.Accounts.AgentProviders
   alias Reviews.OAuth
 
   @impl true
@@ -24,13 +25,17 @@ defmodule ReviewsWeb.SettingsLive do
   end
 
   @impl true
+  def handle_event("change_agent_identity", %{"identity" => params}, socket) do
+    {:noreply, assign(socket, :agent_form, to_form(params, as: :identity))}
+  end
+
   def handle_event("create_agent_identity", %{"identity" => params}, socket) do
     case socket.assigns.current_user do
       nil ->
         {:noreply, put_flash(socket, :error, "Sign in to manage identities.")}
 
       user ->
-        case Accounts.create_agent_identity(user, params) do
+        case Accounts.create_agent_identity(user, agent_identity_attrs(socket, params)) do
           {:ok, _identity} ->
             {:noreply,
              socket
@@ -38,8 +43,10 @@ defmodule ReviewsWeb.SettingsLive do
              |> assign_account_data()
              |> put_flash(:info, "Agent identity created.")}
 
+          # Keep what was typed, including a custom provider, next to the errors.
           {:error, changeset} ->
-            {:noreply, assign(socket, :agent_form, to_form(changeset, as: :identity))}
+            form = to_form(params, as: :identity, errors: changeset.errors, action: :insert)
+            {:noreply, assign(socket, :agent_form, form)}
         end
     end
   end
@@ -212,6 +219,7 @@ defmodule ReviewsWeb.SettingsLive do
 
                     <form
                       id="new-agent-identity-form"
+                      phx-change="change_agent_identity"
                       phx-submit="create_agent_identity"
                       class="ds-settings-form"
                     >
@@ -234,9 +242,18 @@ defmodule ReviewsWeb.SettingsLive do
                       <.input
                         field={@agent_form[:provider]}
                         id="agent-provider"
-                        type="text"
+                        type="select"
                         label="Provider"
-                        placeholder="Claude, Codex, custom"
+                        prompt="None"
+                        options={provider_options()}
+                      />
+                      <.input
+                        :if={@agent_form[:provider].value == "custom"}
+                        field={@agent_form[:custom_provider]}
+                        id="agent-custom-provider"
+                        type="text"
+                        label="Custom Provider"
+                        placeholder="My agent platform"
                         autocomplete="off"
                       />
                       <.ds_button
@@ -550,6 +567,28 @@ defmodule ReviewsWeb.SettingsLive do
       %URI{scheme: "https", host: host} when is_binary(host) -> host
       _ -> "#{grant.client_name || "Unnamed app"} (registered app)"
     end
+  end
+
+  defp provider_options do
+    Enum.map(AgentProviders.all(), &{&1.name, &1.name}) ++ [{"Custom", "custom"}]
+  end
+
+  # The provider is a listed one or the custom name typed. A listed provider
+  # (also when typed as custom) gives the identity its logo as the avatar,
+  # as an absolute URL because API and diff payloads require one.
+  defp agent_identity_attrs(socket, params) do
+    provider =
+      if params["provider"] == "custom", do: params["custom_provider"], else: params["provider"]
+
+    provider = if is_binary(provider) and String.trim(provider) != "", do: String.trim(provider)
+    listed = AgentProviders.get(provider)
+
+    %{
+      "display_name" => params["display_name"],
+      "handle" => params["handle"],
+      "provider" => if(listed, do: listed.name, else: provider),
+      "avatar_url" => listed && static_url(socket, listed.logo)
+    }
   end
 
   defp identity_options(identities) do
