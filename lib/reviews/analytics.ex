@@ -31,7 +31,7 @@ defmodule Reviews.Analytics do
         Ecto.Adapters.SQL.query!(Repo, "SET LOCAL TIME ZONE 'UTC'", [], log: false)
 
         %{rows: [[snapshot]]} =
-          Ecto.Adapters.SQL.query!(Repo, @query, [], log: false, timeout: 6_000)
+          Ecto.Adapters.SQL.query!(Repo, @query, params(), log: false, timeout: 6_000)
 
         snapshot
       end,
@@ -40,5 +40,17 @@ defmodule Reviews.Analytics do
     )
   rescue
     _error in [Postgrex.Error, DBConnection.ConnectionError] -> {:error, :unavailable}
+  end
+
+  # MCP grants are found by `/mcp`'s resource and named by the connectors
+  # `Reviews.MCPAuth` recognizes (Claude, ChatGPT); any other client is "Unrecognized".
+  defp params do
+    connectors = Reviews.MCPAuth.connectors()
+
+    [
+      Reviews.MCPAuth.resource(),
+      Enum.map(connectors, & &1.client_id),
+      Enum.map(connectors, & &1.name)
+    ]
   end
 end

@@ -63,9 +63,14 @@ Dedicated aggregate-only authentication, disabled unless an expiring `rva_` cred
 is configured. Normal account tokens are rejected; this credential cannot authorize
 any other route. No parameters or request body are accepted. Responses are no-store.
 
-The fixed version-1 payload has `version`, `source`, `collected_at`, and `windows`.
-Exactly two windows (7 and 30 days) each contain `days`, `start`, `end`,
-`active_accounts`, `reviews`, `revisions`, `comments`, and `decisions`.
+The fixed version-2 payload has `version`, `source`, `collected_at`, `accounts`
+(every account now), `mcp_clients` and `windows`. `mcp_clients` has one row per
+recognized MCP connector (Claude, ChatGPT) and `Unrecognized`, each with `app`,
+`connections` and `connected_accounts` for `/mcp` grants that are neither revoked
+nor expired. Exactly two windows (7 and 30 days) each contain `days`, `start`, `end`,
+`active_accounts`, `reviews`, `revisions`, `comments`, `decisions`, `signups`,
+`mcp_connections` (`/mcp` grants approved in the window) and `mcp_active_accounts`
+(accounts with an `/mcp` grant used in the window).
 Active accounts count distinct identity owners, deduplicating human and agent
 identities belonging to the same account. All counts are computed in PostgreSQL;
 no identity IDs or content leave the database. See [aggregate export](AGGREGATE_EXPORT.md)

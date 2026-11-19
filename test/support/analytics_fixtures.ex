@@ -99,6 +99,66 @@ defmodule Reviews.AnalyticsFixtures do
     %{user: owner}
   end
 
+  @doc """
+  Three accounts that signed up 1, 10 and 40 days ago, with MCP grants of every
+  kind the snapshot must tell apart: two Claude connections of one account, a
+  ChatGPT one, an unrecognized one, a revoked and an expired one, and a Claude
+  grant for another resource (Poppy) that is not an MCP connection.
+  """
+  def mcp_connections do
+    %{rows: [[now]]} = Ecto.Adapters.SQL.query!(Repo, "SELECT transaction_timestamp()", [])
+    now = now |> DateTime.truncate(:second) |> DateTime.to_naive()
+    ago = &NaiveDateTime.add(now, -&1 * 86_400)
+
+    [a, b, c] =
+      for {days, n} <- [{1, 1}, {10, 2}, {40, 3}] do
+        insert(%User{}, %{
+          github_id: 920_000 + n,
+          username: "PRIVATE-signup-#{n}",
+          inserted_at: DateTime.from_naive!(ago.(days), "Etc/UTC"),
+          updated_at: DateTime.from_naive!(ago.(days), "Etc/UTC")
+        })
+      end
+
+    claude = "https://claude.ai/oauth/mcp-oauth-client-metadata"
+    chatgpt = "https://chatgpt.com/oauth/client.json"
+    mcp = Reviews.MCPAuth.resource()
+
+    grants = [
+      # {client_id, owner, resource, inserted days ago, last used days ago, revoked?, expired?}
+      {claude, a, mcp, 1, 1, false, false},
+      {claude, a, mcp, 2, nil, false, false},
+      {chatgpt, b, mcp, 10, 10, false, false},
+      {"https://PRIVATE.example/client", c, mcp, 40, nil, false, false},
+      {"https://PRIVATE.example/client", c, mcp, 20, 20, true, false},
+      {claude, c, mcp, 95, nil, false, true},
+      {claude, b, Reviews.Poppy.resource(), 1, 1, false, false}
+    ]
+
+    Repo.insert_all(
+      "gatekeep_grants",
+      for {client, user, resource, created, used, revoked?, expired?} <- grants do
+        %{
+          client_id: client,
+          client_name: "PRIVATE-client",
+          subject: "1",
+          owner: to_string(user.id),
+          resource: resource,
+          scopes: [],
+          claims: %{},
+          grant_type: "authorization_code",
+          inserted_at: ago.(created),
+          updated_at: ago.(created),
+          last_used_at: used && ago.(used),
+          revoked_at: if(revoked?, do: ago.(created - 1)),
+          expires_at: if(expired?, do: ago.(5), else: ago.(-30))
+        }
+      end
+    )
+
+    :ok
+  end
+
   defp review(user, at, slug),
     do:
       insert(%Review{}, %{

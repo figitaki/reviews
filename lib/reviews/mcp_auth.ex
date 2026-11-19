@@ -48,7 +48,8 @@ defmodule Reviews.MCPAuth do
   @doc "The origins of every known connector, which `/mcp` accepts."
   def connector_origins, do: Enum.flat_map(connectors(), & &1.origins)
 
-  defp connectors,
+  @doc "Every known connector, in config order."
+  def connectors,
     do: :reviews |> Application.get_env(__MODULE__, []) |> Keyword.get(:connectors, [])
 
   @doc "The MCP endpoint's canonical URL, the audience of its tokens."

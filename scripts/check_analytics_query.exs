@@ -81,8 +81,11 @@ defmodule AnalyticsQueryCheck do
               "-o",
               output,
               "-c",
-              "SET work_mem='4MB'; SET statement_timeout='5s'; EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " <>
-                query
+              "SET work_mem='4MB'; SET statement_timeout='5s'; " <>
+                "PREPARE snapshot(text, text[], text[]) AS " <>
+                query <>
+                "\nEXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) EXECUTE snapshot(" <>
+                "'https://reviews.test/mcp', ARRAY['claude', 'chatgpt'], ARRAY['Claude', 'ChatGPT'])"
             ],
           client_env
         )
@@ -132,6 +135,23 @@ defmodule AnalyticsQueryCheck do
     BEGIN;
     CREATE TABLE identities(id bigint PRIMARY KEY, owner_user_id bigint NOT NULL);
     INSERT INTO identities SELECT n, (n+2)/3 FROM generate_series(1,60000) n;
+    CREATE TABLE users(id bigint PRIMARY KEY, inserted_at timestamp NOT NULL, payload text);
+    INSERT INTO users
+      SELECT n, date_trunc('second',transaction_timestamp()) AT TIME ZONE 'UTC'
+                - (n%365)*interval '1 day', repeat(md5(n::text),8)
+      FROM generate_series(1,20000) n;
+    CREATE TABLE gatekeep_grants(id bigint PRIMARY KEY, client_id text NOT NULL, owner text,
+      resource text NOT NULL, inserted_at timestamp NOT NULL, last_used_at timestamp,
+      revoked_at timestamp, expires_at timestamp, payload text);
+    INSERT INTO gatekeep_grants
+      SELECT n, (ARRAY['claude','chatgpt','other'])[n%3+1], ((n%20000)+1)::text,
+             CASE WHEN n%4=0 THEN 'https://reviews.test/poppy' ELSE 'https://reviews.test/mcp' END,
+             date_trunc('second',transaction_timestamp()) AT TIME ZONE 'UTC' - (n%90)*interval '1 day',
+             date_trunc('second',transaction_timestamp()) AT TIME ZONE 'UTC' - (n%45)*interval '1 day',
+             CASE WHEN n%10=0 THEN transaction_timestamp() AT TIME ZONE 'UTC' END,
+             date_trunc('second',transaction_timestamp()) AT TIME ZONE 'UTC' + interval '30 days',
+             repeat(md5(n::text),8)
+      FROM generate_series(1,40000) n;
     #{tables}
     ANALYZE;
     COMMIT;
