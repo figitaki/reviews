@@ -252,9 +252,10 @@ defmodule Reviews.ReviewView do
       can_update_status: Map.get(thread, :can_update_status, false),
       comments:
         Enum.map(thread.comments || [], fn c ->
+          # The page shows only the rendered body, so the source stays out.
           %{
             id: c.id,
-            body: c.body,
+            body_html: Reviews.Markdown.to_html(c.body),
             author: user_to_payload(c.author),
             attribution: attribution_payload(c),
             inserted_at: encode_dt(c.inserted_at),

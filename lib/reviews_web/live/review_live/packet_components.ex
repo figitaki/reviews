@@ -1587,29 +1587,6 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     end)
     |> Enum.reverse()
     |> Enum.map(&finalize_packet_unit/1)
-    |> mark_intro_unit()
-  end
-
-  defp mark_intro_unit(units) do
-    {units, _intro_marked?} =
-      Enum.map_reduce(units, false, fn
-        %{kind: :row, row: row} = unit, false ->
-          if intro_markdown_row?(row) do
-            {Map.put(unit, :intro?, true), true}
-          else
-            {unit, false}
-          end
-
-        unit, intro_marked? ->
-          {unit, intro_marked?}
-      end)
-
-    units
-  end
-
-  defp intro_markdown_row?(row) do
-    ReviewPacket.text(row, "kind") == "markdown" &&
-      Enum.any?(markdown_blocks(ReviewPacket.text(row, "body")), &(&1.kind == :paragraph))
   end
 
   defp hunk_for_packet_row(hunks_by_path, row) do
@@ -1887,137 +1864,16 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
   attr :body, :string, required: true
   attr :class, :string, default: "review-packet-markdown"
 
+  # Server-rendered and sanitized (Reviews.Markdown); packet prose is untrusted.
   def markdown(assigns) do
-    assigns = assign(assigns, :blocks, markdown_blocks(assigns.body))
+    assigns = assign(assigns, :html, Reviews.Markdown.to_html(assigns.body))
 
     ~H"""
-    <div id={@id} class={@class} phx-hook="Markdown" data-markdown={@body}>
-      <div id={"#{@id}-output"} data-markdown-output phx-update="ignore">
-        <%= for block <- @blocks do %>
-          <h3
-            :if={block.kind == :heading && block.level == 3}
-            class="review-packet-md-heading is-h3"
-          >
-            <.inline segments={block.segments} />
-          </h3>
-          <h4
-            :if={block.kind == :heading && block.level == 4}
-            class="review-packet-md-heading is-h4"
-          >
-            <.inline segments={block.segments} />
-          </h4>
-          <ul :if={block.kind == :list} class="review-packet-md-list">
-            <li :for={item <- block.items}>
-              <.inline segments={item} />
-            </li>
-          </ul>
-          <p :if={block.kind == :paragraph} class="review-packet-md-paragraph">
-            <.inline segments={block.segments} />
-          </p>
-        <% end %>
-      </div>
+    <div id={@id} class={@class}>
+      <div id={"#{@id}-output"} data-markdown-output>{Phoenix.HTML.raw(@html)}</div>
     </div>
     """
   end
-
-  attr :segments, :list, required: true
-
-  def inline(assigns) do
-    ~H"""
-    <%= for segment <- @segments do %>
-      <code :if={segment.kind == :code} class="review-packet-inline-code">{segment.text}</code>
-      <span :if={segment.kind == :text}>{segment.text}</span>
-    <% end %>
-    """
-  end
-
-  defp markdown_blocks(body) when is_binary(body) do
-    body
-    |> String.split("\n")
-    |> parse_markdown_blocks([])
-    |> Enum.reverse()
-  end
-
-  defp markdown_blocks(_), do: []
-
-  defp parse_markdown_blocks([], acc), do: acc
-
-  defp parse_markdown_blocks([line | rest], acc) do
-    trimmed = String.trim(line)
-
-    cond do
-      trimmed == "" ->
-        parse_markdown_blocks(rest, acc)
-
-      heading = markdown_heading(trimmed) ->
-        {level, heading_text} = heading
-
-        parse_markdown_blocks(rest, [
-          %{kind: :heading, level: level, segments: markdown_inline(heading_text)} | acc
-        ])
-
-      markdown_list_item?(trimmed) ->
-        {items, rest} = take_markdown_list([line | rest], [])
-        parse_markdown_blocks(rest, [%{kind: :list, items: items} | acc])
-
-      true ->
-        {paragraph, rest} = take_markdown_paragraph([line | rest], [])
-
-        parse_markdown_blocks(rest, [
-          %{kind: :paragraph, segments: markdown_inline(paragraph)} | acc
-        ])
-    end
-  end
-
-  defp markdown_heading(line) do
-    case Regex.run(~r/^(####|###)\s+(.+)$/, line) do
-      [_, marks, text] -> {String.length(marks), String.trim(text)}
-      _ -> nil
-    end
-  end
-
-  defp markdown_list_item?(line), do: String.starts_with?(line, "- ")
-
-  defp take_markdown_list([], acc), do: {Enum.reverse(acc), []}
-
-  defp take_markdown_list([line | rest], acc) do
-    trimmed = String.trim(line)
-
-    if markdown_list_item?(trimmed) do
-      item =
-        trimmed
-        |> String.replace_prefix("- ", "")
-        |> markdown_inline()
-
-      take_markdown_list(rest, [item | acc])
-    else
-      {Enum.reverse(acc), [line | rest]}
-    end
-  end
-
-  defp take_markdown_paragraph([line | rest], _acc) do
-    trimmed = String.trim(line)
-
-    cond do
-      trimmed == "" || markdown_heading(trimmed) || markdown_list_item?(trimmed) ->
-        {"", [line | rest]}
-
-      true ->
-        {String.trim(line), rest}
-    end
-  end
-
-  defp markdown_inline(text) when is_binary(text) do
-    text
-    |> String.split("`")
-    |> Enum.with_index()
-    |> Enum.reject(fn {part, _idx} -> part == "" end)
-    |> Enum.map(fn {part, idx} ->
-      %{kind: if(rem(idx, 2) == 1, do: :code, else: :text), text: part}
-    end)
-  end
-
-  defp markdown_inline(_), do: []
 
   defp file_for(file_diffs, path) do
     Enum.find(file_diffs, &(&1.path == path || &1.old_path == path))

@@ -76,6 +76,12 @@ defmodule ReviewsWeb.DesignComponentsLive do
     |> push_threads()
   end
 
+  # The thread and composer samples keep their comments in the browser, but
+  # their Markdown renders here, as on the review page.
+  def handle_event("render_comment", %{"body" => body}, socket) when is_binary(body) do
+    {:reply, %{body_html: Reviews.Markdown.to_html(body)}, socket}
+  end
+
   def handle_event("update_thread_status", %{"thread_id" => id, "status" => status}, socket) do
     socket
     |> update(:threads, &DesignFixtures.set_status(&1, id, status))

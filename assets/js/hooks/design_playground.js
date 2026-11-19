@@ -1,6 +1,7 @@
 // DesignPlayground — mounts the real comment UI from annotation_ui.js with
 // sample data on /design/components. Replies, resolving and new comments
-// change only this page; nothing is sent to the server.
+// change only this page; nothing is saved. The server renders each new
+// comment's Markdown, as it does on the review page.
 
 import {
   commentComposer,
@@ -13,12 +14,18 @@ import { Thread } from "../schemas.js"
 const you = { id: -1, username: "you", avatar_url: null }
 let nextId = -1
 
-function localComment(body) {
+// Resolves with a comment whose body the server rendered (render_comment).
+function localComment(hook, body) {
   nextId -= 1
-  return { id: nextId, body, author: you, attribution: null, inserted_at: new Date().toISOString() }
+  const id = nextId
+  return new Promise((resolve) => {
+    hook.pushEvent("render_comment", { body }, ({ body_html }) =>
+      resolve({ id, body_html, author: you, attribution: null, inserted_at: new Date().toISOString() })
+    )
+  })
 }
 
-function mountThread(slot, thread) {
+function mountThread(hook, slot, thread) {
   const ui = {}
   const render = () => {
     slot.replaceChildren(
@@ -28,9 +35,9 @@ function mountThread(slot, thread) {
         // The review page re-renders a thread when the server sends it back
         // with the new comment; do the same once the bubble has closed its
         // composer.
-        onReply: (current, body) => {
-          current.comments.push(localComment(body))
-          queueMicrotask(render)
+        onReply: async (current, body) => {
+          current.comments.push(await localComment(hook, body))
+          render()
         },
         onUpdateStatus: (current, status) => {
           current.status = status
@@ -50,18 +57,18 @@ function stack() {
 }
 
 const demos = {
-  threads(el) {
+  threads(el, hook) {
     const threads = Thread.array().parse(JSON.parse(el.dataset.threads))
     const list = stack()
     for (const thread of threads) {
       const slot = document.createElement("div")
-      mountThread(slot, thread)
+      mountThread(hook, slot, thread)
       list.append(slot)
     }
     el.replaceChildren(list)
   },
 
-  composer(el) {
+  composer(el, hook) {
     const list = stack()
     const posted = stack()
     const anchor = { granularity: "line", line_number_hint: 12, context_before: [], context_after: [] }
@@ -70,13 +77,13 @@ const demos = {
         commentComposer({
           autoFocus: false,
           onCancel: reset,
-          onSave: (body) => {
+          onSave: async (body) => {
             const thread = {
               id: nextId--, file_path: "demo.ex", side: "new", anchor, status: "open",
-              author: you, comments: [localComment(body)], can_update_status: true,
+              author: you, comments: [await localComment(hook, body)], can_update_status: true,
             }
             const slot = document.createElement("div")
-            mountThread(slot, thread)
+            mountThread(hook, slot, thread)
             posted.prepend(slot)
             reset()
           },
@@ -105,7 +112,7 @@ const demos = {
 export default {
   mounted() {
     try {
-      demos[this.el.dataset.demo]?.(this.el)
+      demos[this.el.dataset.demo]?.(this.el, this)
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[DesignPlayground] could not mount the sample:", err)

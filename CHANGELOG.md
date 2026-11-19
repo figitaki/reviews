@@ -37,6 +37,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 - The Guide map uses the same tree rows: sections show their decision as a
   letter (A approved, C changes requested, S skipped), and the open
   section's files show their path, counts and change letter. Rows are 44px.
+- Packet prose and comments now render on the server (MDEx) and arrive as
+  sanitized HTML, so prose no longer paints twice and shifts as the page
+  loads. The rules stay the same: raw HTML shows as text, links go only to
+  http, https, mailto or relative URLs, and images load only from bundled
+  `/images`. Addresses starting with `www.` now become links too.
 
 ## [0.0.3] - 2026-11-19
 

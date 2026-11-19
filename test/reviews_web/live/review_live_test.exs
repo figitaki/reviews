@@ -475,7 +475,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert has_element?(
                view,
-               "#packet-section-0-row-0 .review-packet-md-heading + .review-packet-md-paragraph",
+               "#packet-section-0-row-0 [data-markdown-output] h3 + p",
                "Preserve packet JSON as the server contract."
              )
 
@@ -550,7 +550,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
                ~s|#review-packet [phx-hook="DiffRenderer"][data-file-path="lib/packet.ex"][data-hunk-details^="lib/packet.ex"]|
              )
 
-      assert has_element?(view, "#review-packet .review-packet-md-heading", "Main change")
+      assert has_element?(view, "#review-packet [data-markdown-output] h3", "Main change")
       assert has_element?(view, "#review-packet", "Preserve packet JSON as the server contract.")
       assert has_element?(view, "#review-packet", "Keep packet.md editable.")
       assert has_element?(view, "#review-packet", "Run the smoke test.")

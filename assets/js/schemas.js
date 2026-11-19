@@ -70,7 +70,8 @@ const Attribution = z
 
 export const Comment = z.object({
   id: z.number(),
-  body: z.string(),
+  // Sanitized HTML rendered by the server (Reviews.Markdown).
+  body_html: z.string(),
   author: Author,
   attribution: Attribution,
   inserted_at: z.string().nullable(),

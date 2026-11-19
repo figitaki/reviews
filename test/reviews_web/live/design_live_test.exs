@@ -58,7 +58,7 @@ defmodule ReviewsWeb.DesignLiveTest do
       |> hd()
       |> JSON.decode!()
 
-    assert Enum.map(threads, & &1["status"]) == ["open", "resolved", "open"]
+    assert Enum.map(threads, & &1["status"]) == ["open", "resolved", "open", "open"]
     assert has_element?(view, "#dcp-phone-frame[src='/design/components/phone']")
 
     {:ok, phone, _html} = live(conn, ~p"/design/components/phone")
@@ -87,22 +87,30 @@ defmodule ReviewsWeb.DesignLiveTest do
     # The sample patch adds five lines and removes two; the stat must agree.
     assert render(view) =~ "5 additions, 2 deletions"
 
-    # A new line comment comes back as a fourth thread, without saving.
+    # A new line comment comes back as a fifth thread, without saving.
     render_hook(view, "create_comment", %{
       "file_path" => path,
       "side" => "new",
-      "body" => "Why one retry?",
+      "body" => "Why *one* retry?",
       "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 39}
     })
 
     assert_push_event(view, "threads_updated:" <> ^path, %{threads: threads})
-    assert length(threads) == 4
-    assert List.last(threads).comments |> hd() |> Map.fetch!(:body) == "Why one retry?"
+    assert length(threads) == 5
+
+    # Comments arrive rendered; the Markdown source stays on the server.
+    comment = List.last(threads).comments |> hd()
+    assert comment.body_html == "<p>Why <em>one</em> retry?</p>\n"
+    refute Map.has_key?(comment, :body)
 
     # A reply joins its thread.
     render_hook(view, "create_comment", %{"thread_id" => 103, "body" => "Agreed."})
     assert_push_event(view, "threads_updated:" <> ^path, %{threads: threads})
     assert length(Enum.find(threads, &(&1.id == 103)).comments) == 2
+
+    # The browser-only samples get their Markdown rendered here too.
+    render_hook(view, "render_comment", %{"body" => "**Yes** <b>no</b>"})
+    assert_reply(view, %{body_html: "<p><strong>Yes</strong> &lt;b&gt;no&lt;/b&gt;</p>\n"})
 
     # The section header shows each review state, including a carried-forward
     # decision and one made outdated by a change.

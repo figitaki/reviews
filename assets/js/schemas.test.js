@@ -155,3 +155,18 @@ test("a thread without can_update_status does not offer resolve or reopen", () =
   assert.equal(Thread.parse(thread).can_update_status, false)
   assert.equal(Thread.parse({ ...thread, can_update_status: true }).can_update_status, true)
 })
+
+test("comments carry only the server's rendered HTML to the thread UI", () => {
+  const thread = {
+    id: 1, file_path: "lib/a.ex", side: "new", status: "open",
+    anchor: { granularity: "line", line_number_hint: 1 }, author: { id: 1, username: "carey" },
+  }
+  const comment = { id: 2, author: { id: 1, username: "carey" }, inserted_at: null }
+
+  // A Markdown source alone is refused, so the UI never renders one itself.
+  assert.throws(() => Thread.parse({ ...thread, comments: [{ ...comment, body: "<img src=x onerror=alert(1)>" }] }))
+
+  const parsed = Thread.parse({ ...thread, comments: [{ ...comment, body: "**x**", body_html: "<p><strong>x</strong></p>\n" }] })
+  assert.equal(parsed.comments[0].body, undefined)
+  assert.equal(parsed.comments[0].body_html, "<p><strong>x</strong></p>\n")
+})

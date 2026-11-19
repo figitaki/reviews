@@ -591,7 +591,7 @@ unique DOM id, and `phx-update="ignore"` (the hook owns its DOM tree).
 | `data-side`            | string   | Always `"new"` today.                                    |
 | `data-raw-diff`        | string   | Raw unified diff for this file or hunk only.             |
 | `data-full-diff`       | optional string | Whole-file patch for added/deleted Markdown files, so sliced packet hunks can preview the complete document. Source and thread counts still use `data-raw-diff`. |
-| `data-threads`         | string (JSON) | Published threads in this file. Shape: the `Thread` schema in `schemas.js`. Each thread's `can_update_status` says whether the viewer may resolve or reopen it; the renderer shows those buttons only when it is `true`. |
+| `data-threads`         | string (JSON) | Published threads in this file. Shape: the `Thread` schema in `schemas.js`. Each thread's `can_update_status` says whether the viewer may resolve or reopen it; the renderer shows those buttons only when it is `true`. Each comment carries `body_html`, its Markdown rendered and sanitized on the server by `Reviews.Markdown`, and not its source; the renderer inserts `body_html` as is. |
 | `data-signed-in`       | string   | `"true"` or `"false"`. Signed-out viewers get a sign-in prompt instead of a composer. |
 | `data-diff-style`      | string   | `"split"` or `"unified"`.                                |
 

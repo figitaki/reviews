@@ -90,7 +90,7 @@ const author = { id: 1, username: "a" }
 const thread = (id, line) => ({
   id, file_path: "big.js", side: "new", status: "open", can_update_status: false, author,
   anchor: { granularity: "line", line_number_hint: line, line_text: `line ${line}`, context_before: [], context_after: [] },
-  comments: [{ id, body: "hi", author, attribution: null, inserted_at: "2026-11-19T00:00:00Z" }],
+  comments: [{ id, body_html: "<p>hi</p>\n", author, attribution: null, inserted_at: "2026-11-19T00:00:00Z" }],
 })
 
 test("opening a thread keeps a large file virtualized and focuses the thread after scrolling to its line", () => {
