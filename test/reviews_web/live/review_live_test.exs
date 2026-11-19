@@ -662,6 +662,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       refute has_element?(person, "#review-overview-author .ds-badge")
       refute has_element?(person, "#review-overview-author-owner")
+      # Round like comment avatars, and without an image the handle's first letter.
+      assert has_element?(person, "#review-overview-author .ds-avatar-mark.is-round", "C")
 
       robot = open.(agent)
       assert has_element?(robot, "#review-overview-author", "Claude")

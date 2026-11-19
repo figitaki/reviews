@@ -365,7 +365,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       </span>
       <h2 id={@title_id} class="review-guide-panel-title">{@outline.overview.title}</h2>
       <p :if={@author} id="review-overview-author" class="review-guide-author">
-        <.ds_avatar_mark identity={@author} />
+        <.ds_avatar_mark identity={@author} round />
         <span>
           <span class="review-guide-author-name">{@author.display_name}</span>
           <span translate="no">@{@author.handle}</span>

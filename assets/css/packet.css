@@ -2935,14 +2935,6 @@ details[open] > summary .review-collapse-icon,
   min-width: 0;
 }
 
-.review-guide-author .ds-avatar-mark {
-  flex: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.6875rem;
-}
-
 .review-guide-author-name {
   color: var(--review-text);
   font-weight: 680;
