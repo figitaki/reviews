@@ -311,6 +311,11 @@ defmodule ReviewsWeb.MCPOAuthTest do
       end
 
       doc = consent.(%{client_id: client_id, redirect_uri: redirect_uri})
+
+      # The page names the account, in place of the sign-in toast over the form.
+      assert doc |> LazyHTML.query("#poppy-consent-account") |> LazyHTML.text() =~
+               ctx.owner.username
+
       known = doc |> LazyHTML.query("#poppy-consent-known") |> LazyHTML.text()
       assert known =~ "Claude"
       assert known =~ "Recognized app"
@@ -333,8 +338,24 @@ defmodule ReviewsWeb.MCPOAuthTest do
                "threads:write"
              ]
 
+      # Claude returns you to claude.ai, which the card already names, so the
+      # callback and client ID wait behind Details.
+      assert doc |> LazyHTML.query("#poppy-consent-returns-to") |> Enum.count() == 1
+
+      assert doc
+             |> LazyHTML.query("#poppy-consent-details #poppy-consent-returns-to")
+             |> Enum.any?()
+
+      assert doc |> LazyHTML.query("#poppy-consent-details") |> LazyHTML.text() =~ client_id
+
       lookalike = consent.(ctx.claude)
       refute lookalike |> LazyHTML.query("#poppy-consent-known") |> Enum.any?()
+
+      refute lookalike
+             |> LazyHTML.query("#poppy-consent-details #poppy-consent-returns-to")
+             |> Enum.any?()
+
+      assert lookalike |> LazyHTML.query("#poppy-consent-returns-to") |> Enum.count() == 1
 
       assert lookalike |> LazyHTML.query("#poppy-consent-client") |> LazyHTML.text() =~
                "Not verified"

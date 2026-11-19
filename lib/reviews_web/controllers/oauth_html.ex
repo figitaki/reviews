@@ -43,21 +43,22 @@ defmodule ReviewsWeb.OAuthHTML do
 
   def consent(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <%!-- The page names the signed-in account itself; the sign-in toast would cover the form. --%>
+    <Layouts.app flash={Map.delete(@flash, "info")}>
       <div id="poppy-consent" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow={eyebrow(@request)}
             title={consent_title(@request)}
             description={consent_text(@request)}
-            class="is-compact"
+            class="is-compact is-consent"
           >
           </.ds_page_header>
 
           <.ds_card class="ds-settings-card">
             <div id="poppy-consent-client">
               <div :if={@known} id="poppy-consent-known" class="consent-client is-known">
-                <img src={@known.logo} alt="" width="48" height="48" class="consent-client-logo" />
+                <img src={@known.logo} alt="" width="40" height="40" class="consent-client-logo" />
                 <div class="consent-client-text">
                   <span class="consent-client-name">
                     {@known.name}
@@ -91,19 +92,23 @@ defmodule ReviewsWeb.OAuthHTML do
                 </div>
               </div>
 
-              <dl class="poppy-facts">
-                <div>
-                  <dt>Returns you to</dt>
-                  <dd>
-                    <strong translate="no">{redirect_host(@request.redirect_uri)}</strong>
-                    <code translate="no">{@request.redirect_uri}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Client ID</dt>
-                  <dd translate="no"><code>{@request.client.client_id}</code></dd>
-                </div>
+              <dl :if={!own_callback?(@known, @request)} class="poppy-facts">
+                <.returns_to redirect_uri={@request.redirect_uri} />
               </dl>
+
+              <details id="poppy-consent-details" class="consent-details">
+                <summary>Details</summary>
+                <dl class="poppy-facts">
+                  <.returns_to
+                    :if={own_callback?(@known, @request)}
+                    redirect_uri={@request.redirect_uri}
+                  />
+                  <div>
+                    <dt>Client ID</dt>
+                    <dd translate="no"><code>{@request.client.client_id}</code></dd>
+                  </div>
+                </dl>
+              </details>
             </div>
 
             <p
@@ -143,6 +148,9 @@ defmodule ReviewsWeb.OAuthHTML do
 
               <fieldset id="poppy-consent-identity">
                 <legend>Act as</legend>
+                <p id="poppy-consent-account" class="consent-account">
+                  Signed in as <strong translate="no">{@current_user.username}</strong>
+                </p>
                 <label :for={identity <- @identities} :key={identity.id}>
                   <input
                     type="radio"
@@ -247,6 +255,27 @@ defmodule ReviewsWeb.OAuthHTML do
     </Layouts.app>
     """
   end
+
+  attr :redirect_uri, :string, required: true
+
+  defp returns_to(assigns) do
+    ~H"""
+    <div id="poppy-consent-returns-to">
+      <dt>Returns you to</dt>
+      <dd>
+        <strong translate="no">{redirect_host(@redirect_uri)}</strong>
+        <code translate="no">{@redirect_uri}</code>
+      </dd>
+    </div>
+    """
+  end
+
+  # A recognized app returning you to its own domain needs no second mention
+  # of that domain; any other callback stays in view.
+  defp own_callback?(nil, _request), do: false
+
+  defp own_callback?(_known, request),
+    do: URI.parse(request.redirect_uri).host == client_host(request.client)
 
   attr :scope, :string, required: true
   attr :titles, :map, required: true

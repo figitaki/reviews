@@ -77,7 +77,9 @@ Tools a token lacks the scope for are not listed. Calling one gets 403 with an
 
 Signing in sends the owner to `/oauth/authorize`. After GitHub sign-in, the
 consent page shows who is asking, the host it returns to, a warning for
-loopback redirects, and the scopes. A known connector shows its name, publisher
+loopback redirects, and the scopes. The client ID sits behind a Details
+disclosure, and so does the callback of a recognized app that returns you to
+its own domain. A known connector shows its name, publisher
 and logo as a recognized app. Any other client shows what it calls itself as
 "Not verified", with its verified domain, or a note that it has none if it
 registered itself. Reads are always part of the grant. Each write scope is a

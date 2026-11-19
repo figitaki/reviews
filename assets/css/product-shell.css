@@ -568,18 +568,33 @@ textarea.ds-input{
 }
 
 /* Who is asking: a recognized app with its logo, or an unverified claim. */
+/* A short header, so the app and the form start on the first screen. */
+.ds-page-header.is-consent{
+  min-height: auto;
+  padding: var(--space-10) 0 var(--space-7);
+}
+
+.ds-page-header.is-consent h1{
+  font-size: var(--font-size-2xl);
+}
+
+.ds-page-header.is-consent .design-hero-copy{
+  margin-top: var(--space-3);
+  font-size: var(--font-size-base);
+}
+
 .consent-client{
   display: flex;
-  gap: var(--space-5);
+  gap: var(--space-4);
   align-items: center;
   margin-bottom: var(--space-7);
 }
 
 .consent-client-logo{
   flex: none;
-  width: var(--size-fab);
-  height: var(--size-fab);
-  border-radius: var(--radius-lg);
+  width: var(--size-control-lg);
+  height: var(--size-control-lg);
+  border-radius: var(--radius-md);
 }
 
 .consent-client-logo.is-unknown{
@@ -621,6 +636,30 @@ textarea.ds-input{
   color: var(--ds-add);
   border-color: color-mix(in srgb, var(--ds-add) 45%, var(--ds-line));
   background: color-mix(in srgb, var(--ds-add) 10%, transparent);
+}
+
+.consent-details{
+  margin-top: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.consent-details summary{
+  width: max-content;
+  color: var(--ds-muted);
+  cursor: pointer;
+}
+
+.consent-details[open] summary{
+  margin-bottom: var(--space-4);
+}
+
+.consent-account{
+  margin: 0 0 var(--space-2);
+  color: var(--ds-muted);
+}
+
+.consent-account strong{
+  color: var(--ds-text);
 }
 
 /* Permissions, grouped into reads (always included) and writes. */

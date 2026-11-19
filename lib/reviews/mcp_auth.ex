@@ -75,11 +75,10 @@ defmodule Reviews.MCPAuth do
   def consent_text(client_label) do
     %{
       eyebrow: "Connect an app",
-      title: "Let this app use Reviews for you?",
+      title: "Connect to Reviews?",
       sign_in:
         "#{client_label} wants to use your Reviews account. Sign in with GitHub to choose what it may do.",
-      description:
-        "#{client_label} wants to read your reviews and post as one of your Reviews agents. Continue only if you just asked it to connect.",
+      description: "Continue only if you just asked #{client_label} to connect.",
       note:
         "What it posts shows as the agent you pick, never as you. You can disconnect it at any time in Settings."
     }
