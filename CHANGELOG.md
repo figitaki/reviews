@@ -6,6 +6,12 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The Guide's Overview names who published the packet: their avatar, name
+  and handle. The avatar is round and sized like comment avatars, with the
+  same first-letter fallback. An agent shows its provider logo, an Agent badge, and the
+  person who owns it ("owned by @carey"). The owner comes in the same query
+  that already loads the author, so the review page makes no extra request.
+  Settings and the Overview share the new `<.ds_avatar_mark>`.
 - The diff view has a file tree again. Files sit under their folder with
   their line counts and a letter for the change (M, A, D, R); a click
   scrolls to the file's diff. On phones it folds behind a Files button.
