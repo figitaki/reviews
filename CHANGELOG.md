@@ -31,6 +31,12 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   up with it, in Guide and Diff mode. The diff card, Source and code diffs
   stay full width.
 
+- Collapsing, expanding and marking a file viewed show at once, and the
+  server saves the change in the background. The diff keeps its rendered,
+  highlighted file while collapsed, so expanding it again does not highlight
+  it again. On a 4,562-line file this took about 2 s each way and now takes
+  under 160 ms.
+
 - Opening a thread in a large file keeps the file virtualized. The diff
   scrolls to the thread's line and focuses it, instead of rendering every
   row. Before, a thread on a 4,562-line file put all 4,562 rows in the page,
