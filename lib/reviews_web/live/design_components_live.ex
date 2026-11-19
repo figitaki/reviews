@@ -93,8 +93,15 @@ defmodule ReviewsWeb.DesignComponentsLive do
   def handle_event("mark_hunk_unviewed", _params, socket),
     do: {:noreply, assign(socket, hunk_viewed: false)}
 
-  def handle_event("toggle_section_decision", %{"section_index" => index}, socket) do
-    {:noreply, update_decision(socket, index, &%{&1 | editing: !&1.editing})}
+  def handle_event("toggle_section_decision", %{"section_index" => index} = params, socket) do
+    {:noreply,
+     update_decision(socket, index, fn decision ->
+       %{
+         decision
+         | editing:
+             Map.get(%{"true" => true, "false" => false}, params["open"], !decision.editing)
+       }
+     end)}
   end
 
   # Selecting the current status again clears it, as on the review page.
@@ -476,9 +483,9 @@ defmodule ReviewsWeb.DesignComponentsLive do
               and the Guide map in the review page layouts.
             </li>
             <li>
-              The section decision opens its controls in place. Selecting the current decision again
-              clears it. On phones it is a floating button whose panel spans the screen, and Escape
-              closes it.
+              The section decision is a pill between the previous and next section buttons. It opens
+              its choices above itself and reads Dismiss while open; a choice, a click elsewhere,
+              the pill again or Escape closes it. Selecting the current decision again clears it.
             </li>
             <li>
               Someone who is not the owner sees a note instead of controls; signed out, a sign-in link.

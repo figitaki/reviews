@@ -598,8 +598,6 @@
 }
 
 .review-packet-shell {
-  --guide-measure: 52rem;
-
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
@@ -1099,10 +1097,6 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-text);
 }
 
-.review-packet-section-signin {
-  text-decoration: none;
-}
-
 .review-packet-section-note {
   margin: 0;
   color: var(--review-muted);
@@ -1224,9 +1218,7 @@ details[open] > summary .review-collapse-icon,
 .review-packet-section-summary,
 .review-packet-section-summary-text,
 .review-packet-row.is-markdown,
-.review-section-header,
-.review-section-decision,
-.review-section-next {
+.review-section-header {
   width: min(100%, var(--guide-measure));
   margin-inline: auto;
   justify-self: center;
@@ -1304,24 +1296,76 @@ details[open] > summary .review-collapse-icon,
   line-height: var(--font-meta-leading);
 }
 
+/* The section dock: previous section, the decision control and next
+   section, fixed to the bottom of the screen at every width. It spans the
+   content beside the Guide rail; its right edge and bottom match the
+   floating Comments and Sections buttons, which stack above next section.
+   Phones only change sizes. Without section nav (Diff mode, the design
+   playground) the control sits in the flow below its section. */
 .review-section-decision {
-  --review-decision-action-padding: 0 12px 0 10px;
-
-  position: sticky;
-  bottom: calc(16px + env(safe-area-inset-bottom));
+  position: relative;
   z-index: var(--z-decision);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-3);
   margin-top: 24px;
-  border: 1px solid var(--review-line-strong);
-  border-radius: var(--radius-lg);
-  padding: 16px 20px;
-  background: var(--review-panel-raised);
-  box-shadow: var(--shadow-float);
+  pointer-events: none;
   --decision-accent: var(--ds-warn);
+}
+
+.review-section-decision > * {
+  pointer-events: auto;
+}
+
+.review-section-decision.has-nav {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: calc(var(--guide-rail-w) + 16px);
+  margin: 0;
+}
+
+/* The open Guide map covers the left of the content, so the dock starts
+   beside it. */
+.review-packet-shell:has(> .review-guide-shell.is-flyout-open) .review-section-decision.has-nav {
+  left: calc(var(--guide-flyout-w) + 16px);
+}
+
+/* At 768px and below the Guide rail runs across the top. */
+@media (max-width: 768px) {
+  .review-section-decision.has-nav,
+  .review-packet-shell:has(> .review-guide-shell.is-flyout-open) .review-section-decision.has-nav {
+    left: calc(16px + env(safe-area-inset-left));
+  }
+}
+
+/* Enough room for the last content to scroll clear of the tallest column
+   of floating buttons: the dock's 16px offset, the stack above it and a 16px
+   gap. The stack is the dock's next button, plus Comments (shown when the
+   review has comments; on phones always), plus Sections on phones in the
+   Guide, each --size-fab with the column's 12px gap. This sits inside the
+   Guide shell, so the sticky Guide rail still runs to the end of the page. */
+.review-packet-shell.has-outline .review-packet-grid {
+  --review-guide-stack: var(--size-fab);
+
+  padding-bottom: calc(16px + var(--review-guide-stack) + 16px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 641px) {
+  .review-page:has(.review-activity:not([data-empty])) .review-packet-shell.has-outline .review-packet-grid {
+    --review-guide-stack: calc(2 * var(--size-fab) + 12px);
+  }
+}
+
+@media (max-width: 640px) {
+  .review-page .review-packet-shell.has-outline .review-packet-grid {
+    --review-guide-stack: calc(2 * var(--size-fab) + 12px);
+  }
+
+  .review-page:has([data-guide-flyout-toggle]) .review-packet-shell.has-outline .review-packet-grid {
+    --review-guide-stack: calc(3 * var(--size-fab) + 24px);
+  }
 }
 
 .review-section-decision.is-approved {
@@ -1336,302 +1380,258 @@ details[open] > summary .review-collapse-icon,
   --decision-accent: var(--ds-muted);
 }
 
-.review-section-decision-copy {
-  display: grid;
-  gap: 6px;
+.review-section-decision-control {
+  position: relative;
+  grid-column: 2;
+  display: flex;
+  justify-content: center;
 }
 
-.review-section-decision-heading {
-  color: var(--review-muted);
-  font-size: var(--font-meta-size);
-}
-
+.review-section-step,
 .review-section-decision-toggle {
-  display: none;
-}
-
-/* Expanded, the toggle is a small close button in the bar's top-right
-   corner, out of the bar's flex layout. */
-.review-section-decision.is-editing .review-section-decision-toggle {
-  position: absolute;
-  top: 4px;
-  right: 4px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--review-muted);
-}
-
-.review-section-decision.is-editing .review-section-decision-toggle:hover {
-  background: var(--review-hover);
-  color: var(--review-text);
-}
-
-.review-section-decision.is-editing .review-section-decision-copy {
-  padding-right: 28px;
-}
-
-.review-section-decision.is-editing .review-section-decision-toggle > span {
-  width: 14px;
-  height: 14px;
-}
-
-/* Above phones the decision collapses to a pill at the right edge of the
-   content, like the phone button; its toggle expands the full bar. */
-@media (min-width: 641px) {
-  .review-section-decision:not(.is-editing):not(.is-readonly) {
-    /* Centres the 40px pill on the 48px Comments button. */
-    bottom: calc(20px + env(safe-area-inset-bottom));
-    width: fit-content;
-    margin-left: auto;
-    margin-right: 0;
-    justify-self: end;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-section-decision-copy,
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-packet-section-actions {
-    display: none;
-  }
-
-  .review-section-decision-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    height: 40px;
-    border: 1px solid var(--review-line-strong);
-    border-radius: 999px;
-    padding: 0 16px 0 12px;
-    background: var(--review-panel-raised);
-    color: var(--decision-accent);
-    cursor: pointer;
-    box-shadow: var(--shadow-float);
-    font-size: var(--font-ui-size);
-    font-weight: var(--font-ui-weight);
-    line-height: var(--font-ui-leading);
-  }
-
-  .review-section-decision-toggle:hover {
-    background: var(--review-hover);
-  }
-
-  .review-section-decision-toggle:focus-visible {
-    outline: 2px solid var(--decision-accent);
-    outline-offset: 3px;
-  }
-
-  .review-section-decision-toggle > .review-section-state-icon,
-  .review-section-decision-toggle > [class*="hero-"] {
-    width: 18px;
-    height: 18px;
-  }
-
-  .review-section-decision-toggle-label {
-    color: var(--review-text);
-  }
-
-  /* Bottom-aligned actions stay clear of the close button in the corner. */
-  .review-section-decision.is-editing {
-    align-items: flex-end;
-    padding-top: 22px;
-  }
-
-  .review-section-decision.is-editing .review-packet-section-actions {
-    margin-left: auto;
-  }
-}
-
-.review-section-decision-prompt {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  margin: 0;
+  height: var(--size-fab);
+  box-sizing: border-box;
+  border: 1px solid var(--review-line-strong);
+  border-radius: 999px;
+  background: var(--review-panel-raised);
+  box-shadow: var(--shadow-float);
   color: var(--review-text);
+  cursor: pointer;
   font-size: var(--font-ui-size);
   font-weight: var(--font-ui-weight);
   line-height: var(--font-ui-leading);
+  white-space: nowrap;
 }
 
-/* Lines up under the prompt's label, past its 15px icon and 8px gap. */
-.review-section-decision-history {
-  margin: 0;
-  padding-left: calc(15px + 8px);
-  color: var(--review-warn);
-  font-size: var(--font-meta-size);
-  font-weight: var(--font-meta-weight);
-  line-height: var(--font-meta-leading);
+.review-section-decision-toggle {
+  padding: 0 16px 0 12px;
 }
 
-.review-section-decision .review-packet-section-actions {
-  max-width: 100%;
+.review-section-decision-toggle > [class*="hero-"],
+.review-section-decision-toggle > .review-section-state-icon,
+.review-section-decision-toggle > .ds-github-mark,
+.review-section-step > [class*="hero-"] {
+  flex: none;
+  width: 18px;
+  height: 18px;
 }
 
-.review-section-decision-prompt .review-section-state-icon {
+.review-section-decision-toggle > :first-child {
   color: var(--decision-accent);
 }
 
-/* Decision buttons in the footer read as explicit labeled actions instead of
-   the icon-only, expand-on-hover form. */
+/* Signed out the pill is a sign-in link. GitHub's mark stays in the text
+   colour, as its guidelines require. */
+.review-section-decision-toggle.is-signin {
+  text-decoration: none;
+}
+
+.review-section-decision-toggle.is-signin > :first-child,
+.review-section-decision.is-editing .review-section-decision-toggle > :first-child {
+  color: var(--review-muted);
+}
+
+.review-section-step:hover,
+.review-section-decision-toggle:hover {
+  background: var(--review-hover);
+}
+
+/* The focus ring replaces the border rather than circling it, so the
+   control keeps one outline when focus returns to it on collapse. */
+.review-section-step:focus-visible,
+.review-section-decision-toggle:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -1px;
+}
+
+.review-section-step {
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 14px;
+  color: var(--review-muted);
+}
+
+.review-section-step.is-prev {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.review-section-step.is-next {
+  grid-column: 3;
+  justify-self: end;
+}
+
+.review-section-step-label {
+  display: inline-flex;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.review-section-step-number {
+  font-family: var(--font-mono);
+  color: var(--review-faint);
+}
+
+.review-section-step-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Optical centring: each label's line box is trimmed to its x-height band
+   (top of x, baseline), so flex centring puts the lowercase letters, not the
+   line box, on the control's centre line, level with the icon. Clipping
+   labels clip only sideways, so ascenders and descenders outside the trimmed
+   box still show. Without text-box support the label moves down by the
+   measured offset instead. */
+.review-section-decision-toggle-label,
+.review-section-step-label > span,
+.review-section-decision .review-section-action .review-section-action-label {
+  text-box: trim-both ex alphabetic;
+}
+
+.review-section-step-label,
+.review-section-step-title,
+.review-section-decision .review-section-action .review-section-action-label {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.review-section-decision-toggle > svg,
+.review-section-decision-toggle > [class*="hero-"],
+.review-section-step > [class*="hero-"],
+.review-section-decision .review-section-action > * {
+  display: block;
+}
+
+@supports not (text-box: trim-both ex alphabetic) {
+  .review-section-decision-toggle-label,
+  .review-section-step-label > span,
+  .review-section-decision .review-section-action .review-section-action-label {
+    position: relative;
+    top: 0.05em;
+  }
+}
+
+/* Expanded, the choices float above the control on their own, with no
+   card around them: Request changes, Skip and Approve in one row, Skip
+   centred over the pill. Equal side columns keep Skip on the centre line.
+   Each choice and note brings its own solid background and shadow so it
+   stays readable over code and prose. */
+.review-section-decision-panel {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  transform: translateX(-50%);
+}
+
+.review-section-decision:not(.is-editing) .review-section-decision-panel {
+  display: none;
+}
+
+.review-section-decision .review-packet-section-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.review-section-decision .review-section-action.is-denied {
+  justify-self: end;
+}
+
+.review-section-decision .review-section-action.is-approved {
+  justify-self: start;
+}
+
 .review-section-decision .review-section-action,
 .review-section-decision .review-section-action:hover,
 .review-section-decision .review-section-action:focus-visible,
 .review-section-decision .review-section-action.is-active {
   width: auto;
-  height: 32px;
+  height: 40px;
   gap: 6px;
-  padding: var(--review-decision-action-padding);
+  padding: 0 14px 0 12px;
+  background-color: var(--review-panel-raised);
+  box-shadow: var(--shadow-float);
+}
+
+/* The hover and selected tints are translucent; layer them on the solid
+   background so code never shows through. */
+.review-section-decision .review-section-action.is-approved:is(:hover, .is-active) {
+  background: linear-gradient(color-mix(in oklab, var(--review-add) 16%, transparent) 0 0), var(--review-panel-raised);
+}
+
+.review-section-decision .review-section-action.is-denied:is(:hover, .is-active) {
+  background: linear-gradient(color-mix(in oklab, var(--review-del) 16%, transparent) 0 0), var(--review-panel-raised);
 }
 
 .review-section-decision .review-section-action .review-section-action-label {
-  display: inline-grid;
-  max-width: 160px;
-  opacity: 1;
-  transition: max-width 180ms ease, opacity 160ms ease;
-}
-
-.review-section-decision .review-section-action {
-  transition: gap 180ms ease, padding 180ms ease,
-    background-color 160ms ease, border-color 160ms ease, color 160ms ease;
-}
-
-.review-section-action-verb,
-.review-section-action-result {
-  grid-area: 1 / 1;
-  max-width: 160px;
-  overflow: hidden;
-  transition: max-width 180ms ease, opacity 160ms ease;
-}
-
-.review-section-action-result,
-.review-section-action.is-active .review-section-action-verb {
-  max-width: 0;
-  opacity: 0;
-}
-
-.review-section-action.is-active .review-section-action-result {
-  max-width: 160px;
+  max-width: none;
   opacity: 1;
 }
 
-.review-section-decision:not(.is-pending):not(.is-editing)
-  .review-section-action:not(.is-active):not(:hover):not(:focus-visible) {
-  gap: 0;
-  padding: 0 8px;
+/* As on the pill, focus covers the border so it shows one outline. */
+.review-section-decision .review-section-action:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -1px;
 }
 
-.review-section-decision:not(.is-pending):not(.is-editing)
-  .review-section-action:not(.is-active):not(:hover):not(:focus-visible)
-  .review-section-action-label {
-  max-width: 0;
-  opacity: 0;
+.review-section-action-short {
+  display: none;
+}
+
+/* Phones: three full-size choices with Skip centred need ~420px, so
+   Request changes shows "Changes"; its accessible name stays in full. */
+@media (max-width: 640px) {
+  .review-section-decision .review-section-action.is-denied .review-section-action-full {
+    display: none;
+  }
+
+  .review-section-decision .review-section-action.is-denied .review-section-action-short {
+    display: inline;
+  }
+}
+
+/* Non-owners get the owner-only note, floating alone on the centre line
+   like the choices. */
+.review-section-decision .review-packet-section-note {
+  grid-column: 1 / -1;
+  justify-self: center;
+  box-shadow: var(--shadow-float);
+}
+
+.review-section-decision .review-packet-section-note {
+  max-width: min(20rem, calc(100vw - 32px));
+  box-sizing: border-box;
+  border: 1px solid var(--review-line-strong);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  background: var(--review-panel-raised);
+  text-align: center;
 }
 
 @media (max-width: 640px) {
-  .review-packet-shell.has-outline .review-packet-grid {
-    padding-bottom: calc(88px + env(safe-area-inset-bottom));
-  }
-
-  /* Only people who can decide get the floating button. Everyone else sees
-     the decision inline, with the owner-only note or sign-in link. */
-  .review-packet-shell.has-outline .review-section-decision:not(.is-readonly) {
-    position: fixed;
-    right: calc(16px + env(safe-area-inset-right));
-    margin: 0;
-  }
-
-  .review-section-decision.is-readonly {
-    position: static;
-  }
-
-  .review-packet-shell.has-outline .review-section-decision.is-editing {
-    width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
-  }
-
   .review-section-decision {
-    --review-decision-action-padding: 0 8px;
-
-    padding: 12px;
-    border-radius: var(--radius-lg);
-    gap: 12px;
+    gap: var(--space-2);
   }
 
-  /* The closed decision is a floating button like Sections and Comments:
-     --size-fab, --radius-lg and --shadow-float. */
-  .review-section-decision:not(.is-editing):not(.is-readonly) {
+  /* Phones show only the arrows for previous and next, as the same square
+     buttons as Comments and Sections stacked above next. */
+  .review-section-step {
     width: var(--size-fab);
-    margin-left: auto;
-    margin-right: 0;
-    justify-self: end;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-section-decision-copy,
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-packet-section-actions {
-    display: none;
-  }
-
-  .review-section-decision-toggle {
-    display: inline-flex;
-    flex: 0 0 var(--size-fab);
-    align-items: center;
     justify-content: center;
-    width: var(--size-fab);
-    height: var(--size-fab);
-    border: 1px solid var(--review-line-strong);
+    padding: 0;
     border-radius: var(--radius-lg);
-    background: var(--review-panel-raised);
-    color: var(--decision-accent);
-    cursor: pointer;
-    box-shadow: var(--shadow-float);
   }
 
-  .review-section-decision-toggle:hover {
-    background: var(--review-hover);
-  }
-
-  .review-section-decision-toggle:focus-visible {
-    outline: 2px solid var(--decision-accent);
-    outline-offset: 3px;
-  }
-
-  .review-section-decision-toggle > span {
-    width: var(--size-fab-icon);
-    height: var(--size-fab-icon);
-  }
-
-  .review-section-decision-toggle > .review-section-decision-toggle-label {
+  .review-section-step-label {
     display: none;
-  }
-
-  .review-section-decision.is-editing .review-section-decision-toggle {
-    top: 4px;
-    right: 4px;
-    width: 32px;
-    height: 32px;
-  }
-
-  .review-section-decision.is-editing .review-section-decision-copy {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .review-section-decision .review-packet-section-actions {
-    width: 100%;
-    flex-basis: 100%;
-    justify-content: flex-start;
   }
 
   .review-section-decision .review-section-action {
@@ -2857,23 +2857,6 @@ details[open] > summary .review-collapse-icon,
 }
 
 /* Linear flow: after the decision, the next section is one click away. */
-.review-section-next {
-  display: flex;
-  flex-basis: 100%;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.review-section-next-button {
-  margin-top: 4px;
-}
-
-.review-section-next-button.is-overview {
-  border: 1px solid var(--review-line-strong);
-  background: transparent;
-  color: var(--review-text);
-}
-
 .review-guide-begin {
   display: inline-flex;
   align-items: center;
@@ -3310,6 +3293,11 @@ details[open] > summary .review-collapse-icon,
     padding: 18px 16px 56px;
   }
 
+  /* The floating buttons still need their room in the Guide. */
+  .review-packet-shell.has-outline .review-packet-grid {
+    padding-bottom: calc(16px + var(--review-guide-stack) + 16px + env(safe-area-inset-bottom));
+  }
+
   /* Diffs use the full screen width: no side borders or corners, and in the
      packet the card cancels the grid's 16px inline padding, which the Guide
      prose keeps. Top and bottom borders still separate stacked files. */
@@ -3484,9 +3472,7 @@ details[open] > summary .review-collapse-icon,
   .review-section-action,
   .review-section-action-label,
   .review-section-decision .review-section-action,
-  .review-section-decision .review-section-action .review-section-action-label,
-  .review-section-action-verb,
-  .review-section-action-result {
+  .review-section-decision .review-section-action .review-section-action-label {
     transition: none;
   }
 }
@@ -3533,6 +3519,11 @@ details[open] > summary .review-collapse-icon,
 .review-markdown-side + .review-markdown-side { border-left: 1px solid var(--ds-line); }
 .review-markdown-side-label { padding: .35rem 1rem; font-size: .75rem; color: var(--ds-muted); }
 .review-rich-markdown { padding: 1rem 1.5rem; overflow-wrap: anywhere; line-height: 1.65; color: var(--ds-text); }
+/* Rendered Markdown wraps at the Guide prose measure, centred like the prose
+   column; the card and Source stay full width. Content-box keeps the text
+   itself, not text plus padding, at the measure. Scoped to the preview:
+   comment bodies reuse .review-rich-markdown and stay left-aligned. */
+.review-markdown-preview .review-rich-markdown { box-sizing: content-box; max-width: var(--guide-measure); margin-inline: auto; }
 .review-rich-markdown .review-markdown-change { border-left: 3px solid var(--ds-add); padding-left: .75rem; }
 .review-markdown-side.is-before .review-markdown-change { border-left-color: var(--ds-del); }
 .review-rich-markdown > * + * { margin-top: 1rem; }

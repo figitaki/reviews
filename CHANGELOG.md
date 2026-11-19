@@ -6,6 +6,31 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- In the Guide each section has one compact bar at the bottom of the screen
+  at every width: previous section on the left, the decision
+  pill in the middle and next section on the right. It replaces the
+  "Next:" and "Begin review" button at the end of each section and the
+  old corner decision button and shelf. The pill shows your decision on the
+  current version (Approved, Changes requested or Skipped), or "Decide".
+  Clicking it floats Request changes, Skip and Approve in a row above it,
+  with no panel around them and Skip over the pill (on phones the first
+  reads "Changes"), and reads
+  "Dismiss"; choosing one, clicking elsewhere, clicking it again or Escape
+  closes it. Readers who are not the owner see the owner-only note there.
+  Signed out, the pill reads "Sign in to decide" and goes straight to GitHub
+  sign-in, which returns to that section with the decision open. The bar is fixed to the bottom of
+  the screen, and Comments (and Sections on phones) stack in a column above
+  the next-section button. The pill shows one outline, with or without
+  keyboard focus.
+
+- The Guide no longer adds 72px of empty space below the page on wide
+  screens. That space ended the sticky Guide rail early, so it jumped up as
+  you reached the bottom.
+
+- Markdown Preview wraps at the same reading width as Guide prose and lines
+  up with it, in Guide and Diff mode. The diff card, Source and code diffs
+  stay full width.
+
 - The review page's small controls share one size: the R mark, the account
   and review menu buttons, the version picker, the revision chips, the
   Guide/Diff and layout switchers and every square in the Guide map are

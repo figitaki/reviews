@@ -263,10 +263,17 @@
 /* Leave room so the button never covers the last lines of code. */
 .review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 
-/* Above phones the sticky section decision bar stops short of the button. */
-@media (min-width: 641px) {
-  .review-page:has(.review-activity:not([data-empty])) .review-section-decision { margin-right: 64px; }
+/* In the Guide the fixed section dock holds next section in the
+   bottom-right corner, so Comments (and Sections on phones) stack above it:
+   dock offset + dock height + the column's 12px gap. */
+.review-page:has(.review-section-decision.has-nav) .review-activity {
+  --review-quick-bottom: calc(16px + var(--size-fab) + 12px + env(safe-area-inset-bottom));
 }
+
+/* The Guide grid's own bottom padding already clears the buttons. Padding
+   below the Guide shell ended the sticky Guide rail early, so it jumped up
+   at the bottom of the page over empty space. */
+.review-page:has(.review-packet-shell.has-outline) .review-workspace-content { padding-bottom: 0; }
 
 @media (min-width: 1200px) {
   .review-activity-body { width: 300px; }
@@ -281,19 +288,11 @@
 /* Phones: icon-only floating buttons, Sections (Guide only) above Comments,
    stacked above the section decision button, all three --size-fab. */
 @media (max-width: 640px) {
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
-    --review-quick-right: calc(16px + env(safe-area-inset-right));
-    --review-quick-bottom: calc(16px + var(--size-fab) + 12px + env(safe-area-inset-bottom));
-  }
   /* Sections scrolls the Guide map in below the sticky review toolbar, so its
      close button stays visible. */
   #review-guide-shell { scroll-margin-top: var(--rev-header-h, 48px); }
-  /* The open decision panel spans the screen. */
+  /* The open decisions span most of the screen. */
   .review-page:has(.review-section-decision.is-editing) .review-activity { display: none; }
-  /* The Guide grid already reserves space for the decision button. */
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
-    padding-bottom: 72px;
-  }
 
   .review-quick-button {
     display: inline-flex;
@@ -322,12 +321,12 @@
   }
   .review-activity-log { max-height: calc(60svh - var(--review-quick-bottom)); }
 
-  /* Phones: Sections and Comments sit in their own bar along the bottom, so
-     they never cover thread cards or the end of a comment. The content
-     reserves the bar's height. */
-  .review-activity {
-    --review-bar-h: calc(var(--size-fab) + 16px + env(safe-area-inset-bottom));
-
+  /* Phones without the Guide's section dock (Diff mode): Sections and
+     Comments sit in their own bar along the bottom, so they never cover
+     thread cards or the end of a comment. The content reserves the bar's
+     height; section decisions stay in the page flow. In the Guide they
+     stay stacked above the dock's next button. */
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-activity {
     left: 0;
     right: 0;
     bottom: 0;
@@ -338,28 +337,11 @@
     border-top: 1px solid var(--ds-line);
     background: var(--ds-panel);
   }
-  .review-workspace-content,
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
-    padding-bottom: calc(var(--review-bar-h, 64px) + 16px);
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-workspace-content {
+    padding-bottom: calc(var(--size-fab) + 32px + env(safe-area-inset-bottom));
   }
-  /* Decisions stick just above the bar. In the Guide, which shows one
-     section, the closed decision button joins the bar on its left. */
-  .review-page .review-section-decision { bottom: calc(var(--size-fab) + 28px + env(safe-area-inset-bottom)); }
-  .review-page .review-packet-shell.has-outline .review-section-decision:not(.is-editing):not(.is-readonly) {
-    position: fixed;
-    right: auto;
-    left: calc(16px + env(safe-area-inset-left));
-    bottom: calc(8px + env(safe-area-inset-bottom));
-    /* Above the bar's own background, which comes later in the page. */
-    z-index: calc(var(--z-fab) + 1);
-    margin: 0;
-  }
-  /* Let that z-index reach the page: the grid's own stacking context would
-     keep the button under the bar. Its children still sit below the bar,
-     Guide and toolbar layers. */
-  .review-packet-shell.has-outline .review-packet-grid { z-index: auto; }
-  .review-activity-body { bottom: calc(100% + 8px); }
-  .review-activity:has(details[open]) .review-quick-button { visibility: visible; }
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-activity-body { bottom: calc(100% + 8px); }
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-activity:has(details[open]) .review-quick-button { visibility: visible; }
 }
 
 /* While someone types a comment or reply, or the on-screen keyboard is up,
