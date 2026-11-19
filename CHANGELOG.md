@@ -6,6 +6,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The MCP `reviews_post_comment` tool and the address-feedback prompt now ask
+  agents to write comments in Simplified Technical English (ASD-STE100):
+  short sentences, active voice and common words.
 - In the Guide each section has one compact bar at the bottom of the screen
   at every width: previous section on the left, the decision
   pill in the middle and next section on the right. It replaces the
