@@ -1770,6 +1770,20 @@ details[open] > summary .review-collapse-icon,
   font-size: 0.85em;
 }
 
+/* Tables match comment tables (.review-rich-markdown): bordered cells,
+   scrolling sideways on narrow screens instead of running together. */
+[data-markdown-output] table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+[data-markdown-output] :is(th, td) {
+  border: 1px solid var(--ds-line);
+  padding: 0.4rem 0.75rem;
+}
+
 [data-markdown-output] p:has(> img) {
   max-width: 100%;
   margin-block: 1.5em;

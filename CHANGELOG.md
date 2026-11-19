@@ -41,7 +41,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   sanitized HTML, so prose no longer paints twice and shifts as the page
   loads. The rules stay the same: raw HTML shows as text, links go only to
   http, https, mailto or relative URLs, and images load only from bundled
-  `/images`. Addresses starting with `www.` now become links too.
+  `/images`. One change: addresses starting with `www.`, such as
+  `www.example.com`, now become links; before, they stayed as text. Tables
+  in packet prose now have cell borders, like tables in comments, so cells
+  no longer run together.
 
 ## [0.0.3] - 2026-11-19
 

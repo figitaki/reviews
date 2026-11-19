@@ -166,6 +166,8 @@ defmodule Reviews.MarkdownTest do
     assert Markdown.to_html("[**read** this](javascript:x)") ==
              "<p><strong>read</strong> this</p>\n"
 
+    # Bare www. addresses become links (comrak autolink); markdown-it's
+    # linkify left them as text. Kept on purpose.
     assert links(Markdown.to_html("see www.example.com and <https://example.com>")) == [
              ~s(<a href="http://www.example.com">),
              ~s(<a href="https://example.com">)
