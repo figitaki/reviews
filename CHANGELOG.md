@@ -10,6 +10,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   Codex, ChatGPT, Amp, Cursor, Gemini, GitHub Copilot and Grok, or Custom
   to type another name. An agent made for a listed provider uses its logo
   as its avatar.
+- Commenting on a range of lines no longer gets stuck. Before, after you
+  dragged the "+" across several lines and closed the comment box, the lines
+  stayed highlighted, and the "+" stayed on the last of them. Every later
+  comment then started from that range. Closing the box now clears the
+  selection.
 - The MCP `reviews_post_comment` tool and the address-feedback prompt now ask
   agents to write comments in Simplified Technical English (ASD-STE100):
   short sentences, active voice and common words.

@@ -21,6 +21,7 @@ class FakeVirtualizedFileDiff {
   render() { this.options.onPostRender?.(null, this, "mount") }
   setOptions(options) { this.options = options }
   setLineAnnotations(annotations) { this.annotations = annotations }
+  setSelectedLines(range) { this.selectedLines = range }
   rerender() { this.options.onPostRender?.(null, this, "update") }
   getLinePosition(lineNumber, side) { return side === "additions" ? { top: lineNumber * 20, height: 20 } : undefined }
   cleanUp() {}
@@ -198,6 +199,24 @@ test("large and small files highlight through the worker pool in both themes", (
   small.render()
   expect(calls.fileDiff).toBe(1)
   expect(small.instance.workers).toBe(workers)
+})
+
+test("closing the composer clears the lines the gutter drag selected", () => {
+  const renderer = new VanillaDiffRenderer({
+    container: fakeElement(), filePath: "a.js", signedIn: true, threads: [], diffStyle: "unified", hunkUI: null,
+    rawDiff: "diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1,5 @@\n-old\n+a\n+b\n+c\n+d\n+e\n",
+  })
+  renderer.render()
+  const pierre = renderer.instance
+  // Pierre selected lines 2 to 5 while the "+" was dragged; the composer opens on 5.
+  const dragged = { start: 2, end: 5, side: "additions" }
+  pierre.selectedLines = dragged
+  renderer.setComposerAt({ side: "additions", lineNumber: 5, kind: "comment" })
+  expect(pierre.selectedLines).toBe(dragged)
+
+  // Cancel, Escape and posting all close it through setComposerAt(null).
+  renderer.setComposerAt(null)
+  expect(pierre.selectedLines).toBeNull()
 })
 
 test("updates that keep the diff reuse the Pierre instance", () => {
