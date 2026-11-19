@@ -44,6 +44,14 @@ config :reviews, Reviews.MCPAuth,
       publisher: "OpenAI",
       logo: "/images/connectors/chatgpt.png",
       origins: ["https://chatgpt.com"]
+    },
+    # Amp calls /mcp from its servers, not the browser, so it needs no origin.
+    %{
+      client_id: "https://ampcode.com/oauth/client-metadata.json",
+      name: "Amp",
+      publisher: "Amp",
+      logo: "/images/connectors/amp.png",
+      origins: []
     }
   ]
 

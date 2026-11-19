@@ -161,6 +161,11 @@ defmodule ReviewsWeb.Router do
   end
 
   scope "/api/v1", ReviewsWeb.Api do
+    pipe_through :api
+    get "/analytics/snapshot", AnalyticsController, :show, log: false
+  end
+
+  scope "/api/v1", ReviewsWeb.Api do
     pipe_through [:api, :review_content]
 
     get "/reviews/:slug", ReviewController, :show

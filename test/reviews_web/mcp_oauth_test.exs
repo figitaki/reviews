@@ -361,6 +361,42 @@ defmodule ReviewsWeb.MCPOAuthTest do
                "Not verified"
     end
 
+    test "Amp's real document is recognized", ctx do
+      client_id = "https://ampcode.com/oauth/client-metadata.json"
+      redirect_uri = "https://ampcode.com/auth/mcp/callback"
+
+      # As https://ampcode.com/oauth/client-metadata.json served it on 2026-11-19.
+      Fetcher.put(client_id, %{
+        "client_id" => client_id,
+        "client_name" => "Amp",
+        "client_uri" => "https://ampcode.com",
+        "redirect_uris" => [redirect_uri],
+        "grant_types" => ["authorization_code", "refresh_token"],
+        "response_types" => ["code"],
+        "token_endpoint_auth_method" => "none"
+      })
+
+      {_verifier, challenge} = Client.pkce()
+
+      doc =
+        build_conn()
+        |> init_test_session(current_user_id: ctx.owner.id)
+        |> get(
+          ~p"/oauth/authorize",
+          authorize_params(%{client_id: client_id, redirect_uri: redirect_uri}, challenge)
+        )
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      known = doc |> LazyHTML.query("#poppy-consent-known") |> LazyHTML.text()
+      assert known =~ "Amp"
+      assert known =~ "Recognized app"
+      refute doc |> LazyHTML.query("#poppy-consent-client") |> LazyHTML.text() =~ "Not verified"
+
+      assert doc |> LazyHTML.query("#poppy-consent-known img") |> LazyHTML.attribute("src") ==
+               ["/images/connectors/amp.png"]
+    end
+
     test "the connector acts as the agent the owner chose, with the scopes granted", ctx do
       {query, verifier} = approve(ctx.claude, ctx.owner, ctx.agent)
       assert %{"code" => code, "state" => "st_9", "iss" => @issuer} = query
