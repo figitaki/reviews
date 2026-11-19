@@ -153,9 +153,11 @@ const composerActionsStyle = {
 }
 
 // Annotations are slotted into Pierre's shadow DOM but live in the light DOM,
-// so the shared <.ds_button> classes apply to them.
+// so the shared <.ds_button> classes apply to them. The label gets its own
+// `.ds-label` box, as in <.ds_button>, so text-box can trim it to cap height;
+// a flex button's bare text cannot be trimmed.
 function button(label, onClick, attrs = {}) {
-  const node = baseButton(label, onClick, attrs)
+  const node = baseButton(el("span", { className: "ds-label" }, label), onClick, attrs)
   node.className = ["ds-button", "is-sm", attrs.primary && "is-primary", attrs.ghost && "is-ghost"].filter(Boolean).join(" ")
   return node
 }
@@ -430,7 +432,7 @@ export function signInPrompt(onCancel) {
     el("div", { style: composerActionsStyle }, [
       el("a", { href: signInHref(), className: "ds-button is-sm is-primary" }, [
         githubMark(),
-        "Sign in with GitHub",
+        el("span", { className: "ds-label" }, "Sign in with GitHub"),
       ]),
       button("Cancel", onCancel),
     ]),

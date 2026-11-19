@@ -187,7 +187,12 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       phx-hook="GuideFlyout"
       aria-label="Review guide"
     >
-      <nav id="review-edge-rail" class="review-edge-rail" aria-label="Review sections">
+      <nav
+        id="review-edge-rail"
+        class="review-edge-rail"
+        style={"--guide-items: #{length(@outline.sections) + 3}"}
+        aria-label="Review sections"
+      >
         <button
           type="button"
           class="review-edge-rail-menu"
@@ -229,7 +234,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             aria-describedby={section.effective_status && "review-guide-tick-#{section.index}-state"}
             aria-current={if(section.index == @active_section_index, do: "true", else: "false")}
           >
-            <span class="review-edge-tick-number">{pad2(section.index + 1)}</span>
+            <span class="review-edge-tick-number ds-label">{pad2(section.index + 1)}</span>
             <span
               :if={section.effective_status}
               id={"review-guide-tick-#{section.index}-state"}
@@ -379,7 +384,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         phx-value-section_index={@first_section.index}
         phx-value-target_id={@first_section.target_id}
       >
-        Begin review <span aria-hidden="true">→</span>
+        <span class="ds-label">Begin review</span> <span aria-hidden="true">→</span>
       </button>
     </div>
     """
