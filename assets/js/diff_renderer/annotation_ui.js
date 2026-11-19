@@ -170,8 +170,10 @@ const composerActionsStyle = {
   alignItems: "center",
 }
 
+// The label is its own box so text-box can trim it to cap height; a flex
+// button's bare text cannot be trimmed. Same as `.ds-label` in the app CSS.
 function button(label, onClick, attrs = {}) {
-  return baseButton(label, onClick, {
+  return baseButton(el("span", { style: { textBox: "trim-both cap alphabetic" } }, label), onClick, {
     ...attrs,
     style: buttonStyle,
     primaryStyle: primaryButtonStyle,

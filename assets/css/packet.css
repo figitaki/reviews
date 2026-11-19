@@ -267,12 +267,13 @@
 }
 
 .review-toolbar .review-code-view-switcher,
+/* Segmented groups are one control tall: border, 2px inset, then the tab. */
 .review-toolbar .review-diff-style {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  border: 1px solid var(--review-line-strong);
-  border-radius: 7px;
+  border: var(--border-hair) solid var(--review-line-strong);
+  border-radius: var(--radius-sm);
   background: var(--review-panel);
   padding: 2px;
 }
@@ -281,11 +282,11 @@
 .review-layout-button {
   display: inline-flex;
   min-width: 30px;
-  min-height: 28px;
+  min-height: calc(var(--size-control-md) - 6px);
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: transparent;
   padding: 0 8px;
   color: var(--review-muted);
@@ -319,7 +320,7 @@
 .review-outline-toggle {
   align-self: center;
   flex: 0 0 auto;
-  min-height: 26px;
+  min-height: var(--size-control-md);
   padding-inline: 8px;
 }
 
@@ -338,8 +339,8 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  border: 1px solid var(--review-line);
-  border-radius: 7px;
+  border: var(--border-hair) solid var(--review-line);
+  border-radius: var(--radius-sm);
   background: var(--review-panel);
   padding: 2px;
 }
@@ -387,12 +388,12 @@
 .review-nav-button,
 .review-revision-chip {
   display: inline-flex;
-  min-height: 28px;
+  min-height: var(--size-control-md);
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--review-line);
-  border-radius: 6px;
+  border: var(--border-hair) solid var(--review-line);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--review-muted);
   font-size: var(--font-ui-size);
@@ -2064,6 +2065,11 @@ details[open] > summary .review-collapse-icon,
   line-height: var(--font-meta-leading);
 }
 
+/* A plain block button: trim its own label (see .ds-label). */
+.reviews-diff-header-viewed {
+  text-box: trim-both cap alphabetic;
+}
+
 .reviews-diff-header-viewed:hover,
 .reviews-diff-header-viewed:focus-visible {
   border-color: var(--review-line-strong);
@@ -2298,40 +2304,44 @@ details[open] > summary .review-collapse-icon,
   min-height: calc(100vh - var(--rev-header-h));
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: var(--space-1);
   border-right: 1px solid var(--review-line);
   background: var(--review-panel);
-  padding: 18px 0;
+  padding: var(--space-3) 0;
 }
 
+/* The menu, the overview star, the section numbers and the close button are
+   one rounded square each, one control tall, evenly spaced; only the
+   selected one is filled. The rail centres them with equal space on
+   every side. */
 .review-edge-rail-menu,
-.review-edge-rail-hide {
+.review-edge-rail-hide,
+.review-edge-tick {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: var(--size-control-md);
+  height: var(--size-control-md);
+  flex: 0 0 auto;
   cursor: pointer;
   place-items: center;
-  border-radius: 6px;
+  border: var(--border-hair) solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
+  padding: 0;
   color: var(--review-muted);
   transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 
-.review-edge-rail-menu {
-  border: 1px solid var(--review-line);
-}
-
 .review-edge-rail-hide {
   margin-top: auto;
-  border: 1px solid transparent;
-  color: var(--review-muted);
 }
 
 .review-edge-rail-menu:hover,
 .review-edge-rail-menu:focus-visible,
 .review-guide-shell.is-flyout-open .review-edge-rail-menu,
 .review-edge-rail-hide:hover,
-.review-edge-rail-hide:focus-visible {
+.review-edge-rail-hide:focus-visible,
+.review-edge-tick:hover,
+.review-edge-tick:focus-visible {
   border-color: var(--review-line-strong);
   background: var(--review-hover);
   color: var(--review-text);
@@ -2341,7 +2351,7 @@ details[open] > summary .review-collapse-icon,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
+  gap: var(--space-1);
 }
 
 .review-edge-rail-ticks .review-edge-tick {
@@ -2358,29 +2368,10 @@ details[open] > summary .review-collapse-icon,
 
 .review-edge-tick {
   position: relative;
-  display: grid;
-  width: 24px;
-  height: 28px;
-  flex: 0 0 auto;
-  cursor: pointer;
-  place-items: center;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  padding-block: 3px;
-  color: var(--review-muted);
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 740;
   line-height: 1;
-  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
-}
-
-.review-edge-tick:hover,
-.review-edge-tick:focus-visible {
-  border-color: var(--review-line);
-  background: var(--review-hover);
-  color: var(--review-text);
 }
 
 .review-edge-tick.is-active {
@@ -2396,8 +2387,8 @@ details[open] > summary .review-collapse-icon,
 
 .review-edge-tick-state {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  right: 2px;
+  bottom: 2px;
   display: inline-grid;
   width: 8px;
   height: 8px;
@@ -2944,8 +2935,7 @@ details[open] > summary .review-collapse-icon,
     backdrop-filter: none;
   }
 
-  .review-page .design-brand,
-  .review-page .ds-shell-actions .review-button {
+  .review-page .design-brand {
     min-height: 44px;
   }
 
@@ -3024,7 +3014,7 @@ details[open] > summary .review-collapse-icon,
     position: absolute;
     z-index: -1;
     inset: 6px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     content: "";
   }
 
@@ -3064,17 +3054,37 @@ details[open] > summary .review-collapse-icon,
     padding: 0;
   }
 
+  /* One control tall, as wide as its longest option. 1rem text stops iOS
+     zooming on focus. On touch screens the box grows a transparent border
+     to a 44px target, and an inset shadow draws the visible outline inside
+     it. */
   .review-revision-select {
     display: block;
-    width: 60px;
-    min-height: 44px;
-    border: 1px solid var(--ds-line-input);
-    border-radius: 6px;
+    width: auto;
+    height: var(--size-control-md);
+    min-height: 0;
+    border: var(--border-hair) solid var(--ds-line-input);
+    border-radius: var(--radius-sm);
     background: var(--review-panel);
-    padding-inline: 6px;
+    padding: 0 var(--space-1) 0 var(--space-3);
     color: var(--review-text);
     font-size: 1rem;
+    line-height: 1;
     cursor: pointer;
+  }
+
+  @media (pointer: coarse) {
+    .review-revision-select {
+      --select-hit-pad: calc((44px - var(--size-control-md)) / 2);
+      height: 44px;
+      border: var(--select-hit-pad) solid transparent;
+      border-radius: calc(var(--radius-sm) + var(--select-hit-pad));
+      background-clip: padding-box;
+      box-shadow: inset 0 0 0 var(--border-hair) var(--ds-line-input);
+      outline-offset: calc(2px - var(--select-hit-pad));
+      /* Keep the visible gap to the Guide square the same as without touch. */
+      margin-inline-end: calc(-1 * var(--select-hit-pad));
+    }
   }
 
   .review-diff-style #diff-style-split {
@@ -3125,19 +3135,15 @@ details[open] > summary .review-collapse-icon,
     border-bottom: 1px solid var(--review-line);
   }
 
+  /* 12px inline, the same as the top bar and toolbar, so the first square
+     lines up under the R mark. */
   .review-edge-rail {
     min-height: 48px;
     flex-direction: row;
-    gap: 12px;
     border-right: 0;
     border-bottom: 1px solid var(--review-line);
     overflow-x: auto;
-    padding: 0 16px;
-  }
-
-  .review-edge-rail-menu,
-  .review-edge-rail-hide {
-    flex: 0 0 auto;
+    padding: 0 12px;
   }
 
   .review-edge-rail-hide {

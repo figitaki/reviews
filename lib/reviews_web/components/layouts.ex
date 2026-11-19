@@ -200,7 +200,7 @@ defmodule ReviewsWeb.Layouts do
           height="24"
           class="account-menu-avatar"
         />
-        <span class="account-menu-name">{@current_user.username}</span>
+        <span class="account-menu-name ds-label">{@current_user.username}</span>
       </button>
       <ul tabindex="0" class="dropdown-content menu menu-sm review-menu z-20 mt-2 w-44 p-2">
         <li>

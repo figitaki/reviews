@@ -6,6 +6,22 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The review page's small controls share one size: the R mark, the account
+  and review menu buttons, the version picker, the revision chips, the
+  Guide/Diff and layout switchers and every square in the Guide map are
+  `--size-control-md` (32px) tall with `--radius-sm` corners. On phones the
+  version picker drops from 44px to 32px, the account button from 44px to
+  32px, and the Guide map's menu, star, numbers and close are one 32px
+  square each, 4px apart, with only the selected one filled. Touch screens
+  keep a 44px tap target around each without the box growing.
+
+- Button labels are centred on their letters. A line box keeps the font's
+  descent, so labels without descenders such as "Mark viewed" and an
+  account name sat about 2px high. The new `.ds-label` class trims a label
+  to cap height and baseline with `text-box`; `<.ds_button>` puts it on its
+  label, and so do the account button, revision chips, Guide/Diff, Guide
+  map numbers, Begin review, Mark viewed and the comment thread buttons.
+
 - Syntax highlighting runs in web workers. A diff shows as plain text first
   and its colours fill in, so a large file no longer freezes the page. On a
   4,562-line file, Mark viewed, collapse, expand and opening a thread each
