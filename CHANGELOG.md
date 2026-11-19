@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Reviews has a logo: the R with a lime tick. It is the favicon, the home-screen
+  icon (`apple-touch-icon.png`, `site.webmanifest`), and the icon `/mcp`
+  advertises in `serverInfo.icons`.
+
 - Syntax highlighting runs in web workers. A diff shows as plain text first
   and its colours fill in, so a large file no longer freezes the page. On a
   4,562-line file, Mark viewed, collapse, expand and opening a thread each

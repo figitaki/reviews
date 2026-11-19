@@ -1,0 +1,7 @@
+<svg viewBox="34 50 1172 1170" xmlns="http://www.w3.org/2000/svg">
+  <rect id="background" x="34" y="50" width="1172" height="1170" rx="234" fill="#0B0B0C" />
+  <g id="review-mark">
+    <path id="letter-r" fill="#FFFFFF" fill-rule="evenodd" d="M256 301H674C756 301 823 368 823 450V558C823 640 756 707 674 707H641L793 865L712 946L480 707H390V976H256ZM390 432V577H641C669 577 691 555 691 527V482C691 454 669 432 641 432Z" />
+    <path id="approval-tick" fill="#C6FF3D" d="M712 946L961 696L1029 765L776 1011Z" />
+  </g>
+</svg>
