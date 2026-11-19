@@ -81,6 +81,7 @@ defmodule ReviewsWeb.LinkPreview do
     |> String.replace(~r/\[([^\]]+)\]\([^)]*\)/, "\\1")
     |> String.replace(~r/^\s{0,3}(\#{1,6}|>+|[-*+]\s+\[[ xX]\]|[-*+]|\d+[.)])\s+/m, "")
     |> String.replace(~r/(\*\*|__|~~|`)/, "")
+    |> String.replace(~r/(?<![\w*])[*_](?=\S)(.+?)(?<=\S)[*_](?![\w*])/u, "\\1")
     |> String.replace(~r/\s+/u, " ")
     |> String.trim()
     |> truncate()

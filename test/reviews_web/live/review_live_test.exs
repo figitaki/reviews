@@ -260,7 +260,8 @@ defmodule ReviewsWeb.ReviewLiveTest do
           "file_path" => "lib/foo.ex",
           "side" => "new",
           "body" =>
-            "Don't **leak** `ids` <script>\n\n> see [the docs](https://x.test) " <> long_tail,
+            "Don't **leak** `ids` <script> in *any* _repo_ or qos_p256_key\n\n> see [the docs](https://x.test) " <>
+              long_tail,
           "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
         })
 
@@ -321,7 +322,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       assert comment_tags["twitter:data1"] == "Great change"
 
-      assert "Don't leak ids <script> see the docs word word" <> _ =
+      assert "Don't leak ids <script> in any repo or qos_p256_key see the docs word word" <> _ =
                comment_tags["og:description"]
 
       assert String.ends_with?(comment_tags["og:description"], "word…")
