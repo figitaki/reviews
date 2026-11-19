@@ -137,6 +137,9 @@ defmodule Reviews.Accounts do
   `{:ok, %{user: user, identity: identity}}` or
   `{:error, :invalid_token}`. Updates `last_used_at` on success.
   """
+  # Aggregate credentials cannot authenticate as an account.
+  def authenticate_token("rva_" <> _), do: {:error, :invalid_token}
+
   def authenticate_token(raw) when is_binary(raw) do
     hash = hash_token(raw)
 

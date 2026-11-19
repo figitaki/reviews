@@ -98,12 +98,12 @@
 
 .design-brand-mark{
   display: inline-flex;
-  width: 26px;
-  height: 26px;
+  width: var(--size-control-md);
+  height: var(--size-control-md);
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--ds-line-strong);
-  border-radius: 6px;
+  border: var(--border-hair) solid var(--ds-line-strong);
+  border-radius: var(--radius-sm);
   background: var(--ds-panel-raised);
   font-size: 0.75rem;
 }
@@ -937,6 +937,18 @@ label.consent-scope:hover{
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
 }
 
+/* A control's text label. Line boxes hold the font's full ascent and
+   descent, so a centred label without descenders ("Mark viewed",
+   "other-dev") reads about 2px high. Trimming the box to cap height and
+   baseline centres the letters themselves. text-box only applies to block
+   containers and inline boxes, so in a flex control put this on the label
+   element, not the control: bare text in a flex box cannot be trimmed. A
+   <button> that is not a flex box can take `text-box` itself. Browsers
+   without text-box keep the old centring. */
+.ds-label{
+  text-box: trim-both cap alphabetic;
+}
+
 /* Icons inside buttons, from the icon attr or <.github_mark>. */
 .ds-github-mark{
   width:1em;
@@ -1196,26 +1208,36 @@ label.consent-scope:hover{
   .ds-shell-actions .review-button > span{
     min-width: 0;
     overflow: hidden;
+    overflow: clip visible;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 }
 
-/* Touch screens: topbar controls get a 44px tap target. */
+/* Touch screens: topbar controls get a 44px tap target. The brand link is
+   the target around its 32px mark; buttons keep their 32px box and grow
+   only their hit area, like .ds-button. */
 @media (pointer: coarse) {
-  .design-brand,
-  .ds-shell-actions .review-chip,
-  .ds-shell-actions .review-button{
-    min-height: 44px;
-  }
-
   .design-brand{
     min-width: 44px;
+    min-height: 44px;
     justify-content: center;
   }
 
-  .ds-shell-actions .review-chip{
-    min-width: 44px;
+  .ds-shell-actions :is(.review-chip, .review-button){
+    position: relative;
+  }
+
+  .ds-shell-actions :is(.review-chip, .review-button)::after{
+    content: "";
+    position: absolute;
+    inset: calc((100% - 44px) / 2) 0;
+  }
+  /* landing.css makes the signed-out button 44px tall; here it stays one
+     control tall and .ds-button's own hit area covers the 44px. */
+  .ds-shell-actions .l-nav-signin{
+    height: auto;
+    min-height: var(--size-control-md);
   }
 }
 
@@ -1230,6 +1252,22 @@ label.consent-scope:hover{
   max-width: 100%;
 }
 
+/* DeleteReviewComponents.review_menu: an icon-only square beside it. */
+.ds-shell-actions .review-owner-menu-button {
+  width: var(--size-control-md);
+  padding: 0;
+}
+
+/* Touch: a 44px square target. The account button sits 4px to the right,
+   so the target takes 2px there, half the gap, and the other 10px from the
+   empty bar on the left. Offsets are from the padding edge, inside the
+   1px border. */
+@media (pointer: coarse) {
+  .ds-shell-actions .review-owner-menu-button::after{
+    inset: calc((100% - 44px) / 2) calc(-2px - var(--border-hair)) calc((100% - 44px) / 2) calc(100% + 2px + var(--border-hair) - 44px);
+  }
+}
+
 .account-menu-avatar {
   flex: none;
   width: 24px;
@@ -1238,9 +1276,14 @@ label.consent-scope:hover{
   object-fit: cover;
 }
 
+/* The name is trimmed to cap height (.ds-label), so it clips only
+   sideways: a vertical clip would cut the "g" and "y" in "gypsy". Browsers
+   without `clip` keep `hidden`; they lack text-box too, so nothing is
+   trimmed there. */
 .account-menu-name {
   min-width: 0;
   overflow: hidden;
+  overflow: clip visible;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

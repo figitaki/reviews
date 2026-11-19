@@ -31,6 +31,9 @@ config :reviews, ReviewsWeb.Endpoint,
   secret_key_base: "PksNuEADSq2cFj3rPjGzuMlw2ulffcTg5IHJLaFhVcq8wWgjFfUr/EhTVD4cpvRl",
   server: false
 
+# The sweeper never runs in tests; they call Sweeper.sweep/1 directly.
+config :reviews, Reviews.CodeStorage.Sweeper, enabled: false
+
 config :reviews, :mcp,
   enabled: true,
   writes_enabled: true,

@@ -156,12 +156,25 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_event("toggle_section_decision", %{"section_index" => index}, socket) do
+  # `open` says which state the reader asked for, so a repeated close (two
+  # quick outside clicks, Escape twice) stays closed instead of reopening.
+  def handle_event("toggle_section_decision", %{"section_index" => index} = params, socket) do
     with %{} = patchset <- socket.assigns.selected_patchset,
          {section_index, ""} <- Integer.parse(to_string(index)),
          %{} <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
+      open =
+        case params["open"] do
+          "true" -> true
+          "false" -> false
+          _ -> socket.assigns.editing_decision_index != section_index
+        end
+
       editing =
-        if socket.assigns.editing_decision_index == section_index, do: nil, else: section_index
+        cond do
+          open -> section_index
+          socket.assigns.editing_decision_index == section_index -> nil
+          true -> socket.assigns.editing_decision_index
+        end
 
       {:noreply, assign(socket, :editing_decision_index, editing)}
     else
@@ -822,7 +835,7 @@ defmodule ReviewsWeb.ReviewLive do
       |> assign(:editing_decision_index, section_index)
       |> update(:expanded_section_ids, &MapSet.put(&1, section_index))
       |> auto_open_section_hunks(section_index)
-      |> push_event("packet_nav_jump", %{id: "packet-section-#{section_index}-decision"})
+      |> push_event("packet_nav_jump", %{id: "packet-section-#{section_index}"})
     else
       _ -> socket
     end

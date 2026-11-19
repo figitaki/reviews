@@ -400,6 +400,10 @@ export class VanillaDiffRenderer {
   setComposerAt(composerAt) {
     this.composerAt = composerAt
     this.composerDraft = ""
+    // Pierre keeps the lines the "+" was dragged across selected, pins the
+    // "+" to the last of them, and starts the next press from that range.
+    // Clear it when the composer closes, or every later comment lands there.
+    if (!composerAt) this.instance?.setSelectedLines(null, { notify: false })
     this.refresh()
   }
 

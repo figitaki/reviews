@@ -36,14 +36,31 @@ defmodule Reviews.Errors do
     empty_body: {422, "body cannot be empty"},
     invalid_packet: {422, "Invalid packet"},
     validation_failed: {422, "Invalid input"},
-    write_failed: {422, "The write failed. Nothing was saved."}
+    # Code storage (`Reviews.CodeSnapshots`). 404 for a disabled server matches
+    # an older server without the routes, so the CLI pushes diff-only.
+    code_storage_disabled: {404, "Code storage is not enabled on this server."},
+    code_storage_unavailable: {502, "Code storage is unavailable. Try again later."},
+    invalid_snapshot: {422, "Invalid snapshot parameters"},
+    unsupported_object_format: {422, "The repository object format is not supported."},
+    repository_too_large: {422, "The repository exceeds the upload size limit."},
+    upload_expired: {410, "The snapshot reservation expired before it was claimed."},
+    ref_mismatch: {422, "The uploaded refs do not match the reserved object IDs."},
+    snapshot_not_ready: {422, "The code snapshot is not ready to be claimed."},
+    snapshot_not_authorized:
+      {403, "This identity cannot upload code for that review or snapshot."},
+    write_failed: {422, "The write failed. Nothing was saved."},
+    method_not_allowed: {405, "Method not allowed"},
+    rate_limited: {429, "Rate limit exceeded"},
+    unavailable: {503, "Temporarily unavailable. Try again later."}
   }
 
   # Domain reasons that name the same problem as a code.
   @aliases %{
     invalid_cursor: :invalid_pagination,
     invalid_page_size: :invalid_pagination,
-    could_not_publish: :write_failed
+    could_not_publish: :write_failed,
+    invalid_oid: :invalid_snapshot,
+    invalid_head_kind: :invalid_snapshot
   }
 
   @by_name Map.new(Map.keys(@errors), &{Atom.to_string(&1), &1})

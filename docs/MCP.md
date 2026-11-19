@@ -159,15 +159,15 @@ the whole review.
 | `reviews_get_packet_section` | One section's rows in reading order: Markdown prose and hunk diffs. A row with `complete: false` continues on the next page. |
 | `reviews_list_files` | Files in a revision, in path order, with status, line counts, size and open threads. |
 | `reviews_get_file_diff` | One file's diff in pieces; continue with `next_offset` and the same `revision`. |
-| `reviews_list_threads` | Threads projected onto a revision, with their first comments. `line` is null when the code changed (`anchor_status: "outdated"`). `comments_complete: false` means more comments or longer bodies than shown. |
-| `reviews_get_thread` | One thread with all of its comments, in pieces when long. |
+| `reviews_list_threads` | Threads projected onto a revision, with their first comments. `line` is null when the code changed (`anchor_status: "outdated"`). `comments_complete: false` means more comments or longer bodies than shown. Each thread has a `url` that opens the review on it, and each comment a `url` that opens the review on that comment. |
+| `reviews_get_thread` | One thread with all of its comments, in pieces when long. The thread and each comment carry their `url`. With links in every comment, pages need more than the 2,000-byte minimum `max_bytes` to fit one; the default fits plenty. |
 | `reviews_create_review` | Publish a review from a unified diff and optional packet JSON. Hunk rows and `line_start`/`line_end` slices are checked against the diff, as the CLI does. |
 | `reviews_append_revision` | Upload a new revision of a review your account owns, with the same checks. |
-| `reviews_post_comment` | Reply with `thread_id`, or start a thread at `path` + `line` of a revision's diff. The line must be in that revision's diff. |
-| `reviews_update_thread_status` | Resolve or reopen a thread. |
+| `reviews_post_comment` | Reply with `thread_id`, or start a thread at `path` + `line` of a revision's diff. The line must be in that revision's diff. Returns the review `url`, `thread_url` and `comment_url`. The description asks agents to write in Simplified Technical English (ASD-STE100). |
+| `reviews_update_thread_status` | Resolve or reopen a thread. Returns its `thread_url`. |
 
 Resource: `reviews://{slug}/feedback`, the open threads of the latest revision
-as Markdown anchored to `path:line`. It shows at most 50 threads and 60 KB, and
+as Markdown anchored to `path:line`, each thread with a link to it. It shows at most 50 threads and 60 KB, and
 says how many threads it left out; read those with `reviews_list_threads`.
 
 Prompt: `address_feedback`, which walks an agent through reading, fixing,

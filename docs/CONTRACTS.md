@@ -57,6 +57,31 @@ was approved for, so it can comment but cannot push, resolve, reopen or decide,
 even for an identity that could do so with an API token. A refused comment is
 `403`.
 
+### `GET /api/v1/analytics/snapshot`
+
+Dedicated aggregate-only authentication, disabled unless an expiring `rva_` credential
+is configured. Normal account tokens are rejected; this credential cannot authorize
+any other route. No parameters or request body are accepted. Responses are no-store.
+
+The fixed version-2 payload has `version`, `source`, `collected_at`, `accounts`
+(every account now), `mcp_clients` and `windows`. `mcp_clients` has one row per
+recognized MCP connector (Claude, ChatGPT) and `Unrecognized`, each with `app`,
+`connections` and `connected_accounts` for `/mcp` grants that are neither revoked
+nor expired. Exactly two windows (7 and 30 days) each contain `days`, `start`, `end`,
+`active_accounts`, `reviews`, `revisions`, `comments`, `decisions`, `signups`,
+`mcp_connections` (`/mcp` grants approved in the window) and `mcp_active_accounts`
+(accounts with an `/mcp` grant used in the window).
+Active accounts count distinct identity owners, deduplicating human and agent
+identities belonging to the same account. All counts are computed in PostgreSQL;
+no identity IDs or content leave the database. See [aggregate export](AGGREGATE_EXPORT.md)
+for boundaries, credential expiry/revocation and per-instance limits.
+
+The credential authenticates as a `Reviews.Principal` with `via: :aggregate_export`
+and no identity, account or scopes, so `Reviews.Policy` refuses it every write.
+Errors carry the shared `error_code`: `unauthorized` (401), `invalid_request` (400,
+query string or body), `method_not_allowed` (405), `insufficient_scope` (403, this
+credential on any other route), `rate_limited` (429) and `unavailable` (503).
+
 ### `GET /api/v1/reviews`
 
 Lists reviews. Powers `reviews list` and matches the `/reviews` web page.
@@ -191,6 +216,14 @@ Response `201`:
 
 Unknown slug → `404`. A token whose account does not own the review → `403`.
 
+Both create endpoints accept an optional `code_snapshot_id` (a snapshot UUID
+from `POST /api/v1/code-snapshots` that has been completed). When present, the
+201 response carries a `code_snapshot` key: `{"id": "<uuid>", "status": "claimed"}`
+on success, or `{"status": "skipped", "code": "<error code>"}` when the claim
+failed under the `optional` storage policy (the push still succeeds diff-only).
+Under the `required` policy a failed claim aborts the whole request with the
+error-code envelope below and creates nothing.
+
 ### `GET /api/v1/reviews/:slug`
 
 Public (no token). Returns a JSON snapshot of the review: `slug`, `title`,
@@ -286,6 +319,98 @@ Setting the status a thread already has changes nothing and keeps the
 original resolver. Unknown slug, or a thread that is not in this review →
 `404`. A token whose account is neither the review owner nor the thread's
 author → `403`, even when the status would not change.
+
+### `GET /api/v1/capabilities`
+
+Unauthenticated feature discovery for the CLI. Older servers have no such
+route; treat a `404` as code storage disabled.
+
+```json
+{
+  "code_storage": {
+    "enabled": false,
+    "required": false,
+    "supported_object_formats": ["sha1"],
+    "max_upload_bytes": 536870912,
+    "max_upload_bytes_enforced": false
+  },
+  "lsp": { "enabled": false, "languages": [] }
+}
+```
+
+`max_upload_bytes` is an advisory budget, not a rejection threshold.
+`max_upload_bytes_enforced: false` means neither the CLI nor server enforces
+that budget. The first push can transfer all history reachable from the base
+commit; operators must not rely on this field to bound storage or transfer costs.
+
+### `POST /api/v1/code-snapshots`
+
+Reserves a code snapshot for upload. Requires a token. Returns `404` with
+code `code_storage_disabled` when storage is off.
+
+Request body:
+
+```json
+{
+  "review_slug": "k7m2qz",
+  "object_format": "sha1",
+  "base_oid": "<full 40/64-hex object id>",
+  "head_oid": "<full 40/64-hex object id>",
+  "head_kind": "commit"
+}
+```
+
+`review_slug` is omitted for a new review. When it is present, the caller
+must be allowed to add patchsets to that review; otherwise the server returns
+`403` with code `snapshot_not_authorized` and reserves nothing. `head_kind` is
+one of `commit`, `index_snapshot`, `worktree_snapshot`.
+
+Response `201`:
+
+```json
+{
+  "id": "<snapshot uuid>",
+  "repository_id": "<repository uuid>",
+  "expires_at": "2026-09-01T18:30:00Z",
+  "upload": {
+    "remote_url": "https://<org>.code.storage/reviews/<repository uuid>.git",
+    "token": "<short-lived ES256 JWT, scoped to the two refs below>",
+    "expires_at": "2026-09-01T18:15:00Z"
+  },
+  "refs": {
+    "base": "refs/heads/snapshots/<snapshot uuid>/base",
+    "head": "refs/heads/snapshots/<snapshot uuid>/head"
+  }
+}
+```
+
+Push both refs in one atomic `git push`, sending the token as HTTP basic auth
+(user `t`) via header injection — never embed it in the URL, git config, or
+logs.
+
+### `POST /api/v1/code-snapshots/:id/complete`
+
+Asks the server to verify the uploaded refs against the reserved object ids.
+Unclaimed reservations return `upload_expired` (410) at or after their deadline,
+even before the sweeper runs. Completion rechecks state and deadline after
+provider verification; a late result cannot revive an expired snapshot or
+overwrite a completed/claimed one. Claiming also checks the deadline under
+the snapshot lock. Claimed snapshots remain idempotently completable. Response `200`:
+
+```json
+{ "id": "<snapshot uuid>", "status": "ready", "base_oid": "...", "head_oid": "..." }
+```
+
+Code-storage errors use the shared error envelope (`Reviews.Errors`):
+
+```json
+{ "errors": { "detail": "human message" }, "error_code": "ref_mismatch", "error_detail": "human message" }
+```
+
+Codes: `code_storage_disabled` (404), `snapshot_not_authorized` (403),
+`upload_expired` (410), `invalid_snapshot`, `unsupported_object_format`,
+`ref_mismatch`, `snapshot_not_ready`, `repository_too_large` (422), and
+`code_storage_unavailable` (502) when the provider cannot be reached.
 
 ### `GET /api/v1/me`
 
@@ -586,7 +711,7 @@ Replies require only `{thread_id, body}` and preserve the thread's file, side, a
 
 REST and Poppy application errors add `error_code` and `error_detail` alongside the existing `errors` fields. Poppy authentication retains the protocol-required string `error` and challenge headers and adds the same code/detail fields. Clients should branch on the code, not the prose; field-validation messages remain in `errors`. This is additive rather than replacing the published v1 envelope.
 
-Codes include `review_not_found`, `review_deleted` (410), `thread_not_found`, `patchset_not_found`, `section_not_found`, `forbidden`, `unauthorized`, `invalid_request`, `invalid_status`, `invalid_section_index`, `invalid_anchor`, `invalid_side`, `invalid_file_path`, `empty_body`, `unknown_granularity`, `validation_failed` and `write_failed`. Poppy authentication uses its existing protocol codes (`invalid_session`, `session_ended`, `version_unsupported`, `invalid_token`, `invalid_dpop_proof`, `insufficient_scope`). Both thread and section-decision requests with missing status return 422. Malformed section indices retain their existing 400 response.
+Codes include `review_not_found`, `review_deleted` (410), `thread_not_found`, `patchset_not_found`, `section_not_found`, `forbidden`, `unauthorized`, `invalid_request`, `invalid_status`, `invalid_section_index`, `invalid_anchor`, `invalid_side`, `invalid_file_path`, `empty_body`, `unknown_granularity`, `validation_failed`, `write_failed`, `method_not_allowed`, `rate_limited` and `unavailable`. Poppy authentication uses its existing protocol codes (`invalid_session`, `session_ended`, `version_unsupported`, `invalid_token`, `invalid_dpop_proof`, `insufficient_scope`). Both thread and section-decision requests with missing status return 422. Malformed section indices retain their existing 400 response.
 
 `Reviews.Errors` is the one list of codes, with one HTTP status and one default detail each. REST, Poppy and MCP (`structuredContent.error.code`) all map domain reasons through it, so the same failure has the same code on every surface; an unknown reason is sent as `write_failed`, never as its internal name. It adds `invalid_pagination` (bad cursor, `limit` or `max_bytes` on paged reads) and `invalid_packet` (a packet that fails validation; field messages stay in `errors.packet`).
 
