@@ -6,6 +6,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- idna is now 8.0.0, which fixes EEF-CVE-2026-117678: a long Punycode
+  label in a hostname could keep the CPU busy. jsv still asks for idna 7,
+  so `mix.exs` overrides it until jsv allows 8.
 - The Reviews mark (the R in a rounded square from the top bar) is now the
   favicon, the home-screen icon (`apple-touch-icon.png`, `site.webmanifest`),
   and the icon `/mcp` advertises in `serverInfo.icons`. Claude shows a custom

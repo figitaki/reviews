@@ -84,6 +84,9 @@ defmodule Reviews.MixProject do
       {:req, "~> 0.5"},
       {:joken, "~> 2.6"},
       {:fastest_mcp, "~> 1.0.1"},
+      # idna 7.1.0 has EEF-CVE-2026-117678. jsv (through fastest_mcp) still
+      # asks for ~> 6.0 or ~> 7.0; drop the override once it allows 8.
+      {:idna, "~> 8.0", override: true},
       # The OAuth issuer (Reviews.OAuth). Not on Hex yet; pinned to the merge
       # of figitaki/gatekeep#7 (client assertion jtis of up to 256 bytes).
       {:gatekeep, github: "figitaki/gatekeep", ref: "d1c5cc3e99d739ab74f15b19c7dbf55ed99f3228"}
