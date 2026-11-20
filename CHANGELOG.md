@@ -13,6 +13,13 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   `chart-v<version>` tag publishes it to
   `oci://ghcr.io/figitaki/charts/reviews`. Its README covers installing,
   every value, and deploying with Flux from pinned image tags.
+- phoenix_live_view is now 1.2.14, which fixes EEF-CVE-2026-126334
+  (GHSA-v4p7-3pm2-wq6c): a LiveView joined without `"url"` skipped its
+  `live_session` `on_mount` hooks. Reviews uses no `live_session` or
+  `on_mount` hooks, so it was not exposed, but the Hex audit failed on
+  1.2.12. 1.2.14 was published on 2026-11-20, so this bump is an exception
+  to the 7-day release-age rule, approved by Carey for this security fix
+  only. No other locked dependency changed.
 - The favicon and the web app manifest now load in production. The page
   linked their digested names, such as `/site-<hash>.webmanifest`, which
   the static file allowlist refused with a 404.
