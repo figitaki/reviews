@@ -97,9 +97,10 @@ config :logger, :default_formatter,
 config :phoenix, :json_library, JSON
 
 # Keep OAuth secrets out of request logs. Phoenix already filters "password";
-# the rest are sign-in values (Reviews.OAuth).
+# the rest are sign-in values (Reviews.OAuth) and optional unchanged source.
 config :phoenix, :filter_parameters, [
   "password",
+  "context_diff",
   "client_assertion",
   "code",
   "code_verifier",

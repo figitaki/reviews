@@ -38,66 +38,6 @@ defmodule Reviews.CodeSnapshots do
 
   def get_snapshot_by_public_id(_), do: nil
 
-  @doc "Read only a file in the linked review and revision, using verified OIDs."
-  def file_context(%Review{id: review_id}, number, file_id) do
-    entry =
-      Repo.one(
-        from f in Reviews.Reviews.File,
-          join: p in Patchset,
-          on: p.id == f.patchset_id,
-          left_join: s in CodeSnapshot,
-          on: s.patchset_id == p.id,
-          left_join: r in CodeRepository,
-          on: r.id == s.code_repository_id,
-          where: p.review_id == ^review_id and p.number == ^number and f.id == ^file_id,
-          select: {f, s, r}
-      )
-
-    case entry do
-      {file, %CodeSnapshot{status: "claimed"} = snapshot,
-       %CodeRepository{status: "ready", review_id: ^review_id} = repository} ->
-        reads = [
-          {snapshot.base_oid, file.old_path || file.path, file.status == "added"},
-          {snapshot.head_oid, file.path, file.status == "deleted"}
-        ]
-
-        results =
-          Task.async_stream(
-            reads,
-            fn {oid, path, missing?} ->
-              read_context_file(repository, oid, path, missing?)
-            end,
-            max_concurrency: 2,
-            timeout: 16_000,
-            on_timeout: :kill_task
-          )
-          |> Enum.to_list()
-
-        case results do
-          [{:ok, {:ok, old}}, {:ok, {:ok, new}}] ->
-            {:ok, %{old: old, new: new, raw_diff: file.raw_diff}}
-
-          _ ->
-            Enum.find_value(results, {:error, :context_read_failed}, fn
-              {:ok, {:error, _} = error} -> error
-              _ -> nil
-            end)
-        end
-
-      nil ->
-        {:error, :not_found}
-
-      _ ->
-        {:error, :context_unavailable}
-    end
-  end
-
-  # Context reads never fetch arbitrary paths supplied by the browser.
-  defp read_context_file(_repository, _oid, _path, true), do: {:ok, ""}
-
-  defp read_context_file(repository, oid, path, false),
-    do: CodeStorage.adapter().read_file(repository, oid, path, 1_048_576)
-
   ## Reservation
 
   @doc """

@@ -3839,28 +3839,8 @@ details[open] > summary .review-collapse-icon,
 .review-markdown-preview[data-diff-style="unified"] .review-markdown-pair { grid-template-columns: minmax(0, 1fr); }
 .review-markdown-preview[data-diff-style="unified"] .review-markdown-side + .review-markdown-side { border-left: 0; border-top: 1px solid var(--ds-line); }
 
-/* Context controls live in Pierre's separator slots and below the final hunk. */
-.reviews-context-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+.reviews-context-status:not(:empty) {
   padding: var(--space-2) var(--space-3);
-  background: var(--review-hover);
   color: var(--ds-muted);
   font: var(--font-size-sm)/1.5 var(--font-sans);
 }
-.reviews-context-footer { border-top: 1px solid var(--ds-line); }
-.reviews-context-button {
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--ds-line);
-  border-radius: var(--radius-sm);
-  background: var(--ds-panel);
-  color: var(--ds-text);
-  cursor: pointer;
-}
-.reviews-context-button:hover { background: var(--review-hover); }
-.reviews-context-button:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: 2px; }
-.reviews-context-button:disabled { opacity: 0.6; cursor: wait; }
-
-.reviews-context-controls[hidden], .reviews-context-button[hidden] { display: none; }

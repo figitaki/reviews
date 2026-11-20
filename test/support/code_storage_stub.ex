@@ -47,10 +47,6 @@ defmodule Reviews.CodeStorage.Stub do
   def delete_repository(_repository), do: respond(:delete_repository, :ok)
 
   @impl true
-  def read_file(_repository, _oid, _path, _max_bytes),
-    do: respond(:read_file, {:error, :not_found})
-
-  @impl true
   def checkout_source(_repository, _ref, _destination), do: {:error, :not_implemented}
 
   defp respond(callback, default) do

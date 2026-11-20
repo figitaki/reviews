@@ -21,6 +21,8 @@ defmodule Reviews.Reviews.File do
     field :additions, :integer, default: 0
     field :deletions, :integer, default: 0
     field :raw_diff, :string, default: ""
+    field :has_context, :boolean, default: false
+    field :context, :map, load_in_query: false
 
     belongs_to :patchset, Reviews.Reviews.Patchset
 
@@ -28,7 +30,7 @@ defmodule Reviews.Reviews.File do
   end
 
   @required ~w(patchset_id path status)a
-  @optional ~w(old_path additions deletions raw_diff)a
+  @optional ~w(old_path additions deletions raw_diff has_context context)a
 
   def changeset(file, attrs) do
     file

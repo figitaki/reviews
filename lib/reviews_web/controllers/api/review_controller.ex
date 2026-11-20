@@ -237,6 +237,7 @@ defmodule ReviewsWeb.Api.ReviewController do
       base_sha: params["base_sha"],
       branch_name: params["branch_name"],
       raw_diff: params["raw_diff"],
+      context_diff: params["context_diff"],
       packet: params["packet"],
       code_snapshot_id: params["code_snapshot_id"]
     }

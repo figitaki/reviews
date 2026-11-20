@@ -234,7 +234,8 @@ defmodule Reviews.ReviewView do
       id: file.id,
       path: file.path,
       old_path: file.old_path,
-      status: file.status
+      status: file.status,
+      has_context: file.has_context
     }
   end
 

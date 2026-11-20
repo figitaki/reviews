@@ -20,6 +20,11 @@ defmodule ReviewsWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :context_session do
+    plug :fetch_session
+    plug ReviewsWeb.Plugs.FetchCurrentUser
+  end
+
   pipeline :api_authenticated do
     plug ReviewsWeb.Plugs.RequireApiToken
   end
@@ -80,6 +85,12 @@ defmodule ReviewsWeb.Router do
 
     live "/r/:slug", ReviewLive, :show
     live "/r/:slug/changes", ReviewLive, :changes
+  end
+
+  scope "/", ReviewsWeb do
+    pipe_through [:api, :context_session, :review_content]
+
+    get "/r/:slug/patchsets/:number/files/:file_id/context", FileContextController, :show
   end
 
   # The OAuth issuer (Reviews.OAuth): discovery, authorization, and tokens.
@@ -171,7 +182,6 @@ defmodule ReviewsWeb.Router do
     get "/capabilities", CapabilityController, :show
     get "/reviews/:slug", ReviewController, :show
     get "/reviews/:slug/files", ReviewPageController, :files
-    get "/reviews/:slug/patchsets/:number/files/:file_id/context", FileContextController, :show
     get "/reviews/:slug/threads", ReviewPageController, :threads
     get "/reviews/:slug/threads/:thread_id/comments", ReviewPageController, :comments
   end

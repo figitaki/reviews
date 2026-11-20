@@ -102,6 +102,27 @@ fn canonical_diff(repo: &Path, extra: &[&str]) -> Result<String> {
     run_git(repo, &args)
 }
 
+/// Capture all context for changed files from the same resolved sides as the
+/// canonical diff. This never uploads Git objects or contacts code.storage.
+pub fn capture_context_diff(repo: &Path, captured: &CapturedDiff) -> Result<String> {
+    let mut sides = vec!["--unified=2147483647"];
+    match &captured.head {
+        HeadSource::Commit(head) => sides.extend([captured.base_oid.as_str(), head.as_str()]),
+        HeadSource::Index => {
+            sides.push("--cached");
+            if !captured.base_oid.is_empty() {
+                sides.push(&captured.base_oid);
+            }
+        }
+        HeadSource::Worktree => sides.push(&captured.base_oid),
+    }
+    let context = canonical_diff(repo, &sides)?;
+    if context.len() > 4 * 1024 * 1024 {
+        bail!("changed-file context exceeds 4 MiB; push without --include-context");
+    }
+    Ok(context)
+}
+
 /// Resolve a git ref (or range start) to a full SHA.
 pub fn rev_parse(repo: &Path, rev: &str) -> Result<String> {
     let s = run_git(repo, &["rev-parse", rev])?;

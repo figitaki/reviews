@@ -94,16 +94,6 @@ defmodule Reviews.CodeStorage.CodeDotStorage do
   end
 
   @impl true
-  def read_file(repository, oid, path, max_bytes) do
-    config = config()
-
-    with :ok <- check_config(config),
-         {:ok, token} <- Token.server_token(config, repository.storage_key) do
-      Client.get_file(config, token, repository.storage_key, oid, path, max_bytes)
-    end
-  end
-
-  @impl true
   def checkout_source(_repository, _ref, _destination), do: {:error, :not_implemented}
 
   defp resolve_ref(config, token, repository, ref) do

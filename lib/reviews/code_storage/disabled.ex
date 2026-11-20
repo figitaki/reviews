@@ -22,8 +22,5 @@ defmodule Reviews.CodeStorage.Disabled do
   def delete_repository(_repository), do: :ok
 
   @impl true
-  def read_file(_repository, _oid, _path, _max_bytes), do: {:error, :code_storage_disabled}
-
-  @impl true
   def checkout_source(_repository, _ref, _destination), do: {:error, :not_implemented}
 end

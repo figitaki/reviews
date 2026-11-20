@@ -32,7 +32,8 @@ defmodule Reviews.RateLimiter do
         table \\ __MODULE__,
         now \\ System.monotonic_time(:millisecond)
       )
-      when policy in [:requests, :writes, :uploads, :sockets, :owners] and is_integer(limit) and
+      when policy in [:requests, :writes, :uploads, :sockets, :owners, :context] and
+             is_integer(limit) and
              limit > 0 do
     key = {policy, :erlang.phash2(client, @buckets)}
     consume(table, key, limit, now, 8)

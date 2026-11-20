@@ -22,6 +22,35 @@ defmodule Reviews.ReviewHunksTest do
              ReviewHunks.for_packet_row(%{"q.sql" => hunks}, row)
   end
 
+  test "packet slices retain source coordinates and canonical identity" do
+    header = "diff --git a/x b/x\n--- a/x\n+++ b/x\n"
+
+    for {hunk, first, last, expected} <- [
+          {"@@ -27,7 +27,7 @@ function\n a\n b\n c\n-old\n+new\n d\n e\n f\n", 4, 5,
+           "@@ -30,1 +30,1 @@ function"},
+          {"@@ -10,4 +10,5 @@\n a\n-old\n+one\n+two\n b\n c\n", 5, 6, "@@ -12,2 +13,2 @@"},
+          {"@@ -10,2 +10,3 @@\n a\n+new\n b\n", 2, 2, "@@ -10,0 +11,1 @@"},
+          {"@@ -10,3 +10,2 @@\n a\n-old\n b\n", 2, 2, "@@ -11,1 +10,0 @@"},
+          {"@@ -0,0 +1,2 @@\n+one\n+two\n", 2, 2, "@@ -0,0 +2,1 @@"}
+        ] do
+      [file] = ReviewsContext.parse_diff_files(header <> hunk)
+      [canonical] = hunks = ReviewHunks.for_file(file)
+
+      sliced =
+        ReviewHunks.for_packet_row(%{"x" => hunks}, %{
+          "path" => "x",
+          "hunk_index" => 1,
+          "line_start" => first,
+          "line_end" => last
+        })
+
+      assert sliced.display_raw_diff =~ expected
+      assert sliced.partial_line_range?
+      assert sliced.hunk_fingerprint == canonical.hunk_fingerprint
+      assert sliced.raw_diff == canonical.raw_diff
+    end
+  end
+
   test "empty hunk rows keep CLI slice numbering" do
     raw = File.read!(Path.expand("../vectors/diffs/empty-hunk-rows.diff", __DIR__))
     [file] = ReviewsContext.parse_diff_files(raw)

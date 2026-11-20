@@ -130,7 +130,6 @@ const datasetInt = z.preprocess(
 )
 
 const datasetString = z.preprocess(presentOrUndefined, z.string().optional())
-const datasetId = z.preprocess(presentOrUndefined, z.string().regex(/^[1-9]\d*$/).optional())
 
 export const HunkAttrs = z.object({
   file_path: z.string().min(1),
@@ -166,8 +165,7 @@ export const HunkIslandDataset = z.object({
   hunkViewState: z.string().default(""),
   signedIn: datasetBool,
   filePath: z.string().min(1),
-  sourceFileId: datasetId,
-  patchsetNumber: datasetId,
+  contextUrl: datasetString,
   rowRef: datasetString,
   hunkFingerprint: datasetString,
   hunkAttrs: jsonArray(HunkAttrs),

@@ -48,10 +48,6 @@ defmodule Reviews.CodeStorage do
   @callback checkout_source(CodeRepository.t(), ref :: String.t(), destination :: Path.t()) ::
               :ok | {:error, term()}
 
-  @doc "Read a changed file at a verified commit OID, limited to max_bytes."
-  @callback read_file(CodeRepository.t(), String.t(), String.t(), pos_integer()) ::
-              {:ok, String.t()} | {:error, term()}
-
   ## Runtime configuration
 
   def adapter do

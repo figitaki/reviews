@@ -16,7 +16,7 @@ Current version: `0.0.3`.
 - Review packets: markdown guides that group hunks with prose for humans.
 - Lazy hunk rendering so large diffs do not eagerly mount every diff island.
 - Explicit hunk viewed state shared between packet and Changes views.
-- Expand unchanged code above and below hunks when source snapshots are available.
+- Expand unchanged code above and below complete diffs with uploaded context.
 - Packet section decisions for approve, deny, or ignore.
 - Line and token comments that every viewer sees as soon as they are posted.
 
@@ -136,11 +136,26 @@ GITHUB_CLIENT_SECRET=...
 If the env vars are missing, `/auth/github` redirects home with a flash
 explaining what to set.
 
+## Expanding diff context
+
+Push with `reviews push --include-context --no-code-storage` to include full
+text context for changed files directly in Reviews. This does not use
+code.storage. The extra upload is opt-in, limited to 4 MiB in total and 1 MiB
+per file (old and new text combined). Added/deleted files already include their
+contents; binary files and pure renames have no expandable context.
+
+Signed-in readers with the review link can expand above or below in steps of
+20 lines. Context loads on the first expansion, rather than on page load.
+Expansion is available in Changes and in packet groups containing the file's
+complete diff. Partial packet slices and groups omitting other hunks cannot
+expand, to avoid presenting omitted changes as unchanged code. Revealed lines
+are read-only; existing anchors and viewed state stay tied to the uploaded diff.
+Older uploads continue to display their original diff.
+
 ## Code Storage (optional)
 
-Reviews can store each patchset's base and head commits as Git refs, so reviewers
-can expand unchanged source around a hunk. Context expansion reads only changed
-files and makes their surrounding source visible to anyone with the review link. The backend is
+Reviews can store each patchset's base and head commits as Git refs for future
+source tooling. The backend is
 [code.storage](https://code.storage). Storage is off by default, and pushes
 work diff-only when it is off.
 
