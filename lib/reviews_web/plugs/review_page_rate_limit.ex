@@ -20,15 +20,15 @@ defmodule ReviewsWeb.Plugs.ReviewPageRateLimit do
 
   Counts are fixed windows in ETS, local to each node. The table is bounded:
   a sweep drops windows that have ended, and at `max_entries` new clients
-  share one overflow bucket until the next sweep. Clients already in the
-  table keep their own counts.
+  share one overflow bucket until the next sweep. Within a window, clients
+  already in the table keep their own counts.
 
   The overflow bucket has its own, higher limit, `overflow_limit`, so total
   work stays bounded while the table is full. An attacker who fills the table
-  (`max_entries` distinct IPv4 addresses or /64s in one window) can, until the
-  window ends: spend their own per-client allowance from each of those
+  (`max_entries` distinct IPv4 addresses or /64s in one window) can, until a
+  sweep drops that window's entries: spend their own per-client allowance from each of those
   clients, and use up the overflow bucket so that new anonymous visitors,
-  link-preview crawlers included, get 429 for the rest of the window. They
+  link-preview crawlers included, get 429 until then. They
   cannot raise the limit of any client already in the table, cannot affect
   signed-in people or other routes, and cannot make the table grow past
   `max_entries` or the overflow bucket allow more than `overflow_limit`
@@ -119,8 +119,9 @@ defmodule ReviewsWeb.Plugs.ReviewPageRateLimit do
 
   defp client_ip(conn, {:header, name}) do
     with [value] <- get_req_header(conn, name),
-         {:ok, ip} <-
-           value |> String.trim() |> String.to_charlist() |> :inet.parse_strict_address() do
+         charlist when is_list(charlist) <-
+           value |> String.trim() |> :unicode.characters_to_list(),
+         {:ok, ip} <- :inet.parse_strict_address(charlist) do
       ip
     else
       _ -> conn.remote_ip

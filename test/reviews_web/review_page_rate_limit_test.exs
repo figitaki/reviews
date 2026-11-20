@@ -7,10 +7,18 @@ defmodule ReviewsWeb.ReviewPageRateLimitTest do
   alias ReviewsWeb.Plugs.ReviewPageRateLimit
 
   @limit 3
+  # Ten years, so a wall-clock minute change cannot split a test's requests.
+  @window_seconds 315_360_000
 
   setup do
     previous = Application.get_env(:reviews, ReviewPageRateLimit)
-    Application.put_env(:reviews, ReviewPageRateLimit, Keyword.put(previous, :limit, @limit))
+
+    Application.put_env(
+      :reviews,
+      ReviewPageRateLimit,
+      Keyword.merge(previous, limit: @limit, window_seconds: @window_seconds)
+    )
+
     ReviewPageRateLimit.reset()
 
     on_exit(fn ->
@@ -49,7 +57,7 @@ defmodule ReviewsWeb.ReviewPageRateLimitTest do
 
     assert conn.status == 429
     assert [retry_after] = get_resp_header(conn, "retry-after")
-    assert String.to_integer(retry_after) in 1..60
+    assert String.to_integer(retry_after) in 1..@window_seconds
     assert response_content_type(conn, :text) =~ "text/plain"
     assert conn.resp_body =~ "Too many requests"
   end
@@ -104,6 +112,19 @@ defmodule ReviewsWeb.ReviewPageRateLimitTest do
 
   describe "counter table" do
     @config [limit: 2, window_seconds: 60, max_entries: 3, client_ip: :remote_ip]
+
+    # sweep/1 reads the window length from the application config.
+    setup do
+      previous = Application.get_env(:reviews, ReviewPageRateLimit)
+
+      Application.put_env(
+        :reviews,
+        ReviewPageRateLimit,
+        Keyword.put(previous, :window_seconds, 60)
+      )
+
+      on_exit(fn -> Application.put_env(:reviews, ReviewPageRateLimit, previous) end)
+    end
 
     test "a new window starts a new count" do
       assert ReviewPageRateLimit.hit(:a, 120, @config) == :ok
@@ -219,7 +240,8 @@ defmodule ReviewsWeb.ReviewPageRateLimitTest do
     for {name, headers} <- [
           missing: [],
           duplicated: [{"fly-client-ip", "203.0.113.30"}, {"fly-client-ip", "203.0.113.31"}],
-          malformed: [{"fly-client-ip", "not an address"}]
+          malformed: [{"fly-client-ip", "not an address"}],
+          not_utf8: [{"fly-client-ip", <<0xFF, 0xFE>>}]
         ] do
       test "a #{name} header falls back to remote_ip", %{review: review} do
         path = ~p"/r/#{review.slug}"
