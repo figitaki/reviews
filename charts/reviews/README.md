@@ -170,8 +170,11 @@ the CloudNativePG backup docs.
 Every app pod runs `Reviews.Release.migrate()` in an init container. Ecto
 locks `schema_migrations`, so pods that start together run migrations one at
 a time. If a migration fails, the new pod never starts and the old pods keep
-serving. Roll back by deploying the previous image; migrations are not
-reverted.
+serving. A migration that succeeds changes the shared database before the
+new pods are ready, so the old pods keep serving only if they work with the
+new schema. Rolling back the image does not revert migrations; after an
+incompatible migration, ship a forward fix instead, as
+[docs/RELEASE.md](../../docs/RELEASE.md#8-rollback) describes.
 
 The init container runs migrations only. Fly's `release_command`
 (`/app/bin/migrate`) also seeds the demo review; here that is opt-in with
@@ -221,7 +224,8 @@ ingress:
 cert-manager sees the annotation, solves the challenge on port 80 and writes
 `reviews-tls`. LiveView uses WebSockets on `/live`; Traefik and ingress-nginx
 pass them through without extra settings. The app only accepts WebSocket
-connections whose `Origin` is `https://<host>`.
+connections whose `Origin` is `https://<host>` or `https://reviews-dev.fly.dev`,
+the hosted site's legacy hostname, which `config/runtime.exs` also allows.
 
 ### Image tags
 
@@ -439,7 +443,9 @@ To deploy, change the tag in `pins.yaml` and merge the change. Flux upgrades
 the release on its next reconcile; `flux reconcile kustomization <name>
 --with-source` does it now. If the new pods do not become ready within
 `timeout`, Flux rolls back to the last good revision. The old pods keep
-serving the whole time.
+serving meanwhile, as long as the new image's migrations, which have already
+run, are compatible with them. Flux's rollback does not revert migrations;
+see [Migrations](#migrations).
 
 A scheduled CI job can open that pull request: read the newest `sha-` tag for
 a commit on `main` (or the newest release), write it to `pins.yaml`, and open
@@ -522,11 +528,13 @@ gives the same result with a review step.
 
 ## Known limits
 
-- **Request budgets behind a proxy.** The app's per-client request budgets
-  ([docs/ABUSE_PROTECTION.md](../../docs/ABUSE_PROTECTION.md)) key on the
-  socket peer. Behind an ingress that peer is the ingress pod, so every
-  visitor that comes through the same ingress pod shares one budget (300
-  requests a minute per app pod). Only Fly's `Fly-Client-IP` header is
+- **Request budgets.** The chart's default image, release `0.0.3`, has no
+  per-client request budgets. They are in images built from `main` since
+  [#157](https://github.com/figitaki/reviews/pull/157) (`sha-` tags) and will be in the next release; see
+  [docs/ABUSE_PROTECTION.md](../../docs/ABUSE_PROTECTION.md). Those budgets
+  key on the socket peer. Behind an ingress that peer is the ingress pod, so
+  every visitor that comes through the same ingress pod shares one budget
+  (300 requests a minute per app pod). Only Fly's `Fly-Client-IP` header is
   trusted today.
 - **Database traffic is not encrypted.** The app connects to Postgres without
   TLS, which CloudNativePG allows by default. Restrict who can reach the

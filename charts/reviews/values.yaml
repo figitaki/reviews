@@ -66,7 +66,8 @@ database:
 
 # Run Ecto migrations in an init container before each app pod starts. A
 # failed migration keeps the new pod from starting, so the old pods keep
-# serving during a rolling update.
+# serving during a rolling update. A successful migration is not reverted by
+# a rollback, so old pods keep working only if the new schema suits them.
 migrations:
   enabled: true
   resources: {}
