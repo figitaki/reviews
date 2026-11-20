@@ -1,0 +1,56 @@
+# A production-like configuration, used to lint and template the chart:
+# two clustered replicas behind Traefik with a cert-manager certificate, and
+# secrets from a Secret managed outside the chart.
+host: reviews.example.org
+
+image:
+  tag: sha-8599da003156
+
+replicaCount: 2
+
+secrets:
+  # Holds SECRET_KEY_BASE, RELEASE_COOKIE, GITHUB_CLIENT_ID and
+  # GITHUB_CLIENT_SECRET.
+  existingSecret: reviews-env
+
+database:
+  cluster:
+    instances: 2
+    storage:
+      size: 20Gi
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+    parameters:
+      max_connections: "200"
+    spec:
+      affinity:
+        enablePodAntiAffinity: true
+        topologyKey: kubernetes.io/hostname
+  poolSize: 10
+
+clustering:
+  enabled: true
+
+mcp:
+  enabled: true
+  writesEnabled: true
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+  tlsSecretName: reviews-tls
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: reviews
+        app.kubernetes.io/instance: reviews

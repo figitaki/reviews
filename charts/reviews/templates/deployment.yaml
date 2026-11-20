@@ -1,0 +1,158 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "reviews.fullname" . }}
+  labels:
+    {{- include "reviews.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "reviews.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "reviews.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "reviews.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      {{- if or .Values.migrations.enabled .Values.demo.enabled }}
+      initContainers:
+      {{- end }}
+      {{- if .Values.migrations.enabled }}
+        # Schema migrations only. Ecto locks schema_migrations, so pods that
+        # start together run them one at a time.
+        - name: migrate
+          image: {{ include "reviews.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/bin/reviews", "eval", "Reviews.Release.migrate()"]
+          env:
+            {{- include "reviews.env" . | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: {{ include "reviews.secretName" . }}
+          securityContext:
+            {{- include "reviews.containerSecurityContext" . | nindent 12 }}
+          {{- with .Values.migrations.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      {{- end }}
+      {{- if .Values.demo.enabled }}
+        # Seeds the demo review under a Postgres advisory lock, so pods that
+        # start together seed one at a time. A failure is logged and never
+        # stops the pod from starting.
+        - name: seed-demo
+          image: {{ include "reviews.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - timeout 120 /app/bin/reviews eval "$SEED_DEMO" || echo "Demo review seed failed; starting without it."
+          env:
+            {{- include "reviews.env" . | nindent 12 }}
+            - name: SEED_DEMO
+              value: |
+                Application.load(:reviews)
+                {:ok, _, _} =
+                  Ecto.Migrator.with_repo(Reviews.Repo, fn repo ->
+                    repo.checkout(fn ->
+                      repo.query!("SELECT pg_advisory_lock(hashtext('reviews_demo_seed'))", [], timeout: 60_000)
+                      Reviews.DemoReview.seed!()
+                    end, timeout: 90_000)
+                  end, pool_size: 1)
+          envFrom:
+            - secretRef:
+                name: {{ include "reviews.secretName" . }}
+          securityContext:
+            {{- include "reviews.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      {{- end }}
+      containers:
+        - name: reviews
+          image: {{ include "reviews.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "reviews.env" . | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: {{ include "reviews.secretName" . }}
+          ports:
+            - name: http
+              containerPort: 4000
+              protocol: TCP
+          # Ready only while the app's own pool can reach Postgres: runs
+          # SELECT 1 in the running node over its local distribution. `/` is
+          # not enough, because the home page never touches the database.
+          # Takes about half a second; fails in about 5 when Postgres is down.
+          readinessProbe:
+            exec:
+              command:
+                - /app/bin/reviews
+                - rpc
+                - 'Ecto.Adapters.SQL.query!(Reviews.Repo, "SELECT 1", [], timeout: 2_000)'
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 3
+          # TCP only, so a Postgres outage does not restart every pod.
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 2
+            failureThreshold: 60
+          securityContext:
+            {{- include "reviews.containerSecurityContext" . | nindent 12 }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

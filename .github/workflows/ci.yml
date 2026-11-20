@@ -94,6 +94,16 @@ jobs:
           POSTGRES_PASSWORD: postgres
         run: mix test
 
+  chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner image ships Helm.
+      - run: .github/scripts/check_chart.sh
+
   deploy:
     name: Deploy to Fly
     runs-on: ubuntu-latest

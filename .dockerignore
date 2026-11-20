@@ -26,6 +26,9 @@ erl_crash.dump
 /cli/target
 /cli
 
+# Helm chart — deploys the image, not part of it
+/charts
+
 # Editor / OS junk
 .DS_Store
 .elixir_ls
