@@ -1,0 +1,122 @@
+# Public hostname of the site, without a scheme. It sets PHX_HOST, the
+# Ingress host, and the Host header of the readiness probe. The app
+# redirects requests for any other host to https://<host>.
+host: reviews.example.com
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/figitaki/reviews-server
+  # Image tag. Empty means the chart's appVersion, a server release such as
+  # 0.0.3. Pin an immutable tag: a release, or sha-<12 hex> for a commit on
+  # main. Avoid the moving `main` tag.
+  tag: ""
+  # Optional digest (sha256:...). When set, the image is pulled by digest and
+  # the tag is only a label.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+# Secret values reach the app as environment variables from one Secret,
+# loaded with envFrom. Use any key runtime.exs reads, for example
+# SECRET_KEY_BASE (required), GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
+# RELEASE_COOKIE (required with clustering), CODE_STORAGE_JWT_PRIVATE_KEY and
+# AUTH_RELAY_SECRET.
+secrets:
+  # Name of an existing Secret in the release namespace. Empty means the
+  # chart creates <fullname>-secrets with a random SECRET_KEY_BASE and
+  # RELEASE_COOKIE, and keeps them across upgrades.
+  existingSecret: ""
+
+database:
+  # A CloudNativePG Cluster created by this chart. The operator must already
+  # be installed. DATABASE_URL comes from the `uri` key of the
+  # <fullname>-db-app Secret that the operator creates.
+  cluster:
+    enabled: true
+    instances: 1
+    # Postgres image. Empty means the operator's default.
+    imageName: ""
+    storage:
+      size: 5Gi
+      # Empty means the cluster's default StorageClass.
+      storageClass: ""
+    resources: {}
+    # postgresql.parameters, for example max_connections: "200".
+    parameters: {}
+    # Extra fields merged into the Cluster spec, such as backup, affinity,
+    # monitoring or walStorage. See the CloudNativePG API reference.
+    spec: {}
+    # Keep the Cluster, and so its volumes, when the release is uninstalled
+    # or cluster.enabled is turned off. Delete it by hand to drop the data.
+    keep: true
+  # Used when cluster.enabled is false: an existing Secret holding the
+  # connection URL, for example another CloudNativePG cluster's -app Secret.
+  existingSecret: ""
+  existingSecretKey: uri
+  # Connections per app pod (POOL_SIZE).
+  poolSize: 10
+  # Connect to Postgres over IPv6 (ECTO_IPV6). Needed on IPv6-only clusters.
+  ipv6: false
+
+# Run /app/bin/migrate (Ecto migrations, then the demo review seed) in an init
+# container before each app pod starts. A failed migration keeps the new pod
+# from starting, so the old pods keep serving during a rolling update.
+migrations:
+  enabled: true
+  resources: {}
+
+# Join app pods into one Erlang cluster through DNS_CLUSTER_QUERY and a
+# headless Service, so live updates reach viewers on every pod. Turn it on
+# when replicaCount is more than 1. Requires RELEASE_COOKIE in the Secret.
+clustering:
+  enabled: false
+
+# Hosted MCP endpoint at /mcp (docs/MCP.md).
+mcp:
+  enabled: false
+  writesEnabled: false
+
+# Extra plain environment variables, for example
+#   CODE_STORAGE_ADAPTER: code_storage
+#   CODE_STORAGE_ORG: my-org
+env: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  # IngressClass, for example traefik or nginx. Empty means the cluster default.
+  className: ""
+  # For cert-manager, for example cert-manager.io/cluster-issuer: letsencrypt.
+  annotations: {}
+  # TLS Secret for `host`. cert-manager creates it when the annotation above
+  # is set. The app redirects plain HTTP to HTTPS, so terminate TLS here or
+  # in front of the ingress.
+  tlsSecretName: ""
+
+serviceAccount:
+  create: true
+  # Empty means <fullname> when create is true, and `default` otherwise.
+  name: ""
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    memory: 1Gi
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []

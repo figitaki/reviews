@@ -6,6 +6,12 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- A Helm chart in `charts/reviews` runs the server on Kubernetes, with its
+  Postgres as a CloudNativePG cluster or a database you already have.
+  Migrations run in an init container before each pod starts. A
+  `chart-v<version>` tag publishes it to
+  `oci://ghcr.io/figitaki/charts/reviews`. Its README covers installing,
+  every value, and deploying with Flux from pinned image tags.
 - The favicon and the web app manifest now load in production. The page
   linked their digested names, such as `/site-<hash>.webmanifest`, which
   the static file allowlist refused with a 404.

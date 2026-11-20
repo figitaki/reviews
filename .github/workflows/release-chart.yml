@@ -1,0 +1,49 @@
+name: Release Helm Chart
+
+on:
+  push:
+    tags:
+      - "chart-v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish Helm chart
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner image ships Helm, which pushes OCI charts.
+      - name: Validate chart version
+        run: |
+          set -euo pipefail
+          helm version
+          version="${GITHUB_REF_NAME#chart-v}"
+          chart_version="$(sed -n 's/^version: *//p' charts/reviews/Chart.yaml)"
+          if [ "$version" != "$chart_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match charts/reviews/Chart.yaml version $chart_version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_ENV"
+          echo "registry=oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts" >> "$GITHUB_ENV"
+
+      - name: Lint and render
+        run: |
+          set -euo pipefail
+          helm lint charts/reviews
+          helm lint charts/reviews -f charts/reviews/ci/production-values.yaml
+          helm template reviews charts/reviews > /dev/null
+          helm template reviews charts/reviews -f charts/reviews/ci/production-values.yaml > /dev/null
+
+      - name: Package and push
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "$GHCR_TOKEN" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          helm package charts/reviews --destination dist
+          helm push "dist/reviews-${version}.tgz" "$registry"

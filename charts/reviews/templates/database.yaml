@@ -1,0 +1,25 @@
+{{- with .Values.database.cluster }}
+{{- if .enabled }}
+{{- $spec := dict "instances" .instances "bootstrap" (dict "initdb" (dict "database" "app" "owner" "app")) }}
+{{- $storage := dict "size" .storage.size }}
+{{- with .storage.storageClass }}{{ $_ := set $storage "storageClass" . }}{{ end }}
+{{- $_ := set $spec "storage" $storage }}
+{{- with .imageName }}{{ $_ := set $spec "imageName" . }}{{ end }}
+{{- with .resources }}{{ $_ := set $spec "resources" . }}{{ end }}
+{{- with .parameters }}{{ $_ := set $spec "postgresql" (dict "parameters" .) }}{{ end }}
+{{- $spec = mergeOverwrite $spec (deepCopy .spec) }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "reviews.dbClusterName" $ }}
+  labels:
+    {{- include "reviews.labels" $ | nindent 4 }}
+  {{- if .keep }}
+  annotations:
+    # Uninstalling the release leaves the database and its volumes.
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  {{- toYaml $spec | nindent 2 }}
+{{- end }}
+{{- end }}

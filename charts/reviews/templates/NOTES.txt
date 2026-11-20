@@ -1,0 +1,22 @@
+Reviews {{ include "reviews.imageTag" . }} is deploying as {{ include "reviews.fullname" . }} in {{ .Release.Namespace }}.
+{{- if .Values.database.cluster.enabled }}
+
+The CloudNativePG Cluster {{ include "reviews.dbClusterName" . }} takes a minute or two to start. App
+pods wait for its {{ include "reviews.dbClusterName" . }}-app Secret, then run migrations.
+  kubectl -n {{ .Release.Namespace }} get cluster {{ include "reviews.dbClusterName" . }}
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+Open https://{{ .Values.host }}/
+{{- else }}
+
+No Ingress. To try it locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "reviews.fullname" . }} 4000:{{ .Values.service.port }}
+  curl -H 'Host: {{ .Values.host }}' -H 'X-Forwarded-Proto: https' http://localhost:4000/
+{{- end }}
+{{- if not .Values.secrets.existingSecret }}
+
+SECRET_KEY_BASE was generated into the Secret {{ include "reviews.secretName" . }}. GitHub sign-in
+needs GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET; set secrets.existingSecret to a Secret that holds them.
+{{- end }}

@@ -47,6 +47,13 @@ Before cutting a release:
    git push origin cli-v0.0.1-alpha.0 server-v0.0.1-alpha.0
    ```
 
+4. If the Helm chart should default to the new server image, set
+   `appVersion` in `charts/reviews/Chart.yaml` to the server version, bump the
+   chart's own `version`, and push a `chart-v<chart version>` tag. The
+   `release-chart.yml` workflow publishes it to
+   `oci://ghcr.io/figitaki/charts/reviews`. See
+   [`charts/reviews/README.md`](../charts/reviews/README.md).
+
 The `release-cli.yml` workflow publishes GitHub release assets named:
 
 - `reviews-cli-<version>-linux-x64.tar.gz`
