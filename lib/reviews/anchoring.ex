@@ -11,7 +11,7 @@ defmodule Reviews.Anchoring do
 
   @doc "Validate a new anchor against one revision and capture server-derived line text and context."
   def validate_anchor(patchset, path, side, anchor) do
-    lines = Map.get(index(patchset), {path, side}, %{})
+    lines = Map.get(file_index(patchset, path), {path, side}, %{})
     number = anchor["line_number_hint"]
 
     with true <- anchor["granularity"] in ["line", "token_range"],
@@ -158,9 +158,25 @@ defmodule Reviews.Anchoring do
     end
   end
 
-  def index(patchset) do
-    patchset
-    |> Map.get(:raw_diff, "")
+  def index(patchset), do: index_diff(Map.get(patchset, :raw_diff, ""))
+
+  # A new comment needs one file's lines. Read the file's stored diff rather
+  # than loading and indexing the whole revision.
+  defp file_index(patchset, path) do
+    raw_diff =
+      case ReviewsContext.get_file(patchset, path) do
+        %{raw_diff: raw_diff} when is_binary(raw_diff) and raw_diff != "" -> raw_diff
+        _ -> ReviewsContext.raw_diff_for_file(with_diff(patchset), path)
+      end
+
+    if raw_diff, do: index_diff(raw_diff), else: %{}
+  end
+
+  defp with_diff(%{raw_diff: raw_diff} = patchset) when is_binary(raw_diff), do: patchset
+  defp with_diff(%{id: id}), do: ReviewsContext.get_patchset!(id)
+
+  defp index_diff(raw_diff) do
+    raw_diff
     |> ReviewsContext.parse_diff_files()
     |> Enum.flat_map(fn file ->
       Enum.map(["old", "new"], fn side ->

@@ -491,11 +491,11 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_info({:thread_published, _thread}, socket) do
-    {:noreply,
-     socket
-     |> refresh_snapshot!()
-     |> push_threads_for_all_files()}
+  def handle_info({:thread_published, thread}, socket) do
+    # The process that saved the comment has already shown it.
+    if shown?(socket, thread),
+      do: {:noreply, socket},
+      else: {:noreply, push_threads_for_file(socket, thread.file_path)}
   end
 
   @impl true
@@ -552,16 +552,31 @@ defmodule ReviewsWeb.ReviewLive do
   defp push_threads_for_file(socket, nil), do: socket
 
   defp push_threads_for_file(socket, file_path) when is_binary(file_path) do
-    socket = refresh_snapshot!(socket)
+    socket = refresh_threads(socket)
     payload = threads_for_file_payload(socket, file_path)
     push_event(socket, "threads_updated:#{file_path}", payload)
   end
 
-  defp push_threads_for_all_files(socket) do
-    Enum.reduce(socket.assigns.files, socket, fn file, acc ->
-      payload = threads_for_file_payload(acc, file.path)
-      push_event(acc, "threads_updated:#{file.path}", payload)
-    end)
+  # Comments and status changes leave files, hunks and decisions as they are,
+  # so reload only the threads instead of re-parsing every file's diff.
+  defp refresh_threads(%{assigns: %{selected_patchset: nil}} = socket), do: socket
+
+  defp refresh_threads(socket) do
+    %{review: review, patchsets: patchsets, selected_patchset: selected} = socket.assigns
+
+    threads =
+      ReviewView.published_threads(review, patchsets, selected, socket.assigns.current_identity)
+
+    socket
+    |> assign(:review_snapshot, %{socket.assigns.review_snapshot | published_threads: threads})
+    |> assign(:published_threads, threads)
+  end
+
+  defp shown?(socket, %{id: id, comments: comments}) do
+    Enum.any?(
+      socket.assigns.published_threads,
+      &(&1.id == id and length(&1.comments) == length(comments))
+    )
   end
 
   defp parse_int(int) when is_integer(int), do: int
