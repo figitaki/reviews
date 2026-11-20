@@ -83,6 +83,10 @@ defmodule Reviews.MixProject do
       {:ueberauth_github, "~> 0.8"},
       {:req, "~> 0.5"},
       {:joken, "~> 2.6"},
+      # Pinned to releases at least 7 days old (AGENTS.md); 0.14.7 and
+      # mdex_native 0.3.2 qualify from 2026-11-21.
+      {:mdex, "== 0.14.6"},
+      {:mdex_native, "== 0.3.1"},
       {:fastest_mcp, "~> 1.0.1"},
       # idna 7.1.0 has EEF-CVE-2026-117678. jsv (through fastest_mcp) still
       # asks for ~> 6.0 or ~> 7.0; drop the override once it allows 8.

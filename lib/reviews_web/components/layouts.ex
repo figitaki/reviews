@@ -41,6 +41,35 @@ defmodule ReviewsWeb.Layouts do
   end
 
   @doc """
+  Open Graph and Twitter card tags from `ReviewsWeb.LinkPreview.build/4`.
+  Renders nothing for pages without a preview.
+  """
+  attr :preview, :map, default: nil
+
+  def link_preview_tags(%{preview: nil} = assigns), do: ~H""
+
+  def link_preview_tags(assigns) do
+    assigns = assign(assigns, :site_name, ReviewsWeb.LinkPreview.site_name())
+
+    ~H"""
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={@site_name} />
+    <meta property="og:title" content={@preview.title} />
+    <meta property="og:description" content={@preview.description} />
+    <meta property="og:url" content={@preview.url} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={@preview.title} />
+    <meta name="twitter:description" content={@preview.description} />
+    <%= for {{label, data}, i} <- Enum.with_index(@preview.labels, 1) do %>
+      <meta name={"twitter:label#{i}"} content={label} /><meta
+        name={"twitter:data#{i}"}
+        content={data}
+      />
+    <% end %>
+    """
+  end
+
+  @doc """
   Shows the flash group with standard titles and content.
 
   ## Examples

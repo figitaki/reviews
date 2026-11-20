@@ -99,7 +99,8 @@ defmodule ReviewsWeb.ReviewLive do
           {:ok, socket} ->
             {:noreply,
              socket
-             |> reveal_activity_thread(params["thread"])
+             |> assign_link_preview(params, uri)
+             |> reveal_activity_thread(params["thread"], &Function.identity/1, params["comment"])
              |> reveal_packet_section(params["section"])}
 
           {:error, :patchset_not_found} ->
@@ -525,6 +526,17 @@ defmodule ReviewsWeb.ReviewLive do
     end
   end
 
+  # Only the first, static render reaches unfurlers; the root layout is not
+  # re-rendered after the socket connects.
+  defp assign_link_preview(socket, params, uri) do
+    if connected?(socket) do
+      socket
+    else
+      %{review: review, published_threads: threads} = socket.assigns
+      assign(socket, :link_preview, ReviewsWeb.LinkPreview.build(review, threads, params, uri))
+    end
+  end
+
   defp threads_for_file_payload(socket, file_path) do
     %{
       threads: ReviewView.thread_payloads_for_file(socket.assigns.review_snapshot, file_path)
@@ -782,7 +794,7 @@ defmodule ReviewsWeb.ReviewLive do
     |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
   end
 
-  defp reveal_activity_thread(socket, id, on_missing \\ &Function.identity/1) do
+  defp reveal_activity_thread(socket, id, on_missing, comment_id \\ nil) do
     with thread when not is_nil(thread) <-
            Enum.find(socket.assigns.published_threads, &(to_string(&1.id) == id)),
          true <- is_map(thread.anchor),
@@ -813,10 +825,12 @@ defmodule ReviewsWeb.ReviewLive do
           })
 
         true ->
-          push_patch(socket,
-            to:
-              ~p"/r/#{socket.assigns.review.slug}/changes?#{[patchset: socket.assigns.selected_patchset.number, thread: thread.id]}"
-          )
+          # Keep `comment`, so a copied comment link still lands on it.
+          query =
+            [patchset: socket.assigns.selected_patchset.number, thread: thread.id] ++
+              if(comment_id, do: [comment: comment_id], else: [])
+
+          push_patch(socket, to: ~p"/r/#{socket.assigns.review.slug}/changes?#{query}")
       end
     else
       _ -> on_missing.(socket)

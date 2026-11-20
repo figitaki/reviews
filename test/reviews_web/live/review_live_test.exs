@@ -241,6 +241,109 @@ defmodule ReviewsWeb.ReviewLiveTest do
       end
     end
 
+    test "review links unfurl with the review, and comment links with that comment", %{
+      conn: conn,
+      author: author,
+      review: review
+    } do
+      {:ok, reviewer} =
+        Accounts.upsert_from_github(%{
+          github_id: 9_000_000 + System.unique_integer([:positive]),
+          username: "figitaki",
+          email: "figitaki@example.com"
+        })
+
+      long_tail = String.duplicate("word ", 100)
+
+      {:ok, %{thread: thread, comment: first}} =
+        Threads.publish_comment(review, reviewer, %{
+          "file_path" => "lib/foo.ex",
+          "side" => "new",
+          "body" =>
+            "Don't **leak** `ids` <script> in *any* _repo_ or qos_p256_key\n\n> see [the docs](https://x.test) " <>
+              long_tail,
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
+        })
+
+      {:ok, %{comment: reply}} =
+        Threads.publish_comment(review, author, %{"thread_id" => thread.id, "body" => "Fixed."})
+
+      {:ok, %{review: other}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Other review",
+          raw_diff: "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+        })
+
+      {:ok, %{thread: other_thread, comment: other_comment}} =
+        Threads.publish_comment(other, author, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "Elsewhere",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      # Unfurlers follow redirects, such as the one to the Changes view for a
+      # thread outside the Guide.
+      tags = fn path ->
+        response = get(conn, path)
+
+        response =
+          if response.status == 302, do: get(conn, redirected_to(response)), else: response
+
+        page = response |> html_response(200) |> LazyHTML.from_document()
+
+        for key <- ~w(og:title og:description og:site_name og:url twitter:card twitter:data1),
+            into: %{} do
+          selector = ~s(meta[property="#{key}"], meta[name="#{key}"])
+          {key, page |> LazyHTML.query(selector) |> LazyHTML.attribute("content") |> List.first()}
+        end
+        |> Map.put("title", page |> LazyHTML.query("title") |> LazyHTML.text())
+      end
+
+      review_tags = %{
+        "og:title" => "Great change",
+        "og:description" => "Make bar do :new",
+        "og:site_name" => "Reviews",
+        "og:url" => "http://www.example.com/r/#{review.slug}",
+        "twitter:card" => "summary",
+        "twitter:data1" => nil,
+        "title" => "Great change"
+      }
+
+      assert tags.(~p"/r/#{review.slug}") == review_tags
+
+      comment_path = ~p"/r/#{review.slug}?thread=#{thread.id}&comment=#{first.id}"
+      comment_tags = tags.(comment_path)
+
+      assert comment_tags["og:title"] == "figitaki commented on line +2 in lib/foo.ex"
+
+      assert comment_tags["og:url"] =~
+               ~r"^http://www.example.com/r/#{review.slug}/changes\?.*comment=#{first.id}"
+
+      assert comment_tags["twitter:data1"] == "Great change"
+
+      assert "Don't leak ids <script> in any repo or qos_p256_key see the docs word word" <> _ =
+               comment_tags["og:description"]
+
+      assert String.ends_with?(comment_tags["og:description"], "word…")
+      assert String.length(comment_tags["og:description"]) <= 301
+
+      reply_tags = tags.(~p"/r/#{review.slug}/changes?thread=#{thread.id}&comment=#{reply.id}")
+      assert reply_tags["og:title"] == "carey commented on line +2 in lib/foo.ex"
+      assert reply_tags["og:description"] == "Fixed."
+
+      # A comment from another review, or one that does not exist, previews
+      # the review itself.
+      for query <- [
+            "thread=#{other_thread.id}&comment=#{other_comment.id}",
+            "thread=#{thread.id}&comment=#{other_comment.id}",
+            "thread=999999999&comment=1"
+          ] do
+        fallback = tags.("/r/#{review.slug}?#{query}")
+        assert Map.delete(fallback, "og:url") == Map.delete(review_tags, "og:url")
+      end
+    end
+
     test "renders collapsed diff islands through the single Pierre header", %{
       conn: conn,
       review: review

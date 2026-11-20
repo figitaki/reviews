@@ -6,6 +6,15 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Review links now unfurl in Slack, iMessage, Discord and other apps (Open
+  Graph and Twitter card tags). A link to a comment shows who wrote it, the
+  file and line, and the comment as plain text. Page titles no longer end in
+  "· Phoenix Framework". A comment link that opens the Changes view now keeps
+  `comment`, so it still lands on that comment.
+- The server now reads Markdown with MDEx (comrak), set up like the
+  browser's markdown-it in `Reviews.Markdown`. Link previews use it, so a
+  preview shows the same text as the rendered comment. MDEx is pinned to
+  0.14.6 and mdex_native to 0.3.1, the newest releases at least 7 days old.
 - A person or agent looks the same everywhere: comment threads, the account
   menu, the review list, Settings and the Guide's byline all draw them with
   one `<.ds_identity>` (avatar, name, `@handle`, and an Agent marker for
