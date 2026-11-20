@@ -31,6 +31,7 @@ fn subcommand_help_works_for_push() {
     assert!(stdout.contains("--update"), "stdout = {stdout}");
     assert!(stdout.contains("--title"), "stdout = {stdout}");
     assert!(stdout.contains("--no-code-storage"), "stdout = {stdout}");
+    assert!(stdout.contains("--include-context"), "stdout = {stdout}");
 }
 
 mod push_harness {
@@ -48,7 +49,7 @@ mod push_harness {
         pub repo: PathBuf,
     }
 
-    fn git(repo: &Path, args: &[&str]) {
+    pub fn git(repo: &Path, args: &[&str]) -> String {
         let out = Command::new("git")
             .args(args)
             .current_dir(repo)
@@ -60,6 +61,7 @@ mod push_harness {
             args,
             String::from_utf8_lossy(&out.stderr)
         );
+        String::from_utf8(out.stdout).unwrap()
     }
 
     impl Harness {
@@ -108,6 +110,72 @@ mod push_harness {
 
     pub fn review_created_body() -> &'static str {
         r#"{"id":1,"slug":"abc123","url":"http://localhost:4000/r/abc123","patchset_number":1}"#
+    }
+}
+
+#[test]
+fn push_includes_resolved_commit_index_and_worktree_context_without_code_storage() {
+    for (range, commit_staged) in [
+        (None, false),
+        (Some("HEAD"), false),
+        (Some("HEAD~1...HEAD"), true),
+    ] {
+        let mut server = mockito::Server::new();
+        let h = push_harness::Harness::new(&server.url());
+        push_harness::git(&h.repo, &["reset", "--hard", "HEAD~1"]);
+        let old = (1..=100).map(|i| format!("line {i}\n")).collect::<String>();
+        let new = old.replace("line 50\n", "changed\n");
+        std::fs::write(h.repo.join("a.txt"), &old).unwrap();
+        push_harness::git(&h.repo, &["add", "a.txt"]);
+        push_harness::git(&h.repo, &["commit", "--amend", "-qm", "initial"]);
+        std::fs::write(h.repo.join("a.txt"), &new).unwrap();
+        push_harness::git(&h.repo, &["add", "a.txt"]);
+        std::fs::write(h.repo.join("a.txt"), new.replace("line 90", "unstaged")).unwrap();
+        if commit_staged {
+            push_harness::git(&h.repo, &["commit", "-qm", "change"]);
+        }
+        let context = push_harness::git(
+            &h.repo,
+            &["diff", "--unified=2147483647", range.unwrap_or("--cached")],
+        );
+        assert!(context.contains("@@ -1,100 +1,100 @@"));
+        assert!(context.contains(" line 1\n"));
+        assert!(context.contains("+changed\n"));
+        if range == Some("HEAD") {
+            assert!(context.contains("+unstaged\n"));
+        } else {
+            assert!(!context.contains("unstaged"));
+        }
+        let caps = server.mock("GET", "/api/v1/capabilities")
+            .with_status(200).with_header("content-type", "application/json")
+            .with_body(r#"{"code_storage":{"enabled":true,"required":false,"supported_object_formats":["sha1"]}}"#)
+            .create();
+        let reserve = server
+            .mock("POST", "/api/v1/code-snapshots")
+            .expect(0)
+            .create();
+        let create = server
+            .mock("POST", "/api/v1/reviews")
+            .match_body(mockito::Matcher::PartialJson(serde_json::json!({
+                "context_diff": context
+            })))
+            .with_status(201)
+            .with_header("content-type", "application/json")
+            .with_body(push_harness::review_created_body())
+            .create();
+        let mut args = vec!["--include-context", "--no-code-storage"];
+        if let Some(range) = range {
+            args.extend(["--range", range]);
+        }
+        let out = h.push(&args);
+        assert!(
+            out.status.success(),
+            "range {range:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        caps.assert();
+        reserve.assert();
+        create.assert();
     }
 }
 

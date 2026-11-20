@@ -3838,3 +3838,9 @@ details[open] > summary .review-collapse-icon,
 
 .review-markdown-preview[data-diff-style="unified"] .review-markdown-pair { grid-template-columns: minmax(0, 1fr); }
 .review-markdown-preview[data-diff-style="unified"] .review-markdown-side + .review-markdown-side { border-left: 0; border-top: 1px solid var(--ds-line); }
+
+.reviews-context-status:not(:empty) {
+  padding: var(--space-2) var(--space-3);
+  color: var(--ds-muted);
+  font: var(--font-size-sm)/1.5 var(--font-sans);
+}

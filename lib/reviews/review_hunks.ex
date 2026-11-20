@@ -169,15 +169,47 @@ defmodule Reviews.ReviewHunks do
       end)
 
     hunk_lines = Enum.reverse(kept)
+    prefix = hunk |> rows() |> Enum.take(line_start - 1)
+    hunk_header = slice_header(hunk_header, prefix, hunk_lines)
 
     Enum.join(header_lines ++ [hunk_header | hunk_lines], "\n") <> "\n"
   end
 
   defp slice_hunk(hunk, _line_start, _line_end), do: hunk.raw_diff
 
+  # Hunk slice bounds are body-row indices, not source line numbers. Advance
+  # each side independently, retaining Git's boundary semantics for zero counts.
+  defp slice_header(header, prefix, selected) do
+    Regex.replace(~r/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/, header, fn _,
+                                                                              old,
+                                                                              old_count,
+                                                                              new,
+                                                                              new_count ->
+      {old_prefix, new_prefix} = source_counts(prefix)
+      {old_size, new_size} = source_counts(selected)
+      old_start = slice_start(old, old_count, old_prefix, old_size)
+      new_start = slice_start(new, new_count, new_prefix, new_size)
+      "@@ -#{old_start},#{old_size} +#{new_start},#{new_size} @@"
+    end)
+  end
+
+  defp source_counts(lines) do
+    Enum.reduce(lines, {0, 0}, fn
+      " " <> _, {old, new} -> {old + 1, new + 1}
+      "-" <> _, {old, new} -> {old + 1, new}
+      "+" <> _, {old, new} -> {old, new + 1}
+      _, counts -> counts
+    end)
+  end
+
+  defp slice_start(start, count, consumed, size) do
+    boundary = String.to_integer(start) - if(count == "0", do: 0, else: 1)
+    boundary + consumed + if(size > 0, do: 1, else: 0)
+  end
+
   defp partial_line_range?(hunk, line_start, line_end)
        when is_integer(line_start) and is_integer(line_end) do
-    line_start != hunk.line_start || line_end != hunk.line_end
+    line_start != 1 || line_end != length(rows(hunk))
   end
 
   defp partial_line_range?(_hunk, _line_start, _line_end), do: false

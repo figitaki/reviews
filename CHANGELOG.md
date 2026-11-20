@@ -6,6 +6,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Expand unchanged code above or below complete file diffs, 20 lines at a time.
+  `reviews push --include-context` uploads optional context without code.storage.
+  Reads require sign-in and are rate limited and audited. Packet slices now
+  retain correct source line numbers.
+
 - The favicon and the web app manifest now load in production. The page
   linked their digested names, such as `/site-<hash>.webmanifest`, which
   the static file allowlist refused with a 404.

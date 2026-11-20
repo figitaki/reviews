@@ -1180,7 +1180,17 @@ defmodule ReviewsWeb.ReviewLive do
       if(previous_patchset_id == next_patchset_id, do: socket.assigns[:editing_decision_index])
     )
     |> assign(:files, snapshot.files)
-    |> assign(:file_diffs, snapshot.file_diffs)
+    |> assign(
+      :file_diffs,
+      Enum.map(snapshot.file_diffs, fn file ->
+        context_url =
+          if file.has_context && socket.assigns.current_user do
+            ~p"/r/#{snapshot.review.slug}/patchsets/#{snapshot.selected_patchset.number}/files/#{file.id}/context"
+          end
+
+        Map.put(file, :context_url, context_url)
+      end)
+    )
     |> assign(:hunks_by_path, snapshot.hunks_by_path)
     |> assign(:packet_hunk_views, snapshot.packet_hunk_views)
     |> assign(:expanded_hunk_ids, expanded_hunk_ids)

@@ -41,7 +41,12 @@ pub struct PushArgs {
     #[arg(long, visible_alias = "validate")]
     pub dry_run: bool,
 
-    /// Skip uploading repository code for this push (diff only).
+    /// Include full text context for changed files in Reviews (up to 4 MiB).
+    /// Signed-in readers can expand unchanged lines. Independent of code.storage.
+    #[arg(long)]
+    pub include_context: bool,
+
+    /// Skip uploading repository code to code.storage for this push.
     #[arg(long)]
     pub no_code_storage: bool,
 }
@@ -100,6 +105,10 @@ pub fn run(args: PushArgs) -> Result<()> {
     let cfg = if args.dry_run { cfg } else { Ok(cfg?) };
     let cwd = env::current_dir().context("could not read current directory")?;
     let cap = git::capture_diff(&cwd, args.range.as_deref())?;
+    let context_diff = args
+        .include_context
+        .then(|| git::capture_context_diff(&cwd, &cap))
+        .transpose()?;
     let check = check_packet_for_push(&cwd, &cap.branch_name, args.packet.as_ref(), &cap.raw_diff)?;
     let problems = request_problems(&args, &cap);
 
@@ -169,6 +178,7 @@ pub fn run(args: PushArgs) -> Result<()> {
                 base_sha: &cap.base_sha,
                 branch_name: &cap.branch_name,
                 raw_diff: &cap.raw_diff,
+                context_diff: context_diff.as_deref(),
                 packet: packet.as_ref(),
                 code_snapshot_id: snapshot_id.as_deref(),
             };
@@ -185,6 +195,7 @@ pub fn run(args: PushArgs) -> Result<()> {
                 base_sha: &cap.base_sha,
                 branch_name: &cap.branch_name,
                 raw_diff: &cap.raw_diff,
+                context_diff: context_diff.as_deref(),
                 packet: packet.as_ref(),
                 code_snapshot_id: snapshot_id.as_deref(),
             };

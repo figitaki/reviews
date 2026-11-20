@@ -79,6 +79,8 @@ pub struct CreateReviewRequest<'a> {
     pub branch_name: &'a str,
     pub raw_diff: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_diff: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub packet: Option<&'a Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code_snapshot_id: Option<&'a str>,
@@ -101,6 +103,8 @@ pub struct CreatePatchsetRequest<'a> {
     pub base_sha: &'a str,
     pub branch_name: &'a str,
     pub raw_diff: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_diff: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub packet: Option<&'a Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -628,6 +632,7 @@ mod tests {
                 base_sha: "deadbeef",
                 branch_name: "main",
                 raw_diff: "diff --git a/x b/x\n",
+                context_diff: None,
                 packet: None,
                 code_snapshot_id: None,
             })
@@ -656,6 +661,7 @@ mod tests {
                     base_sha: "cafef00d",
                     branch_name: "main",
                     raw_diff: "diff --git a/x b/x\n",
+                    context_diff: None,
                     packet: None,
                     code_snapshot_id: None,
                 },
@@ -682,6 +688,7 @@ mod tests {
                     base_sha: "x",
                     branch_name: "y",
                     raw_diff: "z",
+                    context_diff: None,
                     packet: None,
                     code_snapshot_id: None,
                 },
@@ -987,6 +994,7 @@ mod tests {
             base_sha: "a",
             branch_name: "b",
             raw_diff: "d",
+            context_diff: None,
             packet: None,
             code_snapshot_id: None,
         };
@@ -1022,6 +1030,7 @@ mod tests {
                     base_sha: "x",
                     branch_name: "y",
                     raw_diff: "z",
+                    context_diff: None,
                     packet: None,
                     code_snapshot_id: Some("snap-1"),
                 },

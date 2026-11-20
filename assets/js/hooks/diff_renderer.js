@@ -112,6 +112,7 @@ const DiffRenderer = {
       filePath,
       rawDiff,
       fullDiff: ds.fullDiff,
+      contextUrl: this._island?.contextUrl,
       signedIn,
       threads: initialThreads,
       diffStyle: initialDiffStyle,

@@ -1788,6 +1788,10 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           id={"#{@hunk_id}-diff"}
           file_id={"hunk-#{@file.id}-#{@hunk_id}"}
           file_path={@file.path}
+          context_url={
+            if String.trim_trailing(@hunk.display_raw_diff) == String.trim_trailing(@file.raw_diff),
+              do: Map.get(@file, :context_url)
+          }
           file_status={@file.status}
           patchset_number={@selected_patchset && @selected_patchset.number}
           raw_diff={@hunk.display_raw_diff}

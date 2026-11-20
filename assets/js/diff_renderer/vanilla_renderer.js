@@ -10,6 +10,7 @@ import {
   threadStatusBadge,
 } from "./annotation_ui.js"
 import { el } from "./dom.js"
+import { loadFileContext } from "./context_expansion.js"
 import { PIERRE_THEMES, highlightWorkers } from "./worker_pool.js"
 import { headerToggleLabel, stopHeaderEvent } from "./header_controls.js"
 import {
@@ -25,6 +26,11 @@ const VIRTUAL_BYTE_THRESHOLD = 200 * 1024
 // sideways instead of wrapping, so each line stays one row and the package
 // names and versions at the start of each line are easy to scan.
 const LOCKFILE = /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|Gemfile\.lock|mix\.lock|composer\.lock|poetry\.lock|uv\.lock|Pipfile\.lock|go\.sum|flake\.lock|Package\.resolved|Podfile\.lock|pubspec\.lock)$/
+const REVIEWS_CONTEXT_CSS = `
+[data-separator] { font-family: var(--font-sans); }
+[data-separator] button:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; }
+`
+
 const REVIEWS_DIFF_TYPOGRAPHY_CSS = `
   :host {
     --diffs-font-family: var(--font-mono);
@@ -260,6 +266,7 @@ export class VanillaDiffRenderer {
     filePath,
     rawDiff,
     fullDiff,
+    contextUrl = null,
     signedIn,
     threads,
     diffStyle,
@@ -282,6 +289,8 @@ export class VanillaDiffRenderer {
     this.onSetHunkViewed = onSetHunkViewed
     this.composerAt = null
     this.fileDiff = parsePatch(rawDiff, filePath)
+    this.commentHunks = this.fileDiff?.hunks || []
+    this.contextUrl = contextUrl && ["change", "rename-changed"].includes(this.fileDiff?.type) ? contextUrl : null
     this.instance = null
     this.headerInstance = null
     this.virtualizer = null
@@ -412,8 +421,16 @@ export class VanillaDiffRenderer {
   // the line where the gesture ended.
   commentFromGutter(range) {
     const side = range.endSide || range.side
+    if (!this.commentable(side, range.end)) return
     const anchor = lineAnchor(this.renderedLine(side, range.end), side, range.end)
     this.setComposerAt(this.signedIn ? anchor : { ...anchor, kind: "signin" })
+  }
+
+  commentable(side, lineNumber) {
+    if (!this.contextUrl) return true
+    const prefix = side === "deletions" ? "deletion" : "addition"
+    return this.commentHunks.some(hunk => lineNumber >= hunk[`${prefix}Start`] &&
+      lineNumber < hunk[`${prefix}Start`] + hunk[`${prefix}Count`])
   }
 
   renderedLine(side, lineNumber, attribute = "line") {
@@ -491,6 +508,7 @@ export class VanillaDiffRenderer {
     const root = this.sourceContainer?.querySelector("diffs-container")?.shadowRoot
     const button = root?.querySelector("[data-utility-button]")
     if (!line || !button) return
+    button.style.visibility = this.commentable(line.side, line.lineNumber) ? "" : "hidden"
     button.setAttribute("aria-label", `Comment on line ${line.lineNumber}`)
     button.title = button.getAttribute("aria-label")
   }
@@ -753,15 +771,50 @@ export class VanillaDiffRenderer {
     return el("div", { className: "reviews-diff-header-metadata" }, children)
   }
 
+  labelContextControls() {
+    if (!this.contextUrl) return
+    const root = this.sourceContainer?.querySelector("diffs-container")?.shadowRoot
+    root?.querySelectorAll("[data-expand-button]").forEach(button => {
+      const label = button.hasAttribute("data-expand-all-button") ? "Expand all context" :
+        button.hasAttribute("data-expand-down") ? "Expand above" :
+        button.hasAttribute("data-expand-up") ? "Expand below" : "Expand above and below"
+      button.tabIndex = 0
+      button.setAttribute("aria-label", label)
+      button.onkeydown = event => {
+        if (event.key !== "Enter" && event.key !== " ") return
+        event.preventDefault()
+        button.click()
+      }
+    })
+  }
+
+  async loadContext() {
+    const status = this.contextStatus
+    status.textContent = "Loading context…"
+    try {
+      const source = await loadFileContext(this.contextUrl)
+      status.textContent = ""
+      return {
+        oldFile: { name: this.fileDiff.prevName || this.filePath, contents: source.old },
+        newFile: { name: this.filePath, contents: source.new },
+      }
+    } catch (error) {
+      status.textContent = error.message
+      throw error
+    }
+  }
+
   options() {
     return {
+      ...(this.contextUrl ? { loadDiffFiles: () => this.loadContext() } : {}),
+      expansionLineCount: 20,
       theme: PIERRE_THEMES,
       themeType: currentThemeType(),
       diffStyle: this.diffStyle,
       overflow:
         this.diffStyle === "unified" && !(this.compact() && LOCKFILE.test(this.filePath)) ? "wrap" : "scroll",
       collapsed: this.collapsed(),
-      unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + REVIEWS_ANNOTATION_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
+      unsafeCSS: REVIEWS_DIFF_TYPOGRAPHY_CSS + REVIEWS_CONTEXT_CSS + REVIEWS_ANNOTATION_CSS + (this.hunkUI ? REVIEWS_DIFF_HEADER_CSS : ""),
       renderHeaderPrefix: () => this.renderHeaderPrefix(),
       renderHeaderMetadata: () => this.renderHeaderMetadata(),
       renderAnnotation: (annotation) => this.renderAnnotation(annotation),
@@ -770,6 +823,7 @@ export class VanillaDiffRenderer {
         // Phones let thread cards span the line-number gutter (packet.css).
         const gutter = this.container.querySelector("diffs-container")?.shadowRoot?.querySelector("[data-gutter]")
         if (gutter) this.container.style.setProperty("--review-thread-gutter", `${gutter.offsetWidth}px`)
+        this.labelContextControls()
         this.placeThreadMarkers()
         this.focusPendingThread()
         if (this.pendingHeaderFocus) {
@@ -877,17 +931,16 @@ export class VanillaDiffRenderer {
 
   renderSource(options) {
     const renderArgs = this.renderArgs()
-
-    // Large files virtualize even while collapsed, so the instance that
-    // expands them later is the one that already highlighted them.
-    if (
-      shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle })
-    ) {
-      if (this.tryRenderVirtualized(options, renderArgs)) return
+    const virtualized = shouldVirtualize({ rawDiff: this.rawDiff, fileDiff: this.fileDiff, diffStyle: this.diffStyle }) &&
+      this.tryRenderVirtualized(options, renderArgs)
+    if (!virtualized) {
+      this.instance = new Diffs.FileDiff(options, highlightWorkers() ?? undefined)
+      this.instance.render(renderArgs)
     }
-
-    this.instance = new Diffs.FileDiff(options, highlightWorkers() ?? undefined)
-    this.instance.render(renderArgs)
+    if (this.contextUrl) {
+      this.contextStatus = el("p", { className: "reviews-context-status", role: "status" })
+      this.sourceContainer.append(this.contextStatus)
+    }
   }
 
   tryRenderVirtualized(options, renderArgs) {
@@ -929,6 +982,7 @@ export class VanillaDiffRenderer {
   }
 
   cleanUp(clear = true) {
+    this.contextStatus = null
     if (clear) {
       this.container.removeEventListener("pointerdown", this.onPointerDown)
       this.compactQuery.removeEventListener("change", this.onCompactChange)

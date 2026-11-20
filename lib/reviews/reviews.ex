@@ -205,7 +205,7 @@ defmodule Reviews.Reviews do
       Patchset.changeset(%Patchset{}, Map.put(patchset_attrs, :review_id, review.id))
     end)
     |> Ecto.Multi.run(:files, fn _repo, %{patchset: patchset} ->
-      insert_files_for_patchset(patchset, raw_diff)
+      insert_files_for_patchset(patchset, raw_diff, attrs[:context_diff] || attrs["context_diff"])
     end)
     |> Ecto.Multi.run(:code_snapshot, fn _repo, %{review: review, patchset: patchset} ->
       Reviews.CodeSnapshots.maybe_claim(author, review, patchset, code_snapshot_id)
@@ -269,7 +269,7 @@ defmodule Reviews.Reviews do
     Ecto.Multi.new()
     |> Ecto.Multi.insert(:patchset, Patchset.changeset(%Patchset{}, patchset_attrs))
     |> Ecto.Multi.run(:files, fn _repo, %{patchset: patchset} ->
-      insert_files_for_patchset(patchset, raw_diff)
+      insert_files_for_patchset(patchset, raw_diff, attrs[:context_diff] || attrs["context_diff"])
     end)
     |> Ecto.Multi.run(:code_snapshot, fn _repo, %{patchset: patchset} ->
       maybe_claim_snapshot(identity, review, patchset, code_snapshot_id)
@@ -530,7 +530,13 @@ defmodule Reviews.Reviews do
     end)
   end
 
-  defp insert_files_for_patchset(%Patchset{id: patchset_id}, raw_diff) do
+  defp insert_files_for_patchset(patchset, raw_diff, context_diff) do
+    with {:ok, contexts} <- Reviews.FileContext.from_diff(context_diff, raw_diff) do
+      insert_files_with_context(patchset, raw_diff, contexts)
+    end
+  end
+
+  defp insert_files_with_context(%Patchset{id: patchset_id}, raw_diff, contexts) do
     files =
       raw_diff
       |> parse_diff_files()
@@ -542,7 +548,9 @@ defmodule Reviews.Reviews do
           status: meta.status,
           additions: meta.additions,
           deletions: meta.deletions,
-          raw_diff: meta.raw_diff
+          raw_diff: meta.raw_diff,
+          context: Map.get(contexts, meta.path),
+          has_context: Map.has_key?(contexts, meta.path)
         }
 
         case %File{} |> File.changeset(attrs) |> Repo.insert() do
@@ -555,6 +563,19 @@ defmodule Reviews.Reviews do
       {:halt, changeset} -> {:error, changeset}
       nil -> {:ok, Enum.map(files, fn {:ok, f} -> f end)}
     end
+  end
+
+  @doc "Loads uploaded context only for the requested review, revision and file."
+  def get_file_context(slug, number, file_id) do
+    Repo.one(
+      from f in File,
+        join: p in Patchset,
+        on: p.id == f.patchset_id,
+        join: r in Review,
+        on: r.id == p.review_id,
+        where: r.slug == ^slug and p.number == ^number and f.id == ^file_id,
+        select: %{context: f.context, review_id: r.id}
+    )
   end
 
   @doc """
