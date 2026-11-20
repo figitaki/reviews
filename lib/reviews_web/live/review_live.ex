@@ -666,82 +666,23 @@ defmodule ReviewsWeb.ReviewLive do
           <Layouts.account_menu current_user={@current_user} return_to={@return_to} />
         </:actions>
 
-        <% packet = @selected_patchset && @selected_patchset.packet %>
-        <% has_packet = ReviewPacket.present?(packet) %>
-
         <div class={[
           "design-main is-review-view",
-          has_packet && @live_action != :changes && "is-guide-view",
-          has_packet && @live_action == :changes && "is-packet-diff-view"
+          has_packet?(@selected_patchset) && @live_action != :changes && "is-guide-view",
+          has_packet?(@selected_patchset) && @live_action == :changes && "is-packet-diff-view"
         ]}>
-          <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
-          <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
-          <% show_packet_outline = has_packet && @show_packet_outline %>
-          <% packet_effort =
-            if has_packet do
-              PacketComponents.packet_effort_for_header(
-                packet,
-                @file_diffs,
-                @hunks_by_path,
-                @packet_section_decisions,
-                @selected_patchset,
-                @patchsets
-              )
-            end %>
-
-          <RevisionNavComponents.revision_nav
-            nav={revision_nav}
+          <.review_header
             review={@review}
-            live_action={@live_action}
+            patchsets={@patchsets}
             selected_patchset={@selected_patchset}
-            has_packet={has_packet}
-            outline_available={has_packet && @live_action != :changes}
-            show_packet_outline={show_packet_outline}
+            file_diffs={@file_diffs}
+            hunks_by_path={@hunks_by_path}
+            packet_section_decisions={@packet_section_decisions}
+            live_action={@live_action}
+            show_packet_outline={@show_packet_outline}
             diff_style={@diff_style}
-          >
-            <header class={[
-              "review-header",
-              has_packet && @live_action != :changes && "is-guide-compact"
-            ]}>
-              <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
-              <h1
-                id={if(has_packet, do: "review-packet-title", else: "review-title")}
-                class={["review-title", has_packet && "is-packet-title"]}
-                translate="no"
-              >
-                {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
-              </h1>
-              <PacketComponents.markdown
-                :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
-                id="review-packet-lede-markdown"
-                body={ReviewPacket.text(packet, "summary")}
-                class="review-description review-packet-lede"
-              />
-              <p
-                :if={!has_packet && (@review.description || @file_diffs != [])}
-                class="review-description"
-              >
-                {@review.description || review_summary(@file_diffs)}
-              </p>
-              <div :if={@selected_patchset} class="review-header-meta">
-                <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
-                <span class="review-header-change-stat">
-                  <PacketComponents.change_stat
-                    additions={diff_stats.additions}
-                    deletions={diff_stats.deletions}
-                  />
-                </span>
-                <span
-                  :if={has_packet && packet_effort}
-                  class="review-header-estimate"
-                  title="Estimated review time"
-                >
-                  <strong>{packet_effort.time}</strong>
-                  <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
-                </span>
-              </div>
-            </header>
-          </RevisionNavComponents.revision_nav>
+            current_user={@current_user}
+          />
 
           <%!-- Patchset-pushed banner --%>
           <div
@@ -758,8 +699,8 @@ defmodule ReviewsWeb.ReviewLive do
           <div class="review-workspace">
             <div class="review-workspace-content">
               <PacketComponents.packet
-                :if={has_packet && @live_action != :changes}
-                packet={packet}
+                :if={has_packet?(@selected_patchset) && @live_action != :changes}
+                packet={@selected_patchset.packet}
                 review={@review}
                 patchsets={@patchsets}
                 section_decisions={@packet_section_decisions}
@@ -773,13 +714,13 @@ defmodule ReviewsWeb.ReviewLive do
                 return_to={@return_to}
                 diff_style={@diff_style}
                 expanded_hunk_ids={@expanded_hunk_ids}
-                show_packet_outline={show_packet_outline}
+                show_packet_outline={has_packet?(@selected_patchset) && @show_packet_outline}
                 active_section_index={@active_outline_section_index}
               />
 
               <%!-- Body: sidebar + diff list --%>
               <DiffComponents.diff_shell
-                :if={@live_action == :changes || !has_packet}
+                :if={@live_action == :changes || !has_packet?(@selected_patchset)}
                 file_diffs={@file_diffs}
                 selected_patchset={@selected_patchset}
                 published_threads={@published_threads}
@@ -808,6 +749,86 @@ defmodule ReviewsWeb.ReviewLive do
     </div>
     """
   end
+
+  # The header reads patchsets, files and decisions, not threads, so a comment
+  # does not re-render it. Its locals would turn off change tracking for the
+  # whole page if they lived in render/1.
+  defp review_header(assigns) do
+    ~H"""
+    <% packet = @selected_patchset && @selected_patchset.packet %>
+    <% has_packet = ReviewPacket.present?(packet) %>
+    <% revision_nav = ReviewNavigation.build(@patchsets, @selected_patchset) %>
+    <% diff_stats = ReviewNavigation.diff_stats_from_files(@file_diffs) %>
+    <% show_packet_outline = has_packet && @show_packet_outline %>
+    <% packet_effort =
+      if has_packet do
+        PacketComponents.packet_effort_for_header(
+          packet,
+          @file_diffs,
+          @hunks_by_path,
+          @packet_section_decisions,
+          @selected_patchset,
+          @patchsets
+        )
+      end %>
+
+    <RevisionNavComponents.revision_nav
+      nav={revision_nav}
+      review={@review}
+      live_action={@live_action}
+      selected_patchset={@selected_patchset}
+      has_packet={has_packet}
+      outline_available={has_packet && @live_action != :changes}
+      show_packet_outline={show_packet_outline}
+      diff_style={@diff_style}
+    >
+      <header class={[
+        "review-header",
+        has_packet && @live_action != :changes && "is-guide-compact"
+      ]}>
+        <span :if={has_packet} class="review-packet-kicker">Review Packet</span>
+        <h1
+          id={if(has_packet, do: "review-packet-title", else: "review-title")}
+          class={["review-title", has_packet && "is-packet-title"]}
+          translate="no"
+        >
+          {if(has_packet, do: ReviewPacket.text(packet, "title"), else: @review.title)}
+        </h1>
+        <PacketComponents.markdown
+          :if={has_packet && ReviewPacket.text(packet, "summary") != ""}
+          id="review-packet-lede-markdown"
+          body={ReviewPacket.text(packet, "summary")}
+          class="review-description review-packet-lede"
+        />
+        <p
+          :if={!has_packet && (@review.description || @file_diffs != [])}
+          class="review-description"
+        >
+          {@review.description || review_summary(@file_diffs)}
+        </p>
+        <div :if={@selected_patchset} class="review-header-meta">
+          <span>{diff_stats.files} {plural(diff_stats.files, "file")}</span>
+          <span class="review-header-change-stat">
+            <PacketComponents.change_stat
+              additions={diff_stats.additions}
+              deletions={diff_stats.deletions}
+            />
+          </span>
+          <span
+            :if={has_packet && packet_effort}
+            class="review-header-estimate"
+            title="Estimated review time"
+          >
+            <strong>{packet_effort.time}</strong>
+            <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
+          </span>
+        </div>
+      </header>
+    </RevisionNavComponents.revision_nav>
+    """
+  end
+
+  defp has_packet?(patchset), do: ReviewPacket.present?(patchset && patchset.packet)
 
   defp reveal_packet_overview(socket) do
     socket
