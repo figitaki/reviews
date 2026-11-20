@@ -1758,7 +1758,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
           }
         })
 
-      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}/changes")
+      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}")
       render_click(view, "open_activity_thread", %{"thread_id" => thread.id})
       path = ~p"/r/#{review.slug}?#{[patchset: 1, thread: thread.id]}"
       assert_patch(view, path)
@@ -1796,6 +1796,60 @@ defmodule ReviewsWeb.ReviewLiveTest do
         assert has_element?(direct, "#review-split-inline-overview")
         refute has_element?(direct, "#packet-section-0")
       end
+    end
+
+    test "activity opens a thread in place when reading the diff", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Diff mode comments",
+          raw_diff: """
+          diff --git a/example.ex b/example.ex
+          --- a/example.ex
+          +++ b/example.ex
+          @@ -1 +1 @@
+          -old
+          +new
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Guide",
+            "sections" => [
+              %{
+                "title" => "Only hunk",
+                "rows" => [%{"kind" => "hunk", "path" => "example.ex", "hunk_index" => 1}]
+              }
+            ]
+          }
+        })
+
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, author, %{
+          "file_path" => "example.ex",
+          "side" => "new",
+          "body" => "Look here",
+          "thread_anchor" => %{
+            "granularity" => "line",
+            "line_number_hint" => 1,
+            "line_text" => "new"
+          }
+        })
+
+      changes_href = ~p"/r/#{review.slug}/changes?#{[patchset: 1, thread: thread.id]}"
+      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}/changes")
+      assert has_element?(view, ~s|#review-activity[data-activity*="#{changes_href}"]|)
+      render_click(view, "open_activity_thread", %{"thread_id" => thread.id})
+      assert_patch(view, changes_href)
+      assert has_element?(view, ~s|#diff-files [data-hunk-expanded="true"]|)
+      refute has_element?(view, "#packet-section-0")
+      thread_id = thread.id
+
+      assert_push_event(view, "open_review_thread", %{
+        thread_id: ^thread_id,
+        file_path: "example.ex"
+      })
     end
 
     test "hunk viewed state is shared between packet and changes views", %{

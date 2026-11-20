@@ -6,6 +6,7 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Opening a thread from Comments in Diff mode now stays in Diff mode and opens the thread there, instead of switching to the Guide and loading every diff again (#245).
 - Review links now unfurl in Slack, iMessage, Discord and other apps (Open
   Graph and Twitter card tags). A link to a comment shows who wrote it, the
   file and line, and the comment as plain text. Page titles no longer end in

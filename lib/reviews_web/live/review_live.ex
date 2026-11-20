@@ -364,10 +364,16 @@ defmodule ReviewsWeb.ReviewLive do
             do: socket.assigns.selected_patchset.number,
             else: thread.originating_patchset_number
 
-        {:noreply,
-         push_patch(socket,
-           to: ~p"/r/#{socket.assigns.review.slug}?#{[patchset: number, thread: thread.id]}"
-         )}
+        query = [patchset: number, thread: thread.id]
+        slug = socket.assigns.review.slug
+
+        # Diff mode reveals the thread in place rather than mounting the Guide.
+        to =
+          if socket.assigns.live_action == :changes,
+            do: ~p"/r/#{slug}/changes?#{query}",
+            else: ~p"/r/#{slug}?#{query}"
+
+        {:noreply, push_patch(socket, to: to)}
     end
   end
 
@@ -773,6 +779,7 @@ defmodule ReviewsWeb.ReviewLive do
               threads={@published_threads}
               current_identity={@current_identity}
               patchset_number={@selected_patchset.number}
+              changes={@live_action == :changes}
             />
           </div>
         </div>
