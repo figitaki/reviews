@@ -10,8 +10,8 @@ linux/arm64.
 
 What you get:
 
-- A Deployment of the server. An init container runs `/app/bin/migrate`
-  (migrations, then the demo review seed) before each pod starts.
+- A Deployment of the server. An init container runs the database
+  migrations before each pod starts.
 - A CloudNativePG `Cluster` named `<release>-db`, kept when the release is
   uninstalled. You can turn it off and point at another database instead.
 - A Service, and optionally an Ingress for any controller.
@@ -89,6 +89,10 @@ Without `secrets.existingSecret`, the chart creates `<release>-secrets` with a
 random `SECRET_KEY_BASE` and `RELEASE_COOKIE`, and keeps them on upgrade.
 That is enough to try the chart, but GitHub sign-in needs its own keys.
 
+`RELEASE_COOKIE` is required in every install, clustered or not. The server
+always starts Erlang distribution, and the cookie built into the public image
+is known to anyone, so a pod whose Secret lacks the key does not start.
+
 ## Values
 
 | Key | Default | What it does |
@@ -98,7 +102,7 @@ That is enough to try the chart, but GitHub sign-in needs its own keys.
 | `image.tag` | chart `appVersion` | Image tag. Pin a release (`0.0.3`) or a commit (`sha-<12 hex>`). |
 | `image.digest` | `""` | Pull by digest (`sha256:...`) instead of by tag. |
 | `replicaCount` | `1` | App pods. Turn on `clustering` when it is more than 1. |
-| `secrets.existingSecret` | `""` | Secret loaded as environment variables. Must hold `SECRET_KEY_BASE`; add `RELEASE_COOKIE` for clustering, `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` for sign-in, and any other secret setting such as `CODE_STORAGE_JWT_PRIVATE_KEY`. Empty means a generated Secret. |
+| `secrets.existingSecret` | `""` | Secret loaded as environment variables. Must hold `SECRET_KEY_BASE` and `RELEASE_COOKIE`; add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` for sign-in, and any other secret setting such as `CODE_STORAGE_JWT_PRIVATE_KEY`. Empty means a generated Secret. |
 | `database.cluster.enabled` | `true` | Create a CloudNativePG `Cluster` named `<release>-db`. |
 | `database.cluster.instances` | `1` | Postgres instances. 2 or more gives a standby to fail over to. |
 | `database.cluster.imageName` | `""` | Postgres image. Empty means the operator's default. |
@@ -112,8 +116,9 @@ That is enough to try the chart, but GitHub sign-in needs its own keys.
 | `database.existingSecretKey` | `uri` | Key in that Secret. |
 | `database.poolSize` | `10` | Connections per app pod (`POOL_SIZE`). |
 | `database.ipv6` | `false` | Connect to Postgres over IPv6 (`ECTO_IPV6`). |
-| `migrations.enabled` | `true` | Run `/app/bin/migrate` in an init container. |
+| `migrations.enabled` | `true` | Run Ecto migrations in an init container. |
 | `migrations.resources` | `{}` | Init container resources. |
+| `demo.enabled` | `false` | Seed the demo review at `/r/demo-review`, which the home page links to. |
 | `clustering.enabled` | `false` | Join pods into one Erlang cluster through a headless Service. |
 | `mcp.enabled` | `false` | Hosted MCP endpoint at `/mcp` ([docs/MCP.md](../../docs/MCP.md)). |
 | `mcp.writesEnabled` | `false` | MCP write tools. |
@@ -158,22 +163,35 @@ the CloudNativePG backup docs.
 
 ### Migrations
 
-Every app pod runs `/app/bin/migrate` in an init container, the step that
-`release_command` runs on Fly. Ecto takes a lock on `schema_migrations`, so
-pods starting together run migrations one at a time. If a migration fails,
-the new pod never starts and the old pods keep serving. Roll back by
-deploying the previous image; migrations are not reverted.
+Every app pod runs `Reviews.Release.migrate()` in an init container. Ecto
+locks `schema_migrations`, so pods that start together run migrations one at
+a time. If a migration fails, the new pod never starts and the old pods keep
+serving. Roll back by deploying the previous image; migrations are not
+reverted.
+
+The init container runs migrations only. Fly's `release_command`
+(`/app/bin/migrate`) also seeds the demo review; here that is opt-in with
+`demo.enabled: true`. The seed then runs in a second init container under a
+Postgres advisory lock, so pods seed one at a time. If it fails, or waits more
+than about a minute for the lock, it logs the failure and the pod starts
+anyway. Without the demo, the home page's "Open demo review" link returns 404.
 
 ### Clustering
 
 With `clustering.enabled: true`, the chart adds a headless Service and sets
 `DNS_CLUSTER_QUERY` to it. Each pod names itself `reviews@<pod IP>` and
 connects to the others, so live updates reach viewers on any pod. The pods
-must share a `RELEASE_COOKIE` from the Secret; the image's built-in cookie is
-public. Pods must reach each other on TCP 4369 (epmd) and the Erlang
-distribution ports, so allow pod-to-pod traffic in any NetworkPolicy. On an
-IPv6-only cluster, also set `env.ERL_AFLAGS: "-proto_dist inet6_tcp"` and
-`database.ipv6: true`.
+share the `RELEASE_COOKIE` from the Secret. Pods must reach each other on TCP
+4369 (epmd) and the Erlang distribution port, which is random, so allow
+traffic between the app pods in any NetworkPolicy, and block it from
+everything else: anyone who can reach those ports with the cookie can run
+code on the node. On an IPv6-only cluster, also set
+`env.ERL_AFLAGS: "-proto_dist inet6_tcp"` and `database.ipv6: true`.
+
+Without clustering, epmd and the distribution port listen on the pod's
+loopback interface only (`RELEASE_NODE=reviews@127.0.0.1`), so
+`kubectl exec ... -- /app/bin/reviews rpc ...` still works and nothing outside
+the pod can connect.
 
 ### Ingress and TLS
 
@@ -520,13 +538,11 @@ git push origin chart-v0.1.0
 ```
 
 `.github/workflows/release-chart.yml` checks that the tag matches
-`Chart.yaml`, lints the chart, and pushes it to
+`Chart.yaml`, runs `.github/scripts/check_chart.sh`, and pushes it to
 `oci://ghcr.io/figitaki/charts/reviews`.
 
 To check the chart locally:
 
 ```sh
-helm lint charts/reviews
-helm lint charts/reviews -f charts/reviews/ci/production-values.yaml
-helm template reviews charts/reviews -f charts/reviews/ci/production-values.yaml
+.github/scripts/check_chart.sh
 ```

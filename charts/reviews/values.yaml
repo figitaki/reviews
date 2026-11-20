@@ -23,9 +23,10 @@ replicaCount: 1
 
 # Secret values reach the app as environment variables from one Secret,
 # loaded with envFrom. Use any key runtime.exs reads, for example
-# SECRET_KEY_BASE (required), GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
-# RELEASE_COOKIE (required with clustering), CODE_STORAGE_JWT_PRIVATE_KEY and
-# AUTH_RELAY_SECRET.
+# SECRET_KEY_BASE and RELEASE_COOKIE (both required), GITHUB_CLIENT_ID,
+# GITHUB_CLIENT_SECRET, CODE_STORAGE_JWT_PRIVATE_KEY and AUTH_RELAY_SECRET.
+# Pods do not start without RELEASE_COOKIE: the image's built-in Erlang
+# cookie is public.
 secrets:
   # Name of an existing Secret in the release namespace. Empty means the
   # chart creates <fullname>-secrets with a random SECRET_KEY_BASE and
@@ -63,16 +64,23 @@ database:
   # Connect to Postgres over IPv6 (ECTO_IPV6). Needed on IPv6-only clusters.
   ipv6: false
 
-# Run /app/bin/migrate (Ecto migrations, then the demo review seed) in an init
-# container before each app pod starts. A failed migration keeps the new pod
-# from starting, so the old pods keep serving during a rolling update.
+# Run Ecto migrations in an init container before each app pod starts. A
+# failed migration keeps the new pod from starting, so the old pods keep
+# serving during a rolling update.
 migrations:
   enabled: true
   resources: {}
 
+# Seed the bundled demo review that the home page links to, at /r/demo-review.
+# It runs after migrations under a Postgres advisory lock; a failure is logged
+# and does not stop the pod. Off by default for real installs.
+demo:
+  enabled: false
+
 # Join app pods into one Erlang cluster through DNS_CLUSTER_QUERY and a
 # headless Service, so live updates reach viewers on every pod. Turn it on
-# when replicaCount is more than 1. Requires RELEASE_COOKIE in the Secret.
+# when replicaCount is more than 1. Without it, Erlang distribution listens on
+# the pod's loopback only.
 clustering:
   enabled: false
 

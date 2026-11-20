@@ -32,12 +32,7 @@ jobs:
           echo "registry=oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts" >> "$GITHUB_ENV"
 
       - name: Lint and render
-        run: |
-          set -euo pipefail
-          helm lint charts/reviews
-          helm lint charts/reviews -f charts/reviews/ci/production-values.yaml
-          helm template reviews charts/reviews > /dev/null
-          helm template reviews charts/reviews -f charts/reviews/ci/production-values.yaml > /dev/null
+        run: .github/scripts/check_chart.sh
 
       - name: Package and push
         env:

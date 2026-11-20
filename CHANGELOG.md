@@ -8,7 +8,8 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 - A Helm chart in `charts/reviews` runs the server on Kubernetes, with its
   Postgres as a CloudNativePG cluster or a database you already have.
-  Migrations run in an init container before each pod starts. A
+  Migrations run in an init container before each pod starts; seeding the
+  demo review is opt-in. Every pod needs a private `RELEASE_COOKIE`. A
   `chart-v<version>` tag publishes it to
   `oci://ghcr.io/figitaki/charts/reviews`. Its README covers installing,
   every value, and deploying with Flux from pinned image tags.

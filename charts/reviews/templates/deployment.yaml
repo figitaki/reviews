@@ -34,12 +34,16 @@ spec:
         fsGroup: 1001
         seccompProfile:
           type: RuntimeDefault
-      {{- if .Values.migrations.enabled }}
+      {{- if or .Values.migrations.enabled .Values.demo.enabled }}
       initContainers:
+      {{- end }}
+      {{- if .Values.migrations.enabled }}
+        # Schema migrations only. Ecto locks schema_migrations, so pods that
+        # start together run them one at a time.
         - name: migrate
           image: {{ include "reviews.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/app/bin/migrate"]
+          command: ["/app/bin/reviews", "eval", "Reviews.Release.migrate()"]
           env:
             {{- include "reviews.env" . | nindent 12 }}
           envFrom:
@@ -51,6 +55,38 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      {{- end }}
+      {{- if .Values.demo.enabled }}
+        # Seeds the demo review under a Postgres advisory lock, so pods that
+        # start together seed one at a time. A failure is logged and never
+        # stops the pod from starting.
+        - name: seed-demo
+          image: {{ include "reviews.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - timeout 120 /app/bin/reviews eval "$SEED_DEMO" || echo "Demo review seed failed; starting without it."
+          env:
+            {{- include "reviews.env" . | nindent 12 }}
+            - name: SEED_DEMO
+              value: |
+                Application.load(:reviews)
+                {:ok, _, _} =
+                  Ecto.Migrator.with_repo(Reviews.Repo, fn repo ->
+                    repo.checkout(fn ->
+                      repo.query!("SELECT pg_advisory_lock(hashtext('reviews_demo_seed'))", [], timeout: 60_000)
+                      Reviews.DemoReview.seed!()
+                    end, timeout: 90_000)
+                  end, pool_size: 1)
+          envFrom:
+            - secretRef:
+                name: {{ include "reviews.secretName" . }}
+          securityContext:
+            {{- include "reviews.containerSecurityContext" . | nindent 12 }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp

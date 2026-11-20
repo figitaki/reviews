@@ -53,7 +53,8 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{- define "reviews.headlessName" -}}
-{{- printf "%s-headless" (include "reviews.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- /* Leave room for the suffix, so a 63-character fullname cannot collide with the app Service. */}}
+{{- printf "%s-headless" (include "reviews.fullname" . | trunc 54 | trimSuffix "-") }}
 {{- end }}
 
 {{/* DATABASE_URL: the CloudNativePG app Secret, or the user's Secret. */}}
@@ -93,6 +94,13 @@ key: {{ .Values.database.existingSecretKey }}
 {{- end }}
 - name: RELEASE_TMP
   value: /tmp
+{{- /* The release always starts Erlang distribution, and the image's built-in cookie is public, so every pod needs a private one. Not optional: a pod without it does not start. */}}
+- name: RELEASE_COOKIE
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "reviews.secretName" . }}
+      key: RELEASE_COOKIE
+{{- if .Values.clustering.enabled }}
 - name: POD_IP
   valueFrom:
     fieldRef:
@@ -100,6 +108,15 @@ key: {{ .Values.database.existingSecretKey }}
 {{- /* A long node name needs a dotted host; the pod IP is one that peers can reach. */}}
 - name: RELEASE_NODE
   value: reviews@$(POD_IP)
+{{- else }}
+{{- /* Without clustering, epmd and the distribution port listen on loopback only, so nothing outside the pod can reach them. */}}
+- name: RELEASE_NODE
+  value: reviews@127.0.0.1
+- name: ERL_EPMD_ADDRESS
+  value: 127.0.0.1
+- name: ERL_ZFLAGS
+  value: "-kernel inet_dist_use_interface {127,0,0,1}"
+{{- end }}
 {{- if .Values.clustering.enabled }}
 - name: DNS_CLUSTER_QUERY
   value: {{ printf "%s.%s.svc.cluster.local" (include "reviews.headlessName" .) .Release.Namespace | quote }}
