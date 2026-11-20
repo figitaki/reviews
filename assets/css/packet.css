@@ -17,28 +17,14 @@
   min-width: 0;
 }
 
-.review-workspace > .review-activity {
-  order: -1;
-}
-
-@media (min-width: 1200px) {
-  .review-workspace {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    padding-right: 16px;
-  }
-
-  .review-workspace > .review-activity {
-    order: 0;
-  }
-}
 
 .review-page {
-  --review-app-nav-h: 64px;
-  --review-toolbar-h: 64px;
+  /* Sticky offsets, in rem to track the bars as text grows. */
+  --review-app-nav-h: 4rem;
+  --review-toolbar-h: 4rem;
   --rev-header-h: calc(var(--review-app-nav-h) + var(--review-toolbar-h));
   --review-main-nav-h: var(--rev-header-h);
-  --review-section-sticky-h: 46px;
+  --review-section-sticky-h: 2.875rem;
 
   color-scheme: light;
   background: var(--review-bg);
@@ -82,7 +68,7 @@
 }
 
 .review-header.is-guide-compact .review-title.is-packet-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 650;
   line-height: 1.35;
 }
@@ -90,14 +76,14 @@
 .review-title {
   margin: 0;
   color: var(--review-text);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   line-height: 1.35;
 }
 
 .review-title.is-packet-title {
   max-width: 920px;
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 760;
   letter-spacing: 0;
   line-height: 1.12;
@@ -107,7 +93,7 @@
 .review-label,
 .rev-empty {
   color: var(--review-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -115,7 +101,7 @@
   margin-top: 8px;
   max-width: 76ch;
   color: color-mix(in srgb, var(--review-text) 72%, var(--review-muted));
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.48;
   overflow-wrap: anywhere;
 }
@@ -241,7 +227,7 @@
 .review-toolbar .review-title,
 .review-toolbar .review-header .review-title.is-packet-title {
   max-width: none;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
@@ -281,12 +267,13 @@
 }
 
 .review-toolbar .review-code-view-switcher,
+/* Segmented groups are one control tall: border, 2px inset, then the tab. */
 .review-toolbar .review-diff-style {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  border: 1px solid var(--review-line-strong);
-  border-radius: 7px;
+  border: var(--border-hair) solid var(--review-line-strong);
+  border-radius: var(--radius-sm);
   background: var(--review-panel);
   padding: 2px;
 }
@@ -295,11 +282,11 @@
 .review-layout-button {
   display: inline-flex;
   min-width: 30px;
-  min-height: 28px;
+  min-height: calc(var(--size-control-md) - 6px);
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: transparent;
   padding: 0 8px;
   color: var(--review-muted);
@@ -333,7 +320,7 @@
 .review-outline-toggle {
   align-self: center;
   flex: 0 0 auto;
-  min-height: 26px;
+  min-height: var(--size-control-md);
   padding-inline: 8px;
 }
 
@@ -352,8 +339,8 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  border: 1px solid var(--review-line);
-  border-radius: 7px;
+  border: var(--border-hair) solid var(--review-line);
+  border-radius: var(--radius-sm);
   background: var(--review-panel);
   padding: 2px;
 }
@@ -401,12 +388,12 @@
 .review-nav-button,
 .review-revision-chip {
   display: inline-flex;
-  min-height: 28px;
+  min-height: var(--size-control-md);
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--review-line);
-  border-radius: 6px;
+  border: var(--border-hair) solid var(--review-line);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--review-muted);
   font-size: var(--font-ui-size);
@@ -527,7 +514,7 @@
   background: var(--review-panel-raised);
   color: var(--review-text);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.4;
 }
 
@@ -602,7 +589,7 @@
 
 .review-banner {
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-packet {
@@ -611,8 +598,6 @@
 }
 
 .review-packet-shell {
-  --guide-measure: 52rem;
-
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
@@ -621,12 +606,6 @@
 
 .review-packet-shell.has-outline {
   grid-template-columns: var(--guide-rail-w) minmax(0, 1fr);
-}
-
-/* Split diffs only run on wide screens, so split guide prose gets a
-   character-based measure instead of the 52rem default. */
-.review-packet-shell.is-guide-split {
-  --guide-measure: 72ch;
 }
 
 .review-packet-shell.is-outline-hidden {
@@ -660,7 +639,7 @@
   border-bottom: 1px solid var(--review-line);
   padding: 8px 10px;
   color: var(--review-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -694,7 +673,7 @@
   margin: 0;
   padding: 12px;
   color: var(--review-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-packet-nav-list {
@@ -737,7 +716,7 @@
   display: block;
   margin-bottom: 10px;
   color: var(--review-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -755,12 +734,6 @@
 
 .review-packet-shell.has-outline .review-packet-grid {
   padding-inline: clamp(16px, 2vw, 32px);
-}
-
-@media (min-width: 769px) {
-  .review-packet-shell.has-outline .review-packet-grid {
-    padding-right: calc(clamp(16px, 2vw, 32px) + var(--guide-rail-w));
-  }
 }
 
 .review-packet-inline-overview {
@@ -784,7 +757,7 @@
   border-radius: 999px;
   padding: 2px 7px;
   color: var(--review-muted);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 750;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -905,7 +878,7 @@ details[open] > summary .review-collapse-icon,
   align-items: center;
   gap: 8px;
   color: var(--review-faint);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 650;
   line-height: 1.25;
   white-space: nowrap;
@@ -937,7 +910,7 @@ details[open] > summary .review-collapse-icon,
   max-width: 74ch;
   margin: 8px 0 0;
   color: var(--review-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 450;
   line-height: 1.45;
 }
@@ -1018,7 +991,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-section-state-history {
   color: var(--review-warn);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-section-state-icon {
@@ -1121,20 +1094,6 @@ details[open] > summary .review-collapse-icon,
 .review-section-action.is-ignored.is-active {
   border-color: var(--review-line-strong);
   background: var(--review-panel-raised);
-  color: var(--review-text);
-}
-
-.review-packet-section-signin {
-  color: var(--review-muted);
-  font-size: var(--font-ui-size);
-  font-weight: var(--font-ui-weight);
-  line-height: var(--font-ui-leading);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.review-packet-section-signin:hover,
-.review-packet-section-signin:focus-visible {
   color: var(--review-text);
 }
 
@@ -1259,9 +1218,7 @@ details[open] > summary .review-collapse-icon,
 .review-packet-section-summary,
 .review-packet-section-summary-text,
 .review-packet-row.is-markdown,
-.review-section-header,
-.review-section-decision,
-.review-section-next {
+.review-section-header {
   width: min(100%, var(--guide-measure));
   margin-inline: auto;
   justify-self: center;
@@ -1325,31 +1282,90 @@ details[open] > summary .review-collapse-icon,
   line-height: var(--font-prose-leading);
 }
 
+/* The mark sits beside the label; a history line ("Previously approved in
+   v2; outdated for v3.") lines up under the label, not under the mark. */
 .review-section-header-state {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: var(--space-1) var(--space-3);
 }
 
-.review-section-decision {
-  --review-decision-action-padding: 0 12px 0 10px;
+.review-section-header-state > .review-section-state-history {
+  grid-column: 2;
+  line-height: var(--font-meta-leading);
+}
 
-  position: sticky;
-  bottom: calc(16px + env(safe-area-inset-bottom));
+/* The section dock: previous section, the decision control and next
+   section, fixed to the bottom of the screen at every width. It spans the
+   content beside the Guide rail; its right edge and bottom match the
+   floating Comments and Sections buttons, which stack above next section.
+   Phones only change sizes. Without section nav (Diff mode, the design
+   playground) the control sits in the flow below its section. */
+.review-section-decision {
+  position: relative;
   z-index: var(--z-decision);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: var(--space-3);
   margin-top: 24px;
-  border: 1px solid var(--review-line-strong);
-  border-radius: 12px;
-  padding: 16px 20px;
-  background: var(--review-panel-raised);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.08);
+  pointer-events: none;
   --decision-accent: var(--ds-warn);
+}
+
+.review-section-decision > * {
+  pointer-events: auto;
+}
+
+.review-section-decision.has-nav {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: calc(var(--guide-rail-w) + 16px);
+  margin: 0;
+}
+
+/* The open Guide map covers the left of the content, so the dock starts
+   beside it. */
+.review-packet-shell:has(> .review-guide-shell.is-flyout-open) .review-section-decision.has-nav {
+  left: calc(var(--guide-flyout-w) + 16px);
+}
+
+/* At 768px and below the Guide rail runs across the top. */
+@media (max-width: 768px) {
+  .review-section-decision.has-nav,
+  .review-packet-shell:has(> .review-guide-shell.is-flyout-open) .review-section-decision.has-nav {
+    left: calc(16px + env(safe-area-inset-left));
+  }
+}
+
+/* Enough room for the last content to scroll clear of the tallest column
+   of floating buttons: the dock's 16px offset, the stack above it and a 16px
+   gap. The stack is the dock's next button, plus Comments (shown when the
+   review has comments; on phones always), plus Sections on phones in the
+   Guide, each --size-fab with the column's 12px gap. This sits inside the
+   Guide shell, so the sticky Guide rail still runs to the end of the page. */
+.review-packet-shell.has-outline .review-packet-grid {
+  --review-guide-stack: var(--size-fab);
+
+  padding-bottom: calc(16px + var(--review-guide-stack) + 16px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 641px) {
+  .review-page:has(.review-activity:not([data-empty])) .review-packet-shell.has-outline .review-packet-grid {
+    --review-guide-stack: calc(2 * var(--size-fab) + 12px);
+  }
+}
+
+@media (max-width: 640px) {
+  .review-page .review-packet-shell.has-outline .review-packet-grid {
+    --review-guide-stack: calc(2 * var(--size-fab) + 12px);
+  }
+
+  .review-page:has([data-guide-flyout-toggle]) .review-packet-shell.has-outline .review-packet-grid {
+    --review-guide-stack: calc(3 * var(--size-fab) + 24px);
+  }
 }
 
 .review-section-decision.is-approved {
@@ -1364,196 +1380,258 @@ details[open] > summary .review-collapse-icon,
   --decision-accent: var(--ds-muted);
 }
 
-.review-section-decision-copy {
-  display: grid;
-  gap: 6px;
-}
-
-.review-section-decision-heading {
-  color: var(--review-muted);
-  font-size: var(--font-meta-size);
-}
-
-.review-section-decision-toggle {
-  display: none;
-}
-
-.review-section-decision-prompt {
+.review-section-decision-control {
+  position: relative;
+  grid-column: 2;
   display: flex;
+  justify-content: center;
+}
+
+.review-section-step,
+.review-section-decision-toggle {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 0;
+  height: var(--size-fab);
+  box-sizing: border-box;
+  border: 1px solid var(--review-line-strong);
+  border-radius: 999px;
+  background: var(--review-panel-raised);
+  box-shadow: var(--shadow-float);
   color: var(--review-text);
+  cursor: pointer;
   font-size: var(--font-ui-size);
   font-weight: var(--font-ui-weight);
   line-height: var(--font-ui-leading);
+  white-space: nowrap;
 }
 
-.review-section-decision-history {
-  margin: 0;
-  color: var(--review-warn);
-  font-size: var(--font-meta-size);
-  font-weight: var(--font-meta-weight);
-  line-height: var(--font-meta-leading);
+.review-section-decision-toggle {
+  padding: 0 16px 0 12px;
 }
 
-.review-section-decision .review-packet-section-actions {
-  max-width: 100%;
+.review-section-decision-toggle > [class*="hero-"],
+.review-section-decision-toggle > .review-section-state-icon,
+.review-section-decision-toggle > .ds-github-mark,
+.review-section-step > [class*="hero-"] {
+  flex: none;
+  width: 18px;
+  height: 18px;
 }
 
-.review-section-decision-prompt .review-section-state-icon {
+.review-section-decision-toggle > :first-child {
   color: var(--decision-accent);
 }
 
-/* Decision buttons in the footer read as explicit labeled actions instead of
-   the icon-only, expand-on-hover form. */
+/* Signed out the pill is a sign-in link. GitHub's mark stays in the text
+   colour, as its guidelines require. */
+.review-section-decision-toggle.is-signin {
+  text-decoration: none;
+}
+
+.review-section-decision-toggle.is-signin > :first-child,
+.review-section-decision.is-editing .review-section-decision-toggle > :first-child {
+  color: var(--review-muted);
+}
+
+.review-section-step:hover,
+.review-section-decision-toggle:hover {
+  background: var(--review-hover);
+}
+
+/* The focus ring replaces the border rather than circling it, so the
+   control keeps one outline when focus returns to it on collapse. */
+.review-section-step:focus-visible,
+.review-section-decision-toggle:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -1px;
+}
+
+.review-section-step {
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 14px;
+  color: var(--review-muted);
+}
+
+.review-section-step.is-prev {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.review-section-step.is-next {
+  grid-column: 3;
+  justify-self: end;
+}
+
+.review-section-step-label {
+  display: inline-flex;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.review-section-step-number {
+  font-family: var(--font-mono);
+  color: var(--review-faint);
+}
+
+.review-section-step-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Optical centring: each label's line box is trimmed to its x-height band
+   (top of x, baseline), so flex centring puts the lowercase letters, not the
+   line box, on the control's centre line, level with the icon. Clipping
+   labels clip only sideways, so ascenders and descenders outside the trimmed
+   box still show. Without text-box support the label moves down by the
+   measured offset instead. */
+.review-section-decision-toggle-label,
+.review-section-step-label > span,
+.review-section-decision .review-section-action .review-section-action-label {
+  text-box: trim-both ex alphabetic;
+}
+
+.review-section-step-label,
+.review-section-step-title,
+.review-section-decision .review-section-action .review-section-action-label {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.review-section-decision-toggle > svg,
+.review-section-decision-toggle > [class*="hero-"],
+.review-section-step > [class*="hero-"],
+.review-section-decision .review-section-action > * {
+  display: block;
+}
+
+@supports not (text-box: trim-both ex alphabetic) {
+  .review-section-decision-toggle-label,
+  .review-section-step-label > span,
+  .review-section-decision .review-section-action .review-section-action-label {
+    position: relative;
+    top: 0.05em;
+  }
+}
+
+/* Expanded, the choices float above the control on their own, with no
+   card around them: Request changes, Skip and Approve in one row, Skip
+   centred over the pill. Equal side columns keep Skip on the centre line.
+   Each choice and note brings its own solid background and shadow so it
+   stays readable over code and prose. */
+.review-section-decision-panel {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  transform: translateX(-50%);
+}
+
+.review-section-decision:not(.is-editing) .review-section-decision-panel {
+  display: none;
+}
+
+.review-section-decision .review-packet-section-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.review-section-decision .review-section-action.is-denied {
+  justify-self: end;
+}
+
+.review-section-decision .review-section-action.is-approved {
+  justify-self: start;
+}
+
 .review-section-decision .review-section-action,
 .review-section-decision .review-section-action:hover,
 .review-section-decision .review-section-action:focus-visible,
 .review-section-decision .review-section-action.is-active {
   width: auto;
-  height: 32px;
+  height: 40px;
   gap: 6px;
-  padding: var(--review-decision-action-padding);
+  padding: 0 14px 0 12px;
+  background-color: var(--review-panel-raised);
+  box-shadow: var(--shadow-float);
+}
+
+/* The hover and selected tints are translucent; layer them on the solid
+   background so code never shows through. */
+.review-section-decision .review-section-action.is-approved:is(:hover, .is-active) {
+  background: linear-gradient(color-mix(in oklab, var(--review-add) 16%, transparent) 0 0), var(--review-panel-raised);
+}
+
+.review-section-decision .review-section-action.is-denied:is(:hover, .is-active) {
+  background: linear-gradient(color-mix(in oklab, var(--review-del) 16%, transparent) 0 0), var(--review-panel-raised);
 }
 
 .review-section-decision .review-section-action .review-section-action-label {
-  display: inline-grid;
-  max-width: 160px;
-  opacity: 1;
-  transition: max-width 180ms ease, opacity 160ms ease;
-}
-
-.review-section-decision .review-section-action {
-  transition: gap 180ms ease, padding 180ms ease,
-    background-color 160ms ease, border-color 160ms ease, color 160ms ease;
-}
-
-.review-section-action-verb,
-.review-section-action-result {
-  grid-area: 1 / 1;
-  max-width: 160px;
-  overflow: hidden;
-  transition: max-width 180ms ease, opacity 160ms ease;
-}
-
-.review-section-action-result,
-.review-section-action.is-active .review-section-action-verb {
-  max-width: 0;
-  opacity: 0;
-}
-
-.review-section-action.is-active .review-section-action-result {
-  max-width: 160px;
+  max-width: none;
   opacity: 1;
 }
 
-.review-section-decision:not(.is-pending):not(.is-editing)
-  .review-section-action:not(.is-active):not(:hover):not(:focus-visible) {
-  gap: 0;
-  padding: 0 8px;
+/* As on the pill, focus covers the border so it shows one outline. */
+.review-section-decision .review-section-action:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -1px;
 }
 
-.review-section-decision:not(.is-pending):not(.is-editing)
-  .review-section-action:not(.is-active):not(:hover):not(:focus-visible)
-  .review-section-action-label {
-  max-width: 0;
-  opacity: 0;
+.review-section-action-short {
+  display: none;
 }
 
+/* Phones: three full-size choices with Skip centred need ~420px, so
+   Request changes shows "Changes"; its accessible name stays in full. */
 @media (max-width: 640px) {
-  .review-packet-shell.has-outline .review-packet-grid {
-    padding-bottom: calc(88px + env(safe-area-inset-bottom));
-  }
-
-  /* Only people who can decide get the floating button. Everyone else sees
-     the decision inline, with the owner-only note or sign-in link. */
-  .review-packet-shell.has-outline .review-section-decision:not(.is-readonly) {
-    position: fixed;
-    right: calc(16px + env(safe-area-inset-right));
-    margin: 0;
-  }
-
-  .review-section-decision.is-readonly {
-    position: static;
-  }
-
-  .review-packet-shell.has-outline .review-section-decision.is-editing {
-    width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
-  }
-
-  .review-section-decision {
-    --review-decision-action-padding: 0 8px;
-
-    padding: 12px;
-    border-radius: var(--radius-lg);
-    gap: 12px;
-  }
-
-  .review-section-decision:not(.is-editing):not(.is-readonly) {
-    width: 56px;
-    margin-left: auto;
-    margin-right: 0;
-    justify-self: end;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-section-decision-copy,
-  .review-section-decision:not(.is-editing):not(.is-readonly) .review-packet-section-actions {
+  .review-section-decision .review-section-action.is-denied .review-section-action-full {
     display: none;
   }
 
-  .review-section-decision-toggle {
-    display: inline-flex;
-    flex: 0 0 56px;
-    align-items: center;
+  .review-section-decision .review-section-action.is-denied .review-section-action-short {
+    display: inline;
+  }
+}
+
+/* Non-owners get the owner-only note, floating alone on the centre line
+   like the choices. */
+.review-section-decision .review-packet-section-note {
+  grid-column: 1 / -1;
+  justify-self: center;
+  box-shadow: var(--shadow-float);
+}
+
+.review-section-decision .review-packet-section-note {
+  max-width: min(20rem, calc(100vw - 32px));
+  box-sizing: border-box;
+  border: 1px solid var(--review-line-strong);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  background: var(--review-panel-raised);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .review-section-decision {
+    gap: var(--space-2);
+  }
+
+  /* Phones show only the arrows for previous and next, as the same square
+     buttons as Comments and Sections stacked above next. */
+  .review-section-step {
+    width: var(--size-fab);
     justify-content: center;
-    width: 56px;
-    height: 56px;
-    border: 1px solid var(--review-line-strong);
+    padding: 0;
     border-radius: var(--radius-lg);
-    background: var(--review-panel-raised);
-    color: var(--decision-accent);
-    cursor: pointer;
-    box-shadow: var(--shadow-float);
   }
 
-  .review-section-decision-toggle:hover {
-    background: var(--review-hover);
-  }
-
-  .review-section-decision-toggle:focus-visible {
-    outline: 2px solid var(--decision-accent);
-    outline-offset: 3px;
-  }
-
-  .review-section-decision-toggle > span {
-    width: 24px;
-    height: 24px;
-  }
-
-  .review-section-decision.is-editing .review-section-decision-toggle {
-    flex-basis: 44px;
-    width: 44px;
-    height: 44px;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-    color: var(--review-muted);
-  }
-
-  .review-section-decision.is-editing .review-section-decision-copy {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .review-section-decision .review-packet-section-actions {
-    width: 100%;
-    flex-basis: 100%;
-    justify-content: flex-start;
+  .review-section-step-label {
+    display: none;
   }
 
   .review-section-decision .review-section-action {
@@ -1563,7 +1641,7 @@ details[open] > summary .review-collapse-icon,
 
 .review-section-summary-status {
   color: var(--review-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -1615,7 +1693,7 @@ details[open] > summary .review-collapse-icon,
   border-radius: 999px;
   background: var(--review-panel-raised);
   color: var(--review-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 750;
   line-height: 1;
 }
@@ -1788,7 +1866,7 @@ details[open] > summary .review-collapse-icon,
   padding: 7px 10px;
   color: var(--review-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
   transition: border-color 120ms ease, background 120ms ease;
 }
@@ -1987,6 +2065,11 @@ details[open] > summary .review-collapse-icon,
   line-height: var(--font-meta-leading);
 }
 
+/* A plain block button: trim its own label (see .ds-label). */
+.reviews-diff-header-viewed {
+  text-box: trim-both cap alphabetic;
+}
+
 .reviews-diff-header-viewed:hover,
 .reviews-diff-header-viewed:focus-visible {
   border-color: var(--review-line-strong);
@@ -2020,6 +2103,201 @@ details[open] > summary .review-collapse-icon,
   }
 }
 
+.reviews-diff-header-viewed-eye {
+  display: none;
+}
+
+/* Phones: the file header stays one compact row. Mark viewed becomes an
+   eye button that looks 32px but keeps a 44px tap area. */
+@media (max-width: 640px) {
+  .reviews-diff-header-viewed,
+  .reviews-diff-header-viewed[aria-pressed="true"] {
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    min-height: 32px;
+    padding: 0;
+  }
+  .reviews-diff-header-viewed::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+  }
+  .reviews-diff-header-viewed-eye {
+    display: block;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .reviews-diff-header-viewed-label {
+    display: none;
+  }
+}
+
+/* Thread cards. Comment bodies start just past the avatar; a light rounded
+   connector runs from under the avatar into the first line of the body, so
+   the text reads as the author's. */
+.review-thread-comments {
+  position: relative;
+  padding: 0 0 0 18px;
+}
+
+.review-thread-comments::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 9px;
+  width: 6px;
+  height: calc(0.8em + 2px);
+  border-left: 1.5px solid var(--ds-line);
+  border-bottom: 1.5px solid var(--ds-line);
+  border-bottom-left-radius: 6px;
+  pointer-events: none;
+}
+
+/* A comment row: on wider screens the body on the left and its time and
+   link on the right, level with the body's first line, so consecutive
+   comments line up. The time after the author name is the phone layout. */
+.review-thread-comment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-items: start;
+  padding: 2px 0;
+}
+
+/* The time shares the baseline of the body's first line of text, whatever
+   block the comment starts with: a code block's or table's padding is part
+   of the body's first baseline. The meta's own baseline is the time's (its
+   first item), and the link button centres on the time; the meta's fixed
+   height below keeps the button from adding to the row's height. */
+.review-thread-comment > .review-comment-markdown,
+.review-thread-comment > .review-comment-meta {
+  align-self: baseline;
+}
+
+/* A table row with no baseline-aligned cell takes the bottom of its lowest
+   cell as its baseline, so a comment that starts with a table would put the
+   time below the header text. Baseline-aligning that first row gives it the
+   text's own baseline; one-line header cells look the same either way. */
+.review-thread-comment > .review-comment-markdown > table:first-child tr:first-child > :is(th, td) {
+  vertical-align: baseline;
+}
+
+.review-thread-comment > * {
+  grid-column: 1;
+}
+
+.review-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-thread-comment > .review-comment-meta {
+  grid-column: 2;
+  grid-row: 1;
+  /* One body line tall (0.8125rem at 1.5 line height), so the 24px link
+     button overflows evenly instead of adding to each row's height. */
+  height: calc(1.5 * 0.8125rem);
+}
+
+.review-comment-meta.is-head {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .review-thread-comment {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+  }
+
+  .review-thread-comment > .review-comment-meta {
+    flex: 1 1 100%;
+    height: auto;
+  }
+
+  .review-thread-comment.is-first > .review-comment-meta {
+    display: none;
+  }
+
+  .review-comment-meta.is-head {
+    display: flex;
+  }
+}
+
+/* Copy-link controls: a faint icon, a real link for long-press on phones. */
+.ds-button.review-copy-link {
+  min-height: 24px;
+  width: 24px;
+  padding: 0;
+  color: var(--ds-faint);
+}
+
+.ds-button.review-copy-link svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.ds-button.review-copy-link:is(:hover, :focus-visible) {
+  color: var(--ds-text);
+}
+
+/* A thread or comment opened from a copied link: a ring on the card, or a
+   tint behind the comment, that fades out. The renderer applies them with a
+   short-lived rule (highlightLinked in vanilla_renderer.js); with reduced
+   motion they hold, then end without fading. */
+@keyframes review-linked-card {
+  0%,
+  40% {
+    box-shadow: inset 0 0 0 2px var(--ds-blue);
+  }
+
+  to {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+}
+
+@keyframes review-linked-comment {
+  0%,
+  40% {
+    background: color-mix(in srgb, var(--ds-blue) 16%, transparent);
+  }
+
+  to {
+    background: transparent;
+  }
+}
+
+.review-thread-card [data-comment-id] {
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 640px) {
+  .ds-button.review-copy-link {
+    min-height: 28px;
+    width: 28px;
+  }
+  /* A 44px tap target around the small icon. */
+  .ds-button.review-copy-link::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+  }
+  .review-thread-card {
+    margin-left: calc(-1 * var(--review-thread-gutter, 0px));
+    border-inline-width: 0 !important;
+    border-radius: 0 !important;
+  }
+}
+
 .review-packet-task,
 .review-packet-question {
   display: flex;
@@ -2045,7 +2323,7 @@ details[open] > summary .review-collapse-icon,
   padding: 2px 7px;
   color: var(--review-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .review-modal {
@@ -2053,14 +2331,92 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-modal-title {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.3;
 }
 
+/* Delete-review confirmation (DeleteReviewComponents). */
+.review-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in oklab, var(--review-bg) 70%, transparent);
+}
+
+.review-delete-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(480px, 100%);
+  padding: 20px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.review-delete-dialog p {
+  margin: 0;
+}
+
+.review-delete-warning {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  border: 1px solid color-mix(in oklab, var(--review-del) 45%, transparent);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--review-del) 12%, transparent);
+  padding: 8px 10px;
+}
+
+.review-delete-warning .size-4 {
+  margin-top: 3px;
+  color: var(--review-del);
+}
+
+.review-delete-input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--review-line-strong);
+  border-radius: 6px;
+  background: var(--review-panel);
+  color: var(--review-text);
+  padding: 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+
+.review-delete-input:focus-visible {
+  outline: 2px solid var(--review-focus);
+  outline-offset: 1px;
+}
+
+.review-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.review-button-danger {
+  border-color: var(--review-del);
+  background: var(--review-del);
+  color: var(--review-bg);
+}
+
+.review-button-danger:hover:not(:disabled) {
+  border-color: var(--review-del);
+  background: color-mix(in oklab, var(--review-del) 85%, var(--review-text));
+}
+
+.review-menu-danger {
+  color: var(--review-del);
+}
+
 .review-draft-item {
   padding: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-textarea {
@@ -2073,7 +2429,7 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-text);
   padding: 10px 12px;
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .review-textarea::placeholder {
@@ -2087,14 +2443,14 @@ details[open] > summary .review-collapse-icon,
 
 .ds-page-header.is-review-header h1 {
   max-width: 920px;
-  font-size: clamp(30px, 4vw, 56px);
+  font-size: clamp(1.875rem, 4vw, 3.5rem);
   line-height: 1;
 }
 
 .ds-page-header.is-review-header .design-hero-copy {
   max-width: 720px;
   margin-top: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .ds-page-header.is-review-header .ds-page-header-actions {
@@ -2104,7 +2460,8 @@ details[open] > summary .review-collapse-icon,
 
 .rev-shell {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  /* Room for a file name and its counts on one row. */
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -2143,40 +2500,44 @@ details[open] > summary .review-collapse-icon,
   min-height: calc(100vh - var(--rev-header-h));
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: var(--space-1);
   border-right: 1px solid var(--review-line);
   background: var(--review-panel);
-  padding: 18px 0;
+  padding: var(--space-3) 0;
 }
 
+/* The menu, the overview star, the section numbers and the close button are
+   one rounded square each, one control tall, evenly spaced; only the
+   selected one is filled. The rail centres them with equal space on
+   every side. */
 .review-edge-rail-menu,
-.review-edge-rail-hide {
+.review-edge-rail-hide,
+.review-edge-tick {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: var(--size-control-md);
+  height: var(--size-control-md);
+  flex: 0 0 auto;
   cursor: pointer;
   place-items: center;
-  border-radius: 6px;
+  border: var(--border-hair) solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
+  padding: 0;
   color: var(--review-muted);
   transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 
-.review-edge-rail-menu {
-  border: 1px solid var(--review-line);
-}
-
 .review-edge-rail-hide {
   margin-top: auto;
-  border: 1px solid transparent;
-  color: var(--review-muted);
 }
 
 .review-edge-rail-menu:hover,
 .review-edge-rail-menu:focus-visible,
 .review-guide-shell.is-flyout-open .review-edge-rail-menu,
 .review-edge-rail-hide:hover,
-.review-edge-rail-hide:focus-visible {
+.review-edge-rail-hide:focus-visible,
+.review-edge-tick:hover,
+.review-edge-tick:focus-visible {
   border-color: var(--review-line-strong);
   background: var(--review-hover);
   color: var(--review-text);
@@ -2186,7 +2547,31 @@ details[open] > summary .review-collapse-icon,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
+  gap: var(--space-1);
+}
+
+/* Touch: each square gets a 44px target. The squares stay 32px and move
+   12px apart, so neighbouring targets meet without overlapping. Where the
+   rail or strip is short of room, the rules for its orientation below
+   narrow the gaps and split the targets at their midpoints. */
+@media (pointer: coarse) {
+  .review-edge-rail,
+  .review-edge-rail-ticks {
+    gap: calc(44px - var(--size-control-md));
+  }
+
+  .review-edge-rail-menu,
+  .review-edge-rail-hide {
+    position: relative;
+  }
+
+  .review-edge-rail-menu::after,
+  .review-edge-rail-hide::after,
+  .review-edge-tick::after {
+    content: "";
+    position: absolute;
+    inset: calc((100% - 44px) / 2);
+  }
 }
 
 .review-edge-rail-ticks .review-edge-tick {
@@ -2203,29 +2588,10 @@ details[open] > summary .review-collapse-icon,
 
 .review-edge-tick {
   position: relative;
-  display: grid;
-  width: 24px;
-  height: 28px;
-  flex: 0 0 auto;
-  cursor: pointer;
-  place-items: center;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  padding-block: 3px;
-  color: var(--review-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 740;
   line-height: 1;
-  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
-}
-
-.review-edge-tick:hover,
-.review-edge-tick:focus-visible {
-  border-color: var(--review-line);
-  background: var(--review-hover);
-  color: var(--review-text);
 }
 
 .review-edge-tick.is-active {
@@ -2241,8 +2607,8 @@ details[open] > summary .review-collapse-icon,
 
 .review-edge-tick-state {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  right: 2px;
+  bottom: 2px;
   display: inline-grid;
   width: 8px;
   height: 8px;
@@ -2305,6 +2671,56 @@ details[open] > summary .review-collapse-icon,
 }
 
 @media (min-width: 769px) {
+  /* The collapsed rail is exactly the height under the headers. If the
+     numbers do not fit, only they scroll, so the menu and close stay on
+     screen. */
+  .review-edge-rail {
+    height: calc(100dvh - var(--rev-header-h));
+    min-height: 0;
+  }
+
+  .review-edge-rail-ticks {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+}
+
+/* Touch, desktop rail: the same sharing as the phone strip, turned
+   vertical. The height left after the 32px squares becomes equal gaps of
+   4px to 12px, and each target reaches the midpoint of the gaps above and
+   below it. Only when even 4px gaps do not fit do the numbers scroll; the
+   padding keeps the scroller from clipping their targets, and the negative
+   margin cancels it visually. */
+@media (min-width: 769px) and (pointer: coarse) {
+  .review-edge-rail {
+    --guide-gap: clamp(
+      var(--space-1),
+      (100dvh - var(--rev-header-h) - 2 * var(--space-3) - var(--guide-items, 9) * var(--size-control-md)) / (var(--guide-items, 9) - 1),
+      calc(44px - var(--size-control-md))
+    );
+    --guide-hit-y: calc(var(--guide-gap) / 2);
+  }
+
+  .review-edge-rail,
+  .review-edge-rail-ticks {
+    gap: var(--guide-gap);
+  }
+
+  .review-edge-rail-ticks {
+    margin-block: calc(-1 * var(--guide-hit-y));
+    padding: var(--guide-hit-y) calc((44px - var(--size-control-md)) / 2);
+  }
+
+  .review-edge-rail-menu::after,
+  .review-edge-rail-hide::after,
+  .review-edge-tick::after {
+    inset-block: calc(-1 * (var(--guide-hit-y) + var(--border-hair)));
+  }
+}
+
+@media (min-width: 769px) {
   .review-packet-shell.has-outline:has(> .review-guide-shell.is-flyout-open) {
     grid-template-columns: var(--guide-flyout-w) minmax(0, 1fr);
   }
@@ -2326,7 +2742,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-flyout-heading {
   margin: 0;
   color: var(--review-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 720;
   line-height: 1.2;
 }
@@ -2362,7 +2778,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-flyout-label {
   margin-bottom: 8px;
   color: var(--review-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 760;
   letter-spacing: 0.08em;
   line-height: 1;
@@ -2370,8 +2786,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-guide-flyout-section,
-.review-guide-flyout-file,
-.review-guide-file-row {
+.review-guide-flyout-file {
   appearance: none;
   width: 100%;
   border: 0;
@@ -2383,15 +2798,7 @@ details[open] > summary .review-collapse-icon,
 }
 
 .review-guide-flyout-section {
-  display: flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 10px;
-  border-radius: 6px;
-  color: var(--review-text);
-  font-size: 13px;
-  font-weight: 650;
-  padding: 6px 8px;
+  font-weight: var(--weight-semi);
 }
 
 .review-guide-flyout-section:hover,
@@ -2407,7 +2814,7 @@ details[open] > summary .review-collapse-icon,
   flex: 0 0 auto;
   color: var(--review-muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 720;
 }
 
@@ -2415,34 +2822,18 @@ details[open] > summary .review-collapse-icon,
   color: var(--review-add);
 }
 
-.review-guide-flyout-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .review-guide-flyout-files {
-  display: grid;
-  gap: 2px;
-  margin: 2px 0 6px 30px;
+  margin: var(--space-1) 0 var(--space-2);
 }
 
-.review-guide-flyout-file {
-  overflow: hidden;
-  border-radius: 4px;
-  color: var(--review-muted);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.2;
-  padding: 4px 6px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* The section tree takes most of the flyout's side padding: its rows have
+   their own, and file names need the width. */
+.review-guide-flyout-group:has(> .rev-tree-header) {
+  margin-inline: calc(-1 * var(--space-6));
 }
 
-.review-guide-flyout-file:hover,
-.review-guide-flyout-file:focus-visible {
-  color: var(--review-text);
+.review-guide-flyout-files .rev-tree-row {
+  gap: var(--space-2);
 }
 
 .review-guide-panel {
@@ -2470,7 +2861,7 @@ details[open] > summary .review-collapse-icon,
 .review-guide-panel-title {
   margin: 18px 0 0;
   color: var(--review-text);
-  font-size: 30px;
+  font-size: 1.875rem;
   font-weight: 780;
   letter-spacing: 0;
   line-height: 1.1;
@@ -2480,7 +2871,7 @@ details[open] > summary .review-collapse-icon,
   margin-top: 24px;
   max-width: 58ch;
   color: color-mix(in srgb, var(--review-text) 82%, var(--review-muted));
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1.58;
 }
 
@@ -2492,6 +2883,13 @@ details[open] > summary .review-collapse-icon,
   margin-top: 0.9em;
 }
 
+/* Who published the packet (<.ds_identity>), and for an agent, its owner. */
+.review-guide-author {
+  margin: var(--space-4) 0 0;
+  color: var(--review-muted);
+  font-size: 0.8125rem;
+}
+
 .review-guide-panel-meta,
 .review-guide-overview-stats {
   display: flex;
@@ -2500,28 +2898,11 @@ details[open] > summary .review-collapse-icon,
   gap: 12px;
   margin-top: 26px;
   color: var(--review-faint);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 680;
 }
 
 /* Linear flow: after the decision, the next section is one click away. */
-.review-section-next {
-  display: flex;
-  flex-basis: 100%;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.review-section-next-button {
-  margin-top: 4px;
-}
-
-.review-section-next-button.is-overview {
-  border: 1px solid var(--review-line-strong);
-  background: transparent;
-  color: var(--review-text);
-}
-
 .review-guide-begin {
   display: inline-flex;
   align-items: center;
@@ -2533,123 +2914,10 @@ details[open] > summary .review-collapse-icon,
   border-radius: 6px;
   background: var(--review-text);
   color: var(--review-bg);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 720;
   line-height: 1;
   padding: 0 14px;
-}
-
-.review-guide-panel-files {
-  display: grid;
-  gap: 0;
-  margin-top: 42px;
-}
-
-.review-guide-files-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  color: var(--review-faint);
-  font-size: 10px;
-  font-weight: 760;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.review-guide-files-label span:last-child {
-  height: 1px;
-  flex: 1 1 auto;
-  background: var(--review-line);
-}
-
-.review-guide-file-row {
-  display: grid;
-  grid-template-areas:
-    "icon name stat"
-    "icon path state";
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  column-gap: 7px;
-  row-gap: 2px;
-  align-items: center;
-  min-height: 38px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--review-panel) 68%, transparent);
-  padding: 6px 8px;
-}
-
-.review-guide-file-row:hover {
-  border-color: var(--review-line);
-  background: var(--review-panel);
-}
-
-.review-guide-file-row:focus-visible {
-  outline: 2px solid var(--review-focus);
-  outline-offset: -2px;
-}
-
-.review-guide-file-row:disabled {
-  cursor: default;
-}
-
-.review-guide-file-row.is-partial .review-guide-file-state {
-  color: var(--review-warn);
-}
-
-.review-guide-file-icon {
-  grid-area: icon;
-  width: 14px;
-  height: 14px;
-  color: var(--review-faint);
-}
-
-.review-guide-file-name {
-  grid-area: name;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--review-text);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.review-guide-file-path {
-  grid-area: path;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--review-faint);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.review-guide-file-stat {
-  grid-area: stat;
-  justify-self: end;
-}
-
-.review-guide-file-state {
-  grid-area: state;
-  display: inline-flex;
-  align-items: center;
-  justify-self: end;
-  gap: 4px;
-  color: var(--review-faint);
-  font-size: 10px;
-  font-weight: 680;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.review-guide-file-row.is-viewed .review-guide-file-state {
-  color: var(--review-add);
 }
 
 .review-guide-open-threads {
@@ -2675,31 +2943,271 @@ details[open] > summary .review-collapse-icon,
   background: var(--review-panel);
 }
 
-.rev-file-tree {
-  height: min(
-    calc(var(--rev-file-tree-rows, 1) * 30px + 22px),
-    calc(100vh - var(--rev-header-h) - 18px)
-  );
-  min-height: 44px;
-  border: 1px solid var(--review-line);
-  border-radius: 8px;
-  background: var(--review-panel);
-  box-sizing: border-box;
+/* Tree rows, shared by the diff view's file tree and the Guide map.
+   Folder rows: a folder icon and a muted path. File rows: a chevron, the
+   name with the rest of the path muted after it, the line counts and an
+   outlined letter. Rows are 2.75rem, a 44px tap target. */
+.rev-tree-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
+  padding: 0 var(--space-3);
+}
+
+.rev-tree-scope {
+  color: var(--review-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--weight-semi);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.rev-tree-row {
+  appearance: none;
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--review-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  padding: 0 var(--space-3);
+  text-align: left;
+}
+
+.rev-tree-row:hover,
+.rev-tree-row:focus-visible {
+  background: var(--review-hover);
+}
+
+.rev-tree-row:focus-visible {
+  outline: 2px solid var(--review-focus);
+  outline-offset: -2px;
+}
+
+.rev-tree-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.rev-tree-row .review-change-stat {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+.rev-tree-label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
-  padding-top: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.rev-file-tree file-tree-container {
-  height: calc(100% - 8px);
-  color-scheme: light dark;
+/* A file row keeps the file name whole. When the row runs out of room,
+   the line counts go first, then the muted path; the name truncates only
+   when it is wider than the whole row.
+
+   The label shrinks a thousand times slower than the counts, so the counts
+   give up their width first. Both the path and the counts sit in a
+   one-line box that wraps: what does not fit drops to a hidden second
+   line instead of showing a stub such as "l…". */
+.rev-tree-row .rev-tree-label:has(> .rev-tree-name) {
+  display: flex;
+  flex: 1 0.001 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+  column-gap: var(--space-2);
+  height: 1lh;
 }
 
-.rev-file-tree-empty {
-  margin: 0;
-  border: 1px solid var(--review-line);
-  border-radius: 8px;
+.rev-tree-name {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--weight-regular);
+}
+
+.rev-tree-name + .rev-tree-dir {
+  flex: 1 1 4ch;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rev-tree-dir {
+  color: var(--review-muted);
+}
+
+.rev-tree-stats {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+  height: 1lh;
+  overflow: hidden;
+}
+
+/* An empty first item a full line tall, so the counts have a line to
+   wrap away from. */
+.rev-tree-stats::before {
+  content: "";
+  height: 100%;
+}
+
+.rev-tree-chevron,
+.rev-tree-folder-icon {
+  flex: 0 0 auto;
+  color: var(--review-faint);
+}
+
+.rev-tree-chevron {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
+.rev-tree-folder-icon {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+}
+
+/* The thin guide line down the left of a folder's children. */
+.rev-tree-children {
+  margin-left: calc(var(--space-3) + var(--size-icon-md) / 2);
+  border-left: var(--border-hair) solid var(--review-line);
+  padding-left: var(--space-1);
+}
+
+.rev-tree-children.is-root {
+  margin-left: 0;
+  border-left: 0;
+  padding-left: 0;
+}
+
+.rev-tree-folder > summary {
+  list-style: none;
+}
+
+.rev-tree-folder > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rev-tree-folder:not([open]) > summary .rev-tree-dir::after {
+  content: " …";
+}
+
+.rev-tree-badge-slot {
+  display: inline-grid;
+  width: 1.375rem;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.rev-tree-badge {
+  display: inline-grid;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border: var(--border-hair) solid currentColor;
+  border-radius: var(--radius-xs);
+  color: var(--review-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-3xs);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+.rev-tree-badge.is-modified,
+.rev-tree-badge.is-renamed {
+  color: var(--review-warn);
+}
+
+.rev-tree-badge.is-added,
+.rev-tree-badge.is-approved {
+  color: var(--review-add);
+}
+
+.rev-tree-badge.is-deleted,
+.rev-tree-badge.is-denied {
+  color: var(--review-del);
+}
+
+.rev-tree-badge.is-ignored {
+  color: var(--review-faint);
+}
+
+.rev-file-tree {
+  border: var(--border-hair) solid var(--review-line);
+  border-radius: var(--radius-md);
   background: var(--review-panel);
-  padding: 12px;
+  padding: var(--space-5) var(--space-2);
+}
+
+.rev-file-tree-toggle {
+  display: none;
+}
+
+.rev-tree-count {
+  color: var(--review-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phones and tablets: the tree folds behind a Files button above the
+   diffs, so the diffs keep the full width. */
+@media (max-width: 768px) {
+  .rev-file-tree-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 2.75rem;
+    align-items: center;
+    gap: var(--space-3);
+    border: var(--border-hair) solid var(--review-line);
+    border-radius: var(--radius-md);
+    background: var(--review-panel);
+    color: var(--review-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: var(--weight-semi);
+    padding: 0 var(--space-5);
+  }
+
+  .rev-file-tree-toggle:focus-visible {
+    outline: 2px solid var(--review-focus);
+    outline-offset: 2px;
+  }
+
+  .rev-file-tree-toggle-chevron {
+    width: var(--size-icon-md);
+    height: var(--size-icon-md);
+    margin-left: auto;
+    color: var(--review-muted);
+  }
+
+  .rev-file-tree-toggle[aria-expanded="true"] .rev-file-tree-toggle-chevron {
+    transform: rotate(180deg);
+  }
+
+  .rev-file-tree {
+    display: none;
+    margin-top: var(--space-3);
+    max-height: 60svh;
+  }
+
+  .rev-file-tree.is-open {
+    display: block;
+  }
 }
 
 .rev-file-link {
@@ -2763,14 +3271,14 @@ details[open] > summary .review-collapse-icon,
   align-items: center;
   padding: 0 56px 0 18px;
   color: var(--review-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .rev-file-path {
   min-width: 0;
   color: var(--review-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
@@ -2780,7 +3288,7 @@ details[open] > summary .review-collapse-icon,
   align-items: center;
   gap: 6px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2799,7 +3307,7 @@ details[open] > summary .review-collapse-icon,
   background: var(--review-panel-raised);
   color: var(--review-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
 }
 
@@ -2818,7 +3326,7 @@ details[open] > summary .review-collapse-icon,
 .rev-open-threads-heading {
   padding: 0 8px 6px;
   color: var(--ds-muted, #a3a3a3);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2832,7 +3340,7 @@ details[open] > summary .review-collapse-icon,
   gap: 6px;
   padding: 4px 8px;
   color: var(--ds-text, #f5f5f5);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 .rev-open-thread-entry {
@@ -2862,14 +3370,14 @@ details[open] > summary .review-collapse-icon,
 }
 .rev-open-thread-path {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--ds-muted, #a3a3a3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .rev-open-thread-snippet {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--ds-text, #f5f5f5);
   overflow: hidden;
   display: -webkit-box;
@@ -2885,15 +3393,14 @@ details[open] > summary .review-collapse-icon,
 
   .review-page .ds-shell-topbar {
     position: static;
-    min-height: 48px;
+    min-height: 3rem;
     gap: 8px;
     background: var(--review-bg);
     padding-inline: 12px;
     backdrop-filter: none;
   }
 
-  .review-page .design-brand,
-  .review-page .ds-shell-actions .review-button {
+  .review-page .design-brand {
     min-height: 44px;
   }
 
@@ -2914,31 +3421,8 @@ details[open] > summary .review-collapse-icon,
     }
   }
 
-  /* Keep the signed-out button compact without shrinking its tap area. */
-  .review-page .ds-shell-actions > a.review-button {
-    position: relative;
-    min-height: 32px;
-  }
-
-  .review-page .ds-shell-actions > a.review-button::after {
-    content: "";
-    position: absolute;
-    inset: -7px 0;
-  }
-
-  .review-page .ds-shell-actions .review-button > span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .review-page .ds-shell-actions img {
-    flex: 0 0 auto;
-  }
-
   .review-toolbar {
-    min-height: 48px;
+    min-height: 3rem;
     flex-wrap: nowrap;
     gap: 8px;
     padding: 0 12px;
@@ -2958,7 +3442,7 @@ details[open] > summary .review-collapse-icon,
   .review-toolbar .review-title,
   .review-toolbar .review-header .review-title.is-packet-title {
     overflow: hidden;
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 20px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2995,7 +3479,7 @@ details[open] > summary .review-collapse-icon,
     position: absolute;
     z-index: -1;
     inset: 6px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     content: "";
   }
 
@@ -3029,23 +3513,43 @@ details[open] > summary .review-collapse-icon,
     flex: 0 0 auto;
   }
 
-  .review-mobile-revision-nav .fieldset {
+  .review-mobile-revision-nav .ds-field {
     margin: 0;
     gap: 0;
     padding: 0;
   }
 
+  /* One control tall, as wide as its longest option. 1rem text stops iOS
+     zooming on focus. On touch screens the box grows a transparent border
+     to a 44px target, and an inset shadow draws the visible outline inside
+     it. */
   .review-revision-select {
     display: block;
-    width: 60px;
-    min-height: 44px;
-    border: 1px solid var(--ds-line-input);
-    border-radius: 6px;
+    width: auto;
+    height: var(--size-control-md);
+    min-height: 0;
+    border: var(--border-hair) solid var(--ds-line-input);
+    border-radius: var(--radius-sm);
     background: var(--review-panel);
-    padding-inline: 6px;
+    padding: 0 var(--space-1) 0 var(--space-3);
     color: var(--review-text);
-    font-size: 16px;
+    font-size: 1rem;
+    line-height: 1;
     cursor: pointer;
+  }
+
+  @media (pointer: coarse) {
+    .review-revision-select {
+      --select-hit-pad: calc((44px - var(--size-control-md)) / 2);
+      height: 44px;
+      border: var(--select-hit-pad) solid transparent;
+      border-radius: calc(var(--radius-sm) + var(--select-hit-pad));
+      background-clip: padding-box;
+      box-shadow: inset 0 0 0 var(--border-hair) var(--ds-line-input);
+      outline-offset: calc(2px - var(--select-hit-pad));
+      /* Keep the visible gap to the Guide square the same as without touch. */
+      margin-inline-end: calc(-1 * var(--select-hit-pad));
+    }
   }
 
   .review-diff-style #diff-style-split {
@@ -3075,6 +3579,11 @@ details[open] > summary .review-collapse-icon,
     padding: 18px 16px 56px;
   }
 
+  /* The floating buttons still need their room in the Guide. */
+  .review-packet-shell.has-outline .review-packet-grid {
+    padding-bottom: calc(16px + var(--review-guide-stack) + 16px + env(safe-area-inset-bottom));
+  }
+
   /* Diffs use the full screen width: no side borders or corners, and in the
      packet the card cancels the grid's 16px inline padding, which the Guide
      prose keeps. Top and bottom borders still separate stacked files. */
@@ -3096,19 +3605,15 @@ details[open] > summary .review-collapse-icon,
     border-bottom: 1px solid var(--review-line);
   }
 
+  /* 12px inline, the same as the top bar and toolbar, so the first square
+     lines up under the R mark. */
   .review-edge-rail {
     min-height: 48px;
     flex-direction: row;
-    gap: 12px;
     border-right: 0;
     border-bottom: 1px solid var(--review-line);
     overflow-x: auto;
-    padding: 0 16px;
-  }
-
-  .review-edge-rail-menu,
-  .review-edge-rail-hide {
-    flex: 0 0 auto;
+    padding: 0 12px;
   }
 
   .review-edge-rail-hide {
@@ -3119,6 +3624,50 @@ details[open] > summary .review-collapse-icon,
   .review-edge-rail-ticks {
     flex: 0 0 auto;
     flex-direction: row;
+  }
+
+  /* Touch phones fit the whole strip in one row. The width left after the
+     32px squares is shared out as equal gaps between 4px (the mouse gap) and
+     12px (where 44px targets fit). Each target covers its square plus half
+     of each gap, so neighbouring targets meet at the midpoint: a tap goes to
+     the nearest control, and targets narrow below 44px only when the row is
+     full. --guide-items (menu, overview, sections, close) is set on the rail.
+     Only when even 4px gaps do not fit do the numbers scroll, between the
+     menu and close, which stay put. The padding keeps the scroller from
+     clipping the targets; the negative margin cancels it visually. */
+  @media (pointer: coarse) {
+    .review-guide-shell {
+      container-type: inline-size;
+    }
+
+    .review-edge-rail {
+      --guide-gap: clamp(
+        var(--space-1),
+        (100cqw - 24px - var(--guide-items, 9) * var(--size-control-md)) / (var(--guide-items, 9) - 1),
+        calc(44px - var(--size-control-md))
+      );
+      --guide-hit-x: calc(var(--guide-gap) / 2);
+    }
+
+    .review-edge-rail,
+    .review-edge-rail-ticks {
+      gap: var(--guide-gap);
+    }
+
+    .review-edge-rail-ticks {
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow-x: auto;
+      margin-inline: calc(-1 * var(--guide-hit-x));
+      padding: calc((44px - var(--size-control-md)) / 2) var(--guide-hit-x);
+      scrollbar-width: none;
+    }
+
+    .review-edge-rail-menu::after,
+    .review-edge-rail-hide::after,
+    .review-edge-tick::after {
+      inset-inline: calc(-1 * (var(--guide-hit-x) + var(--border-hair)));
+    }
   }
 
   .review-guide-flyout {
@@ -3149,11 +3698,11 @@ details[open] > summary .review-collapse-icon,
   }
 
   .review-guide-panel-title {
-    font-size: 26px;
+    font-size: 1.625rem;
   }
 
   .review-guide-panel-prose {
-    font-size: 16px;
+    font-size: 1rem;
   }
 
   .review-hunk-line-stat {
@@ -3209,9 +3758,7 @@ details[open] > summary .review-collapse-icon,
   .review-section-action,
   .review-section-action-label,
   .review-section-decision .review-section-action,
-  .review-section-decision .review-section-action .review-section-action-label,
-  .review-section-action-verb,
-  .review-section-action-result {
+  .review-section-decision .review-section-action .review-section-action-label {
     transition: none;
   }
 }
@@ -3232,8 +3779,6 @@ details[open] > summary .review-collapse-icon,
 
   .review-section-header-title {
     order: 1;
-    font-size: clamp(22px, 6.4vw, 26px);
-    line-height: 1.2;
   }
 
   .review-section-header-meta {
@@ -3260,6 +3805,11 @@ details[open] > summary .review-collapse-icon,
 .review-markdown-side + .review-markdown-side { border-left: 1px solid var(--ds-line); }
 .review-markdown-side-label { padding: .35rem 1rem; font-size: .75rem; color: var(--ds-muted); }
 .review-rich-markdown { padding: 1rem 1.5rem; overflow-wrap: anywhere; line-height: 1.65; color: var(--ds-text); }
+/* Rendered Markdown wraps at the Guide prose measure, centred like the prose
+   column; the card and Source stay full width. Content-box keeps the text
+   itself, not text plus padding, at the measure. Scoped to the preview:
+   comment bodies reuse .review-rich-markdown and stay left-aligned. */
+.review-markdown-preview .review-rich-markdown { box-sizing: content-box; max-width: var(--guide-measure); margin-inline: auto; }
 .review-rich-markdown .review-markdown-change { border-left: 3px solid var(--ds-add); padding-left: .75rem; }
 .review-markdown-side.is-before .review-markdown-change { border-left-color: var(--ds-del); }
 .review-rich-markdown > * + * { margin-top: 1rem; }

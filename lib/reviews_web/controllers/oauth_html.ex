@@ -5,6 +5,8 @@ defmodule ReviewsWeb.OAuthHTML do
   The consent page names the client by the domain that published its
   metadata document (its `client_id` host) and shows its `client_name` only
   as what it calls itself, so an unverified name is never shown as verified.
+  A client the resource recognizes by its `client_id` (`known_client/1`),
+  such as Claude or ChatGPT at `/mcp`, is shown with its name and logo.
   A client registered through dynamic client registration has no verified
   domain, so the page says so and leads with the host it sends you back to.
 
@@ -25,13 +27,12 @@ defmodule ReviewsWeb.OAuthHTML do
             class="is-compact"
           >
             <:actions>
-              <.link
+              <.ds_github_button
                 id="poppy-sign-in-github"
                 href={~p"/auth/github?#{[return_to: @return_to]}"}
-                class="ds-button is-primary"
               >
                 Sign in with GitHub
-              </.link>
+              </.ds_github_button>
             </:actions>
           </.ds_page_header>
         </div>
@@ -42,48 +43,73 @@ defmodule ReviewsWeb.OAuthHTML do
 
   def consent(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <%!-- The page names the signed-in account itself; the sign-in toast would cover the form. --%>
+    <Layouts.app flash={Map.delete(@flash, "info")}>
       <div id="poppy-consent" class="l-page design-page">
         <div class="design-main is-settings">
           <.ds_page_header
             eyebrow={eyebrow(@request)}
             title={consent_title(@request)}
             description={consent_text(@request)}
-            class="is-compact"
+            class="is-compact is-consent"
           >
           </.ds_page_header>
 
           <.ds_card class="ds-settings-card">
-            <dl id="poppy-consent-client" class="poppy-facts">
-              <div :if={!registered?(@request.client)}>
-                <dt>Verified domain</dt>
-                <dd translate="no">{client_host(@request.client)}</dd>
+            <div id="poppy-consent-client">
+              <div :if={@known} id="poppy-consent-known" class="consent-client is-known">
+                <img src={@known.logo} alt="" width="40" height="40" class="consent-client-logo" />
+                <div class="consent-client-text">
+                  <span class="consent-client-name">
+                    {@known.name}
+                    <span class="ds-badge consent-badge is-recognized">
+                      <.icon name="hero-check-badge" class="size-3.5" /> Recognized app
+                    </span>
+                  </span>
+                  <span class="consent-client-meta" translate="no">
+                    {@known.publisher} · {client_host(@request.client)}
+                  </span>
+                </div>
               </div>
-              <div :if={registered?(@request.client)}>
-                <dt>Verified domain</dt>
-                <dd>
-                  None. This app registered itself, so Reviews can't tell who runs it.
-                </dd>
+
+              <div :if={!@known} class="consent-client">
+                <span class="consent-client-logo is-unknown">
+                  <.icon name="hero-question-mark-circle" class="size-6" />
+                </span>
+                <div class="consent-client-text">
+                  <span class="consent-client-name">
+                    {@request.client.client_name || "(no name)"}
+                    <span class="ds-badge consent-badge">Not verified</span>
+                  </span>
+                  <span :if={!registered?(@request.client)} class="consent-client-meta">
+                    Calls itself this. Verified domain:
+                    <strong translate="no">{client_host(@request.client)}</strong>
+                  </span>
+                  <span :if={registered?(@request.client)} class="consent-client-meta">
+                    Calls itself this. No verified domain. This app registered itself, so
+                    Reviews can't tell who runs it.
+                  </span>
+                </div>
               </div>
-              <div>
-                <dt>Calls itself</dt>
-                <dd>
-                  {@request.client.client_name || "(no name)"}
-                  <span class="ds-badge">Not verified</span>
-                </dd>
-              </div>
-              <div>
-                <dt>Client ID</dt>
-                <dd translate="no"><code>{@request.client.client_id}</code></dd>
-              </div>
-              <div>
-                <dt>Returns you to</dt>
-                <dd>
-                  <strong translate="no">{redirect_host(@request.redirect_uri)}</strong>
-                  <code translate="no">{@request.redirect_uri}</code>
-                </dd>
-              </div>
-            </dl>
+
+              <dl :if={!own_callback?(@known, @request)} class="poppy-facts">
+                <.returns_to redirect_uri={@request.redirect_uri} />
+              </dl>
+
+              <details id="poppy-consent-details" class="consent-details">
+                <summary>Details</summary>
+                <dl class="poppy-facts">
+                  <.returns_to
+                    :if={own_callback?(@known, @request)}
+                    redirect_uri={@request.redirect_uri}
+                  />
+                  <div>
+                    <dt>Client ID</dt>
+                    <dd translate="no"><code>{@request.client.client_id}</code></dd>
+                  </div>
+                </dl>
+              </details>
+            </div>
 
             <p
               :if={Gatekeep.Clients.loopback_redirect?(@request.redirect_uri)}
@@ -122,6 +148,9 @@ defmodule ReviewsWeb.OAuthHTML do
 
               <fieldset id="poppy-consent-identity">
                 <legend>Act as</legend>
+                <p id="poppy-consent-account" class="consent-account">
+                  Signed in as <strong translate="no">{@current_user.username}</strong>
+                </p>
                 <label :for={identity <- @identities} :key={identity.id}>
                   <input
                     type="radio"
@@ -148,7 +177,6 @@ defmodule ReviewsWeb.OAuthHTML do
                     type="text"
                     label="Agent name"
                     autocomplete="off"
-                    class="ds-input"
                   />
                   <.input
                     field={@new_identity[:handle]}
@@ -158,40 +186,67 @@ defmodule ReviewsWeb.OAuthHTML do
                     autocomplete="off"
                     autocapitalize="none"
                     spellcheck="false"
-                    class="ds-input"
                   />
                 </div>
               </fieldset>
 
-              <fieldset id="poppy-consent-scopes">
-                <legend>Permissions</legend>
-                <label :for={scope <- @request.scopes} :key={scope}>
-                  <input type="checkbox" name="granted_scopes[]" value={scope} checked />
-                  <span><code>{scope}</code>: {@scopes[scope]}</span>
-                </label>
+              <fieldset id="poppy-consent-scopes" class="consent-scopes">
+                <legend>What it may do</legend>
+                <div :if={read_scopes(@request) != []} class="consent-scope-group is-read">
+                  <p class="consent-scope-group-title">
+                    <.icon name="hero-eye" class="size-4" /> Read <span>Always included</span>
+                  </p>
+                  <div :for={scope <- read_scopes(@request)} :key={scope} class="consent-scope">
+                    <input type="hidden" name="granted_scopes[]" value={scope} />
+                    <.icon name="hero-check" class="size-4 consent-scope-mark" />
+                    <.scope_text scope={scope} titles={@scope_titles} scopes={@scopes} />
+                  </div>
+                </div>
+                <div :if={write_scopes(@request) != []} class="consent-scope-group is-write">
+                  <p class="consent-scope-group-title">
+                    <.icon name="hero-pencil-square" class="size-4" /> Write
+                    <span>As the agent you pick</span>
+                  </p>
+                  <label
+                    :for={scope <- write_scopes(@request)}
+                    :key={scope}
+                    class="consent-scope"
+                    for={"poppy-scope-#{scope}"}
+                  >
+                    <input
+                      type="checkbox"
+                      name="granted_scopes[]"
+                      value={scope}
+                      id={"poppy-scope-#{scope}"}
+                      checked
+                    />
+                    <.scope_text scope={scope} titles={@scope_titles} scopes={@scopes} />
+                  </label>
+                </div>
               </fieldset>
 
               <p class="poppy-consent-note">{text(@request).note}</p>
 
               <div class="poppy-consent-actions">
-                <button
+                <.ds_button
                   id="poppy-consent-approve"
                   type="submit"
                   name="decision"
                   value="approve"
-                  class="ds-button is-primary"
+                  variant="primary"
+                  icon="hero-check"
                 >
                   Allow
-                </button>
-                <button
+                </.ds_button>
+                <.ds_button
                   id="poppy-consent-deny"
                   type="submit"
                   name="decision"
                   value="deny"
-                  class="ds-button"
+                  icon="hero-x-mark"
                 >
                   Deny
-                </button>
+                </.ds_button>
               </div>
             </form>
           </.ds_card>
@@ -200,6 +255,46 @@ defmodule ReviewsWeb.OAuthHTML do
     </Layouts.app>
     """
   end
+
+  attr :redirect_uri, :string, required: true
+
+  defp returns_to(assigns) do
+    ~H"""
+    <div id="poppy-consent-returns-to">
+      <dt>Returns you to</dt>
+      <dd>
+        <strong translate="no">{redirect_host(@redirect_uri)}</strong>
+        <code translate="no">{@redirect_uri}</code>
+      </dd>
+    </div>
+    """
+  end
+
+  # A recognized app returning you to its own domain needs no second mention
+  # of that domain; any other callback stays in view.
+  defp own_callback?(nil, _request), do: false
+
+  defp own_callback?(_known, request),
+    do: URI.parse(request.redirect_uri).host == client_host(request.client)
+
+  attr :scope, :string, required: true
+  attr :titles, :map, required: true
+  attr :scopes, :map, required: true
+
+  defp scope_text(assigns) do
+    ~H"""
+    <span class="consent-scope-text">
+      <span class="consent-scope-title">{@titles[@scope] || @scope}</span>
+      <span :if={@titles[@scope]} class="consent-scope-desc">{@scopes[@scope]}</span>
+      <code translate="no" class="consent-scope-name">{@scope}</code>
+    </span>
+    """
+  end
+
+  # A scope that only reads is part of every grant that asks for it; the
+  # page lets the owner leave out writes.
+  defp read_scopes(request), do: Enum.filter(request.scopes, &String.ends_with?(&1, ":read"))
+  defp write_scopes(request), do: request.scopes -- read_scopes(request)
 
   def invalid_request(assigns) do
     ~H"""
@@ -228,8 +323,30 @@ defmodule ReviewsWeb.OAuthHTML do
   defp reason_text(_),
     do: "Reviews couldn't verify the agent that sent this link. Nothing was shared."
 
-  defp text(request),
-    do: Reviews.OAuth.resource_module(request.resource).consent_text(client_label(request.client))
+  defp text(request) do
+    module = Reviews.OAuth.resource_module(request.resource)
+    module.consent_text(client_label(request.client, known_client(module, request.client)))
+  end
+
+  @doc """
+  The client the requested resource recognizes (`known_client/1`), or nil.
+  Only a client named by its metadata document's URL can be recognized.
+  """
+  def known_client(request) do
+    known_client(Reviews.OAuth.resource_module(request.resource), request.client)
+  end
+
+  defp known_client(module, %{kind: kind, client_id: client_id}) when kind != :registered do
+    if function_exported?(module, :known_client, 1), do: module.known_client(client_id)
+  end
+
+  defp known_client(_module, _client), do: nil
+
+  @doc "Short titles for the requested resource's scopes (`scope_titles/0`)."
+  def scope_titles(request) do
+    module = Reviews.OAuth.resource_module(request.resource)
+    if function_exported?(module, :scope_titles, 0), do: module.scope_titles(), else: %{}
+  end
 
   defp sign_in_text(request), do: text(request).sign_in
   defp eyebrow(request), do: text(request).eyebrow
@@ -238,11 +355,14 @@ defmodule ReviewsWeb.OAuthHTML do
 
   defp registered?(client), do: client.kind == :registered
 
-  # A registered client has no verified domain; name it by where it sends you.
-  defp client_label(%{kind: :registered} = client),
+  # A recognized client by its name; a registered client, which has no
+  # verified domain, by what it calls itself; any other by its domain.
+  defp client_label(_client, %{name: name}), do: name
+
+  defp client_label(%{kind: :registered} = client, nil),
     do: "An app that calls itself #{client.client_name || "(no name)"}"
 
-  defp client_label(client), do: client_host(client)
+  defp client_label(client, nil), do: client_host(client)
 
   defp client_host(%{client_id: client_id}), do: URI.parse(client_id).host
 

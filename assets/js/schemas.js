@@ -15,6 +15,9 @@ const Author = z
   .object({
     id: z.number(),
     username: z.string(),
+    handle: z.string().optional(),
+    display_name: z.string().nullable().optional(),
+    kind: z.enum(["human", "agent"]).nullable().optional(),
     avatar_url: z.string().url().nullable().optional(),
   })
   .nullable()
@@ -57,6 +60,10 @@ const Attribution = z
     approved_at: z.string().nullable(),
     link_revoked: z.boolean(),
     token_binding: z.enum(["dpop", "bearer"]).nullable().optional(),
+    // "turnkey" when the delegation verified as Turnkey's poppy-delegation/v1.
+    delegation_signed_by: z.literal("turnkey").nullable().optional(),
+    turnkey_organization_id: z.string().nullable().optional(),
+    turnkey_agent: z.string().nullable().optional(),
   })
   .nullable()
   .optional()

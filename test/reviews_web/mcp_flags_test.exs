@@ -71,4 +71,25 @@ defmodule ReviewsWeb.MCPFlagsTest do
 
     assert json_response(conn, 404)
   end
+
+  test "with /mcp off, the issuer offers no registration or MCP resource" do
+    Application.put_env(:reviews, :mcp, enabled: false)
+    # The test resource takes public clients too; turn it off for this check.
+    Application.put_env(:reviews, Reviews.OAuthTestResource, enabled: false)
+    on_exit(fn -> Application.delete_env(:reviews, Reviews.OAuthTestResource) end)
+
+    issuer = build_conn() |> get("/.well-known/oauth-authorization-server") |> json_response(200)
+    refute Map.has_key?(issuer, "registration_endpoint")
+    refute "reviews:read" in issuer["scopes_supported"]
+
+    assert build_conn() |> get("/.well-known/oauth-protected-resource/mcp") |> json_response(404)
+
+    assert build_conn()
+           |> put_req_header("content-type", "application/json")
+           |> post(
+             "/oauth/register",
+             JSON.encode!(%{"redirect_uris" => ["https://a.example/cb"]})
+           )
+           |> json_response(404)
+  end
 end

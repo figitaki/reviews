@@ -2,7 +2,7 @@ defmodule ReviewsWeb.DeviceController do
   @moduledoc """
   The CLI sign-in page (RFC 8628 §3.3): `reviews login` shows a code and
   this URL; the person signs in with GitHub, enters the code, checks it
-  matches their terminal, chooses which of their identities the CLI acts as
+  matches their terminal while a countdown shows when it expires, chooses which of their identities the CLI acts as
   (their human identity, preselected, or one of their agents), and allows or
   denies it.
 
@@ -17,6 +17,7 @@ defmodule ReviewsWeb.DeviceController do
   """
   use ReviewsWeb, :controller
 
+  alias Gatekeep.DeviceAuthorization
   alias Reviews.Accounts
   alias Reviews.OAuth
   alias Reviews.OAuth.DeviceAttempts
@@ -32,7 +33,7 @@ defmodule ReviewsWeb.DeviceController do
   def lookup(conn, params) do
     case conn.assigns.current_user do
       nil -> render_sign_in(conn)
-      _user -> check(conn, to_string(params["user_code"]))
+      _user -> check(conn, entered_code(params["user_code"]))
     end
   end
 
@@ -46,7 +47,7 @@ defmodule ReviewsWeb.DeviceController do
       cond do
         is_nil(user) -> :signed_out
         not DeviceAttempts.allowed?(user.id) -> {:error, :too_many_attempts}
-        decision == "approve" -> OAuth.approve_device(user, code, params["identity_id"])
+        decision == "approve" -> approve(user, code, params)
         true -> with :ok <- OAuth.deny_device(code), do: :denied
       end
 
@@ -63,6 +64,9 @@ defmodule ReviewsWeb.DeviceController do
       {:error, :too_many_attempts} ->
         render_entry(conn, :too_many_attempts)
 
+      {:error, %Ecto.Changeset{} = changeset} ->
+        check(conn, code, "new", changeset)
+
       # The code was fine; only the choice was not one of theirs.
       {:error, :invalid_identity} ->
         conn
@@ -77,7 +81,36 @@ defmodule ReviewsWeb.DeviceController do
 
   def decide(conn, _params), do: render_entry(conn, :invalid_user_code)
 
-  defp check(conn, code) do
+  defp approve(user, code, %{"identity_id" => "new"} = params) do
+    attrs =
+      case params["new_identity"] do
+        %{} = attrs -> attrs
+        _ -> %{}
+      end
+
+    # Only text fields reach both validation and HTML value rendering.
+    attrs =
+      Map.new(["display_name", "handle"], fn key ->
+        value =
+          case attrs[key] do
+            value when is_binary(value) -> value
+            _ -> ""
+          end
+
+        {key, value}
+      end)
+
+    OAuth.approve_device_new_agent(user, code, attrs)
+  end
+
+  defp approve(user, code, params), do: OAuth.approve_device(user, code, params["identity_id"])
+
+  # The form has one box per letter; joined, gatekeep drops anything that
+  # isn't a letter, as it does for codes typed in one piece.
+  defp entered_code(boxes) when is_list(boxes), do: Enum.map_join(boxes, &to_string/1)
+  defp entered_code(code), do: to_string(code)
+
+  defp check(conn, code, selected \\ nil, new_identity \\ %{}) do
     user = conn.assigns.current_user
 
     if DeviceAttempts.allowed?(user.id) do
@@ -87,8 +120,11 @@ defmodule ReviewsWeb.DeviceController do
 
           render(conn, :confirm,
             request: request,
+            seconds_left: max(DateTime.diff(request.expires_at, DateTime.utc_now()), 0),
             # Human first, so it is the default, then agents by name.
             identities: Accounts.list_identities_for(user),
+            selected: selected,
+            new_identity: Phoenix.Component.to_form(new_identity, as: :new_identity),
             page_title: "Sign in to the Reviews CLI"
           )
 
@@ -104,7 +140,12 @@ defmodule ReviewsWeb.DeviceController do
   defp render_entry(conn, error) do
     conn
     |> put_status(if(error, do: :bad_request, else: :ok))
-    |> render(:entry, error: error, page_title: "Sign in to the Reviews CLI")
+    |> render(:entry,
+      error: error,
+      alphabet: DeviceAuthorization.user_code_alphabet(),
+      ttl_minutes: div(OAuth.config().device_code_ttl, 60),
+      page_title: "Sign in to the Reviews CLI"
+    )
   end
 
   defp render_sign_in(conn) do

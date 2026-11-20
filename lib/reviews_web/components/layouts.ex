@@ -41,6 +41,35 @@ defmodule ReviewsWeb.Layouts do
   end
 
   @doc """
+  Open Graph and Twitter card tags from `ReviewsWeb.LinkPreview.build/4`.
+  Renders nothing for pages without a preview.
+  """
+  attr :preview, :map, default: nil
+
+  def link_preview_tags(%{preview: nil} = assigns), do: ~H""
+
+  def link_preview_tags(assigns) do
+    assigns = assign(assigns, :site_name, ReviewsWeb.LinkPreview.site_name())
+
+    ~H"""
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={@site_name} />
+    <meta property="og:title" content={@preview.title} />
+    <meta property="og:description" content={@preview.description} />
+    <meta property="og:url" content={@preview.url} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={@preview.title} />
+    <meta name="twitter:description" content={@preview.description} />
+    <%= for {{label, data}, i} <- Enum.with_index(@preview.labels, 1) do %>
+      <meta name={"twitter:label#{i}"} content={label} /><meta
+        name={"twitter:data#{i}"}
+        content={data}
+      />
+    <% end %>
+    """
+  end
+
+  @doc """
   Shows the flash group with standard titles and content.
 
   ## Examples
@@ -84,9 +113,10 @@ defmodule ReviewsWeb.Layouts do
   end
 
   @doc """
-  Shared landing-style topbar — used on `/` (HomeLive) and `/settings`
-  (SettingsLive). Renders brand + a small nav + either a Sign-in CTA or a
-  link to the current user's settings.
+  Shared landing-style topbar — used on `/` (HomeLive), `/reviews`
+  (ReviewListLive), and `/settings` (SettingsLive). Renders brand + a small
+  nav + either a Sign-in CTA or a link to the current user's settings.
+  Signed-in users also get a "Reviews" link to their review list.
 
   Visual style: `.l-topbar` chrome from `landing.css` and `.r-*` components
   from `components.css`.
@@ -100,6 +130,11 @@ defmodule ReviewsWeb.Layouts do
     doc: "whether to include the in-page #chapter-push 'Workflow' anchor link"
 
   attr :return_to, :string, default: "/", doc: "the local path to return to after sign-in"
+
+  attr :active, :atom,
+    default: nil,
+    values: [nil, :reviews],
+    doc: "the nav item to mark as the current page"
 
   def landing_topbar(assigns) do
     ~H"""
@@ -130,38 +165,86 @@ defmodule ReviewsWeb.Layouts do
         </.link>
 
         <nav class="l-nav" aria-label="Primary">
-          <a :if={@show_workflow_anchor} class="r-nav-item" href="/#chapter-push">Workflow</a>
-          <a class="r-nav-item" href="https://github.com/figitaki/reviews">
+          <a
+            :if={@show_workflow_anchor}
+            class="r-nav-item l-nav-optional"
+            href="/#chapter-push"
+          >
+            Workflow
+          </a>
+          <a class="r-nav-item l-nav-optional" href="https://github.com/figitaki/reviews">
             GitHub <span aria-hidden="true">↗</span>
           </a>
+          <.link
+            :if={@current_user}
+            id="nav-reviews"
+            navigate={~p"/reviews"}
+            class={["r-nav-item", @active == :reviews && "is-active"]}
+            aria-current={@active == :reviews && "page"}
+          >
+            Reviews
+          </.link>
 
-          <%= if @current_user do %>
-            <.link
-              navigate={~p"/settings"}
-              class="r-nav-item l-nav-user"
-              aria-label={"Signed in as #{@current_user.username}"}
-            >
-              <img
-                :if={@current_user.avatar_url}
-                src={@current_user.avatar_url}
-                alt=""
-                class="l-nav-avatar"
-                width="20"
-                height="20"
-              />
-              <span>{@current_user.username}</span>
-            </.link>
-          <% else %>
-            <.link
-              href={~p"/auth/github?#{[return_to: @return_to]}"}
-              class="r-button r-button-primary l-nav-signin"
-            >
-              Sign in
-            </.link>
-          <% end %>
+          <.account_menu current_user={@current_user} return_to={@return_to} />
         </nav>
       </div>
     </header>
+    """
+  end
+
+  @doc """
+  The account control in every top bar. Signed in, a menu under the avatar
+  and name with Settings and Sign out. Signed out, a text-only Sign in button;
+  sign-in buttons in the page body carry the GitHub mark instead.
+  """
+  attr :current_user, :map, default: nil
+  attr :return_to, :string, default: "/", doc: "the local path to return to after sign-in"
+
+  def account_menu(%{current_user: nil} = assigns) do
+    ~H"""
+    <.ds_button
+      href={~p"/auth/github?#{[return_to: @return_to]}"}
+      variant="primary"
+      class="l-nav-signin"
+    >
+      Sign in
+    </.ds_button>
+    """
+  end
+
+  def account_menu(assigns) do
+    ~H"""
+    <div class="dropdown dropdown-end account-menu">
+      <button
+        tabindex="0"
+        type="button"
+        class="review-button review-button-secondary account-menu-button"
+        aria-label={"Account menu for #{@current_user.username}"}
+      >
+        <.ds_identity
+          identity={
+            %{
+              avatar_url: @current_user.avatar_url,
+              handle: @current_user.username,
+              display_name: @current_user.username
+            }
+          }
+          size="md"
+          handle={false}
+          name_class="account-menu-name ds-label"
+        />
+      </button>
+      <ul tabindex="0" class="dropdown-content menu menu-sm review-menu z-20 mt-2 w-44 p-2">
+        <li>
+          <.link navigate={~p"/settings"}>Settings</.link>
+        </li>
+        <li>
+          <.link href={~p"/auth/logout"} method="delete">
+            Sign out
+          </.link>
+        </li>
+      </ul>
+    </div>
     """
   end
 

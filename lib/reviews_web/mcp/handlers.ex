@@ -249,7 +249,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         }
 
         {threads, count} =
-          fill_threads(projected, comment_counts, room!(args, header))
+          fill_threads(review, projected, comment_counts, room!(args, header))
 
         cond do
           count == 0 and page != [] ->
@@ -278,8 +278,11 @@ defmodule ReviewsWeb.MCP.Handlers do
         comments = Threads.list_comment_page(thread.id, start_id - 1, @page_fetch)
 
         header =
-          projected
-          |> thread_summary(Threads.comment_counts([thread.id]) |> Map.get(thread.id, 0))
+          review
+          |> thread_summary(
+            projected,
+            Threads.comment_counts([thread.id]) |> Map.get(thread.id, 0)
+          )
           |> Map.merge(%{slug: review.slug, revision: selected.number, next_cursor: nil})
 
         {page, next} =
@@ -288,7 +291,7 @@ defmodule ReviewsWeb.MCP.Handlers do
             start,
             room!(args, header),
             & &1.id,
-            &comment_parts/1
+            &comment_parts(review, &1)
           )
 
         # A full page of comments may have more after it.
@@ -334,7 +337,8 @@ defmodule ReviewsWeb.MCP.Handlers do
 
     with_review(args, ctx, fn review, principal ->
       with :ok <- validate_diff_and_packet(args["raw_diff"], args["packet"]),
-           {:ok, ps} <- ReviewsContext.append_patchset(review, principal, push_attrs(args)) do
+           {:ok, %{patchset: ps}} <-
+             ReviewsContext.append_patchset(review, principal, push_attrs(args)) do
         %{slug: review.slug, url: review_url(review), revision: ps.number}
       else
         other -> write_error(other)
@@ -356,7 +360,9 @@ defmodule ReviewsWeb.MCP.Handlers do
           path: thread.file_path,
           side: thread.side,
           line: thread.anchor["line_number_hint"],
-          url: review_url(review)
+          url: review_url(review),
+          thread_url: thread_url(review, thread.id),
+          comment_url: thread_url(review, thread.id, comment.id)
         }
       else
         {:error, :thread_not_found} ->
@@ -380,6 +386,7 @@ defmodule ReviewsWeb.MCP.Handlers do
           %{
             slug: review.slug,
             thread_id: thread.id,
+            thread_url: thread_url(review, thread.id),
             status: thread.status,
             resolved_by: identity_payload(thread.resolved_by)
           }
@@ -394,6 +401,177 @@ defmodule ReviewsWeb.MCP.Handlers do
           write_error(other)
       end
     end)
+  end
+
+  ## The review list
+
+  @list_filters ~w(role status author q)
+
+  @doc """
+  The reviews the caller can find again, from `Reviews.ReviewIndex`: the
+  same list and filters as `reviews list` and `GET /api/v1/reviews`.
+  `Reviews.Policy.list_viewer/1` decides whose reviews: an OAuth connector or
+  a human identity's token lists the whole account; an agent API token lists
+  only its agent's. Pages continue with `next_cursor`, and each fits in
+  `max_bytes`.
+  """
+  def list_reviews(args, ctx) do
+    viewer = ctx |> current_principal!() |> Reviews.Policy.list_viewer()
+    params = Map.take(args, @list_filters)
+    scope = {:reviews_list, viewer_key(viewer), params}
+
+    with {:ok, limit} <- page_limit(args["limit"]),
+         {:ok, cursor} <- decode_cursor(args, scope),
+         {offset, _} = pair(cursor),
+         {:ok, filters} <- list_filters(params, limit, offset) do
+      list_page(viewer, filters, scope, offset, args)
+    end
+    |> unwrap()
+  catch
+    :too_small -> error_result(@too_small)
+    :bad_cursor -> error_result(@bad_cursor)
+  end
+
+  defp list_page(viewer, filters, scope, offset, args) do
+    result = ReviewsContext.list_reviews(viewer, filters)
+
+    header = %{
+      scope: if(match?(%Reviews.Accounts.User{}, viewer), do: "account", else: "identity"),
+      filters: Map.take(filters, [:role, :status, :author, :q]),
+      next_cursor: nil
+    }
+
+    {reviews, _left, count} = Budget.fill(result.entries, room!(args, header), &list_entry/1)
+
+    next =
+      cond do
+        count == 0 and result.entries != [] -> throw(:too_small)
+        count < length(result.entries) -> offset + count
+        true -> result.next_offset
+      end
+
+    next_cursor = next && Paging.encode(scope, {:position, next, 0})
+
+    header
+    |> Map.merge(%{reviews: reviews, next_cursor: next_cursor})
+    |> with_list_hint(next_cursor)
+  end
+
+  defp viewer_key(%Reviews.Accounts.User{id: id}), do: {:user, id}
+  defp viewer_key(%Reviews.Accounts.Identity{id: id}), do: {:identity, id}
+
+  defp list_filters(params, limit, offset) do
+    case Reviews.ReviewIndex.normalize_filters(
+           Map.merge(params, %{"limit" => limit, "offset" => offset})
+         ) do
+      {:ok, filters} ->
+        {:ok, filters}
+
+      {:error, errors} ->
+        {:error, Enum.map_join(errors, " ", fn {key, message} -> "#{key}: #{message}." end)}
+    end
+  end
+
+  defp list_entry(entry) do
+    review = entry.review
+
+    %{
+      slug: review.slug,
+      title: Budget.cap(review.title, @title_cap),
+      url: review_url(review),
+      author: identity_payload(review.author),
+      role: entry.role,
+      revisions: entry.patchset_count,
+      latest_revision: entry.latest_patchset_number,
+      threads: entry.thread_count,
+      open_threads: entry.open_thread_count,
+      has_new_revision: entry.has_new_patchset,
+      last_pushed_at: iso(entry.last_pushed_at),
+      last_activity_at: iso(entry.last_activity_at),
+      updated_at: iso(entry.updated_at)
+    }
+  end
+
+  defp iso(nil), do: nil
+  defp iso(%DateTime{} = at), do: DateTime.to_iso8601(at)
+  defp iso(%NaiveDateTime{} = at), do: NaiveDateTime.to_iso8601(at)
+
+  defp with_list_hint(payload, nil), do: payload
+
+  defp with_list_hint(payload, _next),
+    do: Map.put(payload, :hint, "More follows. Call again with next_cursor and the same filters.")
+
+  ## search and fetch, in the shape ChatGPT's connectors and deep research use
+
+  @search_limit 20
+
+  @doc """
+  Reviews the caller's account owns that match `query`. Each result's `id` is
+  the slug `fetch` takes. Search stays within the account: other reviews are
+  readable by link, but a link isn't something to search for.
+  """
+  def search(args, ctx) do
+    %Principal{identity: identity} = current_principal!(ctx)
+
+    results =
+      identity
+      |> ReviewsContext.search_owned_reviews(args["query"] || "", @search_limit)
+      |> Enum.map(fn review ->
+        %{id: review.slug, title: Budget.cap(review.title, @title_cap), url: review_url(review)}
+      end)
+
+    %{results: results}
+  end
+
+  @doc """
+  One review as a document: its description, then its open feedback as
+  Markdown, the same text as the `reviews://{slug}/feedback` resource. The
+  whole result fits in the largest `max_bytes`; a longer document is cut
+  short with a note naming the tools that read the rest, and
+  `metadata.complete` is false.
+  """
+  def fetch(%{"id" => id}, _ctx) do
+    with {:ok, review} <- find_review(id),
+         {:ok, revisions, latest} <- select_revision(review, %{}) do
+      title = Budget.cap(review.title, @title_cap)
+
+      description =
+        if review.description in [nil, ""], do: "", else: review.description <> "\n\n"
+
+      {feedback, feedback_complete?} = feedback_with_status(review, revisions, latest)
+      text = "# #{title}\n\n" <> description <> feedback
+
+      doc = %{
+        id: review.slug,
+        title: title,
+        text: "",
+        url: review_url(review),
+        metadata: %{
+          revision: latest.number,
+          open_threads:
+            Threads.count_threads(review, max_origin_number: latest.number, status: "open"),
+          complete: false
+        }
+      }
+
+      left = Budget.available(Paging.max_bytes_limit(), doc)
+
+      case Budget.fit_text(text, 0, left) do
+        # Left-out threads and comments are named in the feedback text itself.
+        {all, nil} ->
+          %{doc | text: all} |> put_in([:metadata, :complete], feedback_complete?)
+
+        _too_long ->
+          note =
+            "\n\n_Cut short to fit. Read the rest with reviews_get_review and " <>
+              "reviews_list_threads (review #{review.slug})._"
+
+          {chunk, _next} = Budget.fit_text(text, 0, left - Budget.cost(note))
+          %{doc | text: chunk <> note}
+      end
+    else
+      _ -> error_result(not_found_message(id))
+    end
   end
 
   ## Resources and prompts
@@ -422,8 +600,10 @@ defmodule ReviewsWeb.MCP.Handlers do
     3. Make the requested changes in the working tree. Do not resolve threads you did
        not address.
     4. Reply on each thread you addressed with reviews_post_comment (pass thread_id),
-       saying what changed. Resolve it with reviews_update_thread_status only when the
-       reviewer's request is fully handled.
+       saying what changed. Write comments in Simplified Technical English
+       (ASD-STE100): short sentences, active voice, common words. Resolve the
+       thread with reviews_update_thread_status only when the reviewer's request
+       is fully handled.
     5. When the code changed, push a new revision with `reviews push --update <slug>`
        or reviews_append_revision.
 
@@ -434,10 +614,36 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   ## Caller and review resolution
 
-  # API tokens carry every scope; the verified principal names the identity.
-  defp current_principal!(%{principal: %{"identity_id" => id}}) when is_integer(id) do
+  # API tokens carry every scope. An OAuth token (it names a grant) carries
+  # only its granted scopes, so `Reviews.Policy` limits its writes to them, and
+  # its comments record which app posted them.
+  defp current_principal!(%{principal: %{"identity_id" => id} = principal})
+       when is_integer(id) do
     identity = Accounts.get_identity!(id)
-    Principal.new(identity, :mcp, Accounts.get_user!(identity.owner_user_id))
+    user = Accounts.get_user!(identity.owner_user_id)
+
+    case principal do
+      %{"grant_id" => _, "scopes" => scopes} ->
+        Principal.delegated(identity, user, scopes, attribution(principal, identity, user), :mcp)
+
+      _ ->
+        Principal.new(identity, :mcp, user)
+    end
+  end
+
+  # Stored with each comment. `link_id` is the grant's ID, the name comments
+  # already use for it.
+  defp attribution(%{"grant_id" => grant_id, "client_id" => client_id}, identity, user) do
+    %{
+      "provider" => "mcp",
+      "verified_at" => DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601(),
+      "client_id" => client_id,
+      "link_id" => grant_id,
+      "owner_user_id" => user.id,
+      "owner_username" => user.username,
+      "identity_id" => identity.id,
+      "identity_handle" => identity.handle
+    }
   end
 
   defp with_review(args, ctx, fun) do
@@ -768,17 +974,22 @@ defmodule ReviewsWeb.MCP.Handlers do
     end
   end
 
-  defp comment_parts(comment) do
-    meta = comment |> ReviewsWeb.Payloads.comment(:compact) |> Map.delete(:body)
+  defp comment_parts(review, comment) do
+    meta =
+      comment
+      |> ReviewsWeb.Payloads.comment(:compact)
+      |> Map.delete(:body)
+      |> Map.put(:url, thread_url(review, comment.thread_id, comment.id))
 
     {meta, :body, comment.body || ""}
   end
 
-  defp thread_summary(thread, comment_count) do
+  defp thread_summary(review, thread, comment_count) do
     thread
     |> ReviewsWeb.Payloads.thread()
     |> Map.take([:id, :path, :side, :line, :anchor_status, :originating_revision, :status])
     |> Map.merge(%{
+      url: thread_url(review, thread.id),
       line_text: Budget.cap(thread.original_anchor["line_text"], @line_text_cap),
       resolved_by: identity_payload(thread.resolved_by),
       comment_count: comment_count
@@ -787,14 +998,14 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   # Threads go in whole while they fit. A first thread too big for the page
   # comes with fewer comment previews, so every page makes progress.
-  defp fill_threads(threads, comment_counts, left) do
+  defp fill_threads(review, threads, comment_counts, left) do
     Enum.reduce_while(threads, {[], 0, left}, fn thread, {acc, count, left} ->
       comment_count = Map.get(comment_counts, thread.id, 0)
       previews = if count == 0, do: @listed_comments..0//-1, else: [@listed_comments]
 
       fitting =
         Enum.find_value(previews, fn n ->
-          item = listed_thread(thread, comment_count, n)
+          item = listed_thread(review, thread, comment_count, n)
           cost = Budget.cost(item) + 4
           if cost <= left, do: {item, cost}
         end)
@@ -807,7 +1018,7 @@ defmodule ReviewsWeb.MCP.Handlers do
     |> then(fn {acc, count, _left} -> {Enum.reverse(acc), count} end)
   end
 
-  defp listed_thread(thread, comment_count, previews) do
+  defp listed_thread(review, thread, comment_count, previews) do
     comments =
       thread.id
       |> Threads.list_comment_page(0, previews)
@@ -815,6 +1026,7 @@ defmodule ReviewsWeb.MCP.Handlers do
         comment
         |> ReviewsWeb.Payloads.comment(:compact)
         |> Map.merge(%{
+          url: thread_url(review, thread.id, comment.id),
           body: Budget.cap(comment.body, @listed_comment_cap),
           body_truncated: byte_size(comment.body || "") > @listed_comment_cap
         })
@@ -823,8 +1035,8 @@ defmodule ReviewsWeb.MCP.Handlers do
     complete =
       comment_count <= length(comments) and not Enum.any?(comments, & &1.body_truncated)
 
-    thread
-    |> thread_summary(comment_count)
+    review
+    |> thread_summary(thread, comment_count)
     |> Map.merge(%{comments: comments, comments_complete: complete})
   end
 
@@ -832,9 +1044,20 @@ defmodule ReviewsWeb.MCP.Handlers do
 
   defp review_url(review), do: ReviewsWeb.Endpoint.url() <> "/r/" <> review.slug
 
+  # The review page opened on one thread, or one comment in it: the links its
+  # copy-link buttons make (`?thread=ID`, `?thread=ID&comment=ID`).
+  defp thread_url(review, thread_id, comment_id \\ nil) do
+    query = if comment_id, do: [thread: thread_id, comment: comment_id], else: [thread: thread_id]
+    review_url(review) <> "?" <> URI.encode_query(query)
+  end
+
   # Bounded like the tools: at most @feedback_threads threads and
   # @feedback_limit bytes, with a note naming what was left out.
-  defp render_feedback(review, revisions, latest) do
+  defp render_feedback(review, revisions, latest),
+    do: review |> feedback_with_status(revisions, latest) |> elem(0)
+
+  # The feedback text, and whether it shows every open thread and comment.
+  defp feedback_with_status(review, revisions, latest) do
     filters = [max_origin_number: latest.number, status: "open"]
     total = Threads.count_threads(review, filters)
     page = Threads.list_thread_page(review, filters, 0, @feedback_threads)
@@ -847,16 +1070,18 @@ defmodule ReviewsWeb.MCP.Handlers do
     Open threads: #{total}
     """
 
-    {sections, shown, _left} =
-      Enum.reduce_while(threads, {[], 0, @feedback_limit - byte_size(header)}, fn thread,
-                                                                                  {acc, shown,
-                                                                                   left} ->
-        text = render_feedback_thread(thread)
+    {sections, shown, all_comments?, _left} =
+      Enum.reduce_while(
+        threads,
+        {[], 0, true, @feedback_limit - byte_size(header)},
+        fn thread, {acc, shown, all?, left} ->
+          {text, complete?} = render_feedback_thread(review, thread)
 
-        if byte_size(text) <= left,
-          do: {:cont, {[text | acc], shown + 1, left - byte_size(text)}},
-          else: {:halt, {acc, shown, left}}
-      end)
+          if byte_size(text) <= left,
+            do: {:cont, {[text | acc], shown + 1, all? and complete?, left - byte_size(text)}},
+            else: {:halt, {acc, shown, all?, left}}
+        end
+      )
 
     omitted =
       if shown < total,
@@ -865,10 +1090,11 @@ defmodule ReviewsWeb.MCP.Handlers do
         ],
         else: []
 
-    Enum.join([header | Enum.reverse(sections)] ++ omitted, "\n")
+    {Enum.join([header | Enum.reverse(sections)] ++ omitted, "\n"),
+     shown == total and all_comments?}
   end
 
-  defp render_feedback_thread(thread) do
+  defp render_feedback_thread(review, thread) do
     location =
       case thread.anchor do
         %{"line_number_hint" => line} ->
@@ -901,7 +1127,8 @@ defmodule ReviewsWeb.MCP.Handlers do
             "reviews_get_thread (thread_id #{thread.id})._\n",
         else: ""
 
-    "## Thread #{thread.id} at `#{location}` (#{thread.side})\n\n#{comments}\n#{note}"
+    {"## Thread #{thread.id} at `#{location}` (#{thread.side})\n\n" <>
+       "Link: #{thread_url(review, thread.id)}\n\n#{comments}\n#{note}", not incomplete?}
   end
 
   ## Write helpers

@@ -4,7 +4,7 @@ defmodule Reviews.MixProject do
   def project do
     [
       app: :reviews,
-      version: "0.0.1",
+      version: "0.0.3",
       elixir: "~> 1.20",
       description: "Code-review tool for arbitrary diffs (Phoenix + Rust CLI).",
       package: [
@@ -81,10 +81,19 @@ defmodule Reviews.MixProject do
       {:bandit, "~> 1.14.1"},
       {:ueberauth, "~> 0.10"},
       {:ueberauth_github, "~> 0.8"},
+      {:req, "~> 0.5"},
+      {:joken, "~> 2.6"},
+      # Pinned to releases at least 7 days old (AGENTS.md); 0.14.7 and
+      # mdex_native 0.3.2 qualify from 2026-11-21.
+      {:mdex, "== 0.14.6"},
+      {:mdex_native, "== 0.3.1"},
       {:fastest_mcp, "~> 1.0.1"},
+      # idna 7.1.0 has EEF-CVE-2026-117678. jsv (through fastest_mcp) still
+      # asks for ~> 6.0 or ~> 7.0; drop the override once it allows 8.
+      {:idna, "~> 8.0", override: true},
       # The OAuth issuer (Reviews.OAuth). Not on Hex yet; pinned to the merge
-      # of figitaki/gatekeep#5 (the device authorization grant).
-      {:gatekeep, github: "figitaki/gatekeep", ref: "3f096d6950d69b5287dcd26f15b65ec0d463b541"}
+      # of figitaki/gatekeep#7 (client assertion jtis of up to 256 bytes).
+      {:gatekeep, github: "figitaki/gatekeep", ref: "d1c5cc3e99d739ab74f15b19c7dbf55ed99f3228"}
     ]
   end
 

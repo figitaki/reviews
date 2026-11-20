@@ -5,6 +5,7 @@ defmodule ReviewsWeb.SettingsLive do
   use ReviewsWeb, :live_view
 
   alias Reviews.Accounts
+  alias Reviews.Accounts.AgentProviders
   alias Reviews.OAuth
 
   @impl true
@@ -24,13 +25,17 @@ defmodule ReviewsWeb.SettingsLive do
   end
 
   @impl true
+  def handle_event("change_agent_identity", %{"identity" => params}, socket) do
+    {:noreply, assign(socket, :agent_form, to_form(params, as: :identity))}
+  end
+
   def handle_event("create_agent_identity", %{"identity" => params}, socket) do
     case socket.assigns.current_user do
       nil ->
         {:noreply, put_flash(socket, :error, "Sign in to manage identities.")}
 
       user ->
-        case Accounts.create_agent_identity(user, params) do
+        case Accounts.create_agent_identity(user, agent_identity_attrs(socket, params)) do
           {:ok, _identity} ->
             {:noreply,
              socket
@@ -38,8 +43,10 @@ defmodule ReviewsWeb.SettingsLive do
              |> assign_account_data()
              |> put_flash(:info, "Agent identity created.")}
 
+          # Keep what was typed, including a custom provider, next to the errors.
           {:error, changeset} ->
-            {:noreply, assign(socket, :agent_form, to_form(changeset, as: :identity))}
+            form = to_form(params, as: :identity, errors: changeset.errors, action: :insert)
+            {:noreply, assign(socket, :agent_form, form)}
         end
     end
   end
@@ -148,13 +155,12 @@ defmodule ReviewsWeb.SettingsLive do
             class="is-compact"
           >
             <:actions>
-              <.link
+              <.ds_github_button
                 :if={!@current_user}
                 href={~p"/auth/github?return_to=/settings"}
-                class="ds-button is-primary"
               >
                 Sign in with GitHub
-              </.link>
+              </.ds_github_button>
             </:actions>
           </.ds_page_header>
 
@@ -213,6 +219,7 @@ defmodule ReviewsWeb.SettingsLive do
 
                     <form
                       id="new-agent-identity-form"
+                      phx-change="change_agent_identity"
                       phx-submit="create_agent_identity"
                       class="ds-settings-form"
                     >
@@ -223,7 +230,6 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Agent Name"
                         placeholder="Claude"
                         autocomplete="off"
-                        class="ds-input"
                       />
                       <.input
                         field={@agent_form[:handle]}
@@ -232,19 +238,32 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Handle"
                         placeholder="claude"
                         autocomplete="off"
-                        class="ds-input"
                       />
                       <.input
                         field={@agent_form[:provider]}
                         id="agent-provider"
-                        type="text"
+                        type="select"
                         label="Provider"
-                        placeholder="Claude, Codex, custom"
-                        autocomplete="off"
-                        class="ds-input"
+                        prompt="None"
+                        options={provider_options()}
                       />
-                      <.ds_button type="submit" variant="primary" class="ds-settings-form-submit">
-                        <.icon name="hero-plus" class="size-4" /> New agent identity
+                      <.input
+                        :if={@agent_form[:provider].value == "custom"}
+                        field={@agent_form[:custom_provider]}
+                        id="agent-custom-provider"
+                        type="text"
+                        label="Custom Provider"
+                        placeholder="My agent platform"
+                        autocomplete="off"
+                      />
+                      <.ds_button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        class="ds-settings-form-submit"
+                        icon="hero-plus"
+                      >
+                        New agent identity
                       </.ds_button>
                     </form>
                   </.ds_card>
@@ -284,6 +303,7 @@ defmodule ReviewsWeb.SettingsLive do
                         <.ds_button
                           id={"sign-out-cli-#{session.id}"}
                           variant="danger"
+                          icon="hero-arrow-right-start-on-rectangle"
                           phx-click="sign_out_cli"
                           phx-value-id={session.id}
                           data-confirm="Sign this CLI out? Its tokens stop working at once."
@@ -338,6 +358,7 @@ defmodule ReviewsWeb.SettingsLive do
                           :if={!link.revoked_at}
                           id={"revoke-agent-link-#{link.id}"}
                           variant="danger"
+                          icon="hero-link-slash"
                           phx-click="revoke_agent_link"
                           phx-value-id={link.id}
                           data-confirm="Disconnect this agent? Its tokens stop working at once."
@@ -366,7 +387,6 @@ defmodule ReviewsWeb.SettingsLive do
                         type="select"
                         label="Acting Identity"
                         options={identity_options(@identities)}
-                        class="ds-input"
                       />
                       <.input
                         field={@token_form[:name]}
@@ -375,10 +395,15 @@ defmodule ReviewsWeb.SettingsLive do
                         label="Token Name"
                         placeholder="laptop"
                         autocomplete="off"
-                        class="ds-input"
                       />
-                      <.ds_button type="submit" variant="primary" class="ds-settings-form-submit">
-                        <.icon name="hero-key" class="size-4" /> Generate token
+                      <.ds_button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        class="ds-settings-form-submit"
+                        icon="hero-key"
+                      >
+                        Generate token
                       </.ds_button>
                     </form>
 
@@ -433,6 +458,7 @@ defmodule ReviewsWeb.SettingsLive do
                             <.ds_button
                               id={"revoke-token-#{token.id}"}
                               variant="danger"
+                              icon="hero-no-symbol"
                               phx-click="revoke_token"
                               phx-value-id={token.id}
                               data-confirm="Revoke this token? Anything using it will lose API access."
@@ -456,9 +482,9 @@ defmodule ReviewsWeb.SettingsLive do
                 body="Settings are tied to your GitHub account so identities and credentials can be managed safely."
               >
                 <:actions>
-                  <.link href={~p"/auth/github?return_to=/settings"} class="ds-button is-primary">
+                  <.ds_github_button href={~p"/auth/github?return_to=/settings"}>
                     Sign in with GitHub
-                  </.link>
+                  </.ds_github_button>
                 </:actions>
               </.ds_empty_state>
             </div>
@@ -476,21 +502,7 @@ defmodule ReviewsWeb.SettingsLive do
   defp identity_row(assigns) do
     ~H"""
     <article id={@id} class="ds-identity-row">
-      <div class="ds-avatar-mark" aria-hidden="true">
-        <img
-          :if={@identity.avatar_url}
-          src={@identity.avatar_url}
-          alt=""
-          width="36"
-          height="36"
-          loading="lazy"
-        />
-        <span :if={!@identity.avatar_url}>{identity_initial(@identity)}</span>
-      </div>
-      <div class="ds-identity-main">
-        <h3>{@identity.display_name}</h3>
-        <p translate="no">@{@identity.handle}</p>
-      </div>
+      <.ds_identity identity={@identity} size="lg" square stacked agent_marker={false} />
       <div class="ds-identity-meta">
         <span class="ds-badge">{String.capitalize(@identity.kind)}</span>
         <span :if={@identity.provider}>{@identity.provider}</span>
@@ -543,6 +555,28 @@ defmodule ReviewsWeb.SettingsLive do
     end
   end
 
+  defp provider_options do
+    Enum.map(AgentProviders.all(), &{&1.name, &1.name}) ++ [{"Custom", "custom"}]
+  end
+
+  # The provider is a listed one or the custom name typed. A listed provider
+  # (also when typed as custom) gives the identity its logo as the avatar,
+  # as an absolute URL because API and diff payloads require one.
+  defp agent_identity_attrs(socket, params) do
+    provider =
+      if params["provider"] == "custom", do: params["custom_provider"], else: params["provider"]
+
+    provider = if is_binary(provider) and String.trim(provider) != "", do: String.trim(provider)
+    listed = AgentProviders.get(provider)
+
+    %{
+      "display_name" => params["display_name"],
+      "handle" => params["handle"],
+      "provider" => if(listed, do: listed.name, else: provider),
+      "avatar_url" => listed && static_url(socket, listed.logo)
+    }
+  end
+
   defp identity_options(identities) do
     Enum.map(identities, &{identity_label(&1), &1.id})
   end
@@ -556,17 +590,6 @@ defmodule ReviewsWeb.SettingsLive do
   end
 
   defp identity_label(identity), do: "#{identity.display_name} (@#{identity.handle})"
-
-  defp identity_initial(identity) do
-    identity.display_name
-    |> to_string()
-    |> String.trim()
-    |> String.first()
-    |> case do
-      nil -> "?"
-      initial -> String.upcase(initial)
-    end
-  end
 
   defp format_date(nil), do: "unknown"
   defp format_date(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d")

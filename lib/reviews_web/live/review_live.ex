@@ -13,6 +13,8 @@ defmodule ReviewsWeb.ReviewLive do
     * receives `{:patchset_pushed, n}`, `{:thread_published, thread}`, and
       `{:thread_updated, thread}` — the last also fires for resolve/reopen
       performed over the CLI/API, not just from a browser
+    * receives `{:review_deleted, slug}` and reloads the page, which then
+      shows that the review was deleted
   """
   use ReviewsWeb, :live_view
 
@@ -27,6 +29,7 @@ defmodule ReviewsWeb.ReviewLive do
   alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
+  alias ReviewsWeb.ReviewLive.DeleteReviewComponents
   alias ReviewsWeb.ReviewLive.DiffComponents
   alias ReviewsWeb.ReviewLive.PacketComponents
   alias ReviewsWeb.ReviewLive.RevisionNavComponents
@@ -39,10 +42,9 @@ defmodule ReviewsWeb.ReviewLive do
   def mount(%{"slug" => slug}, session, socket) do
     case ReviewsContext.get_review_by_slug(slug) do
       nil ->
-        {:ok,
-         socket
-         |> put_flash(:error, "Review not found.")
-         |> push_navigate(to: ~p"/")}
+        if ReviewsContext.deleted?(slug), do: raise(ReviewsWeb.ReviewDeletedError, slug: slug)
+
+        raise ReviewsWeb.ReviewNotFoundError, slug: slug
 
       review ->
         if connected?(socket) do
@@ -63,6 +65,8 @@ defmodule ReviewsWeb.ReviewLive do
                 :can_decide_sections,
                 Policy.can?(current_identity, :decide_section, snapshot.review)
               )
+              |> assign(:can_delete_review, Policy.can?(current_identity, :delete, review))
+              |> assign(:delete_review, nil)
               |> assign(:banner_message, nil)
               |> assign(:diff_style, "split")
               |> assign(:expanded_hunk_ids, MapSet.new())
@@ -93,7 +97,11 @@ defmodule ReviewsWeb.ReviewLive do
       {:ok, patchset_number} ->
         case refresh_snapshot(socket, patchset_number: patchset_number) do
           {:ok, socket} ->
-            {:noreply, reveal_activity_thread(socket, params["thread"])}
+            {:noreply,
+             socket
+             |> assign_link_preview(params, uri)
+             |> reveal_activity_thread(params["thread"], &Function.identity/1, params["comment"])
+             |> reveal_packet_section(params["section"])}
 
           {:error, :patchset_not_found} ->
             {:noreply, put_flash(socket, :error, "Patchset not found.")}
@@ -102,6 +110,36 @@ defmodule ReviewsWeb.ReviewLive do
       :error ->
         {:noreply, put_flash(socket, :error, "Patchset not found.")}
     end
+  end
+
+  @impl true
+  def handle_event("reveal_packet_fragment", %{"id" => id}, socket) do
+    packet = socket.assigns.selected_patchset.packet
+
+    case PacketComponents.fragment_target(packet, socket.assigns.hunks_by_path, id) do
+      %{section_index: index, hunk_id: hunk_id, id: target_id}
+      when socket.assigns.live_action != :changes ->
+        socket =
+          socket
+          |> assign(:editing_decision_index, nil)
+          |> assign(:active_outline_section_index, index)
+          |> update(:expanded_section_ids, &MapSet.put(&1, index))
+          |> update(:expanded_hunk_ids, &MapSet.put(&1, hunk_id))
+
+        {:reply, %{id: target_id}, socket}
+
+      _ ->
+        {:reply, %{id: nil}, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("restore_packet_location", %{"thread" => id}, socket) when id in [nil, ""] do
+    handle_event("select_packet_overview", %{}, socket)
+  end
+
+  def handle_event("restore_packet_location", %{"thread" => id}, socket) do
+    {:noreply, reveal_activity_thread(socket, id, &reveal_packet_overview/1)}
   end
 
   @impl true
@@ -119,12 +157,25 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   @impl true
-  def handle_event("toggle_section_decision", %{"section_index" => index}, socket) do
+  # `open` says which state the reader asked for, so a repeated close (two
+  # quick outside clicks, Escape twice) stays closed instead of reopening.
+  def handle_event("toggle_section_decision", %{"section_index" => index} = params, socket) do
     with %{} = patchset <- socket.assigns.selected_patchset,
          {section_index, ""} <- Integer.parse(to_string(index)),
          %{} <- ReviewPacket.section_at(patchset.packet || %{}, section_index) do
+      open =
+        case params["open"] do
+          "true" -> true
+          "false" -> false
+          _ -> socket.assigns.editing_decision_index != section_index
+        end
+
       editing =
-        if socket.assigns.editing_decision_index == section_index, do: nil, else: section_index
+        cond do
+          open -> section_index
+          socket.assigns.editing_decision_index == section_index -> nil
+          true -> socket.assigns.editing_decision_index
+        end
 
       {:noreply, assign(socket, :editing_decision_index, editing)}
     else
@@ -236,13 +287,7 @@ defmodule ReviewsWeb.ReviewLive do
 
   @impl true
   def handle_event("select_packet_overview", _params, socket) do
-    socket =
-      socket
-      |> assign(:editing_decision_index, nil)
-      |> assign(:active_outline_section_index, nil)
-      |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
-
-    {:noreply, socket}
+    {:noreply, reveal_packet_overview(socket)}
   end
 
   @impl true
@@ -263,7 +308,7 @@ defmodule ReviewsWeb.ReviewLive do
     socket =
       case parse_int(section_index) do
         index when is_integer(index) ->
-          push_event(socket, "packet_nav_jump", %{id: "review-split-section-overview-#{index}"})
+          push_event(socket, "packet_nav_jump", %{id: "review-section-header-#{index}"})
 
         _ ->
           socket
@@ -319,10 +364,16 @@ defmodule ReviewsWeb.ReviewLive do
             do: socket.assigns.selected_patchset.number,
             else: thread.originating_patchset_number
 
-        {:noreply,
-         push_patch(socket,
-           to: ~p"/r/#{socket.assigns.review.slug}?#{[patchset: number, thread: thread.id]}"
-         )}
+        query = [patchset: number, thread: thread.id]
+        slug = socket.assigns.review.slug
+
+        # Diff mode reveals the thread in place rather than mounting the Guide.
+        to =
+          if socket.assigns.live_action == :changes,
+            do: ~p"/r/#{slug}/changes?#{query}",
+            else: ~p"/r/#{slug}?#{query}"
+
+        {:noreply, push_patch(socket, to: to)}
     end
   end
 
@@ -377,6 +428,60 @@ defmodule ReviewsWeb.ReviewLive do
     end
   end
 
+  def handle_event("open_delete_review", _params, socket) do
+    if socket.assigns.can_delete_review do
+      summary = ReviewsContext.deletion_summary(socket.assigns.review)
+      {:noreply, assign(socket, :delete_review, %{summary: summary, confirm_slug: ""})}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("cancel_delete_review", _params, socket),
+    do: {:noreply, assign(socket, :delete_review, nil)}
+
+  def handle_event("change_delete_review", %{"confirm_slug" => typed}, socket) do
+    {:noreply, update(socket, :delete_review, &(&1 && %{&1 | confirm_slug: typed}))}
+  end
+
+  def handle_event("delete_review", %{"confirm_slug" => typed}, socket) do
+    review = socket.assigns.review
+
+    if String.trim(typed) == review.slug do
+      # This page navigates away itself; it must not also reload on the broadcast.
+      Phoenix.PubSub.unsubscribe(Reviews.PubSub, "review:#{review.slug}")
+
+      case ReviewsContext.delete_review(review, socket.assigns.current_identity) do
+        {:ok, _review} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Deleted review #{review.slug}.")
+           |> push_navigate(to: ~p"/reviews")}
+
+        {:error, :review_deleted} ->
+          {:noreply, redirect(socket, to: socket.assigns.return_to)}
+
+        {:error, reason} ->
+          Phoenix.PubSub.subscribe(Reviews.PubSub, "review:#{review.slug}")
+
+          message =
+            if reason == :forbidden,
+              do: "Only the review owner can delete it.",
+              else: "Could not delete the review. Nothing was deleted."
+
+          {:noreply, put_flash(socket, :error, message)}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Type the review's slug to confirm.")}
+    end
+  end
+
+  @impl true
+  def handle_info({:review_deleted, _slug}, socket) do
+    # A full page load renders the "This review was deleted" page.
+    {:noreply, redirect(socket, to: socket.assigns.return_to)}
+  end
+
   @impl true
   def handle_info({:patchset_pushed, number}, socket) do
     {:noreply,
@@ -424,6 +529,17 @@ defmodule ReviewsWeb.ReviewLive do
     case ReviewView.snapshot(review, current_identity, patchset_number: patchset_number) do
       {:ok, snapshot} -> {:ok, assign_snapshot(socket, snapshot)}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Only the first, static render reaches unfurlers; the root layout is not
+  # re-rendered after the socket connects.
+  defp assign_link_preview(socket, params, uri) do
+    if connected?(socket) do
+      socket
+    else
+      %{review: review, published_threads: threads} = socket.assigns
+      assign(socket, :link_preview, ReviewsWeb.LinkPreview.build(review, threads, params, uri))
     end
   end
 
@@ -523,10 +639,16 @@ defmodule ReviewsWeb.ReviewLive do
   def render(assigns) do
     ~H"""
     <Layouts.flash_group flash={@flash} />
-    <div class="review-page min-h-screen">
+    <div
+      id="review-page"
+      class="review-page min-h-screen"
+      phx-hook="PacketFragments"
+      data-patchset={@selected_patchset.id}
+    >
       <.ds_shell brand="Reviews" home={~p"/"}>
         <:actions>
-          <.user_menu current_user={@current_user} return_to={@return_to} />
+          <DeleteReviewComponents.review_menu :if={@can_delete_review} />
+          <Layouts.account_menu current_user={@current_user} return_to={@return_to} />
         </:actions>
 
         <% packet = @selected_patchset && @selected_patchset.packet %>
@@ -657,63 +779,29 @@ defmodule ReviewsWeb.ReviewLive do
               threads={@published_threads}
               current_identity={@current_identity}
               patchset_number={@selected_patchset.number}
+              changes={@live_action == :changes}
             />
           </div>
         </div>
       </.ds_shell>
+      <DeleteReviewComponents.dialog
+        :if={@delete_review}
+        review={@review}
+        summary={@delete_review.summary}
+        confirm_slug={@delete_review.confirm_slug}
+      />
     </div>
     """
   end
 
-  attr :current_user, :any, default: nil
-  attr :return_to, :string, default: "/"
-
-  defp user_menu(%{current_user: nil} = assigns) do
-    ~H"""
-    <a
-      href={~p"/auth/github?#{[return_to: @return_to]}"}
-      class="review-button review-button-secondary"
-    >
-      Sign in
-    </a>
-    """
+  defp reveal_packet_overview(socket) do
+    socket
+    |> assign(:editing_decision_index, nil)
+    |> assign(:active_outline_section_index, nil)
+    |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
   end
 
-  defp user_menu(assigns) do
-    ~H"""
-    <div class="dropdown dropdown-end">
-      <button
-        tabindex="0"
-        type="button"
-        class="review-button review-button-secondary gap-2"
-        aria-label={"Account menu for #{@current_user.username}"}
-      >
-        <img
-          :if={@current_user.avatar_url}
-          src={@current_user.avatar_url}
-          alt=""
-          width="24"
-          height="24"
-          class="size-6 rounded-full"
-        />
-        <span class="text-sm">{@current_user.username}</span>
-      </button>
-      <ul
-        tabindex="0"
-        class="dropdown-content menu menu-sm review-menu z-20 mt-2 w-44 p-2"
-      >
-        <li>
-          <.link navigate={~p"/settings"}>Settings</.link>
-        </li>
-        <li>
-          <.link href={~p"/auth/logout"} method="delete">Sign out</.link>
-        </li>
-      </ul>
-    </div>
-    """
-  end
-
-  defp reveal_activity_thread(socket, id) do
+  defp reveal_activity_thread(socket, id, on_missing, comment_id \\ nil) do
     with thread when not is_nil(thread) <-
            Enum.find(socket.assigns.published_threads, &(to_string(&1.id) == id)),
          true <- is_map(thread.anchor),
@@ -744,11 +832,31 @@ defmodule ReviewsWeb.ReviewLive do
           })
 
         true ->
-          push_patch(socket,
-            to:
-              ~p"/r/#{socket.assigns.review.slug}/changes?#{[patchset: socket.assigns.selected_patchset.number, thread: thread.id]}"
-          )
+          # Keep `comment`, so a copied comment link still lands on it.
+          query =
+            [patchset: socket.assigns.selected_patchset.number, thread: thread.id] ++
+              if(comment_id, do: [comment: comment_id], else: [])
+
+          push_patch(socket, to: ~p"/r/#{socket.assigns.review.slug}/changes?#{query}")
       end
+    else
+      _ -> on_missing.(socket)
+    end
+  end
+
+  # `?section=N` (the section sign-in link's return path) opens that section
+  # with its decision expanded.
+  defp reveal_packet_section(socket, index) do
+    with :show <- socket.assigns.live_action,
+         section_index when is_integer(section_index) <- parse_int(index),
+         %{} <-
+           ReviewPacket.section_at(socket.assigns.selected_patchset.packet || %{}, section_index) do
+      socket
+      |> assign(:active_outline_section_index, section_index)
+      |> assign(:editing_decision_index, section_index)
+      |> update(:expanded_section_ids, &MapSet.put(&1, section_index))
+      |> auto_open_section_hunks(section_index)
+      |> push_event("packet_nav_jump", %{id: "packet-section-#{section_index}"})
     else
       _ -> socket
     end

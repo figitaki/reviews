@@ -45,6 +45,9 @@ defmodule ReviewsWeb.Endpoint do
     plug Phoenix.Ecto.CheckRepoStatus, otp_app: :reviews
   end
 
+  # Aggregate authentication runs before request logging, telemetry, redirects and body parsing.
+  plug ReviewsWeb.Plugs.AggregateExport
+
   plug Phoenix.LiveDashboard.RequestLogger,
     param_key: "request_logger",
     cookie_key: "request_logger"

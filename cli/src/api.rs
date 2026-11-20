@@ -2,12 +2,18 @@
 //!
 //! Endpoints (see docs/CONTRACTS.md):
 //!   GET  /api/v1/me
+//!   GET  /api/v1/capabilities
+//!   GET  /api/v1/reviews
 //!   POST /api/v1/reviews
 //!   POST /api/v1/reviews/:slug/patchsets
+//!   POST /api/v1/code-snapshots
+//!   POST /api/v1/code-snapshots/:id/complete
 //!   GET  /api/v1/reviews/:slug
 //!   POST /api/v1/reviews/:slug/comments (new thread or reply)
 //!   PATCH /api/v1/reviews/:slug/threads/:thread_id
 //!   POST /api/v1/reviews/:slug/sections/:section_index/decision
+//!   GET  /api/v1/reviews/:slug/deletion
+//!   DELETE /api/v1/reviews/:slug
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::blocking::{Client, RequestBuilder, Response};
@@ -15,6 +21,32 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
+
+/// A non-2xx API response, preserving the status and the server's stable
+/// machine-readable `error_code` (when present) so commands can branch on it
+/// instead of parsing message text.
+#[derive(Debug)]
+pub struct ApiError {
+    /// HTTP status, kept for future callers that branch on it.
+    #[allow(dead_code)]
+    pub status: u16,
+    pub code: Option<String>,
+    pub message: String,
+}
+
+impl std::fmt::Display for ApiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ApiError {}
+
+/// The stable error code from an anyhow error chain, if it wraps an ApiError.
+pub fn api_error_code(err: &anyhow::Error) -> Option<&str> {
+    err.downcast_ref::<ApiError>()
+        .and_then(|e| e.code.as_deref())
+}
 
 pub struct ApiClient {
     base_url: String,
@@ -48,6 +80,8 @@ pub struct CreateReviewRequest<'a> {
     pub raw_diff: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub packet: Option<&'a Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code_snapshot_id: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -57,6 +91,9 @@ pub struct CreateReviewResponse {
     pub slug: String,
     pub url: String,
     pub patchset_number: i64,
+    /// Absent when the push carried no snapshot id, and on old servers.
+    #[serde(default)]
+    pub code_snapshot: Option<CodeSnapshotResult>,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,12 +103,90 @@ pub struct CreatePatchsetRequest<'a> {
     pub raw_diff: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub packet: Option<&'a Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code_snapshot_id: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreatePatchsetResponse {
     pub patchset_number: i64,
     pub url: String,
+    /// Absent when the push carried no snapshot id, and on old servers.
+    #[serde(default)]
+    pub code_snapshot: Option<CodeSnapshotResult>,
+}
+
+/// The server's verdict on a `code_snapshot_id` claim: `claimed`, or
+/// `skipped` with a stable error code under the optional storage policy.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeSnapshotResult {
+    pub status: String,
+    #[serde(default)]
+    pub code: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Capabilities {
+    pub code_storage: CodeStorageCaps,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeStorageCaps {
+    pub enabled: bool,
+    pub required: bool,
+    #[serde(default)]
+    pub supported_object_formats: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReserveSnapshotRequest<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_slug: Option<&'a str>,
+    pub object_format: &'a str,
+    pub base_oid: &'a str,
+    pub head_oid: &'a str,
+    pub head_kind: &'a str,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct ReserveSnapshotResponse {
+    pub id: String,
+    #[allow(dead_code)]
+    pub repository_id: String,
+    pub upload: UploadInstructions,
+    pub refs: SnapshotRefs,
+}
+
+#[derive(Clone, Deserialize)]
+pub struct UploadInstructions {
+    pub remote_url: String,
+    pub token: String,
+    #[allow(dead_code)]
+    pub expires_at: String,
+}
+
+/// The upload credential must never be printed; keep it out of Debug output.
+impl std::fmt::Debug for UploadInstructions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UploadInstructions")
+            .field("remote_url", &self.remote_url)
+            .field("token", &"[redacted]")
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SnapshotRefs {
+    pub base: String,
+    pub head: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CompleteSnapshotResponse {
+    #[allow(dead_code)]
+    pub id: String,
+    pub status: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -121,6 +236,35 @@ pub struct SectionDecisionResponse {
     pub status: Option<String>,
 }
 
+/// What deleting a review would remove (`GET /api/v1/reviews/:slug/deletion`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeletionPreview {
+    pub slug: String,
+    pub title: String,
+    pub patchsets: i64,
+    pub threads: i64,
+    pub comments: i64,
+    pub other_comments: i64,
+    pub other_authors: Vec<String>,
+}
+
+/// Filters for `GET /api/v1/reviews`. `None` fields are left out of the query.
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct ListReviewsQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub q: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset: Option<u32>,
+}
+
 impl ApiClient {
     pub fn new(base_url: impl Into<String>, token: impl Into<String>) -> Result<Self> {
         Self::build(base_url.into(), Some(token.into()))
@@ -158,6 +302,52 @@ impl ApiClient {
         self.token
             .as_deref()
             .ok_or_else(|| anyhow!("{what} requires you to sign in. Run `reviews login` first."))
+    }
+
+    /// Probe server capabilities. `Ok(None)` means an older server without
+    /// the endpoint (HTTP 404) — treat every feature as disabled.
+    pub fn capabilities(&self) -> Result<Option<Capabilities>> {
+        let path = "/api/v1/capabilities";
+        let resp = self
+            .auth(self.http.get(self.url(path)))
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        if resp.status() == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        let caps = resp
+            .json::<Capabilities>()
+            .with_context(|| format!("could not parse {path} response as JSON"))?;
+        Ok(Some(caps))
+    }
+
+    pub fn reserve_snapshot(
+        &self,
+        req: &ReserveSnapshotRequest<'_>,
+    ) -> Result<ReserveSnapshotResponse> {
+        let path = "/api/v1/code-snapshots";
+        let _ = self.require_token(&format!("POST {path}"))?;
+        let resp = self
+            .auth(self.http.post(self.url(path)))
+            .json(req)
+            .send()
+            .with_context(|| format!("could not reach server for POST {path}"))?;
+        let resp = check_status(resp, &format!("POST {path}"))?;
+        resp.json::<ReserveSnapshotResponse>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
+    pub fn complete_snapshot(&self, id: &str) -> Result<CompleteSnapshotResponse> {
+        let path = format!("/api/v1/code-snapshots/{id}/complete");
+        let _ = self.require_token(&format!("POST {path}"))?;
+        let resp = self
+            .auth(self.http.post(self.url(&path)))
+            .send()
+            .with_context(|| format!("could not reach server for POST {path}"))?;
+        let resp = check_status(resp, &format!("POST {path}"))?;
+        resp.json::<CompleteSnapshotResponse>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
     }
 
     pub fn me(&self) -> Result<Me> {
@@ -235,6 +425,19 @@ impl ApiClient {
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 
+    pub fn list_reviews(&self, query: &ListReviewsQuery) -> Result<Value> {
+        let path = "/api/v1/reviews";
+        let _ = self.require_token(&format!("GET {path}"))?;
+        let resp = self
+            .auth(self.http.get(self.url(path)))
+            .query(query)
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<Value>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
     pub fn show_review(&self, slug: &str, patchset: Option<i64>) -> Result<Value> {
         let path = format!("/api/v1/reviews/{slug}");
         let mut req = self.auth(self.http.get(self.url(&path)));
@@ -266,6 +469,29 @@ impl ApiClient {
         resp.json::<SectionDecisionResponse>()
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
+
+    pub fn deletion_preview(&self, slug: &str) -> Result<DeletionPreview> {
+        let path = format!("/api/v1/reviews/{slug}/deletion");
+        let _ = self.require_token(&format!("GET {path}"))?;
+        let resp = self
+            .auth(self.http.get(self.url(&path)))
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<DeletionPreview>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
+    pub fn delete_review(&self, slug: &str) -> Result<()> {
+        let path = format!("/api/v1/reviews/{slug}");
+        let _ = self.require_token(&format!("DELETE {path}"))?;
+        let resp = self
+            .auth(self.http.delete(self.url(&path)))
+            .send()
+            .with_context(|| format!("could not reach server for DELETE {path}"))?;
+        check_status(resp, &format!("DELETE {path}"))?;
+        Ok(())
+    }
 }
 
 fn check_status(resp: Response, what: &str) -> Result<Response> {
@@ -282,22 +508,26 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
     let hint = match code {
         Some("invalid_anchor") => " — choose a line or token selection in the selected revision.",
         Some("patchset_not_found") => " — select a revision that belongs to this review.",
+        Some("review_deleted") => " — this review was deleted.",
         _ => match status {
         StatusCode::UNAUTHORIZED => {
             " — the server rejected your sign-in. Run `reviews login` again."
         }
         StatusCode::FORBIDDEN => {
-            " — this identity is not allowed to do that on this review. Only the review owner can push revisions or decide sections; the owner or the thread's author can resolve or reopen a thread."
+            " — this identity is not allowed to do that on this review. Only the review owner can push revisions, decide sections or delete the review; the owner or the thread's author can resolve or reopen a thread."
         }
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",
+        StatusCode::BAD_REQUEST => " — the server did not accept a parameter. See the body.",
         _ => "",
     },
     };
     let code_label = code.map(|c| format!(" [{c}]")).unwrap_or_default();
-    Err(anyhow!(
-        "{what} failed: HTTP {status}{code_label}{hint}\nbody: {body}"
-    ))
+    Err(anyhow::Error::new(ApiError {
+        status: status.as_u16(),
+        code: code.map(str::to_string),
+        message: format!("{what} failed: HTTP {status}{code_label}{hint}\nbody: {body}"),
+    }))
 }
 
 #[cfg(test)]
@@ -399,6 +629,7 @@ mod tests {
                 branch_name: "main",
                 raw_diff: "diff --git a/x b/x\n",
                 packet: None,
+                code_snapshot_id: None,
             })
             .unwrap();
         assert_eq!(resp.slug, "k7m2qz");
@@ -426,6 +657,7 @@ mod tests {
                     branch_name: "main",
                     raw_diff: "diff --git a/x b/x\n",
                     packet: None,
+                    code_snapshot_id: None,
                 },
             )
             .unwrap();
@@ -451,6 +683,7 @@ mod tests {
                     branch_name: "y",
                     raw_diff: "z",
                     packet: None,
+                    code_snapshot_id: None,
                 },
             )
             .unwrap_err();
@@ -641,6 +874,219 @@ mod tests {
         assert_eq!(resp.review, "k7m2qz");
         assert_eq!(resp.status.as_deref(), Some("approved"));
         mock.assert();
+    }
+
+    #[test]
+    fn capabilities_404_means_old_server() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/api/v1/capabilities")
+            .with_status(404)
+            .create();
+
+        let client = ApiClient::anonymous(server.url()).unwrap();
+        assert!(client.capabilities().unwrap().is_none());
+    }
+
+    #[test]
+    fn capabilities_parse() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/api/v1/capabilities")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{"code_storage":{"enabled":true,"required":false,"supported_object_formats":["sha1"],"max_upload_bytes":1},"lsp":{"enabled":false,"languages":[]}}"#,
+            )
+            .create();
+
+        let client = ApiClient::anonymous(server.url()).unwrap();
+        let caps = client.capabilities().unwrap().unwrap();
+        assert!(caps.code_storage.enabled);
+        assert!(!caps.code_storage.required);
+        assert_eq!(caps.code_storage.supported_object_formats, vec!["sha1"]);
+    }
+
+    #[test]
+    fn reserve_and_complete_snapshot_happy_path() {
+        let mut server = mockito::Server::new();
+        let reserve = server
+            .mock("POST", "/api/v1/code-snapshots")
+            .match_header("authorization", "Bearer tok")
+            .match_body(mockito::Matcher::PartialJson(serde_json::json!({
+                "object_format": "sha1",
+                "head_kind": "commit"
+            })))
+            .with_status(201)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{"id":"snap-1","repository_id":"repo-1","expires_at":"x",
+                    "upload":{"remote_url":"https://acme.code.storage/reviews/r.git","token":"jwt","expires_at":"y"},
+                    "refs":{"base":"refs/heads/snapshots/snap-1/base","head":"refs/heads/snapshots/snap-1/head"}}"#,
+            )
+            .create();
+        let complete = server
+            .mock("POST", "/api/v1/code-snapshots/snap-1/complete")
+            .match_header("authorization", "Bearer tok")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"id":"snap-1","status":"ready","base_oid":"a","head_oid":"b"}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let resp = client
+            .reserve_snapshot(&ReserveSnapshotRequest {
+                review_slug: None,
+                object_format: "sha1",
+                base_oid: "a",
+                head_oid: "b",
+                head_kind: "commit",
+            })
+            .unwrap();
+        assert_eq!(resp.id, "snap-1");
+        assert_eq!(resp.refs.base, "refs/heads/snapshots/snap-1/base");
+
+        let done = client.complete_snapshot("snap-1").unwrap();
+        assert_eq!(done.status, "ready");
+        reserve.assert();
+        complete.assert();
+    }
+
+    #[test]
+    fn api_error_carries_stable_code() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("POST", "/api/v1/code-snapshots/x/complete")
+            .with_status(422)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"errors":{"detail":"mismatch"},"error_code":"ref_mismatch","error_detail":"mismatch"}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let err = client.complete_snapshot("x").unwrap_err();
+        assert_eq!(api_error_code(&err), Some("ref_mismatch"));
+    }
+
+    #[test]
+    fn upload_instructions_debug_redacts_token() {
+        let upload = UploadInstructions {
+            remote_url: "https://x".to_string(),
+            token: "super-secret".to_string(),
+            expires_at: "z".to_string(),
+        };
+        let debug = format!("{upload:?}");
+        assert!(!debug.contains("super-secret"), "debug = {debug}");
+        assert!(debug.contains("[redacted]"));
+    }
+
+    #[test]
+    fn create_review_omits_code_snapshot_id_when_none() {
+        let req = CreateReviewRequest {
+            title: "t",
+            description: "",
+            base_sha: "a",
+            branch_name: "b",
+            raw_diff: "d",
+            packet: None,
+            code_snapshot_id: None,
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert!(json.get("code_snapshot_id").is_none());
+
+        let req = CreateReviewRequest {
+            code_snapshot_id: Some("snap-1"),
+            ..req
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["code_snapshot_id"], "snap-1");
+    }
+
+    #[test]
+    fn create_patchset_parses_code_snapshot_result() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("POST", "/api/v1/reviews/k7m2qz/patchsets")
+            .with_status(201)
+            .with_header("content-type", "application/json")
+            .with_body(
+                r#"{"patchset_number":2,"url":"http://localhost:4000/r/k7m2qz",
+                    "code_snapshot":{"status":"skipped","code":"snapshot_not_ready"}}"#,
+            )
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let resp = client
+            .create_patchset(
+                "k7m2qz",
+                &CreatePatchsetRequest {
+                    base_sha: "x",
+                    branch_name: "y",
+                    raw_diff: "z",
+                    packet: None,
+                    code_snapshot_id: Some("snap-1"),
+                },
+            )
+            .unwrap();
+        let cs = resp.code_snapshot.unwrap();
+        assert_eq!(cs.status, "skipped");
+        assert_eq!(cs.code.as_deref(), Some("snapshot_not_ready"));
+    }
+
+    #[test]
+    fn list_reviews_sends_filters_and_token() {
+        let mut server = mockito::Server::new();
+        let mock = server
+            .mock("GET", "/api/v1/reviews")
+            .match_header("authorization", "Bearer tok")
+            .match_query(mockito::Matcher::AllOf(vec![
+                mockito::Matcher::UrlEncoded("role".into(), "involved".into()),
+                mockito::Matcher::UrlEncoded("q".into(), "billing export".into()),
+                mockito::Matcher::UrlEncoded("limit".into(), "5".into()),
+            ]))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"reviews":[],"limit":5,"offset":0,"next_offset":null}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let body = client
+            .list_reviews(&ListReviewsQuery {
+                role: Some("involved".into()),
+                q: Some("billing export".into()),
+                limit: Some(5),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(body["limit"], 5);
+        mock.assert();
+    }
+
+    #[test]
+    fn list_reviews_requires_token() {
+        let client = ApiClient::anonymous("http://example.invalid").unwrap();
+        let err = client
+            .list_reviews(&ListReviewsQuery::default())
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("reviews login"));
+    }
+
+    #[test]
+    fn list_reviews_400_shows_hint() {
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/api/v1/reviews")
+            .match_query(mockito::Matcher::Any)
+            .with_status(400)
+            .with_body(r#"{"errors":{"role":"must be one of: all, authored, involved"}}"#)
+            .create();
+
+        let client = ApiClient::new(server.url(), "tok").unwrap();
+        let err = client
+            .list_reviews(&ListReviewsQuery::default())
+            .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("400"), "msg = {msg}");
+        assert!(msg.contains("must be one of"), "msg = {msg}");
     }
 
     #[test]

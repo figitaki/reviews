@@ -172,8 +172,8 @@
    above it. */
 .review-activity-panel {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: var(--size-fab);
+  height: var(--size-fab);
   box-sizing: border-box;
   border: 1px solid var(--review-line-strong, var(--ds-line));
   border-radius: var(--radius-lg);
@@ -210,7 +210,7 @@
   border: 1px solid var(--review-line-strong, var(--ds-line));
   border-radius: var(--radius-pill);
   background: var(--ds-panel-raised, var(--ds-panel));
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 18px;
   text-align: center;
 }
@@ -245,46 +245,37 @@
   .review-activity-body { animation: none; }
 }
 
-/* Below wide screens the button floats over the content. */
-@media (max-width: 1199px) {
-  .review-activity {
-    --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
-    --review-quick-right: calc(16px + env(safe-area-inset-right));
+/* The button floats over the content at every width; the review content
+   stays full width. */
+.review-activity {
+  --review-quick-bottom: calc(16px + env(safe-area-inset-bottom));
+  --review-quick-right: calc(16px + env(safe-area-inset-right));
 
-    position: fixed;
-    right: var(--review-quick-right);
-    bottom: var(--review-quick-bottom);
-    z-index: var(--z-fab);
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 12px;
-  }
-  /* Leave room so the button never covers the last lines of code. */
-  .review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  position: fixed;
+  right: var(--review-quick-right);
+  bottom: var(--review-quick-bottom);
+  z-index: var(--z-fab);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+/* Leave room so the button never covers the last lines of code. */
+.review-workspace-content { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+
+/* In the Guide the fixed section dock holds next section in the
+   bottom-right corner, so Comments (and Sections on phones) stack above it:
+   dock offset + dock height + the column's 12px gap. */
+.review-page:has(.review-section-decision.has-nav) .review-activity {
+  --review-quick-bottom: calc(16px + var(--size-fab) + 12px + env(safe-area-inset-bottom));
 }
 
-/* Tablets: the sticky section decision bar stops short of the button. */
-@media (min-width: 641px) and (max-width: 1199px) {
-  .review-page:has(.review-activity:not([data-empty])) .review-section-decision { margin-right: 64px; }
-}
+/* The Guide grid's own bottom padding already clears the buttons. Padding
+   below the Guide shell ended the sticky Guide rail early, so it jumped up
+   at the bottom of the page over empty space. */
+.review-page:has(.review-packet-shell.has-outline) .review-workspace-content { padding-bottom: 0; }
 
-/* Wide screens: the aside reserves a column beside the code, as wide as the
-   open log, so neither the button nor the log covers code. */
 @media (min-width: 1200px) {
-  .review-activity {
-    --review-activity-w: 300px;
-
-    width: var(--review-activity-w);
-    align-self: stretch;
-  }
-  .review-activity:not(:has(details[open])) { --review-activity-w: 48px; }
-  .review-activity-panel {
-    position: fixed;
-    right: calc(16px + env(safe-area-inset-right));
-    bottom: calc(16px + env(safe-area-inset-bottom));
-    z-index: var(--z-fab);
-  }
   .review-activity-body { width: 300px; }
   .review-activity-log {
     max-height: min(60dvh, calc(100dvh - var(--review-main-nav-h) - var(--review-section-sticky-h) - 120px));
@@ -295,28 +286,20 @@
 .review-quick-button { display: none; }
 
 /* Phones: icon-only floating buttons, Sections (Guide only) above Comments,
-   stacked above the section decision button and centred on it. */
+   stacked above the section decision button, all three --size-fab. */
 @media (max-width: 640px) {
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision:not(.is-readonly)) .review-activity {
-    --review-quick-right: calc(16px + 4px + env(safe-area-inset-right));
-    --review-quick-bottom: calc(16px + 56px + 12px + env(safe-area-inset-bottom));
-  }
   /* Sections scrolls the Guide map in below the sticky review toolbar, so its
      close button stays visible. */
   #review-guide-shell { scroll-margin-top: var(--rev-header-h, 48px); }
-  /* The open decision panel spans the screen. */
+  /* The open decisions span most of the screen. */
   .review-page:has(.review-section-decision.is-editing) .review-activity { display: none; }
-  /* The Guide grid already reserves space for the decision button. */
-  .review-page:has(.review-packet-shell.has-outline .review-section-decision) .review-workspace-content {
-    padding-bottom: 72px;
-  }
 
   .review-quick-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 48px;
-    height: 48px;
+    width: var(--size-fab);
+    height: var(--size-fab);
     padding: 0;
     border: 1px solid var(--review-line-strong, var(--ds-line));
     border-radius: var(--radius-lg);
@@ -326,7 +309,7 @@
     cursor: pointer;
   }
   .review-page:not(:has([data-guide-flyout-toggle])) .review-quick-button { display: none; }
-  .review-quick-icon { width: 22px; height: 22px; }
+  .review-quick-icon { width: var(--size-fab-icon); height: var(--size-fab-icon); }
   .review-quick-button:focus-visible {
     outline: 2px solid var(--ds-focus);
     outline-offset: 2px;
@@ -337,13 +320,44 @@
     width: calc(100vw - var(--review-quick-right) - 16px - env(safe-area-inset-left));
   }
   .review-activity-log { max-height: calc(60svh - var(--review-quick-bottom)); }
+
+  /* Phones without the Guide's section dock (Diff mode): Sections and
+     Comments sit in their own bar along the bottom, so they never cover
+     thread cards or the end of a comment. The content reserves the bar's
+     height; section decisions stay in the page flow. In the Guide they
+     stay stacked above the dock's next button. */
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-activity {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 8px var(--review-quick-right) calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--ds-line);
+    background: var(--ds-panel);
+  }
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-workspace-content {
+    padding-bottom: calc(var(--size-fab) + 32px + env(safe-area-inset-bottom));
+  }
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-activity-body { bottom: calc(100% + 8px); }
+  .review-page:not(:has(.review-section-decision.has-nav)) .review-activity:has(details[open]) .review-quick-button { visibility: visible; }
+}
+
+/* While someone types a comment or reply, or the on-screen keyboard is up,
+   the floating controls step aside so they never cover the box or Submit. */
+@media (max-width: 640px) {
+  .review-page:has(.review-hunk-card textarea:focus) :is(.review-activity, .review-section-decision),
+  html.is-keyboard-open .review-page :is(.review-activity, .review-section-decision) {
+    display: none;
+  }
 }
 
 /* Comments use the same escaped Markdown renderer as the Guide, at UI scale. */
-.review-rich-markdown.review-comment-markdown { padding: 0; font-size: 13px; line-height: 1.5; }
+.review-rich-markdown.review-comment-markdown { padding: 0; font-size: 0.8125rem; line-height: 1.5; }
 .review-comment-markdown > :first-child { margin-top: 0; }
 .review-comment-markdown > :last-child { margin-bottom: 0; }
 .review-comment-markdown :is(p, ul, ol, blockquote, pre, table) { margin-block: 0.5em; }
 .review-comment-markdown :is(h1, h2, h3, h4, h5, h6) { font-size: 1em; margin-block: 0.75em 0.25em; }
-.review-comment-markdown pre { max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.review-comment-markdown pre { max-width: 100%; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.75rem; }
 .review-comment-markdown table { display: block; max-width: 100%; overflow-x: auto; }

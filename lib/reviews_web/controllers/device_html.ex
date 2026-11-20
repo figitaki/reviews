@@ -18,13 +18,12 @@ defmodule ReviewsWeb.DeviceHTML do
             class="is-compact"
           >
             <:actions>
-              <.link
+              <.ds_github_button
                 id="device-sign-in-github"
                 href={~p"/auth/github?#{[return_to: @return_to]}"}
-                class="ds-button is-primary"
               >
                 Sign in with GitHub
-              </.link>
+              </.ds_github_button>
             </:actions>
           </.ds_page_header>
         </div>
@@ -41,7 +40,7 @@ defmodule ReviewsWeb.DeviceHTML do
           <.ds_page_header
             eyebrow="Reviews CLI"
             title="Enter the code from your terminal"
-            description="reviews login shows an 8-letter code in your terminal. Enter it here, then choose who the CLI acts as."
+            description="reviews login shows an 8-letter code in your terminal. Type or paste it here, then choose who the CLI acts as."
             class="is-compact"
           />
 
@@ -52,25 +51,49 @@ defmodule ReviewsWeb.DeviceHTML do
 
             <form id="device-entry-form" action={~p"/device"} method="post" class="ds-settings-form">
               <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-              <div>
-                <label for="device-user-code">Code</label>
-                <input
-                  id="device-user-code"
-                  name="user_code"
-                  type="text"
-                  class="ds-input"
-                  placeholder="WDJB-MJHT"
-                  autocomplete="off"
-                  autocapitalize="characters"
-                  spellcheck="false"
-                  maxlength="20"
-                  required
-                  autofocus
-                />
-              </div>
-              <button id="device-entry-submit" type="submit" class="ds-button is-primary">
+              <fieldset
+                id="device-user-code"
+                class="device-code"
+                data-device-code
+                data-alphabet={@alphabet}
+              >
+                <legend>Code</legend>
+                <div class="device-code-boxes">
+                  <%!-- No maxlength: a paste or autofill reaches the script whole, and
+                  without JavaScript the server joins whatever the boxes hold. --%>
+                  <%= for index <- 0..7 do %>
+                    <span :if={index == 4} class="device-code-dash" aria-hidden="true">–</span>
+                    <input
+                      id={"device-user-code-#{index}"}
+                      name="user_code[]"
+                      type="text"
+                      class="ds-input device-code-box"
+                      aria-label={"Letter #{index + 1} of 8"}
+                      inputmode="text"
+                      autocomplete={if(index == 0, do: "one-time-code", else: "off")}
+                      autocapitalize="characters"
+                      autocorrect="off"
+                      spellcheck="false"
+                      enterkeyhint={if(index == 7, do: "go", else: "next")}
+                      required
+                      autofocus={index == 0}
+                    />
+                  <% end %>
+                </div>
+              </fieldset>
+              <p id="device-entry-expiry" class="poppy-consent-note">
+                Codes expire {@ttl_minutes} minutes after <code>reviews login</code>
+                shows them. If yours has, run it again for a new one.
+              </p>
+              <.ds_button
+                id="device-entry-submit"
+                type="submit"
+                variant="primary"
+                size="lg"
+                icon="hero-arrow-right"
+              >
                 Continue
-              </button>
+              </.ds_button>
             </form>
           </.ds_card>
         </div>
@@ -101,6 +124,22 @@ defmodule ReviewsWeb.DeviceHTML do
               </div>
             </dl>
 
+            <p
+              id="device-confirm-expiry"
+              class="device-expiry"
+              role="timer"
+              aria-live="off"
+              data-device-expiry
+              data-seconds-left={@seconds_left}
+              data-expired-id="device-confirm-expired"
+              data-approve-id="device-approve"
+            >
+              This code expires in <strong data-countdown translate="no">{format_left(@seconds_left)}</strong>.
+            </p>
+            <p id="device-confirm-expired" class="device-expiry is-expired" role="alert" hidden>
+              {error_text(:expired_user_code)}
+            </p>
+
             <p id="device-confirm-warning" class="poppy-consent-note">
               Check that this code matches the one in your terminal. Allow it only if you ran
               <code>reviews login</code>
@@ -123,27 +162,66 @@ defmodule ReviewsWeb.DeviceHTML do
                     type="radio"
                     name="identity_id"
                     value={identity.id}
-                    checked={index == 0}
+                    checked={
+                      @selected == to_string(identity.id) or (is_nil(@selected) and index == 0)
+                    }
                     id={"device-identity-#{identity.id}"}
                   />
                   {identity.display_name} <span translate="no">(@{identity.handle})</span>
                   <span :if={identity.kind == "human"} class="ds-badge">You</span>
                   <span :if={identity.kind == "agent"} class="ds-badge">Agent</span>
                 </label>
+                <label for="device-identity-new">
+                  <input
+                    type="radio"
+                    name="identity_id"
+                    value="new"
+                    checked={@selected == "new"}
+                    id="device-identity-new"
+                  /> New agent identity
+                </label>
+                <div id="device-new-identity" class="poppy-new-identity">
+                  <.input
+                    field={@new_identity[:display_name]}
+                    id="device-new-identity-name"
+                    type="text"
+                    label="Agent name"
+                    autocomplete="off"
+                  />
+                  <.input
+                    field={@new_identity[:handle]}
+                    id="device-new-identity-handle"
+                    type="text"
+                    label="Handle"
+                    autocomplete="off"
+                    autocapitalize="none"
+                    spellcheck="false"
+                  />
+                  <p class="poppy-consent-note">
+                    Allow creates this agent and signs the CLI in as it.
+                  </p>
+                </div>
               </fieldset>
               <div class="poppy-consent-actions">
-                <button
+                <.ds_button
                   id="device-approve"
                   type="submit"
                   name="decision"
                   value="approve"
-                  class="ds-button is-primary"
+                  variant="primary"
+                  icon="hero-check"
                 >
                   Allow
-                </button>
-                <button id="device-deny" type="submit" name="decision" value="deny" class="ds-button">
+                </.ds_button>
+                <.ds_button
+                  id="device-deny"
+                  type="submit"
+                  name="decision"
+                  value="deny"
+                  icon="hero-x-mark"
+                >
                   Deny
-                </button>
+                </.ds_button>
               </div>
             </form>
           </.ds_card>
@@ -177,6 +255,11 @@ defmodule ReviewsWeb.DeviceHTML do
     </Layouts.app>
     """
   end
+
+  # "9:05" for 545 seconds, as the page's script counts.
+  defp format_left(seconds),
+    do:
+      "#{div(seconds, 60)}:#{seconds |> rem(60) |> Integer.to_string() |> String.pad_leading(2, "0")}"
 
   defp error_text(:expired_user_code),
     do: "That code expired. Run reviews login again for a new one."

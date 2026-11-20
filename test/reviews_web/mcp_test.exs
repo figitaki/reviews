@@ -553,7 +553,9 @@ defmodule ReviewsWeb.MCPTest do
         page_all(
           ctx.owner_token,
           "reviews_get_thread",
-          %{"review" => review.slug, "thread_id" => first["id"]},
+          # Each comment carries its link, so a page needs room for more than
+          # the minimum to fit one alongside the thread header.
+          %{"review" => review.slug, "thread_id" => first["id"], "max_bytes" => 2_500},
           "comments"
         )
 
@@ -590,7 +592,7 @@ defmodule ReviewsWeb.MCPTest do
           "review" => review.slug,
           "revision" => 1,
           "thread_id" => first["id"],
-          "max_bytes" => 2_000
+          "max_bytes" => 2_500
         })
 
       assert is_binary(thread_page.next_cursor)
@@ -813,6 +815,68 @@ defmodule ReviewsWeb.MCPTest do
 
       assert reply.thread_id == thread.id
       assert reply.path == "docs/b.md"
+    end
+
+    test "every thread and comment comes with its link on the review page", ctx do
+      base = "#{ReviewsWeb.Endpoint.url()}/r/#{ctx.review.slug}"
+
+      started =
+        call!(ctx.agent_token, "reviews_post_comment", %{
+          "review" => ctx.review.slug,
+          "path" => "lib/a.ex",
+          "line" => 2,
+          "body" => "Rename this."
+        })
+
+      reply =
+        call!(ctx.owner_token, "reviews_post_comment", %{
+          "review" => ctx.review.slug,
+          "thread_id" => started.thread_id,
+          "body" => "Done."
+        })
+
+      thread_url = "#{base}?thread=#{started.thread_id}"
+      assert started.url == base
+      assert started.thread_url == thread_url
+      assert started.comment_url == "#{thread_url}&comment=#{started.comment_id}"
+      assert reply.thread_url == thread_url
+      assert reply.comment_url == "#{thread_url}&comment=#{reply.comment_id}"
+      refute reply.comment_id == started.comment_id
+
+      listed = call!(ctx.agent_token, "reviews_list_threads", %{"review" => ctx.review.slug})
+      [thread] = listed.threads
+      assert thread.url == thread_url
+
+      assert Enum.map(thread.comments, & &1.url) == [
+               started.comment_url,
+               reply.comment_url
+             ]
+
+      read =
+        call!(ctx.agent_token, "reviews_get_thread", %{
+          "review" => ctx.review.slug,
+          "thread_id" => started.thread_id
+        })
+
+      assert read.url == thread_url
+      assert Enum.map(read.comments, & &1.url) == [started.comment_url, reply.comment_url]
+
+      markdown =
+        FastestMCP.read_resource!(Server, "reviews://#{ctx.review.slug}/feedback",
+          auth_input: bearer(ctx.agent_token)
+        )
+
+      %FastestMCP.Resources.Result{contents: [%{content: text}]} = markdown
+      assert text =~ "Link: #{thread_url}\n"
+
+      resolved =
+        call!(ctx.owner_token, "reviews_update_thread_status", %{
+          "review" => ctx.review.slug,
+          "thread_id" => started.thread_id,
+          "status" => "resolved"
+        })
+
+      assert resolved.thread_url == thread_url
     end
 
     test "refuse lines outside the diff and threads of other reviews without writing", ctx do
@@ -1110,7 +1174,7 @@ defmodule ReviewsWeb.MCPTest do
       cursor ->
         args = if cursor == :start, do: args, else: Map.put(args, "cursor", cursor)
         {size, page} = http_call(token, tool, args)
-        assert size <= 2_000, "#{tool} returned #{size} bytes"
+        assert size <= args["max_bytes"], "#{tool} returned #{size} bytes"
         refute page["isError"]
         next = page["next_cursor"]
         # Opaque: a string no client could read as a JSON number.

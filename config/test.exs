@@ -31,6 +31,9 @@ config :reviews, ReviewsWeb.Endpoint,
   secret_key_base: "PksNuEADSq2cFj3rPjGzuMlw2ulffcTg5IHJLaFhVcq8wWgjFfUr/EhTVD4cpvRl",
   server: false
 
+# The sweeper never runs in tests; they call Sweeper.sweep/1 directly.
+config :reviews, Reviews.CodeStorage.Sweeper, enabled: false
+
 config :reviews, :mcp,
   enabled: true,
   writes_enabled: true,
@@ -64,8 +67,10 @@ config :reviews, Reviews.OAuth,
     Reviews.OAuthTestResource,
     Reviews.OAuthTestResource.KeysOnly,
     Reviews.Poppy,
-    Reviews.OAuth.CLI
+    Reviews.OAuth.CLI,
+    Reviews.MCPAuth
   ],
+  token_endpoint_audience_clients: ["https://chatgpt.com/oauth/client.json"],
   default_resource: Reviews.Poppy
 
 # Raise on LiveView test-time template problems instead of warning.
@@ -84,3 +89,5 @@ config :reviews, ReviewsWeb.Plugs.RequestBudget,
     sockets: 1_000_000,
     owners: 1_000_000
   ]
+
+config :reviews, :design_catalog, true

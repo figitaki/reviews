@@ -59,13 +59,20 @@ defmodule ReviewsWeb.Router do
     plug :require_mcp_enabled
     plug :put_review_robots_header
     plug :put_no_store_header
+    plug :put_mcp_challenge
   end
 
   scope "/", ReviewsWeb do
     pipe_through :browser
 
     live "/", HomeLive, :index
+    live "/reviews", ReviewListLive, :index
     live "/settings", SettingsLive, :edit
+    # Off in production unless DESIGN_CATALOG is set; see ReviewsWeb.DesignLive.
+    live "/design", DesignLive, :index
+    live "/design/components", DesignComponentsLive, :index
+    live "/design/components/phone", DesignComponentsLive, :phone
+    live "/design/layouts", DesignLayoutsLive, :index
   end
 
   scope "/", ReviewsWeb do
@@ -154,8 +161,14 @@ defmodule ReviewsWeb.Router do
   end
 
   scope "/api/v1", ReviewsWeb.Api do
+    pipe_through :api
+    get "/analytics/snapshot", AnalyticsController, :show, log: false
+  end
+
+  scope "/api/v1", ReviewsWeb.Api do
     pipe_through [:api, :review_content]
 
+    get "/capabilities", CapabilityController, :show
     get "/reviews/:slug", ReviewController, :show
     get "/reviews/:slug/files", ReviewPageController, :files
     get "/reviews/:slug/threads", ReviewPageController, :threads
@@ -165,8 +178,13 @@ defmodule ReviewsWeb.Router do
   scope "/api/v1", ReviewsWeb.Api do
     pipe_through [:api, :api_authenticated]
 
+    get "/reviews", ReviewController, :index
     post "/reviews", ReviewController, :create
+    get "/reviews/:slug/deletion", ReviewController, :deletion
+    delete "/reviews/:slug", ReviewController, :delete
     post "/reviews/:slug/patchsets", PatchsetController, :create
+    post "/code-snapshots", CodeSnapshotController, :create
+    post "/code-snapshots/:id/complete", CodeSnapshotController, :complete
     post "/reviews/:slug/comments", CommentController, :create
     patch "/reviews/:slug/threads/:thread_id", ThreadController, :update
     post "/reviews/:slug/sections/:section_index/decision", SectionDecisionController, :create
@@ -177,7 +195,8 @@ defmodule ReviewsWeb.Router do
     pipe_through :mcp
 
     forward "/mcp", ReviewsWeb.MCP.Server,
-      allowed_hosts: {ReviewsWeb.MCP.Server, :allowed_hosts, []}
+      allowed_hosts: {ReviewsWeb.MCP.Server, :allowed_hosts, []},
+      cors: [origins: {ReviewsWeb.MCP.Server, :cors_origins, []}]
   end
 
   # Enable LiveDashboard in development
@@ -197,6 +216,26 @@ defmodule ReviewsWeb.Router do
   end
 
   defp put_no_store_header(conn, _opts), do: put_resp_header(conn, "cache-control", "no-store")
+
+  # Connectors find the issuer through the 401's resource_metadata (RFC 9728).
+  defp put_mcp_challenge(conn, _opts) do
+    register_before_send(conn, fn conn ->
+      case {conn.status, get_resp_header(conn, "www-authenticate")} do
+        {401, challenge} when length(challenge) <= 1 ->
+          put_resp_header(
+            conn,
+            "www-authenticate",
+            ReviewsWeb.MCP.Server.challenge(List.first(challenge))
+          )
+
+        {403, [challenge]} ->
+          put_resp_header(conn, "www-authenticate", ReviewsWeb.MCP.Server.challenge(challenge))
+
+        _ ->
+          conn
+      end
+    end)
+  end
 
   defp require_mcp_enabled(conn, _opts) do
     if ReviewsWeb.MCP.Server.enabled?() do

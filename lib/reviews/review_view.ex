@@ -7,6 +7,8 @@ defmodule Reviews.ReviewView do
   controllers do not duplicate file/thread payload shaping.
   """
 
+  import Ecto.Query, only: [from: 2]
+
   alias Reviews.Accounts.Identity
   alias Reviews.PacketHunkViews
   alias Reviews.PacketSectionDecisions
@@ -38,7 +40,12 @@ defmodule Reviews.ReviewView do
 
   def snapshot(%Review{} = review, viewer, opts \\ []) do
     # The author decides what the viewer may do; load it once for every thread.
-    review = Reviews.Repo.preload(review, :author)
+    # Its owner is joined in the same query: the Guide names who runs an agent.
+    review =
+      Reviews.Repo.preload(review,
+        author: from(i in Identity, join: u in assoc(i, :owner_user), preload: [owner_user: u])
+      )
+
     patchsets = ReviewsContext.list_patchsets(review)
     selected = pick_patchset(patchsets, Keyword.get(opts, :patchset_number))
 
@@ -275,7 +282,10 @@ defmodule Reviews.ReviewView do
       owner_username: a["owner_username"],
       approved_at: a["approved_at"],
       link_revoked: match?(%{revoked_at: %DateTime{}}, grant),
-      token_binding: token_binding(a)
+      token_binding: token_binding(a),
+      delegation_signed_by: a["delegation_signed_by"],
+      turnkey_organization_id: a["turnkey_organization_id"],
+      turnkey_agent: a["turnkey_agent"]
     }
   end
 

@@ -1,6 +1,6 @@
 [package]
 name = "reviews"
-version = "0.0.1"
+version = "0.0.3"
 edition = "2021"
 description = "CLI for the Reviews code review tool"
 license = "MIT"
@@ -17,8 +17,9 @@ dirs = "5.0"
 reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"], default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tempfile = "3.10"
+unicode-width = "0.2"
 toml = "0.8"
 
 [dev-dependencies]
 mockito = "1.5"
-tempfile = "3.10"

@@ -1,5 +1,11 @@
 import Config
 
+# Disabled unless both a SHA-256 digest and a UTC expiry (at most 90 days away) are valid.
+# Only the collector holds the raw aggregate credential; never reuse an account API token.
+config :reviews, :analytics_export,
+  token_sha256: System.get_env("REVIEWS_ANALYTICS_TOKEN_SHA256"),
+  expires_at: System.get_env("REVIEWS_ANALYTICS_TOKEN_EXPIRES_AT")
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
@@ -28,6 +34,33 @@ config :reviews, ReviewsWeb.Endpoint,
 config :ueberauth, Ueberauth.Strategy.Github.OAuth,
   client_id: System.get_env("GITHUB_CLIENT_ID"),
   client_secret: System.get_env("GITHUB_CLIENT_SECRET")
+
+# Code storage (code.storage backend). Off unless CODE_STORAGE_ADAPTER is set.
+# CODE_STORAGE_ORG is the code.storage organization; CODE_STORAGE_JWT_PRIVATE_KEY
+# is the P-256 private key in PKCS8 PEM format that signs ES256 upload tokens.
+if System.get_env("CODE_STORAGE_ADAPTER") == "code_storage" do
+  org = System.get_env("CODE_STORAGE_ORG")
+  key_pem = System.get_env("CODE_STORAGE_JWT_PRIVATE_KEY")
+
+  if config_env() == :prod and (is_nil(org) or is_nil(key_pem)) do
+    raise """
+    CODE_STORAGE_ADAPTER=code_storage requires CODE_STORAGE_ORG and
+    CODE_STORAGE_JWT_PRIVATE_KEY (P-256 PKCS8 PEM) to be set.
+    """
+  end
+
+  policy =
+    case System.get_env("CODE_STORAGE_POLICY", "optional") do
+      "required" -> :required
+      _ -> :optional
+    end
+
+  config :reviews, Reviews.CodeStorage,
+    adapter: Reviews.CodeStorage.CodeDotStorage,
+    policy: policy,
+    org: org,
+    jwt_private_key: key_pem
+end
 
 # Preview sign-in relay (Reviews.AuthRelay, docs/PREVIEW_ENVS.md). Production
 # is the relay: AUTH_RELAY_SECRET plus the GitHub OAuth app above.
@@ -71,6 +104,8 @@ if config_env() == :prod do
   host = System.get_env("PHX_HOST") || "example.com"
 
   config :reviews, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+
+  config :reviews, :design_catalog, System.get_env("DESIGN_CATALOG") in ~w(true 1)
 
   mcp_enabled = System.get_env("MCP_ENABLED") in ~w(true 1)
 
