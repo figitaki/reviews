@@ -1840,10 +1840,24 @@ defmodule ReviewsWeb.ReviewLiveTest do
       changes_href = ~p"/r/#{review.slug}/changes?#{[patchset: 1, thread: thread.id]}"
       {:ok, view, _} = live(conn, ~p"/r/#{review.slug}/changes")
       assert has_element?(view, ~s|#review-activity[data-activity*="#{changes_href}"]|)
+      island = ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="example.ex"]|
+
+      render_click(
+        view,
+        "mark_hunk_viewed",
+        hunk_view_params(review, "example.ex", 1, %{
+          "hunk_id" => changes_hunk_id(review, "example.ex")
+        })
+      )
+
+      assert has_element?(
+               view,
+               island <> ~s|[data-hunk-viewed="true"][data-hunk-expanded="false"]|
+             )
+
       render_click(view, "open_activity_thread", %{"thread_id" => thread.id})
       assert_patch(view, changes_href)
-      assert has_element?(view, ~s|#diff-files [data-hunk-expanded="true"]|)
-      refute has_element?(view, "#packet-section-0")
+      assert has_element?(view, island <> ~s|[data-hunk-expanded="true"]|)
       thread_id = thread.id
 
       assert_push_event(view, "open_review_thread", %{
