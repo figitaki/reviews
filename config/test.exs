@@ -79,3 +79,7 @@ config :phoenix_live_view, :test_warnings,
   missing_form_id: :raise
 
 config :reviews, :design_catalog, true
+
+# Every test connection comes from 127.0.0.1; a real limit would throttle the
+# suite. ReviewsWeb.ReviewPageRateLimitTest sets its own.
+config :reviews, ReviewsWeb.Plugs.ReviewPageRateLimit, limit: 1_000_000

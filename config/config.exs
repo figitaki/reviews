@@ -59,6 +59,15 @@ config :reviews, Reviews.MCPAuth,
 # and test enable it, and prod reads DESIGN_CATALOG in runtime.exs.
 config :reviews, :design_catalog, false
 
+# Anonymous requests to /r/:slug pages, per client IP and node (issue #265).
+# 120 a minute is far above an unfurler's one or two fetches and a person
+# reloading. See ReviewsWeb.Plugs.ReviewPageRateLimit.
+config :reviews, ReviewsWeb.Plugs.ReviewPageRateLimit,
+  limit: 120,
+  window_seconds: 60,
+  max_entries: 50_000,
+  client_ip: :remote_ip
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.28.2",

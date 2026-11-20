@@ -23,6 +23,8 @@ defmodule Reviews.Application do
           Reviews.OAuth.Issuer,
           # Wrong-code counts for the CLI sign-in page (/device).
           Reviews.OAuth.DeviceAttempts,
+          # Per-IP counts for anonymous review-page requests.
+          ReviewsWeb.Plugs.ReviewPageRateLimit.Table,
           # Start to serve requests, typically the last entry
           ReviewsWeb.Endpoint
         ]

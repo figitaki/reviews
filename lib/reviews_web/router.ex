@@ -53,6 +53,12 @@ defmodule ReviewsWeb.Router do
     plug :put_review_robots_header
   end
 
+  # Anonymous review pages, per client IP (issue #265). After :browser, which
+  # assigns current_user; signed-in requests are not limited.
+  pipeline :review_page_rate_limit do
+    plug ReviewsWeb.Plugs.ReviewPageRateLimit
+  end
+
   # MCP has no session cookie or CSRF token; FastestMCP checks the bearer
   # token, Host and Origin itself. See ReviewsWeb.MCP.Server.
   pipeline :mcp do
@@ -76,7 +82,7 @@ defmodule ReviewsWeb.Router do
   end
 
   scope "/", ReviewsWeb do
-    pipe_through [:browser, :review_content]
+    pipe_through [:browser, :review_content, :review_page_rate_limit]
 
     live "/r/:slug", ReviewLive, :show
     live "/r/:slug/changes", ReviewLive, :changes

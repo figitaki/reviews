@@ -1,0 +1,115 @@
+defmodule ReviewsWeb.Plugs.ReviewPageRateLimit do
+  @moduledoc """
+  Limits anonymous HTTP requests to review pages (`/r/:slug/...`) per client
+  IP. Each such request renders the page and builds its link preview, so a
+  flood costs CPU in proportion (issue #265).
+
+  Signed-in requests (a `current_user`) pass untouched, so this plug must run
+  after `ReviewsWeb.Plugs.FetchCurrentUser`. Over the limit the response is
+  `429` with `retry-after` and a short plain-text body.
+
+  Crawlers are not exempt by User-Agent, which anyone can send. The default,
+  120 requests per 60 seconds, is far above what an unfurler needs (Slackbot,
+  Discordbot and Twitterbot fetch a URL once or twice) and above a person
+  reloading a page.
+
+  Counts are fixed windows in ETS, local to each node. The table is bounded:
+  a sweep drops windows that have ended, and at `max_entries` new clients
+  share one overflow bucket, with the same limit, until the next sweep.
+  Clients already in the table keep their own counts.
+
+  Configuration (`config :reviews, #{inspect(__MODULE__)}`):
+
+    * `:limit` - requests per window per client IP (default 120)
+    * `:window_seconds` - window length (default 60)
+    * `:max_entries` - hard cap on table entries (default 50_000)
+    * `:client_ip` - `:remote_ip` (default) uses the socket peer; `{:header,
+      name}` uses that request header when it holds exactly one valid IP, and
+      the socket peer otherwise. Use a header only when the proxy in front
+      sets it on every request, overwriting what the client sent.
+  """
+  @behaviour Plug
+
+  import Plug.Conn
+
+  @table ReviewsWeb.Plugs.ReviewPageRateLimit.Table
+  @overflow :overflow
+  @defaults [limit: 120, window_seconds: 60, max_entries: 50_000, client_ip: :remote_ip]
+
+  ## Plug
+
+  @impl true
+  def init(opts), do: opts
+
+  @impl true
+  def call(%Plug.Conn{assigns: %{current_user: user}} = conn, _opts) when not is_nil(user),
+    do: conn
+
+  def call(conn, _opts) do
+    config = config()
+
+    case hit(client_ip(conn, config[:client_ip]), System.system_time(:second), config) do
+      :ok ->
+        conn
+
+      {:error, retry_after} ->
+        conn
+        |> put_resp_header("retry-after", Integer.to_string(retry_after))
+        |> put_resp_content_type("text/plain")
+        |> send_resp(429, "Too many requests. Try again in #{retry_after} seconds.\n")
+        |> halt()
+    end
+  end
+
+  @doc """
+  Counts one request from `ip` at `now` (Unix seconds). Returns `:ok`, or
+  `{:error, retry_after_seconds}` when the client is over the limit.
+  """
+  def hit(ip, now, config \\ config()) do
+    window = config[:window_seconds]
+    index = div(now, window)
+    key = bucket(ip, index, config[:max_entries])
+    count = :ets.update_counter(@table, key, {2, 1}, {key, 0})
+
+    if count <= config[:limit] do
+      :ok
+    else
+      {:error, max((index + 1) * window - now, 1)}
+    end
+  end
+
+  # A new client past the cap counts against the shared overflow bucket.
+  defp bucket(ip, index, max_entries) do
+    key = {ip, index}
+
+    if :ets.member(@table, key) or :ets.info(@table, :size) < max_entries,
+      do: key,
+      else: {@overflow, index}
+  end
+
+  defp client_ip(conn, {:header, name}) do
+    with [value] <- get_req_header(conn, name),
+         {:ok, ip} <-
+           value |> String.trim() |> String.to_charlist() |> :inet.parse_strict_address() do
+      ip
+    else
+      _ -> conn.remote_ip
+    end
+  end
+
+  defp client_ip(conn, _), do: conn.remote_ip
+
+  @doc "Deletes windows that ended before `now` (Unix seconds). Returns how many."
+  def sweep(now \\ System.system_time(:second)) do
+    current = div(now, config()[:window_seconds])
+    :ets.select_delete(@table, [{{{:_, :"$1"}, :_}, [{:<, :"$1", current}], [true]}])
+  end
+
+  @doc "Forgets every count. For tests."
+  def reset, do: :ets.delete_all_objects(@table)
+
+  @doc false
+  def config do
+    Keyword.merge(@defaults, Application.get_env(:reviews, __MODULE__, []))
+  end
+end

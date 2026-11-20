@@ -22,6 +22,12 @@ config :reviews, ReviewsWeb.Endpoint,
 # Keep crash messages (which can include internals) out of MCP responses.
 config :reviews, ReviewsWeb.MCP.Server, mask_error_details: true
 
+# Fly Proxy is the only hop in front of the app; conn.remote_ip is the
+# proxy's address, the same for every client. Fly Proxy sets Fly-Client-IP to
+# the address it accepted the connection from. X-Forwarded-For is not used:
+# the client can put its own entries in it.
+config :reviews, ReviewsWeb.Plugs.ReviewPageRateLimit, client_ip: {:header, "fly-client-ip"}
+
 # Do not print debug messages in production
 config :logger, level: :info
 

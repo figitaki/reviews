@@ -6,6 +6,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Anonymous requests to review pages are limited to 120 a minute per client
+  IP; past that the page answers 429 with `retry-after` (issue #265).
+  Signed-in people are not limited.
 - Review links now unfurl in Slack, iMessage, Discord and other apps (Open
   Graph and Twitter card tags). A link to a comment shows who wrote it, the
   file and line, and the comment as plain text. Page titles no longer end in
