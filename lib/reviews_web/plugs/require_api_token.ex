@@ -8,6 +8,10 @@ defmodule ReviewsWeb.Plugs.RequireApiToken do
   Halts with 401 JSON if missing/invalid. An invalid token also gets a
   `WWW-Authenticate` challenge with `invalid_token`, so the CLI knows to
   refresh it.
+
+  `ReviewsWeb.Plugs.BodyBudget` runs this plug for API writes before their
+  bodies are parsed. The router's run reuses that result from a private
+  marker, so a token (and a CLI token's DPoP proof) is checked once.
   """
   import Plug.Conn
 
@@ -16,14 +20,27 @@ defmodule ReviewsWeb.Plugs.RequireApiToken do
 
   def init(opts), do: opts
 
+  # Only this plug writes the private marker, after successful authentication.
+  # Caller-supplied assigns alone must never bypass authentication.
+  def call(%{private: %{reviews_api_authenticated: {user, identity, principal}}} = conn, _opts) do
+    conn
+    |> assign(:current_user, user)
+    |> assign(:current_identity, identity)
+    |> assign(:current_principal, principal)
+  end
+
   def call(conn, _opts) do
     with [raw] <- get_req_header(conn, "authorization"),
          "Bearer " <> token <- raw,
+         true <- token != "",
          {:ok, %{user: user, identity: identity}} <- authenticate(conn, raw, token) do
+      principal = Reviews.Principal.new(identity, :api_token, user)
+
       conn
       |> assign(:current_user, user)
       |> assign(:current_identity, identity)
-      |> assign(:current_principal, Reviews.Principal.new(identity, :api_token, user))
+      |> assign(:current_principal, principal)
+      |> put_private(:reviews_api_authenticated, {user, identity, principal})
     else
       [_raw] ->
         unauthorized(conn, ~s(Bearer error="invalid_token"))

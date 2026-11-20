@@ -496,6 +496,30 @@ defmodule ReviewsWeb.DeviceLoginTest do
            }) == {:error, :invalid_token}
   end
 
+  test "a CLI token can push a review: API writes authenticate it before parsing", %{
+    user: user,
+    human: human
+  } do
+    %{"device_code" => device_code, "user_code" => user_code} = start!()
+    :ok = OAuth.approve_device(user, user_code, human.id)
+    %{"access_token" => access} = poll(device_code) |> json_response(200)
+
+    conn =
+      build_conn()
+      |> put_req_header("authorization", "Bearer " <> access)
+      |> put_req_header("content-type", "application/json")
+      |> post(
+        ~p"/api/v1/reviews",
+        JSON.encode!(%{
+          title: "Pushed after reviews login",
+          raw_diff: "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-old\n+new\n"
+        })
+      )
+
+    assert %{"slug" => slug} = json_response(conn, 201)
+    assert Reviews.Reviews.get_review_by_slug(slug).author_id == human.id
+  end
+
   test "Settings lists CLI sign-ins apart from connected agents", %{user: user, human: human} do
     %{"device_code" => device_code, "user_code" => user_code} = start!()
     :ok = OAuth.approve_device(user, user_code, human.id)

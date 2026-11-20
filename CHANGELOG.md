@@ -39,6 +39,18 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   letter (A approved, C changes requested, S skipped), and the open
   section's files show their path, counts and change letter. Rows are 44px.
 
+### Security
+
+- Add bounded per-instance request budgets before expensive request handling,
+  authenticate API writes before body parsing, and limit small bodies to 64KB
+  while keeping authenticated 50MB review/patchset uploads and 4MB MCP
+  requests. A rejected request gets `429` with `error_code: rate_limited`.
+  Unsupported multipart bodies now return 415. A 429 from an OAuth endpoint
+  keeps its CORS headers and exposes `Retry-After`, and `reviews login` waits
+  out a 429 and keeps polling. On Fly the app now listens on IPv4 only and
+  budgets use a single valid `Fly-Client-IP` (else the socket peer); IPv6
+  clients share a budget per /64. See `docs/ABUSE_PROTECTION.md`.
+
 ## [0.0.3] - 2026-11-19
 
 0.0.1 brought the CLI and API tokens, and 0.0.2 brought agents signing in

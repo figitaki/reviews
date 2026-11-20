@@ -33,6 +33,13 @@ defmodule ReviewsWeb.ConnCase do
 
   setup tags do
     Reviews.DataCase.setup_sandbox(tags)
-    {:ok, conn: Phoenix.ConnTest.build_conn()}
+    # Each test represents a separate client; budgets remain enabled in tests.
+    n = System.unique_integer([:positive, :monotonic])
+
+    ip =
+      {10, Bitwise.band(Bitwise.bsr(n, 16), 255), Bitwise.band(Bitwise.bsr(n, 8), 255),
+       Bitwise.band(n, 255)}
+
+    {:ok, conn: %{Phoenix.ConnTest.build_conn() | remote_ip: ip}}
   end
 end
