@@ -104,6 +104,22 @@ defmodule Reviews.MarkdownTest do
     assert Markdown.to_html("<div>\n```\n<b>\n```\n</div>") ==
              "<p>&lt;div&gt;</p>\n<pre><code>&lt;b&gt;\n</code></pre>\n<p>&lt;/div&gt;</p>\n"
 
+    # An HTML block inside the first hides no fence: code gains no backslash.
+    assert Markdown.to_html("<div>\n<pre>\n~~~\n<b>\n~~~\n</pre>\n</div>") ==
+             "<p>&lt;div&gt;\n&lt;pre&gt;</p>\n<pre><code>&lt;b&gt;\n</code></pre>\n<p>&lt;/pre&gt;\n&lt;/div&gt;</p>\n"
+
+    # Nor does a code span that runs over lines.
+    assert Markdown.to_html("<div>\n`first\n<b>\nlast`\n</div>") ==
+             "<p>&lt;div&gt;\n<code>first &lt;b&gt; last</code>\n&lt;/div&gt;</p>\n"
+
+    # References resolve across the block in both directions.
+    assert Markdown.to_html("<div>\n[guide][g]\n</div>\n\n[g]: /docs") ==
+             ~s(<p>&lt;div&gt;\n<a href="/docs">guide</a>\n&lt;/div&gt;</p>\n)
+
+    # A <pre> block runs past blank lines, so the definition is inside it.
+    assert Markdown.to_html("<pre>\n\n[g]: /docs\n</pre>\n\n[guide][g]") ==
+             ~s(<p>&lt;pre&gt;</p>\n<p>&lt;/pre&gt;</p>\n<p><a href="/docs">guide</a></p>\n)
+
     # A second HTML block inside the first is read the same way, and changed
     # lines still find the blocks it becomes.
     html = Markdown.to_html("First\n\n<div>\n*a*\n\n<p onclick=x>\n</div>", changed_lines: [5])
