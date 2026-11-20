@@ -34,6 +34,9 @@ defmodule ReviewsWeb.Endpoint do
     from: :reviews,
     gzip: not code_reloading?,
     only: ReviewsWeb.static_paths(),
+    # `~p` links the digested root files `mix phx.digest` writes, such as
+    # /favicon-<hash>.ico and /site-<hash>.webmanifest, which `only:` misses.
+    only_matching: ~w(favicon- site-),
     raise_on_missing_only: code_reloading?
 
   # Code reloading can be explicitly enabled under the

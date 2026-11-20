@@ -6,6 +6,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The favicon and the web app manifest now load in production. The page
+  linked their digested names, such as `/site-<hash>.webmanifest`, which
+  the static file allowlist refused with a 404.
 - Opening a thread from Comments in Diff mode now stays in Diff mode and opens the thread there, instead of switching to the Guide and loading every diff again (#245).
 - Review links now unfurl in Slack, iMessage, Discord and other apps (Open
   Graph and Twitter card tags). A link to a comment shows who wrote it, the
