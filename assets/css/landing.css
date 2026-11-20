@@ -256,3 +256,86 @@
   .home-workflow article { grid-template-columns: 1fr; gap: 8px; }
   .home-content { padding-bottom: 40px; }
 }
+
+/* Privacy Policy and Terms of Service (ReviewsWeb.LegalHTML). */
+.l-footer nav a:first-child { margin-left: 0; }
+
+.legal-content {
+  width: min(44rem, calc(100% - 2 * var(--space-6)));
+  margin-inline: auto;
+  padding: var(--space-12) 0 var(--space-16);
+  color: var(--ds-text);
+  font-family: var(--font-prose);
+  font-size: var(--font-prose-size);
+  line-height: var(--font-prose-leading);
+}
+.legal-header h1 {
+  font-size: var(--font-size-3xl);
+  line-height: 1.1;
+  font-weight: 700;
+}
+.legal-updated {
+  margin-top: var(--space-2);
+  color: var(--ds-muted);
+  font-size: var(--font-size-sm);
+}
+.legal-draft {
+  margin: var(--space-6) 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--ds-warn);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--ds-warn) 10%, transparent);
+  font-size: var(--font-size-sm);
+}
+.legal-content section { margin-top: var(--space-10); }
+.legal-content h2 {
+  font-size: var(--font-size-xl);
+  font-weight: 650;
+  line-height: 1.25;
+  margin-bottom: var(--space-3);
+}
+.legal-content h3 {
+  font-size: var(--font-size-md);
+  font-weight: 650;
+  margin: var(--space-6) 0 var(--space-2);
+}
+.legal-content p + p { margin-top: var(--space-3); }
+.legal-content ul {
+  list-style: disc;
+  padding-left: var(--space-6);
+  margin: var(--space-3) 0;
+}
+.legal-content li + li { margin-top: var(--space-2); }
+.legal-content a { color: var(--ds-blue); text-decoration: underline; }
+.legal-content code { font-family: var(--font-mono); font-size: 0.9em; }
+.legal-placeholder {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-xs);
+  background: color-mix(in oklab, var(--ds-warn) 28%, transparent);
+  color: var(--ds-text);
+  font-weight: 600;
+}
+.legal-table-wrap { overflow-x: auto; margin: var(--space-4) 0; }
+.legal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.legal-table th,
+.legal-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--ds-line);
+  text-align: left;
+  vertical-align: top;
+}
+.legal-table tbody th { width: 32%; font-weight: 600; }
+
+/* The Terms and Privacy line under sign-in and approval buttons. */
+.legal-notice {
+  margin-top: var(--space-4);
+  color: var(--ds-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+.legal-notice a { color: inherit; text-decoration: underline; }
+.legal-notice a:hover { color: var(--ds-text); }

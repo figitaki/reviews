@@ -121,12 +121,7 @@ defmodule ReviewsWeb.HomeLive do
           </section>
         </div>
 
-        <footer class="l-footer">
-          <div class="l-wrap l-footer-inner">
-            <span>Reviews · Open source · MIT</span>
-            <a href={@repo_url}>GitHub</a>
-          </div>
-        </footer>
+        <Layouts.site_footer />
       </div>
       <script :type={Phoenix.LiveView.ColocatedHook} name=".InstallCopy">
         export default {

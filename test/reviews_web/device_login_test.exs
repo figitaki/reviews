@@ -73,11 +73,13 @@ defmodule ReviewsWeb.DeviceLoginTest do
     # Signed out, the link asks for sign-in and comes back with the code.
     html = build_conn() |> get(~p"/device?#{[user_code: user_code]}") |> html_response(200)
     assert html =~ ~s(id="device-sign-in")
+    assert html =~ ~s(id="device-sign-in-legal")
     assert html =~ URI.encode_www_form("/device?user_code=" <> user_code)
 
     # Signed in, the link shows the code to check; it approves nothing.
     html = user |> signed_in() |> get(~p"/device?#{[user_code: user_code]}") |> html_response(200)
     assert html =~ ~s(id="device-confirm-code")
+    assert html =~ ~s(id="device-confirm-legal")
     assert html =~ user_code
     # The countdown starts near the code's 10 minutes.
     [_, left] = Regex.run(~r/id="device-confirm-expiry"[^>]*data-seconds-left="(\d+)"/, html)

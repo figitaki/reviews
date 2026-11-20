@@ -35,6 +35,7 @@ defmodule ReviewsWeb.OAuthHTML do
               </.ds_github_button>
             </:actions>
           </.ds_page_header>
+          <Layouts.legal_notice id="poppy-sign-in-legal" />
         </div>
       </div>
     </Layouts.app>
@@ -248,6 +249,7 @@ defmodule ReviewsWeb.OAuthHTML do
                   Deny
                 </.ds_button>
               </div>
+              <Layouts.legal_notice id="poppy-consent-legal" action="allowing" />
             </form>
           </.ds_card>
         </div>
