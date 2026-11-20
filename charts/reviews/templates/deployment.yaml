@@ -104,19 +104,18 @@ spec:
             - name: http
               containerPort: 4000
               protocol: TCP
-          # Probes send the Host and X-Forwarded-Proto an ingress would, so
-          # the app answers instead of redirecting to https://<host>.
+          # Ready only while the app's own pool can reach Postgres: runs
+          # SELECT 1 in the running node over its local distribution. `/` is
+          # not enough, because the home page never touches the database.
+          # Takes about half a second; fails in about 5 when Postgres is down.
           readinessProbe:
-            httpGet:
-              path: /
-              port: http
-              httpHeaders:
-                - name: Host
-                  value: {{ .Values.host | quote }}
-                - name: X-Forwarded-Proto
-                  value: https
+            exec:
+              command:
+                - /app/bin/reviews
+                - rpc
+                - 'Ecto.Adapters.SQL.query!(Reviews.Repo, "SELECT 1", [], timeout: 2_000)'
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 10
             failureThreshold: 3
           # TCP only, so a Postgres outage does not restart every pod.
           livenessProbe:

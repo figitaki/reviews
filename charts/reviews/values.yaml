@@ -1,6 +1,6 @@
-# Public hostname of the site, without a scheme. It sets PHX_HOST, the
-# Ingress host, and the Host header of the readiness probe. The app
-# redirects requests for any other host to https://<host>.
+# Public hostname of the site, without a scheme. It sets PHX_HOST and the
+# Ingress host. The app redirects requests for any other host to
+# https://<host>.
 host: reviews.example.com
 
 nameOverride: ""

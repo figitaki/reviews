@@ -101,7 +101,7 @@ is known to anyone, so a pod whose Secret lacks the key does not start.
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `host` | `reviews.example.com` | Public hostname. Sets `PHX_HOST`, the Ingress host and the readiness probe's `Host` header. Other hosts redirect here. |
+| `host` | `reviews.example.com` | Public hostname. Sets `PHX_HOST` and the Ingress host. Other hosts redirect here. |
 | `image.repository` | `ghcr.io/figitaki/reviews-server` | Server image. |
 | `image.tag` | chart `appVersion` | Image tag. Pin a release (`0.0.3`) or a commit (`sha-<12 hex>`). |
 | `image.digest` | `""` | Pull by digest (`sha256:...`) instead of by tag. |
@@ -179,6 +179,13 @@ The init container runs migrations only. Fly's `release_command`
 Postgres advisory lock, so pods seed one at a time. If it fails, or waits more
 than about a minute for the lock, it logs the failure and the pod starts
 anyway. Without the demo, the home page's "Open demo review" link returns 404.
+
+### Probes
+
+A pod is ready only while it can query Postgres: the readiness probe runs
+`SELECT 1` through the app's own connection pool with `bin/reviews rpc`. The
+liveness and startup probes only check that port 4000 accepts connections, so
+a database outage takes pods out of the Service without restarting them.
 
 ### Clustering
 
