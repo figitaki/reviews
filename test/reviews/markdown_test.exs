@@ -92,6 +92,27 @@ defmodule Reviews.MarkdownTest do
              "<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>\n"
   end
 
+  test "reads Markdown and entities inside HTML blocks, keeping the tags as text" do
+    # Matches markdown-it with html: false.
+    assert Markdown.to_html("<div>\n**fixed** &amp;\n</div>") ==
+             "<p>&lt;div&gt;\n<strong>fixed</strong> &amp;\n&lt;/div&gt;</p>\n"
+
+    assert Markdown.to_html("- item\n\n  <div>\n  _x_\n  </div>") ==
+             "<ul>\n<li>\n<p>item</p>\n<p>&lt;div&gt;\n<em>x</em>\n&lt;/div&gt;</p>\n</li>\n</ul>\n"
+
+    # Code inside the block stays code, without an added backslash.
+    assert Markdown.to_html("<div>\n```\n<b>\n```\n</div>") ==
+             "<p>&lt;div&gt;</p>\n<pre><code>&lt;b&gt;\n</code></pre>\n<p>&lt;/div&gt;</p>\n"
+
+    # A second HTML block inside the first is read the same way, and changed
+    # lines still find the blocks it becomes.
+    html = Markdown.to_html("First\n\n<div>\n*a*\n\n<p onclick=x>\n</div>", changed_lines: [5])
+    assert_inert(html)
+
+    assert html ==
+             ~s(<p>First</p>\n<p>&lt;div&gt;\n<em>a</em></p>\n<p class="review-markdown-change">&lt;p onclick=x&gt;\n&lt;/div&gt;</p>\n)
+  end
+
   test "keeps HTML entities as text, never markup" do
     for {source, text} <- [
           {"&lt;script&gt;alert(1)&lt;/script&gt;", "&lt;script&gt;alert(1)&lt;/script&gt;"},

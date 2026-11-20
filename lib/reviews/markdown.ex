@@ -235,7 +235,6 @@ defmodule Reviews.Markdown do
     Image,
     LineBreak,
     Link,
-    Paragraph,
     SoftBreak,
     Text
   }
@@ -251,12 +250,56 @@ defmodule Reviews.Markdown do
     if bundled_image?(url), do: [image], else: [%Text{literal: plain_text(image)}]
   end
 
-  defp clean_node(%HtmlBlock{literal: literal, sourcepos: position}),
-    do: [%Paragraph{nodes: [%Text{literal: String.trim_trailing(literal)}], sourcepos: position}]
+  # With `html: false` the browser never reads an HTML block, so its lines
+  # are ordinary Markdown whose tags are text. A leading `<` is escaped on
+  # every line outside code (where a backslash would show), so no line
+  # starts a new HTML block, and the block reparses as Markdown. The
+  # reparsed nodes move to the block's lines so `changed_lines:` finds them.
+  defp clean_node(%HtmlBlock{literal: literal, sourcepos: %{start: {line, _}}}) do
+    lines = String.split(literal, "\n")
+    first = escape_lines(lines, &(&1 == 1))
+    code = first |> MDExNative.Comrak.parse_document!(@options) |> native_code_lines()
+
+    lines
+    |> escape_lines(&(not MapSet.member?(code, &1)))
+    |> MDExNative.Comrak.parse_document!(@options)
+    |> clean()
+    |> Map.fetch!(:nodes)
+    |> Enum.map(&shift_lines(&1, line - 1))
+  end
 
   defp clean_node(%HtmlInline{literal: literal}), do: [%Text{literal: literal}]
   defp clean_node(%{nodes: _} = node), do: [clean(node)]
   defp clean_node(node), do: [node]
+
+  defp escape_lines(lines, escape?) do
+    lines
+    |> Enum.with_index(1)
+    |> Enum.map_join("\n", fn {text, number} ->
+      if escape?.(number), do: String.replace(text, ~r/\A( {0,3})</, "\\1\\\\<"), else: text
+    end)
+  end
+
+  defp native_code_lines(%MDExNative.Comrak.CodeBlock{
+         sourcepos: %{start: {first, _}, end: {last, _}}
+       }),
+       do: MapSet.new(first..last//1)
+
+  defp native_code_lines(%{nodes: nodes}),
+    do: Enum.reduce(nodes, MapSet.new(), &MapSet.union(&2, native_code_lines(&1)))
+
+  defp native_code_lines(_node), do: MapSet.new()
+
+  defp shift_lines(%{sourcepos: %{start: {l1, c1}, end: {l2, c2}} = pos} = node, by) do
+    node = %{node | sourcepos: %{pos | start: {l1 + by, c1}, end: {l2 + by, c2}}}
+
+    case node do
+      %{nodes: nodes} -> %{node | nodes: Enum.map(nodes, &shift_lines(&1, by))}
+      node -> node
+    end
+  end
+
+  defp shift_lines(node, _by), do: node
 
   # Only bundled SVG basenames: no hosts, subdirectories, traversal, escapes,
   # query strings or fragments, so packet images never make outside requests.
