@@ -116,18 +116,22 @@ defmodule Reviews.ReviewView do
       hunks_by_path: hunks_by_path,
       packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
-      published_threads:
-        review
-        |> project_threads(patchsets, selected)
-        |> Enum.map(
-          &Map.put(
-            &1,
-            :can_update_status,
-            Policy.can?(viewer, {:update_thread_status, &1}, review)
-          )
-        ),
+      published_threads: published_threads(review, patchsets, selected, viewer),
       viewer: viewer
     }
+  end
+
+  @doc """
+  The snapshot's `published_threads` alone. A comment or status change only
+  changes threads, so the review screen reloads these without rebuilding files
+  and hunks.
+  """
+  def published_threads(review, patchsets, selected, viewer) do
+    review
+    |> project_threads(patchsets, selected)
+    |> Enum.map(
+      &Map.put(&1, :can_update_status, Policy.can?(viewer, {:update_thread_status, &1}, review))
+    )
   end
 
   @doc """

@@ -1633,6 +1633,57 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert comment.body == "from-hook"
     end
 
+    test "a comment updates only its own file, once, on every open page", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Two files",
+          raw_diff: """
+          diff --git a/lib/one.ex b/lib/one.ex
+          --- a/lib/one.ex
+          +++ b/lib/one.ex
+          @@ -1 +1 @@
+          -:old_one
+          +:new_one
+          diff --git a/lib/two.ex b/lib/two.ex
+          --- a/lib/two.ex
+          +++ b/lib/two.ex
+          @@ -1 +1 @@
+          -:old_two
+          +:new_two
+          """
+        })
+
+      {:ok, commenter, _} = live(conn, ~p"/r/#{review.slug}/changes")
+      {:ok, other, _} = live(conn, ~p"/r/#{review.slug}/changes")
+
+      render_hook(commenter, "create_comment", %{
+        "file_path" => "lib/one.ex",
+        "side" => "new",
+        "body" => "only here",
+        "thread_anchor" => %{
+          "granularity" => "line",
+          "line_text" => ":new_one",
+          "context_before" => [],
+          "context_after" => [],
+          "line_number_hint" => 1
+        }
+      })
+
+      # Wait for both pages to handle the broadcast.
+      render(commenter)
+      render(other)
+
+      for view <- [commenter, other] do
+        assert_push_event(view, "threads_updated:lib/one.ex", %{threads: [thread]})
+        assert [%{body: "only here"}] = thread.comments
+        refute_push_event(view, "threads_updated:lib/one.ex", _)
+        refute_push_event(view, "threads_updated:lib/two.ex", _)
+      end
+    end
+
     test "update_thread_status event resolves an existing thread", %{
       conn: conn,
       author: author,
