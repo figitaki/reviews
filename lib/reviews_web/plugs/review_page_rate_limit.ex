@@ -13,14 +13,32 @@ defmodule ReviewsWeb.Plugs.ReviewPageRateLimit do
   Discordbot and Twitterbot fetch a URL once or twice) and above a person
   reloading a page.
 
+  A client is an IPv4 address, or the /64 prefix of an IPv6 address: one host
+  usually holds a whole /64 and can send each request from a new address in
+  it. An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) counts as its IPv4
+  address.
+
   Counts are fixed windows in ETS, local to each node. The table is bounded:
   a sweep drops windows that have ended, and at `max_entries` new clients
-  share one overflow bucket, with the same limit, until the next sweep.
-  Clients already in the table keep their own counts.
+  share one overflow bucket until the next sweep. Clients already in the
+  table keep their own counts.
+
+  The overflow bucket has its own, higher limit, `overflow_limit`, so total
+  work stays bounded while the table is full. An attacker who fills the table
+  (`max_entries` distinct IPv4 addresses or /64s in one window) can, until the
+  window ends: spend their own per-client allowance from each of those
+  clients, and use up the overflow bucket so that new anonymous visitors,
+  link-preview crawlers included, get 429 for the rest of the window. They
+  cannot raise the limit of any client already in the table, cannot affect
+  signed-in people or other routes, and cannot make the table grow past
+  `max_entries` or the overflow bucket allow more than `overflow_limit`
+  requests per window.
 
   Configuration (`config :reviews, #{inspect(__MODULE__)}`):
 
     * `:limit` - requests per window per client IP (default 120)
+    * `:overflow_limit` - requests per window shared by every new client while
+      the table is full (default ten times `:limit`)
     * `:window_seconds` - window length (default 60)
     * `:max_entries` - hard cap on table entries (default 50_000)
     * `:client_ip` - `:remote_ip` (default) uses the socket peer; `{:header,
@@ -68,15 +86,27 @@ defmodule ReviewsWeb.Plugs.ReviewPageRateLimit do
   def hit(ip, now, config \\ config()) do
     window = config[:window_seconds]
     index = div(now, window)
-    key = bucket(ip, index, config[:max_entries])
+    key = bucket(client_key(ip), index, config[:max_entries])
     count = :ets.update_counter(@table, key, {2, 1}, {key, 0})
 
-    if count <= config[:limit] do
+    if count <= limit(key, config) do
       :ok
     else
       {:error, max((index + 1) * window - now, 1)}
     end
   end
+
+  defp limit({@overflow, _index}, config),
+    do: config[:overflow_limit] || config[:limit] * 10
+
+  defp limit(_key, config), do: config[:limit]
+
+  # IPv4-mapped IPv6 counts as IPv4; other IPv6 by its /64 prefix.
+  defp client_key({0, 0, 0, 0, 0, 0xFFFF, ab, cd}),
+    do: {div(ab, 256), rem(ab, 256), div(cd, 256), rem(cd, 256)}
+
+  defp client_key({a, b, c, d, _, _, _, _}), do: {:ipv6_64, a, b, c, d}
+  defp client_key(ip), do: ip
 
   # A new client past the cap counts against the shared overflow bucket.
   defp bucket(ip, index, max_entries) do

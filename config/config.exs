@@ -61,7 +61,9 @@ config :reviews, :design_catalog, false
 
 # Anonymous requests to /r/:slug pages, per client IP and node (issue #265).
 # 120 a minute is far above an unfurler's one or two fetches and a person
-# reloading. See ReviewsWeb.Plugs.ReviewPageRateLimit.
+# reloading. IPv6 clients count by /64. When the table is full, new clients
+# share one overflow bucket; `overflow_limit` is left unset so it stays ten
+# times `limit`. See ReviewsWeb.Plugs.ReviewPageRateLimit.
 config :reviews, ReviewsWeb.Plugs.ReviewPageRateLimit,
   limit: 120,
   window_seconds: 60,
