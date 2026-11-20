@@ -31,19 +31,51 @@ defmodule ReviewsWeb.RequestBudgetTest do
     assert RateLimiter.check(:requests, :client, 10, table) == :limited
   end
 
-  test "ignores forwarded headers from untrusted peers" do
-    conn = conn(:get, "/") |> put_req_header("fly-client-ip", "8.8.8.8")
-    assert RequestBudget.client_ip(conn, []) == conn.remote_ip
-    assert RequestBudget.client_ip(conn, [conn.remote_ip]) == {8, 8, 8, 8}
+  test "trusts one valid Fly-Client-IP only when enabled, else uses the peer" do
+    peer = {10, 0, 0, 7}
+    conn = %{conn(:get, "/") | remote_ip: peer} |> put_req_header("fly-client-ip", "8.8.8.8")
+    assert RequestBudget.client_ip(conn, false) == peer
+    assert RequestBudget.client_ip(conn, true) == {8, 8, 8, 8}
 
-    for value <- ["bad", "8.8.8.8, 1.1.1.1", ""] do
-      assert RequestBudget.client_ip(put_req_header(conn, "fly-client-ip", value), [
-               conn.remote_ip
-             ]) == conn.remote_ip
+    assert RequestBudget.client_ip(put_req_header(conn, "fly-client-ip", "2001:db8::1"), true) ==
+             {0x2001, 0xDB8, 0, 0, 0, 0, 0, 1}
+
+    for value <- ["bad", "8.8.8.8, 1.1.1.1", "", "1.2.3", "8.8.8.8 ", String.duplicate("1", 46)] do
+      assert RequestBudget.client_ip(put_req_header(conn, "fly-client-ip", value), true) == peer
     end
 
-    conn = %{conn | req_headers: [{"fly-client-ip", "8.8.8.8"}, {"fly-client-ip", "1.1.1.1"}]}
-    assert RequestBudget.client_ip(conn, [conn.remote_ip]) == conn.remote_ip
+    assert RequestBudget.client_ip(%{conn | req_headers: []}, true) == peer
+    two = %{conn | req_headers: [{"fly-client-ip", "8.8.8.8"}, {"fly-client-ip", "1.1.1.1"}]}
+    assert RequestBudget.client_ip(two, true) == peer
+  end
+
+  test "buckets IPv6 by /64 and IPv4-mapped IPv6 as IPv4" do
+    assert RequestBudget.bucket({8, 8, 8, 8}) == {8, 8, 8, 8}
+
+    assert RequestBudget.bucket({0x2001, 0xDB8, 1, 2, 0xAAAA, 3, 4, 5}) ==
+             {0x2001, 0xDB8, 1, 2, 0, 0, 0, 0}
+
+    assert RequestBudget.bucket({0, 0, 0, 0, 0, 0xFFFF, 0x0808, 0x0404}) == {8, 8, 4, 4}
+  end
+
+  test "per-IP budgets follow Fly-Client-IP: one /64 shares, other clients do not", %{
+    table: table
+  } do
+    opts = [table: table, limits: [requests: 1], trust_fly_client_ip: true]
+    from = fn ip -> conn(:get, "/") |> put_req_header("fly-client-ip", ip) end
+
+    refute RequestBudget.call(from.("2001:db8:0:1::1"), opts).halted
+    assert RequestBudget.call(from.("2001:db8:0:1:ffff::2"), opts).status == 429
+    refute RequestBudget.call(from.("2001:db8:0:2::1"), opts).halted
+    refute RequestBudget.call(from.("203.0.113.1"), opts).halted
+    refute RequestBudget.call(from.("203.0.113.2"), opts).halted
+
+    # Without trust every request counts against the one socket peer.
+    opts = Keyword.put(opts, :trust_fly_client_ip, false)
+    other = :ets.new(:limits, [:set, :public])
+    opts = Keyword.put(opts, :table, other)
+    refute RequestBudget.call(from.("198.51.100.1"), opts).halted
+    assert RequestBudget.call(from.("198.51.100.2"), opts).status == 429
   end
 
   test "429 is cheap, retryable, and precedes authentication and parsing", %{table: table} do

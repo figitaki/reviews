@@ -73,7 +73,8 @@ requests are limited to 4,000,000 bytes; other parsed requests are limited to
 read; oversized bodies receive `413`. Unsupported body media, including
 multipart, receives `415`. CLI JSON and browser URL-encoded forms remain supported.
 See [application request budgets](ABUSE_PROTECTION.md) for defaults, client-IP
-trust prerequisites, configuration, and limitations.
+handling on Fly, configuration, and limitations.
+
 ### `GET /api/v1/analytics/snapshot`
 
 Dedicated aggregate-only authentication, disabled unless an expiring `rva_` credential

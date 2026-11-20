@@ -114,6 +114,12 @@ if config_env() == :prod do
     writes_enabled: mcp_enabled and System.get_env("MCP_WRITES_ENABLED") in ~w(true 1),
     allowed_hosts: [host]
 
+  # Fly sets FLY_APP_NAME on every machine. The IPv4-only listener below is
+  # what makes Fly-Client-IP trustworthy, so both follow this one switch.
+  on_fly = System.get_env("FLY_APP_NAME") not in [nil, ""]
+
+  config :reviews, ReviewsWeb.Plugs.RequestBudget, trust_fly_client_ip: on_fly
+
   config :reviews, ReviewsWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     # Accept WebSocket origins from both the canonical host and the legacy
@@ -124,11 +130,11 @@ if config_env() == :prod do
       "https://reviews-dev.fly.dev"
     ],
     http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
-      ip: {0, 0, 0, 0, 0, 0, 0, 0}
+      # On Fly, listen on IPv4 only: Fly Proxy reaches the app over IPv4, and
+      # other machines in the org reach it only over IPv6 (6PN), so they cannot
+      # send their own Fly-Client-IP. Elsewhere, bind all IPv6 and IPv4
+      # interfaces. See docs/ABUSE_PROTECTION.md.
+      ip: if(on_fly, do: {0, 0, 0, 0}, else: {0, 0, 0, 0, 0, 0, 0, 0})
     ],
     secret_key_base: secret_key_base
 

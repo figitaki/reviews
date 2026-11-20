@@ -1,9 +1,9 @@
 # Application request budgets
 
 This is a first application-level defense, not DDoS protection or a measured safe
-request rate. It does not change Fly networking, deployment settings, or seeded
-demos. Before deploying, resolve the client-IP trust prerequisite below and
-measure normal traffic and memory use, especially large uploads.
+request rate. On Fly it changes the listener to IPv4 only so budgets can trust
+`Fly-Client-IP` (see "Client IPs on Fly" below). Watch normal traffic and memory
+use after deploying, especially large uploads.
 
 ## Admission and body handling
 
@@ -75,38 +75,43 @@ There is no per-request GenServer mailbox or unbounded client map. Counters are
 local to a BEAM instance and reset on process restart/deployment. Two instances
 can admit twice the per-instance allowance. This is not a distributed quota.
 
-## Client-IP trust is a deployment prerequisite
+## Client IPs on Fly
 
-By default **all forwarding headers are ignored** and the socket peer is used.
-On Fly this can be a shared proxy peer, not an end user. Deploying these defaults
-without validating attribution can throttle unrelated users together. This
-branch deliberately does not silently enable Fly-header trust or change the
-current IPv6 listener/network access.
+Budgets key on the client address. On Fly the socket peer is Fly Proxy, not
+the user, so `config/runtime.exs` turns on two things together whenever
+`FLY_APP_NAME` is set:
 
-Only peers explicitly listed as IP tuples in `:trusted_fly_proxy_peers` may
-supply one syntactically valid `Fly-Client-IP`. Missing, duplicate, oversized, or
-invalid headers fall back to the peer. Neither `X-Forwarded-For`, `Forwarded`,
-nor `CF-Connecting-IP` is trusted. Never populate the allowlist from a request
-header, allow all private addresses, or infer trust merely from `FLY_APP_NAME`.
+- The endpoint listens on IPv4 only (`{0, 0, 0, 0}`). Fly Proxy reaches the app
+  over IPv4, while other machines in the organization reach it only over IPv6
+  (6PN). So every request on the listener came through Fly Proxy, which
+  overwrites `Fly-Client-IP` on every request through the `http` handler.
+- `trust_fly_client_ip: true`: one syntactically valid `Fly-Client-IP` is the
+  client. A missing, repeated, oversized or invalid header falls back to the
+  socket peer. `X-Forwarded-For`, `Forwarded` and `CF-Connecting-IP` are never
+  trusted.
+
+Do not turn on the trust without the IPv4-only listener: an IPv6 listener lets
+any machine in the organization send its own header. Elsewhere (dev, test,
+self-hosted) trust is off and the endpoint keeps its IPv6 listener.
+
+IPv6 clients share one budget per /64, since one subscriber usually holds a
+whole /64 and can rotate within it. IPv4-mapped IPv6 addresses count as their
+IPv4 address.
 
 [Fly documents](https://docs.fly.io/networking/request-headers) that
-Fly-Client-IP is the client as seen by Fly Proxy: with another proxy in front,
-it becomes that proxy's address. Its docs caution against spoofable XFF parsing.
-Fly does not document stable socket-peer ranges as an authentication boundary.
-An operator must verify the actual ingress boundary and direct-access exclusion
-before configuring exact trusted peers; peer changes require revalidation. If
-that cannot be established, do not enable header trust and do not present
-peer-based budgets as per-user protection. Future Cloudflare support needs its
-own verified trust chain and origin isolation; it is not included here.
+Fly-Client-IP is the client as seen by Fly Proxy: with another proxy in front
+(such as Cloudflare), it becomes that proxy's address. Cloudflare support would
+need its own verified trust chain and origin isolation; it is not included.
 
 ## Configuration and limits
 
-Application environment (no live configuration changed by this branch):
+Application environment:
 
 ```elixir
 config :reviews, ReviewsWeb.Plugs.RequestBudget,
   limits: [requests: 300, writes: 60, uploads: 20, sockets: 60, owners: 60],
-  trusted_fly_proxy_peers: []
+  # Set by config/runtime.exs on Fly, together with the IPv4-only listener.
+  trust_fly_client_ip: false
 
 config :reviews, ReviewsWeb.Plugs.BodyBudget,
   upload_bytes: 50_000_000,

@@ -47,8 +47,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   requests. A rejected request gets `429` with `error_code: rate_limited`.
   Unsupported multipart bodies now return 415. A 429 from an OAuth endpoint
   keeps its CORS headers and exposes `Retry-After`, and `reviews login` waits
-  out a 429 and keeps polling. See `docs/ABUSE_PROTECTION.md` for the Fly
-  client-IP trust prerequisite and remaining limits.
+  out a 429 and keeps polling. On Fly the app now listens on IPv4 only and
+  budgets use a single valid `Fly-Client-IP` (else the socket peer); IPv6
+  clients share a budget per /64. See `docs/ABUSE_PROTECTION.md`.
 
 ## [0.0.3] - 2026-11-19
 

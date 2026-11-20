@@ -9,7 +9,7 @@ defmodule ReviewsWeb.Plugs.RequestBudget do
 
   def call(conn, opts) do
     opts = Keyword.merge(Application.get_env(:reviews, __MODULE__, []), opts)
-    client = client_ip(conn, Keyword.get(opts, :trusted_fly_proxy_peers, []))
+    client = conn |> client_ip(Keyword.get(opts, :trust_fly_client_ip, false)) |> bucket()
     policies = [:requests | policies(conn)]
 
     Enum.reduce_while(policies, conn, fn policy, conn ->
@@ -20,9 +20,14 @@ defmodule ReviewsWeb.Plugs.RequestBudget do
     end)
   end
 
-  @doc "Only explicitly trusted socket peers may supply a single Fly-Client-IP."
-  def client_ip(conn, trusted_peers) do
-    with true <- conn.remote_ip in trusted_peers,
+  @doc """
+  The client address for budgets. With `trust?` (on Fly, where the endpoint
+  listens on IPv4 only and only Fly Proxy reaches it over IPv4), a single valid
+  `Fly-Client-IP` wins; a missing, repeated or invalid header falls back to the
+  socket peer.
+  """
+  def client_ip(conn, trust?) do
+    with true <- trust?,
          [value] when byte_size(value) <= 45 <- get_req_header(conn, "fly-client-ip"),
          {:ok, ip} <- :inet.parse_strict_address(String.to_charlist(value)) do
       ip
@@ -30,6 +35,16 @@ defmodule ReviewsWeb.Plugs.RequestBudget do
       _ -> conn.remote_ip
     end
   end
+
+  @doc """
+  The budget key for an address. One IPv6 subscriber usually holds a whole /64,
+  so IPv6 addresses share a budget per /64; IPv4-mapped IPv6 counts as its IPv4.
+  """
+  def bucket({0, 0, 0, 0, 0, 0xFFFF, hi, lo}),
+    do: {div(hi, 256), rem(hi, 256), div(lo, 256), rem(lo, 256)}
+
+  def bucket({a, b, c, d, _, _, _, _}), do: {a, b, c, d, 0, 0, 0, 0}
+  def bucket(ip), do: ip
 
   def allow?(policy, client, opts \\ []) do
     opts = Keyword.merge(Application.get_env(:reviews, __MODULE__, []), opts)
