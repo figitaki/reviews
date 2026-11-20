@@ -61,7 +61,7 @@ defmodule Reviews.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 4.4"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
-      {:phoenix_live_view, "~> 1.2.12"},
+      {:phoenix_live_view, "~> 1.2.14"},
       {:lazy_html, ">= 0.1.13", only: :test},
       {:sobelow, "== 0.18.1", only: [:dev, :test], runtime: false},
       {:phoenix_live_dashboard, "~> 0.9.1"},
