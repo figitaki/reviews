@@ -2,13 +2,26 @@
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{- /*
+At most 47 characters, so every derived name fits: the CloudNativePG Cluster
+<fullname>-db (the operator allows 50 and adds its own -rw, -app and other
+suffixes), <fullname>-headless and <fullname>-secrets. A longer name keeps its
+first 38 characters plus 8 hex of its SHA-256, so names that share a prefix
+stay distinct.
+*/}}
 {{- define "reviews.fullname" -}}
+{{- $name := "" }}
 {{- if .Values.fullnameOverride }}
-{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- $name = .Values.fullnameOverride }}
 {{- else if contains (include "reviews.name" .) .Release.Name }}
-{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- $name = .Release.Name }}
 {{- else }}
-{{- printf "%s-%s" .Release.Name (include "reviews.name" .) | trunc 63 | trimSuffix "-" }}
+{{- $name = printf "%s-%s" .Release.Name (include "reviews.name" .) }}
+{{- end }}
+{{- if gt (len $name) 47 }}
+{{- printf "%s-%s" ($name | trunc 38 | trimSuffix "-") ($name | sha256sum | trunc 8) }}
+{{- else }}
+{{- $name }}
 {{- end }}
 {{- end }}
 
@@ -49,12 +62,11 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{- define "reviews.dbClusterName" -}}
-{{- printf "%s-db" (include "reviews.fullname" .) | trunc 50 | trimSuffix "-" }}
+{{- printf "%s-db" (include "reviews.fullname" .) }}
 {{- end }}
 
 {{- define "reviews.headlessName" -}}
-{{- /* Leave room for the suffix, so a 63-character fullname cannot collide with the app Service. */}}
-{{- printf "%s-headless" (include "reviews.fullname" . | trunc 54 | trimSuffix "-") }}
+{{- printf "%s-headless" (include "reviews.fullname" .) }}
 {{- end }}
 
 {{/* DATABASE_URL: the CloudNativePG app Secret, or the user's Secret. */}}

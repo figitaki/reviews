@@ -14,6 +14,10 @@ What you get:
   migrations before each pod starts.
 - A CloudNativePG `Cluster` named `<release>-db`, kept when the release is
   uninstalled. You can turn it off and point at another database instead.
+- Object names built from the release name. A name longer than 47 characters
+  is shortened to its first 38 plus 8 hex of its hash, so the Cluster stays
+  within CloudNativePG's 50-character limit and long release names that share
+  a prefix still get their own objects.
 - A Service, and optionally an Ingress for any controller.
 - Optionally, a headless Service for Erlang clustering across replicas.
 
