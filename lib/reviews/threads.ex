@@ -25,6 +25,10 @@ defmodule Reviews.Threads do
   # Every message broadcast on a `"review:<slug>"` topic.
   @review_events [:thread_published, :thread_updated, :patchset_pushed, :review_deleted]
 
+  # pg_advisory_xact_lock namespace, keyed by review id, that orders comment
+  # inserts against waiters' reads; distinct from `Reviews.CodeSnapshots`'s 7_201.
+  @comment_order_lock 7_202
+
   # Every comment reader preloads the same associations, so renaming one (such
   # as the attribution link) is a single change here, not one per query.
   @comment_preloads [:author, :oauth_grant]
@@ -121,50 +125,64 @@ defmodule Reviews.Threads do
   end
 
   @doc """
-  Comments on any thread of the review with an id above `after_id`, oldest
-  first, with authors and their thread preloaded. Comment ids only grow, so the
-  last id returned is the cursor for the next call.
+  Comments on threads of the given reviews with an id above `after_id`, oldest
+  first, with authors and their thread preloaded. The read takes the shared
+  comment-order lock of each review, so the last id returned is a cursor that
+  skips no comment on any of them.
   """
-  def list_comments_after(%Review{id: review_id}, after_id, limit)
-      when is_integer(after_id) and is_integer(limit) and limit > 0 do
-    Repo.all(
-      from c in Comment,
-        join: t in assoc(c, :thread),
-        where: t.review_id == ^review_id and c.id > ^after_id,
-        order_by: [asc: c.id],
-        limit: ^limit,
-        preload: [^@comment_preloads, thread: t]
-    )
+  def list_comments_after(review_ids, after_id, limit)
+      when is_list(review_ids) and is_integer(after_id) and is_integer(limit) and limit > 0 do
+    {:ok, comments} =
+      Repo.transaction(fn ->
+        # Waits for comment inserts in flight on these reviews and holds new
+        # ones off until the read is done, so every id below the newest one
+        # read is already visible.
+        for id <- Enum.sort(review_ids) do
+          Repo.query!("SELECT pg_advisory_xact_lock_shared($1, $2)", [@comment_order_lock, id])
+        end
+
+        Repo.all(
+          from c in Comment,
+            join: t in assoc(c, :thread),
+            where: t.review_id in ^review_ids and c.id > ^after_id,
+            order_by: [asc: c.id],
+            limit: ^limit,
+            preload: [^@comment_preloads, thread: t]
+        )
+      end)
+
+    comments
   end
 
-  @doc "The highest comment id on the review, or 0 when it has no comments."
-  def latest_comment_id(%Review{id: review_id}) do
+  @doc "The highest comment id on the given reviews, or 0 when they have none."
+  def latest_comment_id(review_ids) when is_list(review_ids) do
     Repo.one(
       from c in Comment,
         join: t in assoc(c, :thread),
-        where: t.review_id == ^review_id,
+        where: t.review_id in ^review_ids,
         select: coalesce(max(c.id), 0)
     )
   end
 
   @doc """
-  Waits up to `timeout_ms` for comments newer than `after_id`, and returns
-  `{:ok, comments}` (empty on timeout or when the review is deleted).
+  Waits up to `timeout_ms` for comments newer than `after_id` on any of the
+  reviews, and returns `{:ok, comments}` (empty on timeout or when one of the
+  reviews is deleted).
 
-  It subscribes to the review's topic before reading, so a comment published
+  It subscribes to each review's topic before reading, so a comment published
   between the read and the wait still wakes it. It wakes on `:thread_published`
   and reads again instead of polling.
   """
-  def wait_for_comments(%Review{} = review, after_id, limit, timeout_ms)
+  def wait_for_comments([%Review{} | _] = reviews, after_id, limit, timeout_ms)
       when is_integer(timeout_ms) and timeout_ms >= 0 do
-    topic = "review:#{review.slug}"
-    :ok = Phoenix.PubSub.subscribe(@pubsub, topic)
+    topics = Enum.map(reviews, &"review:#{&1.slug}")
+    Enum.each(topics, &(:ok = Phoenix.PubSub.subscribe(@pubsub, &1)))
     deadline = System.monotonic_time(:millisecond) + timeout_ms
 
     try do
-      await_comments(review, after_id, limit, deadline)
+      await_comments(Enum.map(reviews, & &1.id), after_id, limit, deadline)
     after
-      Phoenix.PubSub.unsubscribe(@pubsub, topic)
+      Enum.each(topics, &Phoenix.PubSub.unsubscribe(@pubsub, &1))
       flush_review_events()
     end
   end
@@ -179,13 +197,13 @@ defmodule Reviews.Threads do
     end
   end
 
-  defp await_comments(review, after_id, limit, deadline) do
-    case list_comments_after(review, after_id, limit) do
+  defp await_comments(review_ids, after_id, limit, deadline) do
+    case list_comments_after(review_ids, after_id, limit) do
       [] ->
         remaining = max(deadline - System.monotonic_time(:millisecond), 0)
 
         receive do
-          {:thread_published, _thread} -> await_comments(review, after_id, limit, deadline)
+          {:thread_published, _thread} -> await_comments(review_ids, after_id, limit, deadline)
           {:review_deleted, _slug} -> {:ok, []}
         after
           remaining -> {:ok, []}
@@ -356,6 +374,11 @@ defmodule Reviews.Threads do
     result =
       Repo.transaction(fn ->
         thread = existing || create_thread(review, author, file_path, side, anchor, origin_id)
+
+        # Waiters read under the shared form of this lock (see
+        # `list_comments_after/3`), so no read can see a comment while one
+        # with a lower id on the same review is still uncommitted.
+        Repo.query!("SELECT pg_advisory_xact_lock($1, $2)", [@comment_order_lock, review.id])
 
         comment =
           %Comment{}
