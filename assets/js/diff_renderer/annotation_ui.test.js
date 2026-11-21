@@ -34,6 +34,6 @@ test("thread and comment links keep the view and patchset and replace an older t
 
 test("comment authors keep the name and kind that <.ds_identity> shows", () => {
   const author = { id: 1, username: "claude", handle: "claude", display_name: "Claude", kind: "agent", avatar_url: null }
-  const comment = Comment.parse({ id: 1, body: "Hi", author, attribution: null, inserted_at: null })
+  const comment = Comment.parse({ id: 1, body_html: "<p>Hi</p>\n", author, attribution: null, inserted_at: null })
   assert.deepEqual(comment.author, author)
 })

@@ -1666,13 +1666,6 @@ details[open] > summary .review-collapse-icon,
   line-height: var(--font-prose-leading);
 }
 
-.review-packet-row.is-markdown.is-annotation .review-packet-md-heading {
-  color: var(--review-text);
-  font-size: var(--font-subheading-size);
-  font-weight: var(--font-subheading-weight);
-  line-height: var(--font-subheading-leading);
-}
-
 .review-packet-point-list {
   display: grid;
   gap: 12px;
@@ -1777,6 +1770,20 @@ details[open] > summary .review-collapse-icon,
   font-size: 0.85em;
 }
 
+/* Tables match comment tables (.review-rich-markdown): bordered cells,
+   scrolling sideways on narrow screens instead of running together. */
+[data-markdown-output] table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+[data-markdown-output] :is(th, td) {
+  border: 1px solid var(--ds-line);
+  padding: 0.4rem 0.75rem;
+}
+
 [data-markdown-output] p:has(> img) {
   max-width: 100%;
   margin-block: 1.5em;
@@ -1798,50 +1805,6 @@ details[open] > summary .review-collapse-icon,
   margin-inline: auto;
 }
 
-.review-packet-md-heading {
-  margin: 0 0 0.5em;
-  color: var(--review-text);
-  font-family: var(--font-sans);
-  font-weight: var(--font-subheading-weight);
-  line-height: var(--font-subheading-leading);
-}
-
-.review-packet-md-heading.is-h3 {
-  font-size: var(--font-subheading-size);
-}
-
-.review-packet-md-heading.is-h4 {
-  font-size: 1rem;
-}
-
-.review-packet-md-paragraph {
-  margin: 0;
-}
-
-.review-packet-md-paragraph + .review-packet-md-paragraph,
-.review-packet-md-paragraph + .review-packet-md-list,
-.review-packet-md-list + .review-packet-md-paragraph {
-  margin-top: 1em;
-}
-
-.review-packet-markdown > * + .review-packet-md-heading {
-  margin-top: 1.75em;
-}
-
-.review-packet-md-heading + .review-packet-md-paragraph,
-.review-packet-md-heading + .review-packet-md-list {
-  margin-top: 0.5em;
-}
-
-.review-packet-md-list {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding-left: 18px;
-  list-style: disc;
-}
-
-.review-packet-inline-code,
 .review-packet-markdown :not(pre) > code,
 .review-guide-panel-prose code {
   border: 0;

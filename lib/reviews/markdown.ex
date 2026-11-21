@@ -7,6 +7,18 @@ defmodule Reviews.Markdown do
 
   Use `options/0` for any server-side parse or render, so every caller reads
   Markdown the same way.
+
+  ## HTML
+
+  `to_html/2` renders packet prose and comments. Both are untrusted:
+
+    * Raw HTML is text, never markup.
+    * Links go only where `allowed_link?/1` allows; a refused link keeps its text.
+    * Images load only bundled `/images/<name>.svg`; any other image shows
+      its alt text.
+
+  The tree is cleaned first, then the HTML goes through an allowlist
+  sanitizer (ammonia) as a second wall.
   """
 
   @options [
@@ -162,4 +174,173 @@ defmodule Reviews.Markdown do
         MDEx.Image,
         MDEx.Escaped
       ]
+
+  @change_class "review-markdown-change"
+  @marked_tags ~w(p li pre table blockquote h1 h2 h3 h4 h5 h6 hr)
+
+  @sanitize [
+    tags:
+      ~w(a blockquote br code del em h1 h2 h3 h4 h5 h6 hr img li ol p pre strong table tbody td th thead tr ul),
+    tag_attributes: %{
+      "a" => ~w(href),
+      "img" => ~w(src alt),
+      "code" => ~w(class),
+      "ol" => ~w(start),
+      "th" => ~w(align),
+      "td" => ~w(align)
+    },
+    tag_attribute_values: Map.new(@marked_tags, &{&1, %{"class" => [@change_class]}}),
+    generic_attributes: ~w(title),
+    url_schemes: ~w(http https mailto),
+    url_relative: :passthrough
+  ]
+
+  @doc """
+  Sanitized HTML for `markdown`, cached by source (`Reviews.Markdown.Cache`).
+
+  `changed_lines:` takes zero-based source line numbers. Each top-level
+  block, or item of a top-level list, that covers one gets the
+  `#{@change_class}` class, as the Markdown file preview marks changes.
+  """
+  def to_html(markdown, opts \\ [])
+  def to_html(nil, _opts), do: ""
+
+  # MDExNative is the Comrak binding under MDEx. Calling it with these
+  # fixed options skips MDEx's per-call option validation, which costs
+  # about 0.4 ms a document; the parse and render take about 0.02 ms.
+  def to_html(markdown, opts) when is_binary(markdown) do
+    changed = opts |> Keyword.get(:changed_lines, []) |> MapSet.new()
+
+    if MapSet.size(changed) == 0 do
+      Reviews.Markdown.Cache.fetch(markdown, fn ->
+        markdown
+        |> parse_native(@options)
+        |> clean()
+        |> MDExNative.Comrak.document_to_html!(@options ++ [sanitize: @sanitize])
+      end)
+    else
+      options = put_in(@options, [:render, :sourcepos], true)
+      document = markdown |> parse_native(options) |> clean()
+
+      document
+      |> MDExNative.Comrak.document_to_html!(options)
+      |> mark_changes(changed_positions(document, changed))
+      |> MDExNative.Ammonia.safe_html(sanitize: @sanitize)
+    end
+  end
+
+  alias MDExNative.Comrak.{
+    HtmlBlock,
+    HtmlInline,
+    Image,
+    LineBreak,
+    Link,
+    Paragraph,
+    SoftBreak,
+    Text
+  }
+
+  defp clean(%{nodes: nodes} = node), do: %{node | nodes: Enum.flat_map(nodes, &clean_node/1)}
+
+  # A rejected link keeps its text; a rejected image becomes its alt text.
+  defp clean_node(%Link{url: url} = link) do
+    if allowed_link?(url), do: [clean(link)], else: clean(link).nodes
+  end
+
+  defp clean_node(%Image{url: url} = image) do
+    if bundled_image?(url), do: [image], else: [%Text{literal: plain_text(image)}]
+  end
+
+  # Left only when escaping gives up (parse_native/3); never markup.
+  defp clean_node(%HtmlBlock{literal: literal, sourcepos: position}),
+    do: [%Paragraph{nodes: [%Text{literal: String.trim_trailing(literal)}], sourcepos: position}]
+
+  defp clean_node(%HtmlInline{literal: literal}), do: [%Text{literal: literal}]
+  defp clean_node(%{nodes: _} = node), do: [clean(node)]
+  defp clean_node(node), do: [node]
+
+  @html_rounds 16
+
+  # markdown-it runs with `html: false`, so it never starts an HTML block: a
+  # line comrak reads as one is ordinary Markdown there, with its tags as
+  # text. Escaping the `<` that opens each HTML block and parsing the whole
+  # document again gives the same reading, and keeps code spans, fences and
+  # reference definitions working across the document. Escaping one block
+  # can let a later line start another, hence the rounds. Only a `<` that
+  # opens a block is escaped, so code never gains a backslash, and lines
+  # keep their numbers for `changed_lines:`. A block left after the last
+  # round renders as plain text (clean_node/1).
+  defp parse_native(markdown, options, rounds \\ @html_rounds) do
+    document = MDExNative.Comrak.parse_document!(markdown, options)
+
+    case html_block_starts(document) do
+      [] -> document
+      _starts when rounds == 0 -> document
+      starts -> markdown |> escape_at(starts) |> parse_native(options, rounds - 1)
+    end
+  end
+
+  defp html_block_starts(%HtmlBlock{sourcepos: %{start: start}}), do: [start]
+  defp html_block_starts(%{nodes: nodes}), do: Enum.flat_map(nodes, &html_block_starts/1)
+  defp html_block_starts(_node), do: []
+
+  defp escape_at(markdown, starts) do
+    columns = Enum.group_by(starts, &elem(&1, 0), &elem(&1, 1))
+
+    markdown
+    |> String.split("\n")
+    |> Enum.with_index(1)
+    |> Enum.map_join("\n", fn {text, number} ->
+      columns |> Map.get(number, []) |> Enum.sort(:desc) |> Enum.reduce(text, &escape_from/2)
+    end)
+  end
+
+  # Source columns are bytes; escape the first `<` from the block's column.
+  defp escape_from(column, text) do
+    offset = min(column - 1, byte_size(text))
+
+    case :binary.match(text, "<", scope: {offset, byte_size(text) - offset}) do
+      {at, 1} -> binary_part(text, 0, at) <> "\\" <> binary_part(text, at, byte_size(text) - at)
+      :nomatch -> text
+    end
+  end
+
+  # Only bundled SVG basenames: no hosts, subdirectories, traversal, escapes,
+  # query strings or fragments, so packet images never make outside requests.
+  defp bundled_image?(url),
+    do: Regex.match?(~r/\A\/images\/[a-zA-Z0-9][a-zA-Z0-9_-]*\.svg\z/, url)
+
+  defp plain_text(%{nodes: nodes}), do: Enum.map_join(nodes, &plain_text/1)
+  defp plain_text(%{literal: literal}), do: literal
+  defp plain_text(%SoftBreak{}), do: " "
+  defp plain_text(%LineBreak{}), do: " "
+  defp plain_text(_), do: ""
+
+  # Source positions of the blocks a changed line falls in: top-level blocks
+  # other than lists, and the items of top-level lists.
+  defp changed_positions(document, changed) do
+    document.nodes
+    |> Enum.flat_map(fn
+      %MDExNative.Comrak.List{nodes: items} -> items
+      node -> [node]
+    end)
+    |> Enum.filter(fn %{sourcepos: %{start: {first, _}, end: {last, column}}} ->
+      # An item that runs to a blank line ends at its column 0.
+      last = if column == 0, do: last - 1, else: last
+      Enum.any?((first - 1)..(last - 1)//1, &MapSet.member?(changed, &1))
+    end)
+    |> MapSet.new(fn %{sourcepos: %{start: {l1, c1}, end: {l2, c2}}} ->
+      "#{l1}:#{c1}-#{l2}:#{c2}"
+    end)
+  end
+
+  # Text escapes `<`, so only the renderer writes a tag; the sanitizer then
+  # drops every data-sourcepos left.
+  defp mark_changes(html, positions) do
+    Regex.replace(~r/<([a-z0-9]+) data-sourcepos="([\d:-]+)"/, html, fn whole, tag, position ->
+      if MapSet.member?(positions, position),
+        do: ~s(<#{tag} class="#{@change_class}"),
+        else: whole
+    end)
+  end
 end

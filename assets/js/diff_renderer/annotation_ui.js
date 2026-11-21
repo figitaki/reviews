@@ -1,5 +1,4 @@
 import { button as baseButton, el } from "./dom.js"
-import { renderMarkdown } from "../lib/markdown.js"
 import { COARSE } from "../lib/breakpoints.js"
 
 // Pierre owns the diff body theme. Annotation UI is rendered by Reviews through
@@ -572,12 +571,15 @@ function formatDate(iso) {
   return date && !Number.isNaN(date.valueOf()) ? `on ${date.toISOString().slice(0, 10)}` : ""
 }
 
-function commentBody(body, condensed = false) {
+// `body_html` is the server's sanitized rendering of the comment
+// (Reviews.Markdown), checked as a string by the Thread schema. Nothing typed
+// in the browser goes through innerHTML.
+function commentBody(comment, condensed = false) {
   const node = el("div", {
     className: "review-rich-markdown review-comment-markdown",
     style: { ...threadCommentBodyStyle, ...(condensed ? { margin: "4px 0", maxHeight: "4.8em", overflow: "auto" } : {}) },
   })
-  node.innerHTML = renderMarkdown(body)
+  node.innerHTML = comment.body_html
   return node
 }
 
@@ -601,7 +603,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
       // link lands on the author line too.
       el("li", { className: i ? "review-thread-comment" : "review-thread-comment is-first", dataset: i ? { commentId: comment.id } : {} }, [
         commentMeta(comment),
-        commentBody(comment.body),
+        commentBody(comment),
         attributionDetails(comment.attribution, run.author),
       ])
     )
@@ -656,7 +658,7 @@ export function threadBubble({ thread, onReply, onUpdateStatus, ui = {} }) {
         el("div", { style: composerActionsStyle }, [
           `${thread.comments?.length || 0} comments`, history,
         ]),
-        !ui.expanded && last ? commentBody(last.body, true) : null,
+        !ui.expanded && last ? commentBody(last, true) : null,
       ]))
     }
     if (!expanded) return

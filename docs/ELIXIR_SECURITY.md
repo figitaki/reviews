@@ -54,3 +54,11 @@ hijacking. Development disables origin checks and binds loopback; browser-origin
 attacks can still reach loopback, so tightening development origins is useful
 separate hardening. Verify deployed configuration and handshake rejection before
 closing origin-related findings as false positives.
+
+The `XSS.Raw` finding in `PacketComponents.markdown/1` is reviewed: it inserts
+the output of `Reviews.Markdown.to_html/1`, never packet text itself. That
+function shows raw HTML as text, drops links and images that break its URL
+rules, and passes the result through an allowlist sanitizer (ammonia);
+`test/reviews/markdown_test.exs` covers scripts, event handlers, `javascript:`
+and `data:` URLs, remote images and entity tricks. Reassess if anything else
+reaches that `raw/1`.

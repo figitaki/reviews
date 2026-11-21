@@ -13,6 +13,7 @@ defmodule Reviews.Application do
         Reviews.Repo,
         Reviews.RateLimiter,
         Reviews.Analytics.Cache,
+        Reviews.Markdown.Cache,
         {DNSCluster, query: Application.get_env(:reviews, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: Reviews.PubSub}
       ] ++
