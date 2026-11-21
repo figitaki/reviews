@@ -241,6 +241,109 @@ defmodule ReviewsWeb.ReviewLiveTest do
       end
     end
 
+    test "review links unfurl with the review, and comment links with that comment", %{
+      conn: conn,
+      author: author,
+      review: review
+    } do
+      {:ok, reviewer} =
+        Accounts.upsert_from_github(%{
+          github_id: 9_000_000 + System.unique_integer([:positive]),
+          username: "figitaki",
+          email: "figitaki@example.com"
+        })
+
+      long_tail = String.duplicate("word ", 100)
+
+      {:ok, %{thread: thread, comment: first}} =
+        Threads.publish_comment(review, reviewer, %{
+          "file_path" => "lib/foo.ex",
+          "side" => "new",
+          "body" =>
+            "Don't **leak** `ids` <script> in *any* _repo_ or qos_p256_key\n\n> see [the docs](https://x.test) " <>
+              long_tail,
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 2}
+        })
+
+      {:ok, %{comment: reply}} =
+        Threads.publish_comment(review, author, %{"thread_id" => thread.id, "body" => "Fixed."})
+
+      {:ok, %{review: other}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Other review",
+          raw_diff: "diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-old\n+new\n"
+        })
+
+      {:ok, %{thread: other_thread, comment: other_comment}} =
+        Threads.publish_comment(other, author, %{
+          "file_path" => "foo",
+          "side" => "new",
+          "body" => "Elsewhere",
+          "thread_anchor" => %{"granularity" => "line", "line_number_hint" => 1}
+        })
+
+      # Unfurlers follow redirects, such as the one to the Changes view for a
+      # thread outside the Guide.
+      tags = fn path ->
+        response = get(conn, path)
+
+        response =
+          if response.status == 302, do: get(conn, redirected_to(response)), else: response
+
+        page = response |> html_response(200) |> LazyHTML.from_document()
+
+        for key <- ~w(og:title og:description og:site_name og:url twitter:card twitter:data1),
+            into: %{} do
+          selector = ~s(meta[property="#{key}"], meta[name="#{key}"])
+          {key, page |> LazyHTML.query(selector) |> LazyHTML.attribute("content") |> List.first()}
+        end
+        |> Map.put("title", page |> LazyHTML.query("title") |> LazyHTML.text())
+      end
+
+      review_tags = %{
+        "og:title" => "Great change",
+        "og:description" => "Make bar do :new",
+        "og:site_name" => "Reviews",
+        "og:url" => "http://www.example.com/r/#{review.slug}",
+        "twitter:card" => "summary",
+        "twitter:data1" => nil,
+        "title" => "Great change"
+      }
+
+      assert tags.(~p"/r/#{review.slug}") == review_tags
+
+      comment_path = ~p"/r/#{review.slug}?thread=#{thread.id}&comment=#{first.id}"
+      comment_tags = tags.(comment_path)
+
+      assert comment_tags["og:title"] == "figitaki commented on line +2 in lib/foo.ex"
+
+      assert comment_tags["og:url"] =~
+               ~r"^http://www.example.com/r/#{review.slug}/changes\?.*comment=#{first.id}"
+
+      assert comment_tags["twitter:data1"] == "Great change"
+
+      assert "Don't leak ids <script> in any repo or qos_p256_key see the docs word word" <> _ =
+               comment_tags["og:description"]
+
+      assert String.ends_with?(comment_tags["og:description"], "word…")
+      assert String.length(comment_tags["og:description"]) <= 301
+
+      reply_tags = tags.(~p"/r/#{review.slug}/changes?thread=#{thread.id}&comment=#{reply.id}")
+      assert reply_tags["og:title"] == "carey commented on line +2 in lib/foo.ex"
+      assert reply_tags["og:description"] == "Fixed."
+
+      # A comment from another review, or one that does not exist, previews
+      # the review itself.
+      for query <- [
+            "thread=#{other_thread.id}&comment=#{other_comment.id}",
+            "thread=#{thread.id}&comment=#{other_comment.id}",
+            "thread=999999999&comment=1"
+          ] do
+        fallback = tags.("/r/#{review.slug}?#{query}")
+        assert Map.delete(fallback, "og:url") == Map.delete(review_tags, "og:url")
+      end
+    end
+
     test "renders collapsed diff islands through the single Pierre header", %{
       conn: conn,
       review: review
@@ -608,6 +711,79 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
     end
 
+    test "the overview names the packet's author, and an agent's owner", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, agent} =
+        Accounts.create_agent_identity(author, %{
+          handle: "claude-bot",
+          display_name: "Claude",
+          provider: "Claude",
+          avatar_url: "/images/connectors/claude.png"
+        })
+
+      packet = %{
+        "format_version" => 1,
+        "title" => "Who wrote this",
+        "sections" => [
+          %{
+            "title" => "Only",
+            "rows" => [%{"kind" => "hunk", "path" => "lib/one.ex", "hunk_index" => 1}]
+          }
+        ]
+      }
+
+      raw_diff = """
+      diff --git a/lib/one.ex b/lib/one.ex
+      --- a/lib/one.ex
+      +++ b/lib/one.ex
+      @@ -1 +1 @@
+      -old
+      +new
+      """
+
+      open = fn identity ->
+        {:ok, %{review: review}} =
+          ReviewsCtx.create_review_with_initial_patchset(identity, %{
+            title: "Who wrote this",
+            raw_diff: raw_diff,
+            packet: packet
+          })
+
+        {:ok, view, _html} = live(conn, ~p"/r/#{review.slug}")
+        view
+      end
+
+      person = open.(author)
+
+      # A person's display name is their GitHub username, so the handle that
+      # only repeats it is left out.
+      assert has_element?(
+               person,
+               "#review-split-inline-overview #review-overview-author .ds-identity-name",
+               "carey"
+             )
+
+      refute has_element?(person, "#review-overview-author .ds-identity-handle")
+      refute has_element?(person, "#review-overview-author .ds-identity-agent")
+      refute has_element?(person, "#review-overview-author-owner")
+      # Round like comment avatars, and without an image the handle's first letter.
+      assert has_element?(person, "#review-overview-author .ds-avatar-mark.is-round", "C")
+
+      robot = open.(agent)
+      assert has_element?(robot, "#review-overview-author", "Claude")
+      assert has_element?(robot, "#review-overview-author", "@claude-bot")
+      assert has_element?(robot, "#review-overview-author .ds-identity-agent", "Agent")
+
+      assert has_element?(
+               robot,
+               ~s|#review-overview-author img[src="/images/connectors/claude.png"]|
+             )
+
+      assert has_element?(robot, "#review-overview-author-owner", "owned by @carey")
+    end
+
     test "packets land on overview and open section hunks only after selection", %{
       conn: conn,
       author: author
@@ -861,7 +1037,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
              )
 
       assert has_element?(changes_view, "#code-view-switcher .review-code-view-tab", "Guide")
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#diff-files .rev-file-card")
       refute has_element?(changes_view, "#diff-files .rev-file-placeholder")
 
@@ -877,7 +1053,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-unified")
       |> render_click()
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#review-guide-sidebar")
       refute has_element?(changes_view, "#review-guide-rail")
       refute has_element?(changes_view, "#changes-file-tree")
@@ -889,7 +1065,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-split")
       |> render_click()
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, "#review-guide-shell")
     end
 
@@ -1099,7 +1275,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
 
       {:ok, changes_view, _html} = live(conn, ~p"/r/#{packet_review.slug}/changes")
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       assert has_element?(changes_view, "#diff-files .review-hunk-card.is-file-diff")
 
       assert has_element?(
@@ -1249,8 +1425,39 @@ defmodule ReviewsWeb.ReviewLiveTest do
       |> element("#diff-style-unified")
       |> render_click()
 
-      refute has_element?(changes_view, "#file-tree")
+      assert has_element?(changes_view, "#file-tree")
       refute has_element?(changes_view, ~s|#changes-file-tree[phx-hook="ChangesFileTree"]|)
+
+      # Files sit under their folder, each with its counts, a change-type
+      # badge whose word is read out, and a jump to its diff card.
+      assert has_element?(changes_view, "#file-tree summary", "lib/")
+
+      [first, second] =
+        Enum.sort_by(
+          Reviews.Repo.preload(ReviewsCtx.latest_patchset(mixed_review), :files).files,
+          & &1.path
+        )
+
+      for file <- [first, second] do
+        row = "#file-tree-row-#{file.id}"
+        assert has_element?(changes_view, row, Path.basename(file.path))
+        assert has_element?(changes_view, row <> " .review-change-stat", "+300")
+
+        assert has_element?(
+                 changes_view,
+                 row <> " .rev-tree-badge.is-modified .sr-only",
+                 "Modified"
+               )
+
+        assert has_element?(changes_view, ~s|#{row}[phx-click*="file-#{file.id}"]|)
+        assert has_element?(changes_view, "#file-#{file.id}")
+      end
+
+      assert has_element?(
+               changes_view,
+               ~s|#file-tree-toggle[aria-controls="file-tree"][aria-expanded="false"]|
+             )
+
       refute has_element?(changes_view, "#review-guide-sidebar")
       assert has_element?(changes_view, "#diff-files")
     end
@@ -1551,7 +1758,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
           }
         })
 
-      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}/changes")
+      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}")
       render_click(view, "open_activity_thread", %{"thread_id" => thread.id})
       path = ~p"/r/#{review.slug}?#{[patchset: 1, thread: thread.id]}"
       assert_patch(view, path)
@@ -1589,6 +1796,74 @@ defmodule ReviewsWeb.ReviewLiveTest do
         assert has_element?(direct, "#review-split-inline-overview")
         refute has_element?(direct, "#packet-section-0")
       end
+    end
+
+    test "activity opens a thread in place when reading the diff", %{
+      conn: conn,
+      author: author
+    } do
+      {:ok, %{review: review}} =
+        ReviewsCtx.create_review_with_initial_patchset(author, %{
+          title: "Diff mode comments",
+          raw_diff: """
+          diff --git a/example.ex b/example.ex
+          --- a/example.ex
+          +++ b/example.ex
+          @@ -1 +1 @@
+          -old
+          +new
+          """,
+          packet: %{
+            "format_version" => 1,
+            "title" => "Guide",
+            "sections" => [
+              %{
+                "title" => "Only hunk",
+                "rows" => [%{"kind" => "hunk", "path" => "example.ex", "hunk_index" => 1}]
+              }
+            ]
+          }
+        })
+
+      {:ok, %{thread: thread}} =
+        Threads.publish_comment(review, author, %{
+          "file_path" => "example.ex",
+          "side" => "new",
+          "body" => "Look here",
+          "thread_anchor" => %{
+            "granularity" => "line",
+            "line_number_hint" => 1,
+            "line_text" => "new"
+          }
+        })
+
+      changes_href = ~p"/r/#{review.slug}/changes?#{[patchset: 1, thread: thread.id]}"
+      {:ok, view, _} = live(conn, ~p"/r/#{review.slug}/changes")
+      assert has_element?(view, ~s|#review-activity[data-activity*="#{changes_href}"]|)
+      island = ~s|#diff-files [phx-hook="DiffRenderer"][data-file-path="example.ex"]|
+
+      render_click(
+        view,
+        "mark_hunk_viewed",
+        hunk_view_params(review, "example.ex", 1, %{
+          "hunk_id" => changes_hunk_id(review, "example.ex")
+        })
+      )
+
+      assert has_element?(
+               view,
+               island <> ~s|[data-hunk-viewed="true"][data-hunk-expanded="false"]|
+             )
+
+      render_click(view, "open_activity_thread", %{"thread_id" => thread.id})
+      assert_patch(view, changes_href)
+      assert has_element?(view, island <> ~s|[data-hunk-expanded="true"]|)
+      thread_id = thread.id
+
+      assert_push_event(view, "open_review_thread", %{
+        thread_id: ^thread_id,
+        file_path: "example.ex"
+      })
     end
 
     test "hunk viewed state is shared between packet and changes views", %{
@@ -1906,7 +2181,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       # screen readers only.
       assert has_element?(
                view,
-               "#review-guide-flyout-state-0.review-section-state-mark.is-approved .sr-only",
+               "#review-guide-flyout-state-0.rev-tree-badge.is-approved .sr-only",
                "Approved"
              )
 

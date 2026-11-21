@@ -11,6 +11,7 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
   attr :threads, :list, required: true
   attr :current_identity, :any, required: true
   attr :patchset_number, :integer, required: true
+  attr :changes, :boolean, default: false, doc: "link threads into Diff mode, not the Guide"
 
   # Enough for the recent conversation without sending every comment body.
   @log_limit 100
@@ -44,7 +45,7 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
           line: anchor["line_number_hint"],
           side: thread.side,
           earlierRevision: outdated?,
-          href: ~p"/r/#{assigns.review.slug}?#{[patchset: number, thread: thread.id]}",
+          href: thread_href(assigns, number, thread.id),
           insertedAt: DateTime.to_iso8601(latest.inserted_at),
           comments:
             Enum.map(comments, fn comment ->
@@ -80,7 +81,7 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
             filePath: thread.file_path,
             line: anchor && anchor["line_number_hint"],
             side: thread.side,
-            href: ~p"/r/#{assigns.review.slug}?#{[patchset: number, thread: thread.id]}",
+            href: thread_href(assigns, number, thread.id),
             replyTo:
               previous &&
                 %{
@@ -172,6 +173,12 @@ defmodule ReviewsWeb.ReviewLive.ActivityComponents do
     </aside>
     """
   end
+
+  defp thread_href(%{changes: true, review: review}, number, thread_id),
+    do: ~p"/r/#{review.slug}/changes?#{[patchset: number, thread: thread_id]}"
+
+  defp thread_href(%{review: review}, number, thread_id),
+    do: ~p"/r/#{review.slug}?#{[patchset: number, thread: thread_id]}"
 
   defp author_name(%{display_name: name}) when is_binary(name) and name != "", do: name
   defp author_name(%{handle: handle}) when is_binary(handle), do: handle

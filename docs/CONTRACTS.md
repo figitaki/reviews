@@ -57,6 +57,24 @@ was approved for, so it can comment but cannot push, resolve, reopen or decide,
 even for an identity that could do so with an API token. A refused comment is
 `403`.
 
+### Request budgets
+
+Requests can return `429` JSON with `Retry-After: 60` and `error_code:
+rate_limited` (the `Reviews.Errors` envelope). IP budgets apply before
+DB/auth/body work; API writes also share an authenticated account budget across
+tokens. Clients should wait before retrying, and should not retry writes blindly
+when a response was lost. Counters are local to each instance and reset on restart.
+
+Protected `/api/v1` writes authenticate before parsing (`401` takes precedence
+over body errors), with an API token or a `reviews login` access token.
+Review/patchset POSTs retain a 50,000,000-byte total JSON body limit; `/mcp`
+requests are limited to 4,000,000 bytes; other parsed requests are limited to
+64,000 bytes. Limits count bytes actually
+read; oversized bodies receive `413`. Unsupported body media, including
+multipart, receives `415`. CLI JSON and browser URL-encoded forms remain supported.
+See [application request budgets](ABUSE_PROTECTION.md) for defaults, client-IP
+handling on Fly, configuration, and limitations.
+
 ### `GET /api/v1/analytics/snapshot`
 
 Dedicated aggregate-only authentication, disabled unless an expiring `rva_` credential

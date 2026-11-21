@@ -99,7 +99,8 @@ defmodule ReviewsWeb.ReviewLive do
           {:ok, socket} ->
             {:noreply,
              socket
-             |> reveal_activity_thread(params["thread"])
+             |> assign_link_preview(params, uri)
+             |> reveal_activity_thread(params["thread"], &Function.identity/1, params["comment"])
              |> reveal_packet_section(params["section"])}
 
           {:error, :patchset_not_found} ->
@@ -363,10 +364,16 @@ defmodule ReviewsWeb.ReviewLive do
             do: socket.assigns.selected_patchset.number,
             else: thread.originating_patchset_number
 
-        {:noreply,
-         push_patch(socket,
-           to: ~p"/r/#{socket.assigns.review.slug}?#{[patchset: number, thread: thread.id]}"
-         )}
+        query = [patchset: number, thread: thread.id]
+        slug = socket.assigns.review.slug
+
+        # Diff mode reveals the thread in place rather than mounting the Guide.
+        to =
+          if socket.assigns.live_action == :changes,
+            do: ~p"/r/#{slug}/changes?#{query}",
+            else: ~p"/r/#{slug}?#{query}"
+
+        {:noreply, push_patch(socket, to: to)}
     end
   end
 
@@ -522,6 +529,17 @@ defmodule ReviewsWeb.ReviewLive do
     case ReviewView.snapshot(review, current_identity, patchset_number: patchset_number) do
       {:ok, snapshot} -> {:ok, assign_snapshot(socket, snapshot)}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Only the first, static render reaches unfurlers; the root layout is not
+  # re-rendered after the socket connects.
+  defp assign_link_preview(socket, params, uri) do
+    if connected?(socket) do
+      socket
+    else
+      %{review: review, published_threads: threads} = socket.assigns
+      assign(socket, :link_preview, ReviewsWeb.LinkPreview.build(review, threads, params, uri))
     end
   end
 
@@ -761,6 +779,7 @@ defmodule ReviewsWeb.ReviewLive do
               threads={@published_threads}
               current_identity={@current_identity}
               patchset_number={@selected_patchset.number}
+              changes={@live_action == :changes}
             />
           </div>
         </div>
@@ -782,7 +801,7 @@ defmodule ReviewsWeb.ReviewLive do
     |> push_event("packet_nav_jump", %{id: "review-split-inline-overview"})
   end
 
-  defp reveal_activity_thread(socket, id, on_missing \\ &Function.identity/1) do
+  defp reveal_activity_thread(socket, id, on_missing, comment_id \\ nil) do
     with thread when not is_nil(thread) <-
            Enum.find(socket.assigns.published_threads, &(to_string(&1.id) == id)),
          true <- is_map(thread.anchor),
@@ -813,10 +832,12 @@ defmodule ReviewsWeb.ReviewLive do
           })
 
         true ->
-          push_patch(socket,
-            to:
-              ~p"/r/#{socket.assigns.review.slug}/changes?#{[patchset: socket.assigns.selected_patchset.number, thread: thread.id]}"
-          )
+          # Keep `comment`, so a copied comment link still lands on it.
+          query =
+            [patchset: socket.assigns.selected_patchset.number, thread: thread.id] ++
+              if(comment_id, do: [comment: comment_id], else: [])
+
+          push_patch(socket, to: ~p"/r/#{socket.assigns.review.slug}/changes?#{query}")
       end
     else
       _ -> on_missing.(socket)

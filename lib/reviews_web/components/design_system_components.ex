@@ -227,6 +227,101 @@ defmodule ReviewsWeb.DesignSystemComponents do
     """
   end
 
+  @identity_sizes ~w(xs sm md lg)
+
+  @doc """
+  An identity's avatar: its image (a person's GitHub avatar, an agent's
+  provider logo) or, without one, the first letter of its handle. Decorative;
+  put the name in text next to it, or use `<.ds_identity>`.
+
+  Round by default, like every avatar except Settings' square rows. Sizes:
+  `xs` 16px (review list), `sm` 20px (comments, the Guide's byline), `md`
+  24px (the account menu), `lg` 36px (Settings). Comment threads draw the same
+  markup in JS (`avatar()` in `diff_renderer/annotation_ui.js`).
+  """
+  attr :identity, :map, required: true
+  attr :size, :string, default: "sm", values: @identity_sizes
+  attr :square, :boolean, default: false
+  attr :class, :any, default: nil
+
+  def ds_avatar_mark(assigns) do
+    ~H"""
+    <span
+      class={["ds-avatar-mark", "is-#{@size}", !@square && "is-round", @class]}
+      aria-hidden="true"
+    >
+      <img :if={@identity.avatar_url} src={@identity.avatar_url} alt="" loading="lazy" />
+      <span :if={!@identity.avatar_url}>{avatar_initial(@identity)}</span>
+    </span>
+    """
+  end
+
+  defp avatar_initial(identity) do
+    name = Map.get(identity, :handle) || Map.get(identity, :display_name)
+
+    case name |> to_string() |> String.trim() |> String.first() do
+      nil -> "?"
+      initial -> String.upcase(initial)
+    end
+  end
+
+  @doc """
+  An identity as one unit: avatar, name, `@handle` and, for an agent, an
+  Agent marker. Use it wherever an identity appears; comment threads draw the
+  same classes in JS (`identity()` in `diff_renderer/annotation_ui.js`).
+
+  Inline, the handle is left out when it only repeats the name. `stacked`
+  puts the handle under the name, as Settings' rows do. The inner block
+  follows the marker, for a note such as who owns an agent.
+  """
+  attr :identity, :map, required: true
+  attr :size, :string, default: "sm", values: @identity_sizes
+  attr :square, :boolean, default: false
+  attr :stacked, :boolean, default: false
+  attr :name, :boolean, default: true, doc: "show the name; false shows only the handle"
+  attr :handle, :boolean, default: true
+  attr :agent_marker, :boolean, default: true
+  attr :name_class, :any, default: nil
+  attr :class, :any, default: nil
+  attr :rest, :global
+  slot :inner_block
+
+  def ds_identity(assigns) do
+    identity = assigns.identity
+    handle = Map.get(identity, :handle)
+    name = Map.get(identity, :display_name) || handle
+
+    show_handle =
+      assigns.handle && is_binary(handle) &&
+        (!assigns.name || assigns.stacked || !same_name?(name, handle))
+
+    assigns =
+      assign(assigns,
+        display: name,
+        handle_text: handle,
+        show_handle: show_handle,
+        agent?: assigns.agent_marker && Map.get(identity, :kind) == "agent"
+      )
+
+    ~H"""
+    <span
+      class={["ds-identity", "is-#{@size}", @stacked && "is-stacked", @class]}
+      {@rest}
+    >
+      <.ds_avatar_mark identity={@identity} size={@size} square={@square} />
+      <span class="ds-identity-text">
+        <span :if={@name} class={["ds-identity-name", @name_class]}>{@display}</span>
+        <span :if={@show_handle} class="ds-identity-handle" translate="no">@{@handle_text}</span>
+        <span :if={@agent?} class="ds-identity-agent">Agent</span>
+        {render_slot(@inner_block)}
+      </span>
+    </span>
+    """
+  end
+
+  defp same_name?(name, handle),
+    do: String.downcase(to_string(name)) == String.downcase(to_string(handle))
+
   attr :icon, :string, required: true
   attr :title, :string, required: true
   attr :body, :string, required: true

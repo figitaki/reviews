@@ -11,6 +11,7 @@ defmodule Reviews.Application do
       [
         ReviewsWeb.Telemetry,
         Reviews.Repo,
+        Reviews.RateLimiter,
         Reviews.Analytics.Cache,
         {DNSCluster, query: Application.get_env(:reviews, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: Reviews.PubSub},

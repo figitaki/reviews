@@ -407,6 +407,46 @@ defmodule ReviewsWeb.DesignLive do
           </div>
         </.catalog_section>
 
+        <.catalog_section id="dc-identities" title="Identities">
+          <:rules>
+            <li>
+              <code>&lt;.ds_identity&gt;</code>
+              is how an identity appears everywhere: avatar, name, <code>@handle</code>
+              and, for an agent, an Agent marker. Comment threads draw the same classes in JS.
+            </li>
+            <li>
+              The avatar (<code>&lt;.ds_avatar_mark&gt;</code>) is a person's GitHub avatar or an
+              agent's provider logo, else the first letter of the handle in a ringed circle.
+            </li>
+            <li>
+              Sizes: <code>xs</code>
+              16px in the review list (handle only), <code>sm</code>
+              20px in comments and the Guide's byline, <code>md</code>
+              24px in the account menu (name only), <code>lg</code>
+              36px in Settings, square and stacked.
+            </li>
+            <li>The handle is left out when it only repeats the name.</li>
+          </:rules>
+          <div :for={size <- ~w(xs sm md)} :key={size} class="dc-specimens is-wide">
+            <.specimen
+              :for={{label, identity} <- identity_specimens()}
+              :key={label}
+              name={~s|<.ds_identity size="#{size}"> #{label}|}
+            >
+              <.ds_identity identity={identity} size={size} />
+            </.specimen>
+          </div>
+          <div class="dc-specimens is-wide">
+            <.specimen
+              :for={{label, identity} <- identity_specimens()}
+              :key={label}
+              name={~s|<.ds_identity size="lg" square stacked> #{label}|}
+            >
+              <.ds_identity identity={identity} size="lg" square stacked agent_marker={false} />
+            </.specimen>
+          </div>
+        </.catalog_section>
+
         <.catalog_section id="dc-buttons" title="Buttons">
           <:rules>
             <li>
@@ -703,6 +743,29 @@ defmodule ReviewsWeb.DesignLive do
       </div>
     </section>
     """
+  end
+
+  # A person with a GitHub avatar, an agent with its provider logo, and a
+  # person without avatar_url, for the identity specimens.
+  defp identity_specimens do
+    [
+      {"person",
+       %{
+         kind: "human",
+         handle: "octocat",
+         display_name: "The Octocat",
+         avatar_url: "https://avatars.githubusercontent.com/u/583231?v=4"
+       }},
+      {"agent",
+       %{
+         kind: "agent",
+         handle: "claude",
+         display_name: "Claude",
+         avatar_url: ~p"/images/connectors/claude.png"
+       }},
+      {"no avatar_url",
+       %{kind: "human", handle: "reviews-demo", display_name: "reviews-demo", avatar_url: nil}}
+    ]
   end
 
   attr :name, :string, required: true

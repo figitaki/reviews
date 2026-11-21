@@ -78,4 +78,16 @@ config :phoenix_live_view, :test_warnings,
   duplicate_id: :raise,
   missing_form_id: :raise
 
+# Many tests build their own connections from 127.0.0.1, so one shared budget
+# would throttle the suite. ReviewsWeb.AbuseIntegrationTest replaces this
+# config with the defaults to test exhaustion.
+config :reviews, ReviewsWeb.Plugs.RequestBudget,
+  limits: [
+    requests: 1_000_000,
+    writes: 1_000_000,
+    uploads: 1_000_000,
+    sockets: 1_000_000,
+    owners: 1_000_000
+  ]
+
 config :reviews, :design_catalog, true

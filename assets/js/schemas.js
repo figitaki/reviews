@@ -15,6 +15,9 @@ const Author = z
   .object({
     id: z.number(),
     username: z.string(),
+    handle: z.string().optional(),
+    display_name: z.string().nullable().optional(),
+    kind: z.enum(["human", "agent"]).nullable().optional(),
     avatar_url: z.string().url().nullable().optional(),
   })
   .nullable()

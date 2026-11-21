@@ -357,19 +357,6 @@ defmodule ReviewsWeb.ReviewListLive do
         border-radius: var(--radius-xs);
       }
 
-      .rl-author > span {
-        min-width: 0;
-        overflow-wrap: anywhere;
-      }
-
-      .rl-author img {
-        flex-shrink: 0;
-        width: 16px;
-        height: 16px;
-        border-radius: var(--radius-pill);
-        object-fit: cover;
-      }
-
       .rl-empty {
         display: grid;
         place-items: center;
@@ -566,18 +553,7 @@ defmodule ReviewsWeb.ReviewListLive do
               class="rl-author"
               title={"Show reviews by @#{entry.review.author.handle}"}
             >
-              <img
-                :if={entry.review.author.avatar_url}
-                src={entry.review.author.avatar_url}
-                alt=""
-                width="16"
-                height="16"
-                loading="lazy"
-              />
-              <span translate="no">
-                @{entry.review.author.handle}{if entry.review.author.kind == "agent",
-                  do: " (agent)"}
-              </span>
+              <.ds_identity identity={entry.review.author} size="xs" name={false} />
             </.link>
             <span class="rl-dot" aria-hidden="true">·</span>
             <time datetime={DateTime.to_iso8601(entry.updated_at)}>{relative_time(

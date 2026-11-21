@@ -4,7 +4,7 @@ defmodule Reviews.MixProject do
   def project do
     [
       app: :reviews,
-      version: "0.0.2",
+      version: "0.0.3",
       elixir: "~> 1.20",
       description: "Code-review tool for arbitrary diffs (Phoenix + Rust CLI).",
       package: [
@@ -61,7 +61,7 @@ defmodule Reviews.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 4.4"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
-      {:phoenix_live_view, "~> 1.2.12"},
+      {:phoenix_live_view, "~> 1.2.14"},
       {:lazy_html, ">= 0.1.13", only: :test},
       {:sobelow, "== 0.18.1", only: [:dev, :test], runtime: false},
       {:phoenix_live_dashboard, "~> 0.9.1"},
@@ -83,6 +83,10 @@ defmodule Reviews.MixProject do
       {:ueberauth_github, "~> 0.8"},
       {:req, "~> 0.5"},
       {:joken, "~> 2.6"},
+      # Pinned to releases at least 7 days old (AGENTS.md); 0.14.7 and
+      # mdex_native 0.3.2 qualify from 2026-11-21.
+      {:mdex, "== 0.14.6"},
+      {:mdex_native, "== 0.3.1"},
       {:fastest_mcp, "~> 1.0.1"},
       # idna 7.1.0 has EEF-CVE-2026-117678. jsv (through fastest_mcp) still
       # asks for ~> 6.0 or ~> 7.0; drop the override once it allows 8.

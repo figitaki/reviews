@@ -1,6 +1,15 @@
 defmodule ReviewsWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :reviews
 
+  # Phoenix inserts socket dispatch ahead of ordinary endpoint plugs.
+  # Wrap the generated pipeline so handshakes also pay the cheap IP budget.
+  def call(conn, opts) do
+    case ReviewsWeb.Plugs.RequestBudget.call(conn, []) do
+      %{halted: true} = conn -> conn
+      conn -> super(conn, opts)
+    end
+  end
+
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.
@@ -25,6 +34,9 @@ defmodule ReviewsWeb.Endpoint do
     from: :reviews,
     gzip: not code_reloading?,
     only: ReviewsWeb.static_paths(),
+    # `~p` links the digested root files `mix phx.digest` writes, such as
+    # /favicon-<hash>.ico and /site-<hash>.webmanifest, which `only:` misses.
+    only_matching: ~w(favicon- site-),
     raise_on_missing_only: code_reloading?
 
   # Code reloading can be explicitly enabled under the
@@ -49,15 +61,9 @@ defmodule ReviewsWeb.Endpoint do
   # Redirect legacy hostnames (reviews-dev.fly.dev) to the canonical PHX_HOST.
   plug ReviewsWeb.Plugs.CanonicalHost
 
-  # `length: 50_000_000` lets diffs up to ~50MB flow through the JSON parser —
-  # the CLI's `POST /api/v1/reviews` body is `raw_diff` JSON-wrapped.
-  # `/mcp` requests are capped at `mcp_length` before decoding.
-  plug ReviewsWeb.Plugs.Parsers,
-    parsers: [:urlencoded, :multipart, :json],
-    pass: ["*/*"],
-    json_decoder: Phoenix.json_library(),
-    length: 50_000_000,
-    mcp_length: 4_000_000
+  # Authenticates API writes, then parses bodies with per-route limits. See
+  # docs/ABUSE_PROTECTION.md.
+  plug ReviewsWeb.Plugs.BodyBudget
 
   plug Plug.MethodOverride
   plug Plug.Head
