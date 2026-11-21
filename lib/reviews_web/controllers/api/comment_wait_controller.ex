@@ -31,7 +31,8 @@ defmodule ReviewsWeb.Api.CommentWaitController do
   Without `since`, or with one above the reviews' newest comment, it waits for
   comments published after the request. Comment ids are one sequence across
   reviews, so one cursor covers all of them. The caller's own comments are
-  left out, and an identity may hold at most 5 waits at once (429 beyond).
+  left out, and an account (all of its identities together) may hold at most
+  5 waits at once (429 beyond).
   """
   def wait(conn, params) do
     with {:ok, slugs} <- slugs(params["reviews"]),
@@ -41,7 +42,7 @@ defmodule ReviewsWeb.Api.CommentWaitController do
          {:ok, limit} <- bounded_int(params["limit"], @max_results, 1, @max_results),
          {:ok, reviews} <- fetch_reviews(slugs),
          identity = conn.assigns.current_identity,
-         :ok <- WaitSlots.acquire(identity.id) do
+         :ok <- WaitSlots.acquire(identity.owner_user_id) do
       {:ok, %{comments: comments, cursor: cursor}} =
         try do
           Threads.wait_for_comments(reviews, since,
@@ -50,7 +51,7 @@ defmodule ReviewsWeb.Api.CommentWaitController do
             exclude_author_id: identity.id
           )
         after
-          WaitSlots.release(identity.id)
+          WaitSlots.release(identity.owner_user_id)
         end
 
       slug_by_id = Map.new(reviews, &{&1.id, &1.slug})
@@ -65,7 +66,7 @@ defmodule ReviewsWeb.Api.CommentWaitController do
         ReviewsWeb.ApiErrors.render(
           conn,
           :rate_limited,
-          "Too many waits are open for this identity or server. Close one, or retry later."
+          "Too many waits are open for this account or server. Close one, or retry later."
         )
 
       {:error, {:missing, slug}} ->

@@ -361,9 +361,10 @@ The server wakes on the reviews' `{:thread_published, thread}` broadcasts rather
 than polling the database, and reads again only when the broadcast's thread
 belongs to one of the reviews and carries a comment above the cursor by someone
 else, so other broadcasts cost a waiter no query. It returns early with no
-comments if a review is deleted. One identity may hold 5 waits at once and a
-server node 500; more → `429` with `error_code: rate_limited`. A cursor never skips a comment: each comment insert takes a per-review
-advisory lock until it commits, and the read takes the shared form of that lock
+comments if a review is deleted. One account (all of its identities together)
+may hold 5 waits at once and a server node 500; more → `429` with
+`error_code: rate_limited`. A cursor never skips a comment: each comment
+insert takes a per-review advisory lock until it commits, and the read takes the shared form of that lock
 for each review, so no lower id can commit after a read returns a higher one.
 A bad parameter, or a slug outside `[A-Za-z0-9_-]{1,64}`, → `400` with
 `error_code: invalid_request`; an unknown slug →

@@ -267,7 +267,7 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
 
     refute subscribed?("review:#{review.slug}", self())
     refute_received {:thread_published, _}
-    slots = Registry.lookup(Reviews.Threads.WaitRegistry, identity.id)
+    slots = Registry.lookup(Reviews.Threads.WaitRegistry, identity.owner_user_id)
     refute Enum.any?(slots, fn {pid, _} -> pid == self() end)
   end
 
@@ -276,13 +276,21 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
     assert body == %{"comments" => [], "cursor" => 0, "more" => false}
   end
 
-  test "refuses a sixth wait for the same identity", %{raw: raw, review: review, identity: id} do
+  test "all identities of one account share one cap of 5 waits", %{
+    raw: raw,
+    review: review,
+    user: user,
+    reviewer: reviewer
+  } do
+    {:ok, agent} = Accounts.create_agent_identity(user, %{display_name: "Codex", handle: "codex"})
+    {:ok, _token, agent_raw} = Accounts.mint_token(user, %{name: "agent", identity_id: agent.id})
+    {:ok, _token, other_raw} = Accounts.mint_token(reviewer, %{"name" => "other"})
     test = self()
 
     holders =
       for _ <- 1..5 do
         spawn_link(fn ->
-          :ok = WaitSlots.acquire(id.id)
+          :ok = WaitSlots.acquire(user.id)
           send(test, :held)
           receive do: (:stop -> :ok)
         end)
@@ -290,8 +298,12 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
 
     for _ <- holders, do: assert_receive(:held)
 
-    conn = wait(raw, review, %{"timeout" => "0"})
-    assert json_response(conn, 429)["error_code"] == "rate_limited"
+    for token <- [raw, agent_raw] do
+      conn = wait(token, review, %{"timeout" => "0"})
+      assert json_response(conn, 429)["error_code"] == "rate_limited"
+    end
+
+    assert json_response(wait(other_raw, review, %{"timeout" => "0"}), 200)
 
     for pid <- holders, do: send(pid, :stop)
   end

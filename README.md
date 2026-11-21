@@ -258,7 +258,8 @@ batch, 124 when `--timeout` (default 600 seconds) passes, and 1 on errors after
 five retries of network errors and HTTP 429/5xx. A follower retries those
 without a limit (at most a minute apart) and stops only on another error or
 `--timeout`; when it stops on an error it prints a last line
-`{"error": "..."}`. One identity may hold five waits at once.
+`{"error": "..."}`. One account may hold five waits at once,
+across all of its identities.
 
 ## MCP (prototype)
 

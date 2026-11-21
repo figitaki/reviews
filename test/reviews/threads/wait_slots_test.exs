@@ -9,21 +9,21 @@ defmodule Reviews.Threads.WaitSlotsTest do
     %{registry: registry}
   end
 
-  defp hold(identity_id, limits, registry) do
+  defp hold(account_id, limits, registry) do
     test = self()
 
     pid =
       spawn_link(fn ->
-        send(test, {:acquired, WaitSlots.acquire(identity_id, limits, registry)})
-        receive do: (:stop -> send(test, {:released, WaitSlots.release(identity_id, registry)}))
+        send(test, {:acquired, WaitSlots.acquire(account_id, limits, registry)})
+        receive do: (:stop -> send(test, {:released, WaitSlots.release(account_id, registry)}))
       end)
 
     assert_receive {:acquired, result}
     {pid, result}
   end
 
-  test "caps waits per identity and per node", %{registry: registry} do
-    limits = %{per_identity: 2, total: 3}
+  test "caps waits per account and per node", %{registry: registry} do
+    limits = %{per_account: 2, total: 3}
 
     assert {_, :ok} = hold(1, limits, registry)
     assert {_, :ok} = hold(1, limits, registry)
@@ -34,7 +34,7 @@ defmodule Reviews.Threads.WaitSlotsTest do
   end
 
   test "a released slot is free for the next wait", %{registry: registry} do
-    limits = %{per_identity: 1, total: 10}
+    limits = %{per_account: 1, total: 10}
     {holder, :ok} = hold(7, limits, registry)
     assert {_, {:error, :rate_limited}} = hold(7, limits, registry)
 
