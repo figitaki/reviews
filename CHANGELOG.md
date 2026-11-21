@@ -6,6 +6,15 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- `reviews wait <slug>...` waits for new comments and replies on up to 20
+  reviews and prints one compact JSON line per comment, with a `cursor`. Run
+  it with `--follow` in the background to stream comments while an agent
+  works, each printed once and in order; `--cursor-file` resumes after a
+  restart. Without `--follow` it exits 0 after the first batch and 124 when
+  `--timeout` passes. It long-polls the new `GET /api/v1/comments/wait`,
+  which holds a call for up to 30 seconds, wakes on the reviews' comment
+  broadcasts, leaves out the caller's own comments, and allows 5 waits per
+  account at once.
 - phoenix_live_view is now 1.2.14, which fixes EEF-CVE-2026-126334
   (GHSA-v4p7-3pm2-wq6c): a LiveView joined without `"url"` skipped its
   `live_session` `on_mount` hooks. Reviews uses no `live_session` or

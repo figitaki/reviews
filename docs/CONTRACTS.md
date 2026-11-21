@@ -322,6 +322,54 @@ Publishes one comment right away as the token identity. Request body:
 `file_path` over 255 characters → `422` with `{ "errors": { "detail": "..." } }`.
 Unknown slug → `404`.
 
+### `GET /api/v1/comments/wait`
+
+Long poll for new comments and replies on one or more reviews, for
+`reviews wait`. Needs a bearer token; any signed-in identity with the links
+may wait, as for commenting. Query parameters:
+
+- `reviews`: 1–20 review slugs, separated by commas. Required.
+- `since`: a comment id. Comments on these reviews with a higher id return at
+  once. Without it, or with one above the reviews' newest comment, the call
+  waits for comments published after it starts. Comment ids are one sequence
+  across reviews, so one cursor covers them all.
+- `timeout`: seconds to hold the call when nothing is new. Default 25, 0–30.
+- `limit`: most comments returned. Default 50, 1–50.
+
+Response `200`:
+
+```json
+{
+  "comments": [
+    { "review": "Q4bwuxuZ", "thread_id": 7, "comment_id": 41, "author": "dana",
+      "file_path": "lib/foo.ex", "side": "new", "line": 42, "body": "...",
+      "truncated": false }
+  ],
+  "cursor": 41,
+  "more": false
+}
+```
+
+Comments are oldest first and leave out the caller's own (by the token's
+identity). `author` is the identity's handle; `body` is capped at 8000 bytes,
+and `truncated` says whether it was cut. `cursor` is the `since` for the next
+call: the last comment's id when `limit` comments were returned (`more` is then
+true), otherwise the reviews' newest comment id, which can be above the last
+comment returned when the newest are the caller's own.
+
+The server wakes on the reviews' `{:thread_published, thread}` broadcasts rather
+than polling the database, and reads again only when the broadcast's thread
+belongs to one of the reviews and carries a comment above the cursor by someone
+else, so other broadcasts cost a waiter no query. It returns early with no
+comments if a review is deleted. One account (all of its identities together)
+may hold 5 waits at once and a server node 500; more → `429` with
+`error_code: rate_limited`. A cursor never skips a comment: each comment
+insert takes a per-review advisory lock until it commits, and the read takes the shared form of that lock
+for each review, so no lower id can commit after a read returns a higher one.
+A bad parameter, or a slug outside `[A-Za-z0-9_-]{1,64}`, → `400` with
+`error_code: invalid_request`; an unknown slug →
+`404` and a deleted review → `410`, with the slug in `error_detail`.
+
 ### `PATCH /api/v1/reviews/:slug/threads/:thread_id`
 
 Resolves or reopens a thread as the token identity. Powers `reviews resolve`

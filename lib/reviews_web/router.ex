@@ -186,6 +186,7 @@ defmodule ReviewsWeb.Router do
     post "/code-snapshots", CodeSnapshotController, :create
     post "/code-snapshots/:id/complete", CodeSnapshotController, :complete
     post "/reviews/:slug/comments", CommentController, :create
+    get "/comments/wait", CommentWaitController, :wait
     patch "/reviews/:slug/threads/:thread_id", ThreadController, :update
     post "/reviews/:slug/sections/:section_index/decision", SectionDecisionController, :create
     get "/me", MeController, :show

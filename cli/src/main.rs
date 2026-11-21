@@ -55,6 +55,12 @@ enum Command {
     /// Reopen a resolved review thread (requires `reviews login`)
     Reopen(commands::thread_status::ThreadStatusArgs),
 
+    /// Wait for new comments on one or more reviews and print one JSON line
+    /// per comment. Exits 0 when comments arrive, 124 when `--timeout` passes;
+    /// `--follow` keeps printing until an error or the timeout
+    /// (requires `reviews login`)
+    Wait(commands::wait::WaitArgs),
+
     /// Approve, deny, ignore, or reset a packet section to pending
     Section(commands::section::SectionArgs),
 
@@ -83,6 +89,12 @@ fn run() -> Result<()> {
         Command::Reply(args) => commands::reply::run(args),
         Command::Resolve(args) => commands::thread_status::run(args, "resolved"),
         Command::Reopen(args) => commands::thread_status::run(args, "open"),
+        Command::Wait(args) => {
+            if commands::wait::run(args)? == commands::wait::Outcome::TimedOut {
+                std::process::exit(commands::wait::TIMED_OUT_EXIT_CODE);
+            }
+            Ok(())
+        }
         Command::Section(args) => commands::section::run(args),
         Command::Delete(args) => commands::delete::run(args),
     }
