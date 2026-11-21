@@ -55,8 +55,9 @@ enum Command {
     /// Reopen a resolved review thread (requires `reviews login`)
     Reopen(commands::thread_status::ThreadStatusArgs),
 
-    /// Wait for new comments on a review and print them as JSON. Exits 0 when
-    /// comments arrive and 124 when `--timeout` passes first
+    /// Wait for new comments on one or more reviews and print one JSON line
+    /// per comment. Exits 0 when comments arrive, 124 when `--timeout` passes;
+    /// `--follow` keeps printing until an error or the timeout
     /// (requires `reviews login`)
     Wait(commands::wait::WaitArgs),
 

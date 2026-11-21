@@ -10,7 +10,7 @@
 //!   POST /api/v1/code-snapshots/:id/complete
 //!   GET  /api/v1/reviews/:slug
 //!   POST /api/v1/reviews/:slug/comments (new thread or reply)
-//!   GET  /api/v1/reviews/:slug/comments/wait (long poll)
+//!   GET  /api/v1/comments/wait (long poll)
 //!   PATCH /api/v1/reviews/:slug/threads/:thread_id
 //!   POST /api/v1/reviews/:slug/sections/:section_index/decision
 //!   GET  /api/v1/reviews/:slug/deletion
@@ -28,8 +28,6 @@ use std::time::Duration;
 /// instead of parsing message text.
 #[derive(Debug)]
 pub struct ApiError {
-    /// HTTP status, kept for future callers that branch on it.
-    #[allow(dead_code)]
     pub status: u16,
     pub code: Option<String>,
     pub message: String,
@@ -418,23 +416,24 @@ impl ApiClient {
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 
-    /// Long poll for comments with an id above `since` (or published after the
-    /// call when `None`). The server holds the call for up to `timeout_secs`.
+    /// Long poll for comments on any of `slugs` with an id above `since` (or
+    /// published after the call when `None`). The server holds the call for up
+    /// to `timeout_secs`.
     pub fn wait_comments(
         &self,
-        slug: &str,
+        slugs: &[String],
         since: Option<i64>,
         timeout_secs: u64,
     ) -> Result<WaitCommentsResponse> {
-        let path = format!("/api/v1/reviews/{slug}/comments/wait");
+        let path = "/api/v1/comments/wait";
         let _ = self.require_token(&format!("GET {path}"))?;
-        let mut query = Vec::with_capacity(2);
+        let mut query = vec![("reviews", slugs.join(","))];
         if let Some(cursor) = since {
             query.push(("since", cursor.to_string()));
         }
         query.push(("timeout", timeout_secs.to_string()));
         let resp = self
-            .auth(self.http.get(self.url(&path)))
+            .auth(self.http.get(self.url(path)))
             .query(&query)
             .send()
             .with_context(|| format!("could not reach server for GET {path}"))?;

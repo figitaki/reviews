@@ -863,6 +863,8 @@ mod wait {
     use std::fs;
     use std::process::Output;
 
+    const PATH: &str = "/api/v1/comments/wait";
+
     fn home(server_url: &str) -> tempfile::TempDir {
         let home = tempfile::tempdir().unwrap();
         let config_dir = home.path().join(".config").join("reviews");
@@ -885,28 +887,57 @@ mod wait {
             .expect("run wait")
     }
 
-    fn stdout_json(out: &Output) -> serde_json::Value {
-        serde_json::from_slice(&out.stdout).expect("stdout is JSON")
+    fn lines(out: &Output) -> Vec<serde_json::Value> {
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("each line is JSON"))
+            .collect()
+    }
+
+    fn comment(id: i64) -> String {
+        format!(
+            r#"{{"review":"abc","thread_id":7,"comment_id":{id},"author":"dana","file_path":"foo","line":1,"body":"nit {id}","truncated":false}}"#
+        )
+    }
+
+    fn answer(ids: &[i64], cursor: i64) -> String {
+        let comments: Vec<String> = ids.iter().map(|id| comment(*id)).collect();
+        format!(
+            r#"{{"comments":[{}],"cursor":{cursor},"more":false}}"#,
+            comments.join(",")
+        )
+    }
+
+    fn query(pairs: &[(&str, &str)]) -> Matcher {
+        Matcher::AllOf(
+            pairs
+                .iter()
+                .map(|(k, v)| Matcher::UrlEncoded(k.to_string(), v.to_string()))
+                .collect(),
+        )
     }
 
     #[test]
-    fn prints_new_comments_and_exits_zero() {
+    fn one_shot_prints_one_line_per_comment_and_exits_zero() {
         let mut server = mockito::Server::new();
         let poll = server
-            .mock("GET", "/api/v1/reviews/abc/comments/wait")
+            .mock("GET", PATH)
             .match_header("authorization", "Bearer tok")
-            .match_query(Matcher::UrlEncoded("since".into(), "4".into()))
+            .match_query(query(&[("reviews", "abc,def"), ("since", "4")]))
             .with_header("content-type", "application/json")
-            .with_body(r#"{"comments":[{"id":5,"body":"nit"}],"cursor":5,"more":false}"#)
+            .with_body(answer(&[5, 6], 6))
             .create();
 
         let home = home(&server.url());
-        let out = wait(home.path(), &["abc", "--since", "4"]);
+        let out = wait(home.path(), &["abc", "def", "--since", "4"]);
 
         assert!(out.status.success(), "wait failed: {out:?}");
-        let body = stdout_json(&out);
-        assert_eq!(body["cursor"], 5);
-        assert_eq!(body["comments"][0]["body"], "nit");
+        let lines = lines(&out);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0]["comment_id"], 5);
+        assert_eq!(lines[0]["cursor"], 5);
+        assert_eq!(lines[1]["cursor"], 6);
+        assert_eq!(lines[1]["body"], "nit 6");
         poll.assert();
     }
 
@@ -914,38 +945,87 @@ mod wait {
     fn re_polls_from_the_returned_cursor() {
         let mut server = mockito::Server::new();
         let first = server
-            .mock("GET", "/api/v1/reviews/abc/comments/wait")
-            .match_query(Matcher::Regex("^timeout=".into()))
+            .mock("GET", PATH)
+            .match_query(Matcher::Regex("^reviews=abc&timeout=".into()))
             .with_header("content-type", "application/json")
-            .with_body(r#"{"comments":[],"cursor":9,"more":false}"#)
+            .with_body(answer(&[], 9))
             .create();
         let second = server
-            .mock("GET", "/api/v1/reviews/abc/comments/wait")
-            .match_query(Matcher::UrlEncoded("since".into(), "9".into()))
+            .mock("GET", PATH)
+            .match_query(query(&[("since", "9")]))
             .with_header("content-type", "application/json")
-            .with_body(r#"{"comments":[{"id":10}],"cursor":10,"more":false}"#)
+            .with_body(answer(&[10], 10))
             .create();
 
         let home = home(&server.url());
         let out = wait(home.path(), &["abc", "--timeout", "60"]);
 
         assert!(out.status.success(), "wait failed: {out:?}");
-        assert_eq!(stdout_json(&out)["cursor"], 10);
+        assert_eq!(lines(&out)[0]["cursor"], 10);
         first.assert();
         second.assert();
     }
 
     #[test]
-    fn timeout_prints_the_cursor_and_exits_124() {
+    fn follow_keeps_polling_from_the_last_printed_cursor_without_repeats() {
+        let mut server = mockito::Server::new();
+        let first = server
+            .mock("GET", PATH)
+            .match_query(query(&[("since", "1")]))
+            .with_header("content-type", "application/json")
+            .with_body(answer(&[2, 3], 3))
+            .expect(1)
+            .create();
+        let second = server
+            .mock("GET", PATH)
+            .match_query(query(&[("since", "3")]))
+            .with_header("content-type", "application/json")
+            .with_body(answer(&[4], 4))
+            .expect(1)
+            .create();
+        // After the last comment the server has nothing new until the bound.
+        let idle = server
+            .mock("GET", PATH)
+            .match_query(query(&[("since", "4"), ("timeout", "0")]))
+            .with_header("content-type", "application/json")
+            .with_body(answer(&[], 4))
+            .create();
+
+        let home = home(&server.url());
+        let cursor = home.path().join("cursor");
+        fs::write(&cursor, "1\n").unwrap();
+        let out = wait(
+            home.path(),
+            &[
+                "abc",
+                "--follow",
+                "--cursor-file",
+                cursor.to_str().unwrap(),
+                "--timeout",
+                "0",
+            ],
+        );
+
+        assert_eq!(out.status.code(), Some(124), "out = {out:?}");
+        let ids: Vec<i64> = lines(&out)
+            .iter()
+            .map(|l| l["cursor"].as_i64().unwrap())
+            .collect();
+        assert_eq!(ids, vec![2, 3, 4]);
+        assert_eq!(fs::read_to_string(&cursor).unwrap(), "4\n");
+        first.assert();
+        second.assert();
+        idle.assert();
+    }
+
+    #[test]
+    fn timeout_prints_nothing_and_exits_124() {
         let mut server = mockito::Server::new();
         let poll = server
-            .mock("GET", "/api/v1/reviews/abc/comments/wait")
-            .match_query(Matcher::AllOf(vec![
-                Matcher::UrlEncoded("since".into(), "3".into()),
-                Matcher::UrlEncoded("timeout".into(), "0".into()),
-            ]))
+            .mock("GET", PATH)
+            .match_query(query(&[("since", "3"), ("timeout", "0")]))
             .with_header("content-type", "application/json")
-            .with_body(r#"{"comments":[],"cursor":3,"more":false}"#)
+            .with_body(answer(&[], 3))
             .expect(1)
             .create();
 
@@ -953,24 +1033,52 @@ mod wait {
         let out = wait(home.path(), &["abc", "--since", "3", "--timeout", "0"]);
 
         assert_eq!(out.status.code(), Some(124), "out = {out:?}");
-        assert_eq!(stdout_json(&out)["cursor"], 3);
+        assert!(out.stdout.is_empty(), "out = {out:?}");
         poll.assert();
     }
 
     #[test]
-    fn server_errors_exit_one() {
+    fn client_errors_exit_one_without_retrying() {
         let mut server = mockito::Server::new();
-        let _poll = server
-            .mock("GET", "/api/v1/reviews/abc/comments/wait")
+        let poll = server
+            .mock("GET", PATH)
             .match_query(Matcher::Any)
             .with_status(404)
             .with_body(r#"{"error_code":"review_not_found"}"#)
+            .expect(1)
             .create();
 
         let home = home(&server.url());
-        let out = wait(home.path(), &["abc", "--timeout", "0"]);
+        let out = wait(home.path(), &["abc", "--follow"]);
 
         assert_eq!(out.status.code(), Some(1), "out = {out:?}");
         assert!(String::from_utf8_lossy(&out.stderr).contains("review_not_found"));
+        poll.assert();
+    }
+
+    #[test]
+    fn server_errors_are_retried() {
+        let mut server = mockito::Server::new();
+        let failing = server
+            .mock("GET", PATH)
+            .match_query(query(&[("since", "1")]))
+            .with_status(503)
+            .expect(1)
+            .create();
+        let ok = server
+            .mock("GET", PATH)
+            .match_query(query(&[("since", "1")]))
+            .with_header("content-type", "application/json")
+            .with_body(answer(&[2], 2))
+            .create();
+
+        let home = home(&server.url());
+        let out = wait(home.path(), &["abc", "--since", "1", "--timeout", "30"]);
+
+        assert!(out.status.success(), "out = {out:?}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("retrying in 1s"));
+        assert_eq!(lines(&out)[0]["cursor"], 2);
+        failing.assert();
+        ok.assert();
     }
 }
