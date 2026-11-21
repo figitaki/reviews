@@ -141,7 +141,6 @@ defmodule ReviewsWeb.Router do
     pipe_through :poppy_comments
 
     post "/reviews/:slug/comments", CommentController, :create
-    get "/reviews/:slug/comments/wait", CommentController, :wait
   end
 
   # Preview sign-in relay. Before /auth/:provider, which would match /auth/relay.
