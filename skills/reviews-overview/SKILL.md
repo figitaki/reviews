@@ -78,4 +78,6 @@ When updating a review, preserve packet section titles and hunk groupings if the
 
 When addressing feedback from Reviews, list threads with `reviews threads <slug>` or inspect `reviews show --format md`. Answer each thread with `reviews reply <slug> <thread-id>` describing what changed, then mark it handled with `reviews resolve <slug> <thread-id>`. Use `reviews reopen <slug> <thread-id>` when a resolved thread needs attention again.
 
+To wait for a reviewer's next comment, run `reviews wait <slug>` (in the background if you can) instead of re-running `reviews threads` in a loop. It prints the new comments as JSON with a `cursor`, exits 0 when comments arrive and 124 when `--timeout` seconds pass first. Pass the printed `cursor` as `--since` next time so no comment is missed between waits.
+
 When reporting a Reviews link back to the user, include the URL and the patchset number if the CLI provides one.

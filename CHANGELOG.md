@@ -6,6 +6,13 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- `reviews wait <slug>` waits for new comments and replies and prints them as
+  JSON with a `cursor` for `--since`. It exits 0 when comments arrive and 124
+  when `--timeout` passes, so an agent can wait in the background instead of
+  polling `reviews threads`. It long-polls the new
+  `GET /api/v1/reviews/:slug/comments/wait`, which holds a call for up to 30
+  seconds and wakes on the review's comment broadcast.
+
 - idna is now 8.0.0, which fixes EEF-CVE-2026-117678: a long Punycode
   label in a hostname could keep the CPU busy. jsv still asks for idna 7,
   so `mix.exs` overrides it until jsv allows 8.

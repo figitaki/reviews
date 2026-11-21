@@ -134,9 +134,20 @@ the question:
 cli/target/release/reviews reply <slug> <thread-id> --body "Switched to Decimal in 4f2a1c9."
 ```
 
+Wait for the next comment instead of polling `reviews threads`:
+
+```bash
+cli/target/release/reviews wait <slug> --timeout 1800
+cli/target/release/reviews wait <slug> --since <cursor>
+```
+
+It prints new comments as JSON with a `cursor` to pass as `--since` next time.
+It exits 0 when comments arrive, 124 when `--timeout` (default 600 seconds)
+passes first, and 1 on errors.
+
 Notes:
 - `reviews threads` can run anonymously against public review JSON.
-- `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` (or `reviews login --token` with an API token).
+- `reviews wait`, `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` (or `reviews login --token` with an API token).
 - `reviews resolve` and `reviews reopen` work only for the review owner or the thread's author; `reviews section` works only for the review owner. Others get HTTP 403.
 - `reviews delete <slug>` permanently deletes a review you own, with its comments. It shows what goes and asks you to type the slug; `--yes` skips the prompt for scripts. Only the review owner can delete; others get HTTP 403.
 - Thread IDs are accepted bare (`7`) or as printed by the listing (`#7`).
@@ -149,6 +160,7 @@ Notes:
 - Keep local packet files in `/private/tmp` unless the user asks to commit them.
 - After pushing, return the review URL and patchset number.
 - After addressing review feedback, use `reviews threads <slug>` to find thread IDs, `reviews reply <slug> <thread-id>` to record what changed, then `reviews resolve <slug> <thread-id>` to mark the thread handled. Use `reviews reopen` if a thread was closed too early.
+- To wait for more feedback, run `reviews wait <slug> --since <cursor>` in the background rather than polling `reviews threads`; it exits 0 on new comments and 124 on timeout.
 - Use `mix compile --warnings-as-errors`, `mix format --check-formatted`, and `mix assets.build` after relevant code/CSS/JS changes.
 - If `mix test` fails before tests run because DB config points at the wrong local Postgres, report that separately from app failures.
 

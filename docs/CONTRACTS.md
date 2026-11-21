@@ -304,6 +304,39 @@ Publishes one comment right away as the token identity. Request body:
 `file_path` over 255 characters → `422` with `{ "errors": { "detail": "..." } }`.
 Unknown slug → `404`.
 
+### `GET /api/v1/reviews/:slug/comments/wait`
+
+Long poll for new comments and replies, for `reviews wait`. Needs a bearer
+token; any signed-in identity with the link may wait, as for commenting.
+Query parameters:
+
+- `since`: a comment id. Comments on the review with a higher id return at
+  once. Without it, the call waits for comments published after it starts.
+- `timeout`: seconds to hold the call when nothing is new. Default 25, 0–30.
+- `limit`: most comments returned. Default 50, 1–50.
+
+Response `200`:
+
+```json
+{
+  "comments": [
+    { "id": 41, "body": "...", "author": {}, "attribution": null,
+      "inserted_at": "...", "thread_id": 7, "file_path": "lib/foo.ex",
+      "side": "new", "line": 42, "thread_status": "open" }
+  ],
+  "cursor": 41,
+  "more": false
+}
+```
+
+Comments are oldest first. `cursor` is the `since` for the next call: the
+last comment's id, or the `since` used when none arrived before the timeout.
+`more` is true when `limit` comments were returned and more may be waiting.
+The server wakes on the review's `{:thread_published, _}` broadcast rather
+than polling the database, and returns early with no comments if the review
+is deleted. A bad parameter → `400` with `error_code: invalid_request`;
+unknown slug → `404`; deleted review → `410`.
+
 ### `PATCH /api/v1/reviews/:slug/threads/:thread_id`
 
 Resolves or reopens a thread as the token identity. Powers `reviews resolve`

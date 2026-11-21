@@ -224,6 +224,18 @@ a section of only config, docs, lockfiles or generated files placed before a
 section that changes code. It cannot check that the slug exists or that your
 token works.
 
+Wait for reviewer comments instead of re-running `reviews threads`:
+
+```sh
+reviews wait <slug> --timeout 1800
+reviews wait <slug> --since <cursor>
+```
+
+It prints new comments as JSON with a `cursor`; pass that as `--since` next
+time. It exits 0 when comments arrive, 124 when `--timeout` (default 600
+seconds) passes first, and 1 on errors, so an agent can run it in the
+background and be woken by it.
+
 ## MCP (prototype)
 
 The server can also serve agents over MCP at `/mcp`, using the same API token.
