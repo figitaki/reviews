@@ -119,6 +119,7 @@ defmodule ReviewsWeb.ReviewListLive do
                   </.ds_github_button>
                 </:actions>
               </.ds_empty_state>
+              <Layouts.legal_notice id="reviews-sign-in-legal" />
             </div>
           <% end %>
         </div>

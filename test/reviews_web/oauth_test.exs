@@ -281,6 +281,7 @@ defmodule ReviewsWeb.OAuthTest do
       host = URI.parse(ctx.app.client_id).host
 
       assert doc |> LazyHTML.query("#poppy-consent-client") |> LazyHTML.text() =~ host
+      assert doc |> LazyHTML.query("#poppy-consent-legal a[href='/privacy']") |> Enum.any?()
       assert html =~ "Let this test app in?"
       human = Accounts.human_identity_for(ctx.owner)
 
@@ -315,6 +316,7 @@ defmodule ReviewsWeb.OAuthTest do
         |> LazyHTML.from_document()
 
       [href] = doc |> LazyHTML.query("#poppy-sign-in-github") |> LazyHTML.attribute("href")
+      assert doc |> LazyHTML.query("#poppy-sign-in-legal a[href='/terms']") |> Enum.any?()
       %URI{path: "/auth/github", query: query} = URI.parse(href)
       assert "/oauth/authorize?" <> _ = return_to = URI.decode_query(query)["return_to"]
       assert URI.decode_query(URI.parse(return_to).query)["client_id"] == ctx.app.client_id

@@ -1,0 +1,178 @@
+<.legal_page
+  id="terms"
+  title="Terms of Service"
+  legal={@legal}
+  flash={@flash}
+  current_user={@current_user}
+>
+  <p>
+    These terms govern your use of the Reviews service at <strong>{host()}</strong>, including
+    its website, API and CLI sign-in<span :if={mcp?()}> and MCP endpoint</span>
+    (together, "the Service"). The Service is operated by {@legal.operator_name} ("we", "us").
+    By signing in or otherwise using the Service, you agree to these terms. If you use it for an
+    organization, you agree for that organization and confirm you may do so.
+  </p>
+  <p>
+    The Reviews source code is licensed separately under the MIT license. These terms cover the
+    Service, not your use of the code.
+  </p>
+
+  <section id="terms-account">
+    <h2>Your account</h2>
+    <p>
+      You sign in with a GitHub account and must be at least 13, or older where your local law
+      requires. You are responsible for what happens under your account, including everything
+      done by agent identities, API tokens, CLI sign-ins and apps you connect. Keep tokens
+      secret, and revoke any you no longer use or think may be exposed.
+    </p>
+  </section>
+
+  <section id="terms-agents">
+    <h2>Agents and connected apps</h2>
+    <p>
+      You can let AI agents and other tools act on Reviews as an agent identity you own. You are
+      responsible for their actions as if they were your own, and for choosing which apps to
+      trust. Apps you connect are provided by others under their own terms; we do not control them and are not responsible for them.
+    </p>
+  </section>
+
+  <section id="terms-content">
+    <h2>Your content</h2>
+    <p>
+      You keep ownership of the diffs, review packets, comments and other content you or your
+      agents submit ("your content"). You give us a worldwide, non-exclusive, royalty-free
+      license to host, store, copy, process and display your content only as needed to run,
+      secure and improve the Service, and to show it to anyone who has its link.
+    </p>
+    <p>
+      <strong>Reviews are shared by link.</strong>
+      Anyone with a review's URL can read it and its comments without signing in. Do not submit
+      secrets, credentials, personal information about others, or code you do not have the
+      right to share. You confirm you have the rights needed to submit your content.
+    </p>
+  </section>
+
+  <section id="terms-acceptable-use">
+    <h2>Acceptable use</h2>
+    <p>You agree not to:</p>
+    <ul>
+      <li>
+        break the law or infringe anyone's rights, including by uploading code you may not share;
+      </li>
+      <li>upload malware, or content meant to harass, deceive or harm others;</li>
+      <li>
+        try to get around rate limits, access controls or authentication, or access data that is not yours;
+      </li>
+      <li>
+        overload, disrupt or probe the Service, except through a coordinated security report;
+      </li>
+      <li>use the Service as general file hosting, or resell it without our permission;</li>
+      <li>
+        impersonate a person, organization or app, including through an agent identity's name.
+      </li>
+    </ul>
+    <p>
+      Automated use through the CLI, the API and MCP is expected, within the rate limits and
+      these rules.
+    </p>
+  </section>
+
+  <section id="terms-removal">
+    <h2>Removal and suspension</h2>
+    <p>
+      We may remove content, revoke tokens or app connections, or suspend or close accounts that
+      break these terms or put the Service or others at risk. Where it is practical and
+      lawful, we will tell you why. You can stop using the Service at any time and ask us to
+      delete your account by emailing <.contact legal={@legal} />.
+    </p>
+  </section>
+
+  <section id="terms-service">
+    <h2>Changes to the Service</h2>
+    <p>
+      Reviews is a small, evolving tool. We may add, change or remove features, change limits,
+      or stop offering the Service. If we plan to shut it down, we will try to give reasonable
+      notice so you can save your content. The Service is free today; if we introduce paid
+      features, we will tell you before you are charged.
+    </p>
+  </section>
+
+  <section :if={Reviews.Legal.href(:privacy)} id="terms-privacy">
+    <h2>Privacy</h2>
+    <p>
+      The <a href={Reviews.Legal.href(:privacy)}>Privacy Policy</a>
+      explains what we collect and how we use it.
+    </p>
+  </section>
+
+  <section id="terms-feedback">
+    <h2>Feedback</h2>
+    <p>
+      If you send us ideas or feedback, we may use them without obligation to you.
+      Contributions to the source code are covered by the repository's license instead.
+    </p>
+  </section>
+
+  <section id="terms-warranty">
+    <h2>No warranty</h2>
+    <p>
+      The Service is provided <strong>"as is" and "as available"</strong>, without warranties of
+      any kind, express or implied, including merchantability, fitness for a particular purpose
+      and non-infringement. We do not promise that it will be uninterrupted, secure or free of
+      errors, or that content will never be lost. Keep your own copies of anything important.
+    </p>
+  </section>
+
+  <section id="terms-liability">
+    <h2>Limitation of liability</h2>
+    <p>
+      To the fullest extent the law allows, we are not liable for indirect, incidental, special,
+      consequential or punitive damages, or for lost profits, data or goodwill, arising from your
+      use of the Service. Our total liability for any claim about the Service is limited to the
+      greater of the amount you paid us for it in the 12 months before the claim and {@legal.liability_cap}. Some places do not allow these
+      limits, so they may not apply to you.
+    </p>
+  </section>
+
+  <section id="terms-indemnity">
+    <h2>Indemnity</h2>
+    <p>
+      You agree to cover our reasonable costs from claims by others that arise from your content,
+      your agents' actions, or your breach of these terms.
+    </p>
+  </section>
+
+  <section id="terms-law">
+    <h2>Governing law and disputes</h2>
+    <p>
+      These terms are governed by the laws of {@legal.governing_law}, without regard to
+      conflict-of-law rules. Disputes will be resolved in the courts of {@legal.venue}, unless the law where you live gives you the right to
+      bring them elsewhere.
+    </p>
+  </section>
+
+  <section id="terms-changes">
+    <h2>Changes to these terms</h2>
+    <p>
+      We may update these terms. We will change the date at the top, and for significant changes
+      give notice on the site or by email before they take effect. Using the Service after that
+      means you accept the new terms.
+    </p>
+  </section>
+
+  <section id="terms-general">
+    <h2>General</h2>
+    <p>
+      These terms<span :if={Reviews.Legal.href(:privacy)}> and the Privacy Policy</span>
+      are the whole agreement between you and us about the
+      Service. If a part is found unenforceable, the rest still applies. Not enforcing a term is
+      not a waiver of it. You may not transfer these terms without our consent; we may transfer
+      them to whoever takes over the Service.
+    </p>
+  </section>
+
+  <section id="terms-contact">
+    <h2>Contact</h2>
+    <p>Questions about these terms: <.contact legal={@legal} />, {@legal.operator_name}.</p>
+  </section>
+</.legal_page>

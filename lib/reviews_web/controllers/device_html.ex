@@ -26,6 +26,7 @@ defmodule ReviewsWeb.DeviceHTML do
               </.ds_github_button>
             </:actions>
           </.ds_page_header>
+          <Layouts.legal_notice id="device-sign-in-legal" />
         </div>
       </div>
     </Layouts.app>
@@ -223,6 +224,7 @@ defmodule ReviewsWeb.DeviceHTML do
                   Deny
                 </.ds_button>
               </div>
+              <Layouts.legal_notice id="device-confirm-legal" action="allowing" />
             </form>
           </.ds_card>
         </div>

@@ -68,6 +68,8 @@ defmodule ReviewsWeb.Router do
     live "/", HomeLive, :index
     live "/reviews", ReviewListLive, :index
     live "/settings", SettingsLive, :edit
+    get "/privacy", LegalController, :privacy
+    get "/terms", LegalController, :terms
     # Off in production unless DESIGN_CATALOG is set; see ReviewsWeb.DesignLive.
     live "/design", DesignLive, :index
     live "/design/components", DesignComponentsLive, :index

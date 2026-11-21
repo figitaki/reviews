@@ -1,0 +1,309 @@
+<.legal_page
+  id="privacy"
+  title="Privacy Policy"
+  legal={@legal}
+  flash={@flash}
+  current_user={@current_user}
+>
+  <p>
+    This policy explains what Reviews collects when you use the service at <strong>{host()}</strong>, why, who else receives it, and what you can do about it. This
+    service is operated by {@legal.operator_name} ("we", "us"). The Reviews source code is open
+    source under the MIT license; anyone who runs their own copy operates it, and this policy
+    does not apply to it.
+  </p>
+
+  <section id="privacy-summary">
+    <h2>The short version</h2>
+    <ul>
+      <li>
+        You sign in with GitHub. We keep your GitHub user ID, username, avatar URL and email address.
+      </li>
+      <li>
+        Reviews you push, and comments on them, can be read by <strong>anyone who has the link</strong>. Do not push secrets or code you are not allowed to share.
+      </li>
+      <li>
+        We do not sell your data, show ads, or use third-party analytics or tracking scripts.
+      </li>
+      <li>
+        Apps you connect to Reviews receive the review data they read through it, under their own privacy policies.
+      </li>
+    </ul>
+  </section>
+
+  <section id="privacy-collect">
+    <h2>What we collect</h2>
+
+    <h3>Your GitHub account</h3>
+    <p>
+      Signing in uses GitHub OAuth with the <code>read:user</code>
+      and <code>user:email</code>
+      scopes. From GitHub we store your numeric GitHub user ID, your username, the URL of your
+      GitHub avatar, and your email address. We do not receive your GitHub password and we do not
+      ask for access to your repositories. We use your email address only to identify your account
+      and to contact you about it; it is not shown on reviews or to other people. It is returned to
+      you, and to tools you authorize to act for you, through the API.
+    </p>
+
+    <h3>Identities</h3>
+    <p>
+      Your account has a personal identity, named after your GitHub username, and can own
+      <em>agent identities</em>
+      you create for AI agents and tools. An agent identity has the handle, display name,
+      platform and description you give it. Anything an agent identity does is linked to your
+      account.
+    </p>
+
+    <h3>Reviews and their content</h3>
+    <p>
+      When you or an agent push a review, we store what is sent: the diff, the review packet,
+      the title and description, the branch name and base commit, and each later revision.
+      Diffs can contain source code, file paths, commit details and anything else in the changed
+      files.
+    </p>
+
+    <h3>Comments and decisions</h3>
+    <p>
+      We store comments and replies, which identity wrote them and when, where in the code each
+      thread is anchored, whether it is resolved and by whom, and the decision each account makes
+      on each section of a review. We also store which parts of a review you have marked viewed,
+      and your settings, such as display preferences.
+    </p>
+
+    <h3>API tokens and CLI sign-ins</h3>
+    <p>
+      For each API token we store its name, the identity it acts as, when it was created and
+      when it was last used. We store only a hash of the token itself, so we cannot show it to you
+      again. Signing in the CLI with <code>reviews login</code>
+      creates an approval like the connected apps below.
+    </p>
+
+    <h3>Connected apps</h3>
+    <p>
+      You can connect OAuth clients<span :if={mcp?()}>, such as {Enum.join(connectors(), ", ")} and other MCP clients,</span>
+      so they can read reviews and, if you allow it, act as an agent identity you choose. For each
+      approval we store the app's client ID and the name it gives itself, the identity and scopes
+      you approved, when you approved it, when it was last used, and when it expires or was
+      revoked. We store hashes of the tokens we issue, not the tokens. To verify an app, Reviews
+      fetches the metadata and public keys the app publishes at its own web address.
+    </p>
+    <p>
+      Agents that use the Personal Agent Protocol also send signed session information. We store
+      the agent's client ID, session and user identifiers it sends, and when the session was last
+      seen. Comments such an agent posts record what was verified about it, such as its client ID,
+      the name it claims and the key it signed with.
+    </p>
+
+    <h3 :if={code_storage?()}>Code snapshots</h3>
+    <p :if={code_storage?()} id="privacy-code-storage">
+      When you push a review, the CLI can also upload the source code at the review's base and
+      head commits to our code storage provider, code.storage, so it can be read alongside the
+      diff.
+    </p>
+
+    <h3>Cookies and browser storage</h3>
+    <p>
+      We set one cookie, <code>_reviews_key</code>, which keeps you signed in and protects forms
+      against cross-site requests. It is signed so it cannot be altered, and it lasts until you sign
+      out or close your browser. The site also saves a few display choices in your browser's local
+      storage, such as the theme and how diffs are shown; these stay on your device. We use no
+      advertising or analytics cookies.
+    </p>
+
+    <h3>Request logs and rate limiting</h3>
+    <p>
+      Our servers log each request: the time, method, path, response status, how long it took
+      and a request ID. Sign-in codes, tokens and similar secrets are removed from logged
+      parameters. To protect the service from abuse, each server counts recent requests per
+      network address and per account in memory for about a minute. These counters are keyed by a
+      hash and are not written to disk. Our hosting provider also processes network addresses to
+      deliver traffic to us.
+    </p>
+  </section>
+
+  <section id="privacy-visibility">
+    <h2>Who can see your content</h2>
+    <p>
+      A review is shared by its link: <strong>anyone with the URL can read the review, its diff,
+      its packet and its comments, without signing in.</strong>
+      Pages of reviews ask search engines not to index them, but this is a request, not access
+      control, and anyone who has the link can pass it on. When you paste a review link into an
+      app such as Slack or iMessage, that app fetches the page and may show its title and, for a
+      comment link, the comment.
+    </p>
+    <p>
+      Your username, avatar and identities' names appear next to what you write. Your email
+      address does not.
+    </p>
+  </section>
+
+  <section id="privacy-use">
+    <h2>How we use it</h2>
+    <ul>
+      <li>
+        To run Reviews: sign you in, store and show reviews, and record comments and decisions.
+      </li>
+      <li>To let the CLI, API tokens and connected apps act as the identity you chose.</li>
+      <li>
+        To keep Reviews secure and available, including rate limiting and investigating abuse.
+      </li>
+      <li :if={aggregate_export?()}>
+        To understand overall use through the aggregate counts described below.
+      </li>
+      <li>To contact you about your account or about changes to this policy.</li>
+    </ul>
+    <p>
+      Where the law requires a legal basis, ours are performing our agreement with you, our
+      legitimate interest in running and protecting a developer tool, and your consent where we
+      ask for it, such as when you connect an app.
+    </p>
+  </section>
+
+  <section :if={aggregate_export?()} id="privacy-analytics">
+    <h2>Aggregate usage statistics</h2>
+    <p>
+      Reviews exports a fixed set of totals to a private dashboard we operate: counts of
+      accounts, sign-ups, active accounts, reviews, revisions, comments and section decisions over
+      the last 7 and 30 days, and how many accounts have connected each recognized app, with every
+      other app counted together. The totals are computed inside our database. The export contains
+      no review content, comments, names, usernames, email addresses, network addresses or account
+      identifiers.
+    </p>
+  </section>
+
+  <section id="privacy-third-parties">
+    <h2>Service providers and other parties</h2>
+    <p>We do not sell or rent personal information. It reaches these parties:</p>
+    <div class="legal-table-wrap">
+      <table class="legal-table">
+        <thead>
+          <tr>
+            <th scope="col">Party</th>
+            <th scope="col">What they receive</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Hosting provider</th>
+            <td>
+              Runs the application and its database in {@legal.hosting_region}, so it
+              processes everything Reviews stores and receives, including network addresses.
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">GitHub</th>
+            <td>
+              Handles sign-in. Avatars are loaded by your browser from GitHub's servers, which
+              see your network address. The CLI installer is downloaded from GitHub.
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">Apps you connect</th>
+            <td>
+              The Reviews CLI and the OAuth<span :if={mcp?()}>, MCP</span>
+              or Personal Agent Protocol clients you approve receive the reviews, comments and
+              account details they request with that access.
+            </td>
+          </tr>
+          <tr :if={code_storage?()}>
+            <th scope="row">code.storage</th>
+            <td>Source code snapshots of reviews, when the CLI uploads them.</td>
+          </tr>
+          <tr :if={relay?()}>
+            <th scope="row">Preview deployments</th>
+            <td>
+              Test copies of Reviews that we run sign in through this site. If you sign in to
+              one, it receives your GitHub user ID, username, avatar URL and email address.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      We may also disclose information if the law requires it, to protect the rights or safety of
+      people or the service, or as part of a transfer of the service to a new operator, who would
+      remain bound by this policy.
+    </p>
+  </section>
+
+  <section id="privacy-connected-apps">
+    <h2>Apps you connect</h2>
+    <p>
+      When you connect an app, it can read anything on Reviews that its approved scopes cover,
+      and write as the agent identity you picked. What the app does with that data, including
+      sending it to an AI model, is governed by that app's own terms and privacy policy, not this
+      one. You can see and revoke connected apps, CLI sign-ins and API tokens at any time in
+      Settings.
+    </p>
+  </section>
+
+  <section id="privacy-retention">
+    <h2>How long we keep it</h2>
+    <ul>
+      <li>
+        Account data, identities, reviews and comments: until you delete them or ask us to delete your account.
+      </li>
+      <li>
+        Deleted reviews: deleting a review removes its revisions, diffs, packet, comments and decisions. We keep the review's link name so the link can say it was deleted.
+      </li>
+      <li>
+        API tokens: deleted when you revoke them. App and CLI approvals: kept after they are revoked or expire, as a record of what acted for you, until your account is deleted.
+      </li>
+      <li>Request logs: {@legal.log_retention}.</li>
+      <li>Database backups: {@legal.backup_retention}.</li>
+    </ul>
+    <p>
+      Reviews has no self-service account deletion yet. To delete your account and everything
+      linked to it, email <.contact legal={@legal} />.
+    </p>
+  </section>
+
+  <section id="privacy-security">
+    <h2>Security</h2>
+    <p>
+      Connections use HTTPS. Tokens are stored as hashes, and secret values are kept out of
+      logs. No system is perfectly secure; if you find a vulnerability, please report it to
+      <.contact legal={@legal} />.
+    </p>
+  </section>
+
+  <section id="privacy-rights">
+    <h2>Your choices and rights</h2>
+    <p>
+      You can revoke tokens and connected apps in Settings, delete reviews you wrote, and sign out
+      at any time. Depending on where you live, you may have the right to access, correct, delete
+      or export your personal information, and to object to or restrict how we use it. To make a
+      request, email <.contact legal={@legal} />. We will answer within the time the law requires.
+      You may also complain to your local data protection authority.
+    </p>
+  </section>
+
+  <section id="privacy-children">
+    <h2>Children</h2>
+    <p>
+      Reviews is a tool for software developers and is not meant for children. You must be at
+      least 13, or older where your local law requires, to use it.
+    </p>
+  </section>
+
+  <section id="privacy-transfers">
+    <h2>International transfers</h2>
+    <p>
+      Your information is stored and processed in {@legal.hosting_region}. If you use Reviews
+      from elsewhere, it is transferred there.
+    </p>
+  </section>
+
+  <section id="privacy-changes">
+    <h2>Changes to this policy</h2>
+    <p>
+      We will update this page when what Reviews collects or shares changes, and change the date
+      at the top. For significant changes we will give notice on the site or by email before they
+      take effect.
+    </p>
+  </section>
+
+  <section id="privacy-contact">
+    <h2>Contact</h2>
+    <p>Questions or requests: <.contact legal={@legal} />, {@legal.operator_name}.</p>
+  </section>
+</.legal_page>
