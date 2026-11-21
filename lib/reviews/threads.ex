@@ -22,6 +22,9 @@ defmodule Reviews.Threads do
 
   @pubsub Reviews.PubSub
 
+  # Every message broadcast on a `"review:<slug>"` topic.
+  @review_events [:thread_published, :thread_updated, :patchset_pushed, :review_deleted]
+
   # Every comment reader preloads the same associations, so renaming one (such
   # as the attribution link) is a single change here, not one per query.
   @comment_preloads [:author, :oauth_grant]
@@ -115,6 +118,82 @@ defmodule Reviews.Threads do
         limit: ^limit,
         preload: ^@comment_preloads
     )
+  end
+
+  @doc """
+  Comments on any thread of the review with an id above `after_id`, oldest
+  first, with authors and their thread preloaded. Comment ids only grow, so the
+  last id returned is the cursor for the next call.
+  """
+  def list_comments_after(%Review{id: review_id}, after_id, limit)
+      when is_integer(after_id) and is_integer(limit) and limit > 0 do
+    Repo.all(
+      from c in Comment,
+        join: t in assoc(c, :thread),
+        where: t.review_id == ^review_id and c.id > ^after_id,
+        order_by: [asc: c.id],
+        limit: ^limit,
+        preload: [^@comment_preloads, thread: t]
+    )
+  end
+
+  @doc "The highest comment id on the review, or 0 when it has no comments."
+  def latest_comment_id(%Review{id: review_id}) do
+    Repo.one(
+      from c in Comment,
+        join: t in assoc(c, :thread),
+        where: t.review_id == ^review_id,
+        select: coalesce(max(c.id), 0)
+    )
+  end
+
+  @doc """
+  Waits up to `timeout_ms` for comments newer than `after_id`, and returns
+  `{:ok, comments}` (empty on timeout or when the review is deleted).
+
+  It subscribes to the review's topic before reading, so a comment published
+  between the read and the wait still wakes it. It wakes on `:thread_published`
+  and reads again instead of polling.
+  """
+  def wait_for_comments(%Review{} = review, after_id, limit, timeout_ms)
+      when is_integer(timeout_ms) and timeout_ms >= 0 do
+    topic = "review:#{review.slug}"
+    :ok = Phoenix.PubSub.subscribe(@pubsub, topic)
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+
+    try do
+      await_comments(review, after_id, limit, deadline)
+    after
+      Phoenix.PubSub.unsubscribe(@pubsub, topic)
+      flush_review_events()
+    end
+  end
+
+  # Bandit reuses the process for the next request on a keep-alive connection,
+  # so broadcasts that arrived during the wait must not stay in its mailbox.
+  defp flush_review_events do
+    receive do
+      {event, _} when event in @review_events -> flush_review_events()
+    after
+      0 -> :ok
+    end
+  end
+
+  defp await_comments(review, after_id, limit, deadline) do
+    case list_comments_after(review, after_id, limit) do
+      [] ->
+        remaining = max(deadline - System.monotonic_time(:millisecond), 0)
+
+        receive do
+          {:thread_published, _thread} -> await_comments(review, after_id, limit, deadline)
+          {:review_deleted, _slug} -> {:ok, []}
+        after
+          remaining -> {:ok, []}
+        end
+
+      comments ->
+        {:ok, comments}
+    end
   end
 
   def comment_counts([]), do: %{}

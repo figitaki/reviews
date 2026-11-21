@@ -11,6 +11,7 @@ defmodule ReviewsWeb.Api.CommentController do
   use ReviewsWeb, :controller
 
   alias Reviews.Reviews, as: ReviewsContext
+  alias Reviews.Reviews.Review
   alias Reviews.Threads, as: ThreadsContext
 
   @doc "POST /api/v1/reviews/:slug/comments"
@@ -55,6 +56,72 @@ defmodule ReviewsWeb.Api.CommentController do
         end
     end
   end
+
+  @default_wait_seconds 25
+  @max_wait_seconds 30
+  @max_wait_results 50
+  # Postgres bigint; a larger cursor could not name a comment.
+  @max_comment_id 9_223_372_036_854_775_807
+
+  @doc """
+  GET /api/v1/reviews/:slug/comments/wait
+
+  Long poll for new comments and replies. Returns at once when the review has
+  comments with an id above `since`; otherwise holds the request until one is
+  published or `timeout` seconds pass (default #{@default_wait_seconds}, at most
+  #{@max_wait_seconds}). Without `since` it waits for comments published after
+  the request. The response's `cursor` is the `since` for the next call.
+  """
+  def wait(conn, %{"slug" => slug} = params) do
+    with {:ok, since} <- bounded_int(params["since"], nil, 0, @max_comment_id),
+         {:ok, seconds} <-
+           bounded_int(params["timeout"], @default_wait_seconds, 0, @max_wait_seconds),
+         {:ok, limit} <- bounded_int(params["limit"], @max_wait_results, 1, @max_wait_results),
+         %Review{} = review <- ReviewsContext.get_review_by_slug(slug) do
+      since = since || ThreadsContext.latest_comment_id(review)
+      {:ok, comments} = ThreadsContext.wait_for_comments(review, since, limit, seconds * 1000)
+
+      json(conn, %{
+        comments: Enum.map(comments, &wait_payload/1),
+        cursor: comments |> List.last(%{id: since}) |> Map.fetch!(:id),
+        more: length(comments) == limit
+      })
+    else
+      nil ->
+        ReviewsWeb.ApiErrors.render(conn, ReviewsContext.not_found_reason(slug))
+
+      {:error, :invalid} ->
+        ReviewsWeb.ApiErrors.render(
+          conn,
+          :invalid_request,
+          "since, timeout and limit must be whole numbers: since 0 or more, " <>
+            "timeout 0-#{@max_wait_seconds}, limit 1-#{@max_wait_results}"
+        )
+    end
+  end
+
+  defp wait_payload(comment) do
+    comment
+    |> ReviewsWeb.Payloads.comment(:bounded)
+    |> Map.merge(%{
+      thread_id: comment.thread.id,
+      file_path: comment.thread.file_path,
+      side: comment.thread.side,
+      line: get_in(comment.thread.anchor || %{}, ["line_number_hint"]),
+      thread_status: comment.thread.status
+    })
+  end
+
+  defp bounded_int(nil, default, _min, _max), do: {:ok, default}
+
+  defp bounded_int(value, _default, min, max) when is_binary(value) and byte_size(value) <= 19 do
+    case Integer.parse(value) do
+      {n, ""} when n >= min and n <= max -> {:ok, n}
+      _ -> {:error, :invalid}
+    end
+  end
+
+  defp bounded_int(_value, _default, _min, _max), do: {:error, :invalid}
 
   defp normalize(params) when is_map(params) do
     %{
