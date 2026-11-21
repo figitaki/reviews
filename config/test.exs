@@ -34,6 +34,19 @@ config :reviews, ReviewsWeb.Endpoint,
 # The sweeper never runs in tests; they call Sweeper.sweep/1 directly.
 config :reviews, Reviews.CodeStorage.Sweeper, enabled: false
 
+# Both built-in legal templates, filled in (Reviews.Legal). Tests of other
+# setups change this in async: false modules.
+config :reviews, :legal,
+  operator_name: "Example Operator LLC",
+  contact_email: "privacy@example.com",
+  updated: "2026-11-21",
+  hosting_region: "the European Union",
+  log_retention: "30 days",
+  backup_retention: "7 days",
+  governing_law: "the State of Example",
+  venue: "Example County",
+  liability_cap: "US$50"
+
 config :reviews, :mcp,
   enabled: true,
   writes_enabled: true,

@@ -1,13 +1,20 @@
-<.legal_page id="terms" title="Terms of Service" flash={@flash} current_user={@current_user}>
+<.legal_page
+  id="terms"
+  title="Terms of Service"
+  legal={@legal}
+  flash={@flash}
+  current_user={@current_user}
+>
   <p>
-    These terms govern your use of the hosted Reviews service at <strong>reviews.figitaki.dev</strong>, including its website, API, CLI sign-in and MCP
-    endpoint (together, "the Service"). The Service is operated by <.operator /> ("we", "us").
+    These terms govern your use of the Reviews service at <strong>{host()}</strong>, including
+    its website, API and CLI sign-in<span :if={mcp?()}> and MCP endpoint</span>
+    (together, "the Service"). The Service is operated by {@legal.operator_name} ("we", "us").
     By signing in or otherwise using the Service, you agree to these terms. If you use it for an
     organization, you agree for that organization and confirm you may do so.
   </p>
   <p>
     The Reviews source code is licensed separately under the MIT license. These terms cover the
-    hosted Service, not your use of the code.
+    Service, not your use of the code.
   </p>
 
   <section id="terms-account">
@@ -25,8 +32,7 @@
     <p>
       You can let AI agents and other tools act on Reviews as an agent identity you own. You are
       responsible for their actions as if they were your own, and for choosing which apps to
-      trust. Apps you connect, such as Claude, ChatGPT or Amp, are provided by others under their
-      own terms; we do not control them and are not responsible for them.
+      trust. Apps you connect are provided by others under their own terms; we do not control them and are not responsible for them.
     </p>
   </section>
 
@@ -77,7 +83,7 @@
       We may remove content, revoke tokens or app connections, or suspend or close accounts that
       break these terms or put the Service or others at risk. Where it is practical and
       lawful, we will tell you why. You can stop using the Service at any time and ask us to
-      delete your account by emailing <.contact />.
+      delete your account by emailing <.contact legal={@legal} />.
     </p>
   </section>
 
@@ -91,10 +97,11 @@
     </p>
   </section>
 
-  <section id="terms-privacy">
+  <section :if={Reviews.Legal.href(:privacy)} id="terms-privacy">
     <h2>Privacy</h2>
     <p>
-      The <a href={~p"/privacy"}>Privacy Policy</a> explains what we collect and how we use it.
+      The <a href={Reviews.Legal.href(:privacy)}>Privacy Policy</a>
+      explains what we collect and how we use it.
     </p>
   </section>
 
@@ -122,7 +129,7 @@
       To the fullest extent the law allows, we are not liable for indirect, incidental, special,
       consequential or punitive damages, or for lost profits, data or goodwill, arising from your
       use of the Service. Our total liability for any claim about the Service is limited to the
-      greater of the amount you paid us for it in the 12 months before the claim and <.placeholder>[LIABILITY CAP, e.g. US$100]</.placeholder>. Some places do not allow these
+      greater of the amount you paid us for it in the 12 months before the claim and {@legal.liability_cap}. Some places do not allow these
       limits, so they may not apply to you.
     </p>
   </section>
@@ -138,8 +145,8 @@
   <section id="terms-law">
     <h2>Governing law and disputes</h2>
     <p>
-      These terms are governed by the laws of <.placeholder>[GOVERNING LAW]</.placeholder>, without
-      regard to conflict-of-law rules. Disputes will be resolved in the courts of <.placeholder>[VENUE]</.placeholder>, unless the law where you live gives you the right to
+      These terms are governed by the laws of {@legal.governing_law}, without regard to
+      conflict-of-law rules. Disputes will be resolved in the courts of {@legal.venue}, unless the law where you live gives you the right to
       bring them elsewhere.
     </p>
   </section>
@@ -156,7 +163,8 @@
   <section id="terms-general">
     <h2>General</h2>
     <p>
-      These terms and the Privacy Policy are the whole agreement between you and us about the
+      These terms<span :if={Reviews.Legal.href(:privacy)}> and the Privacy Policy</span>
+      are the whole agreement between you and us about the
       Service. If a part is found unenforceable, the rest still applies. Not enforcing a term is
       not a waiver of it. You may not transfer these terms without our consent; we may transfer
       them to whoever takes over the Service.
@@ -165,6 +173,6 @@
 
   <section id="terms-contact">
     <h2>Contact</h2>
-    <p>Questions about these terms: <.contact />, <.operator />.</p>
+    <p>Questions about these terms: <.contact legal={@legal} />, {@legal.operator_name}.</p>
   </section>
 </.legal_page>

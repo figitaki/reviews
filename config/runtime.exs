@@ -62,6 +62,25 @@ if System.get_env("CODE_STORAGE_ADAPTER") == "code_storage" do
     jwt_private_key: key_pem
 end
 
+# Privacy Policy and Terms of Service (Reviews.Legal, docs/LEGAL_PAGES.md).
+# Unset means no legal pages and no links to them. Per document, a URL
+# points at the operator's own policy; otherwise the built-in template is
+# used once every field it needs is set. Tests use config/test.exs.
+if config_env() != :test do
+  config :reviews, :legal,
+    privacy_url: System.get_env("LEGAL_PRIVACY_URL"),
+    terms_url: System.get_env("LEGAL_TERMS_URL"),
+    operator_name: System.get_env("LEGAL_OPERATOR_NAME"),
+    contact_email: System.get_env("LEGAL_CONTACT_EMAIL"),
+    updated: System.get_env("LEGAL_UPDATED"),
+    hosting_region: System.get_env("LEGAL_HOSTING_REGION"),
+    log_retention: System.get_env("LEGAL_LOG_RETENTION"),
+    backup_retention: System.get_env("LEGAL_BACKUP_RETENTION"),
+    governing_law: System.get_env("LEGAL_GOVERNING_LAW"),
+    venue: System.get_env("LEGAL_VENUE"),
+    liability_cap: System.get_env("LEGAL_LIABILITY_CAP")
+end
+
 # Preview sign-in relay (Reviews.AuthRelay, docs/PREVIEW_ENVS.md). Production
 # is the relay: AUTH_RELAY_SECRET plus the GitHub OAuth app above.
 # Previews are clients: AUTH_RELAY_SECRET plus AUTH_RELAY_URL.

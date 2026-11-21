@@ -20,12 +20,15 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   1.2.12. 1.2.14 was published on 2026-11-20, so this bump is an exception
   to the 7-day release-age rule, approved by Carey for this security fix
   only. No other locked dependency changed.
-- Draft Privacy Policy (`/privacy`) and Terms of Service (`/terms`), linked
-  from the landing page footer and under every GitHub sign-in and approval
-  (the OAuth and CLI sign-in and consent pages, the review list and
-  Settings). Both are marked as drafts and not legal advice, and highlight
-  what the operator still has to fill in: legal entity, contact email,
-  governing law, venue, liability cap, log and backup retention.
+- Each deployment can have a Privacy Policy and Terms of Service: link its
+  own with `LEGAL_PRIVACY_URL` and `LEGAL_TERMS_URL`, or fill in the
+  built-in templates at `/privacy` and `/terms` from `LEGAL_*` settings
+  (operator, contact email, date, hosting region, log and backup retention,
+  governing law, venue, liability cap). The landing page footer and every
+  GitHub sign-in and approval screen link whichever exist. With nothing set,
+  there are no legal pages, links or "you agree" lines. A partly filled
+  template stops the server from starting. The Helm chart sets them from
+  `legal.*` values. See `docs/LEGAL_PAGES.md`.
 - The favicon and the web app manifest now load in production. The page
   linked their digested names, such as `/site-<hash>.webmanifest`, which
   the static file allowlist refused with a 404.

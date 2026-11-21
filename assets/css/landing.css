@@ -269,6 +269,7 @@
   font-size: var(--font-prose-size);
   line-height: var(--font-prose-leading);
 }
+.legal-header { margin-bottom: var(--space-8); }
 .legal-header h1 {
   font-size: var(--font-size-3xl);
   line-height: 1.1;
@@ -277,14 +278,6 @@
 .legal-updated {
   margin-top: var(--space-2);
   color: var(--ds-muted);
-  font-size: var(--font-size-sm);
-}
-.legal-draft {
-  margin: var(--space-6) 0;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--ds-warn);
-  border-radius: var(--radius-md);
-  background: color-mix(in oklab, var(--ds-warn) 10%, transparent);
   font-size: var(--font-size-sm);
 }
 .legal-content section { margin-top: var(--space-10); }
@@ -308,13 +301,6 @@
 .legal-content li + li { margin-top: var(--space-2); }
 .legal-content a { color: var(--ds-blue); text-decoration: underline; }
 .legal-content code { font-family: var(--font-mono); font-size: 0.9em; }
-.legal-placeholder {
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-xs);
-  background: color-mix(in oklab, var(--ds-warn) 28%, transparent);
-  color: var(--ds-text);
-  font-weight: 600;
-}
 .legal-table-wrap { overflow-x: auto; margin: var(--space-4) 0; }
 .legal-table {
   width: 100%;

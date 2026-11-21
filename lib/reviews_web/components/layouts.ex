@@ -250,16 +250,20 @@ defmodule ReviewsWeb.Layouts do
 
   @doc """
   The site footer on the landing page and the legal pages: the Privacy
-  Policy, the Terms of Service and the source on GitHub.
+  Policy and the Terms of Service when the deployment has them
+  (`Reviews.Legal`), and the source on GitHub.
   """
   def site_footer(assigns) do
+    assigns =
+      assign(assigns, privacy: Reviews.Legal.href(:privacy), terms: Reviews.Legal.href(:terms))
+
     ~H"""
     <footer id="site-footer" class="l-footer">
       <div class="l-wrap l-footer-inner">
         <span>Reviews · Open source · MIT</span>
         <nav aria-label="Legal and source">
-          <a id="footer-privacy" href={~p"/privacy"}>Privacy</a>
-          <a id="footer-terms" href={~p"/terms"}>Terms</a>
+          <a :if={@privacy} id="footer-privacy" href={@privacy}>Privacy</a>
+          <a :if={@terms} id="footer-terms" href={@terms}>Terms</a>
           <a href="https://github.com/figitaki/reviews">GitHub</a>
         </nav>
       </div>
@@ -269,17 +273,26 @@ defmodule ReviewsWeb.Layouts do
 
   @doc """
   The line under a GitHub sign-in or an approval that links the Terms of
-  Service and the Privacy Policy. `action` names what the person does, such
-  as "signing in" or "allowing".
+  Service and the Privacy Policy, naming only the ones the deployment has
+  (`Reviews.Legal`). Renders nothing when it has neither. `action` names what
+  the person does, such as "signing in" or "allowing".
   """
   attr :id, :string, required: true
   attr :action, :string, default: "signing in"
 
   def legal_notice(assigns) do
+    assigns =
+      assign(assigns, privacy: Reviews.Legal.href(:privacy), terms: Reviews.Legal.href(:terms))
+
     ~H"""
-    <p id={@id} class="legal-notice">
-      By {@action}, you agree to the <a href={~p"/terms"}>Terms of Service</a>
-      and acknowledge the <a href={~p"/privacy"}>Privacy Policy</a>.
+    <p :if={@privacy || @terms} id={@id} class="legal-notice">
+      By {@action}, you
+      <%= if @terms do %>
+        agree to the <a href={@terms}>Terms of Service</a>{if @privacy, do: " and", else: "."}
+      <% end %>
+      <%= if @privacy do %>
+        acknowledge the <a href={@privacy}>Privacy Policy</a>.
+      <% end %>
     </p>
     """
   end

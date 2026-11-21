@@ -1,9 +1,15 @@
-<.legal_page id="privacy" title="Privacy Policy" flash={@flash} current_user={@current_user}>
+<.legal_page
+  id="privacy"
+  title="Privacy Policy"
+  legal={@legal}
+  flash={@flash}
+  current_user={@current_user}
+>
   <p>
-    This policy explains what Reviews collects when you use the hosted service at <strong>reviews.figitaki.dev</strong>, why, who else receives it, and what you can do about
-    it. Reviews is operated by <.operator /> ("we", "us"). The Reviews source code is open source
-    under the MIT license; if you run your own copy, you operate it and this policy does not
-    apply to it.
+    This policy explains what Reviews collects when you use the service at <strong>{host()}</strong>, why, who else receives it, and what you can do about it. This
+    service is operated by {@legal.operator_name} ("we", "us"). The Reviews source code is open
+    source under the MIT license; anyone who runs their own copy operates it, and this policy
+    does not apply to it.
   </p>
 
   <section id="privacy-summary">
@@ -19,7 +25,7 @@
         We do not sell your data, show ads, or use third-party analytics or tracking scripts.
       </li>
       <li>
-        Apps you connect, such as Claude, ChatGPT or Amp, receive the review data they read through Reviews, under their own privacy policies.
+        Apps you connect to Reviews receive the review data they read through it, under their own privacy policies.
       </li>
     </ul>
   </section>
@@ -73,12 +79,12 @@
 
     <h3>Connected apps</h3>
     <p>
-      You can connect apps such as Claude (Anthropic), ChatGPT (OpenAI), Amp and other OAuth or
-      MCP clients so they can read reviews and, if you allow it, act as an agent identity you
-      choose. For each approval we store the app's client ID and the name it gives itself, the
-      identity and scopes you approved, when you approved it, when it was last used, and when it
-      expires or was revoked. We store hashes of the tokens we issue, not the tokens. To verify an
-      app, Reviews fetches the metadata and public keys the app publishes at its own web address.
+      You can connect OAuth clients<span :if={mcp?()}>, such as {Enum.join(connectors(), ", ")} and other MCP clients,</span>
+      so they can read reviews and, if you allow it, act as an agent identity you choose. For each
+      approval we store the app's client ID and the name it gives itself, the identity and scopes
+      you approved, when you approved it, when it was last used, and when it expires or was
+      revoked. We store hashes of the tokens we issue, not the tokens. To verify an app, Reviews
+      fetches the metadata and public keys the app publishes at its own web address.
     </p>
     <p>
       Agents that use the Personal Agent Protocol also send signed session information. We store
@@ -87,21 +93,20 @@
       the name it claims and the key it signed with.
     </p>
 
-    <h3>Code snapshots</h3>
-    <p>
-      Reviews has an optional feature that uploads the source code at a review's base and head
-      commits to our code storage provider, code.storage, so it can be read alongside the diff.
-      <strong>It is not turned on for the hosted service.</strong>
-      If we turn it on, we will update this policy first.
+    <h3 :if={code_storage?()}>Code snapshots</h3>
+    <p :if={code_storage?()} id="privacy-code-storage">
+      When you push a review, the CLI can also upload the source code at the review's base and
+      head commits to our code storage provider, code.storage, so it can be read alongside the
+      diff.
     </p>
 
     <h3>Cookies and browser storage</h3>
     <p>
       We set one cookie, <code>_reviews_key</code>, which keeps you signed in and protects forms
       against cross-site requests. It is signed so it cannot be altered, and it lasts until you sign
-      out or close your browser. The site also saves a few display choices in your browser's local storage, such as the
-      theme and how diffs are shown; these stay on your device. We use no advertising or analytics
-      cookies.
+      out or close your browser. The site also saves a few display choices in your browser's local
+      storage, such as the theme and how diffs are shown; these stay on your device. We use no
+      advertising or analytics cookies.
     </p>
 
     <h3>Request logs and rate limiting</h3>
@@ -111,7 +116,7 @@
       parameters. To protect the service from abuse, each server counts recent requests per
       network address and per account in memory for about a minute. These counters are keyed by a
       hash and are not written to disk. Our hosting provider also processes network addresses to
-      deliver traffic to us, as described in its own privacy policy.
+      deliver traffic to us.
     </p>
   </section>
 
@@ -141,24 +146,25 @@
       <li>
         To keep Reviews secure and available, including rate limiting and investigating abuse.
       </li>
-      <li>To understand overall use through the aggregate counts described below.</li>
-      <li>To contact you about your account or about changes to these policies.</li>
+      <li :if={aggregate_export?()}>
+        To understand overall use through the aggregate counts described below.
+      </li>
+      <li>To contact you about your account or about changes to this policy.</li>
     </ul>
     <p>
-      Our legal bases, where the law requires one, are performing our agreement with you (the
-      Terms of Service), our legitimate interest in running and protecting a developer tool, and
-      your consent where we ask for it, such as when you connect an app.
-      <.placeholder>[CONFIRM: legal bases, if GDPR applies]</.placeholder>
+      Where the law requires a legal basis, ours are performing our agreement with you, our
+      legitimate interest in running and protecting a developer tool, and your consent where we
+      ask for it, such as when you connect an app.
     </p>
   </section>
 
-  <section id="privacy-analytics">
+  <section :if={aggregate_export?()} id="privacy-analytics">
     <h2>Aggregate usage statistics</h2>
     <p>
-      Reviews can export a fixed set of totals to a private dashboard we operate: counts of
+      Reviews exports a fixed set of totals to a private dashboard we operate: counts of
       accounts, sign-ups, active accounts, reviews, revisions, comments and section decisions over
-      the last 7 and 30 days, and how many accounts have connected each recognized app (Claude,
-      ChatGPT or Amp, with every other app counted together). The totals are computed inside our database. The export contains
+      the last 7 and 30 days, and how many accounts have connected each recognized app, with every
+      other app counted together. The totals are computed inside our database. The export contains
       no review content, comments, names, usernames, email addresses, network addresses or account
       identifiers.
     </p>
@@ -177,11 +183,10 @@
         </thead>
         <tbody>
           <tr>
-            <th scope="row">Fly.io</th>
+            <th scope="row">Hosting provider</th>
             <td>
-              Hosts the application, so it processes everything Reviews stores and receives,
-              including network addresses. Our servers run in the United States.
-              <.placeholder>[CONFIRM: where the database is hosted]</.placeholder>
+              Runs the application and its database in {@legal.hosting_region}, so it
+              processes everything Reviews stores and receives, including network addresses.
             </td>
           </tr>
           <tr>
@@ -194,19 +199,19 @@
           <tr>
             <th scope="row">Apps you connect</th>
             <td>
-              Claude, ChatGPT, Amp, the Reviews CLI and other OAuth, MCP or Personal Agent
-              Protocol clients receive the reviews, comments and account details they request
-              with the access you approve.
+              The Reviews CLI and the OAuth<span :if={mcp?()}>, MCP</span>
+              or Personal Agent Protocol clients you approve receive the reviews, comments and
+              account details they request with that access.
             </td>
           </tr>
-          <tr>
+          <tr :if={code_storage?()}>
             <th scope="row">code.storage</th>
-            <td>Source code snapshots, only if that feature is turned on. It is off today.</td>
+            <td>Source code snapshots of reviews, when the CLI uploads them.</td>
           </tr>
-          <tr>
+          <tr :if={relay?()}>
             <th scope="row">Preview deployments</th>
             <td>
-              Test copies of Reviews that we run sign in through the main site. If you sign in to
+              Test copies of Reviews that we run sign in through this site. If you sign in to
               one, it receives your GitHub user ID, username, avatar URL and email address.
             </td>
           </tr>
@@ -243,12 +248,12 @@
       <li>
         API tokens: deleted when you revoke them. App and CLI approvals: kept after they are revoked or expire, as a record of what acted for you, until your account is deleted.
       </li>
-      <li>Request logs: <.placeholder>[LOG RETENTION PERIOD]</.placeholder>.</li>
-      <li>Database backups: <.placeholder>[BACKUP RETENTION PERIOD]</.placeholder>.</li>
+      <li>Request logs: {@legal.log_retention}.</li>
+      <li>Database backups: {@legal.backup_retention}.</li>
     </ul>
     <p>
       Reviews has no self-service account deletion yet. To delete your account and everything
-      linked to it, email <.contact />.
+      linked to it, email <.contact legal={@legal} />.
     </p>
   </section>
 
@@ -257,7 +262,7 @@
     <p>
       Connections use HTTPS. Tokens are stored as hashes, and secret values are kept out of
       logs. No system is perfectly secure; if you find a vulnerability, please report it to
-      <.contact />.
+      <.contact legal={@legal} />.
     </p>
   </section>
 
@@ -267,8 +272,8 @@
       You can revoke tokens and connected apps in Settings, delete reviews you wrote, and sign out
       at any time. Depending on where you live, you may have the right to access, correct, delete
       or export your personal information, and to object to or restrict how we use it. To make a
-      request, email <.contact />. We will answer within the time the law requires. You may also
-      complain to your local data protection authority.
+      request, email <.contact legal={@legal} />. We will answer within the time the law requires.
+      You may also complain to your local data protection authority.
     </p>
   </section>
 
@@ -283,8 +288,8 @@
   <section id="privacy-transfers">
     <h2>International transfers</h2>
     <p>
-      We and our providers operate in the United States. If you use Reviews from elsewhere, your
-      information is transferred to and processed in the United States.
+      Your information is stored and processed in {@legal.hosting_region}. If you use Reviews
+      from elsewhere, it is transferred there.
     </p>
   </section>
 
@@ -299,6 +304,6 @@
 
   <section id="privacy-contact">
     <h2>Contact</h2>
-    <p>Questions or requests: <.contact />, <.operator />.</p>
+    <p>Questions or requests: <.contact legal={@legal} />, {@legal.operator_name}.</p>
   </section>
 </.legal_page>
