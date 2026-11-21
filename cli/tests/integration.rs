@@ -983,12 +983,14 @@ mod wait {
             .with_body(answer(&[4], 4))
             .expect(1)
             .create();
-        // After the last comment the server has nothing new until the bound.
+        // After the last comment the server has nothing new until the bound;
+        // the mock answers at once, so the follower polls it repeatedly.
         let idle = server
             .mock("GET", PATH)
-            .match_query(query(&[("since", "4"), ("timeout", "0")]))
+            .match_query(query(&[("since", "4")]))
             .with_header("content-type", "application/json")
             .with_body(answer(&[], 4))
+            .expect_at_least(1)
             .create();
 
         let home = home(&server.url());
@@ -1002,7 +1004,7 @@ mod wait {
                 "--cursor-file",
                 cursor.to_str().unwrap(),
                 "--timeout",
-                "0",
+                "2",
             ],
         );
 
@@ -1035,6 +1037,57 @@ mod wait {
         assert_eq!(out.status.code(), Some(124), "out = {out:?}");
         assert!(out.stdout.is_empty(), "out = {out:?}");
         poll.assert();
+    }
+
+    #[test]
+    fn an_empty_first_poll_saves_the_cursor_for_a_restart() {
+        let mut server = mockito::Server::new();
+        let poll = server
+            .mock("GET", PATH)
+            .match_query(Matcher::Regex("^reviews=abc&timeout=0$".into()))
+            .with_header("content-type", "application/json")
+            .with_body(answer(&[], 9))
+            .expect(1)
+            .create();
+
+        let home = home(&server.url());
+        let cursor = home.path().join("cursor");
+        let out = wait(
+            home.path(),
+            &[
+                "abc",
+                "--cursor-file",
+                cursor.to_str().unwrap(),
+                "--timeout",
+                "0",
+            ],
+        );
+
+        assert_eq!(out.status.code(), Some(124), "out = {out:?}");
+        assert_eq!(fs::read_to_string(&cursor).unwrap(), "9\n");
+        poll.assert();
+    }
+
+    #[test]
+    fn a_stopped_follower_prints_an_error_line() {
+        let mut server = mockito::Server::new();
+        let _poll = server
+            .mock("GET", PATH)
+            .match_query(Matcher::Any)
+            .with_status(410)
+            .with_body(r#"{"error_code":"review_deleted"}"#)
+            .create();
+
+        let home = home(&server.url());
+        let out = wait(home.path(), &["abc", "--follow"]);
+
+        assert_eq!(out.status.code(), Some(1), "out = {out:?}");
+        let lines = lines(&out);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0]["error"]
+            .as_str()
+            .unwrap()
+            .contains("review_deleted"));
     }
 
     #[test]
