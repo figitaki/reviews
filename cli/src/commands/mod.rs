@@ -9,6 +9,7 @@ pub mod section;
 pub mod show;
 pub mod thread_status;
 pub mod threads;
+pub mod wait;
 pub mod whoami;
 
 /// Accepts a thread id either bare (`7`) or as printed by `reviews threads`

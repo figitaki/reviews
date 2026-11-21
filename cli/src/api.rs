@@ -10,6 +10,7 @@
 //!   POST /api/v1/code-snapshots/:id/complete
 //!   GET  /api/v1/reviews/:slug
 //!   POST /api/v1/reviews/:slug/comments (new thread or reply)
+//!   GET  /api/v1/reviews/:slug/comments/wait (long poll)
 //!   PATCH /api/v1/reviews/:slug/threads/:thread_id
 //!   POST /api/v1/reviews/:slug/sections/:section_index/decision
 //!   GET  /api/v1/reviews/:slug/deletion
@@ -265,6 +266,16 @@ pub struct ListReviewsQuery {
     pub offset: Option<u32>,
 }
 
+/// One long-poll answer: new comments (oldest first), the cursor to pass as
+/// `since` next time, and whether more are waiting past the result limit.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WaitCommentsResponse {
+    pub comments: Vec<Value>,
+    pub cursor: i64,
+    #[serde(default)]
+    pub more: bool,
+}
+
 impl ApiClient {
     pub fn new(base_url: impl Into<String>, token: impl Into<String>) -> Result<Self> {
         Self::build(base_url.into(), Some(token.into()))
@@ -404,6 +415,31 @@ impl ApiClient {
             .with_context(|| format!("could not reach server for POST {path}"))?;
         let resp = check_status(resp, &format!("POST {path}"))?;
         resp.json::<CreateCommentResponse>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
+    /// Long poll for comments with an id above `since` (or published after the
+    /// call when `None`). The server holds the call for up to `timeout_secs`.
+    pub fn wait_comments(
+        &self,
+        slug: &str,
+        since: Option<i64>,
+        timeout_secs: u64,
+    ) -> Result<WaitCommentsResponse> {
+        let path = format!("/api/v1/reviews/{slug}/comments/wait");
+        let _ = self.require_token(&format!("GET {path}"))?;
+        let mut query = Vec::with_capacity(2);
+        if let Some(cursor) = since {
+            query.push(("since", cursor.to_string()));
+        }
+        query.push(("timeout", timeout_secs.to_string()));
+        let resp = self
+            .auth(self.http.get(self.url(&path)))
+            .query(&query)
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<WaitCommentsResponse>()
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 

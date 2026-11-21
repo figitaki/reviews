@@ -856,3 +856,121 @@ mod delete {
         refused.assert();
     }
 }
+
+mod wait {
+    use super::bin;
+    use mockito::Matcher;
+    use std::fs;
+    use std::process::Output;
+
+    fn home(server_url: &str) -> tempfile::TempDir {
+        let home = tempfile::tempdir().unwrap();
+        let config_dir = home.path().join(".config").join("reviews");
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::write(
+            config_dir.join("config.toml"),
+            format!("[default]\nserver_url = \"{server_url}\"\napi_token = \"tok\"\n"),
+        )
+        .unwrap();
+        home
+    }
+
+    fn wait(home: &std::path::Path, args: &[&str]) -> Output {
+        bin()
+            .arg("wait")
+            .args(args)
+            .env("HOME", home)
+            .env("XDG_CONFIG_HOME", home.join(".config"))
+            .output()
+            .expect("run wait")
+    }
+
+    fn stdout_json(out: &Output) -> serde_json::Value {
+        serde_json::from_slice(&out.stdout).expect("stdout is JSON")
+    }
+
+    #[test]
+    fn prints_new_comments_and_exits_zero() {
+        let mut server = mockito::Server::new();
+        let poll = server
+            .mock("GET", "/api/v1/reviews/abc/comments/wait")
+            .match_header("authorization", "Bearer tok")
+            .match_query(Matcher::UrlEncoded("since".into(), "4".into()))
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"comments":[{"id":5,"body":"nit"}],"cursor":5,"more":false}"#)
+            .create();
+
+        let home = home(&server.url());
+        let out = wait(home.path(), &["abc", "--since", "4"]);
+
+        assert!(out.status.success(), "wait failed: {out:?}");
+        let body = stdout_json(&out);
+        assert_eq!(body["cursor"], 5);
+        assert_eq!(body["comments"][0]["body"], "nit");
+        poll.assert();
+    }
+
+    #[test]
+    fn re_polls_from_the_returned_cursor() {
+        let mut server = mockito::Server::new();
+        let first = server
+            .mock("GET", "/api/v1/reviews/abc/comments/wait")
+            .match_query(Matcher::Regex("^timeout=".into()))
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"comments":[],"cursor":9,"more":false}"#)
+            .create();
+        let second = server
+            .mock("GET", "/api/v1/reviews/abc/comments/wait")
+            .match_query(Matcher::UrlEncoded("since".into(), "9".into()))
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"comments":[{"id":10}],"cursor":10,"more":false}"#)
+            .create();
+
+        let home = home(&server.url());
+        let out = wait(home.path(), &["abc", "--timeout", "60"]);
+
+        assert!(out.status.success(), "wait failed: {out:?}");
+        assert_eq!(stdout_json(&out)["cursor"], 10);
+        first.assert();
+        second.assert();
+    }
+
+    #[test]
+    fn timeout_prints_the_cursor_and_exits_124() {
+        let mut server = mockito::Server::new();
+        let poll = server
+            .mock("GET", "/api/v1/reviews/abc/comments/wait")
+            .match_query(Matcher::AllOf(vec![
+                Matcher::UrlEncoded("since".into(), "3".into()),
+                Matcher::UrlEncoded("timeout".into(), "0".into()),
+            ]))
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"comments":[],"cursor":3,"more":false}"#)
+            .expect(1)
+            .create();
+
+        let home = home(&server.url());
+        let out = wait(home.path(), &["abc", "--since", "3", "--timeout", "0"]);
+
+        assert_eq!(out.status.code(), Some(124), "out = {out:?}");
+        assert_eq!(stdout_json(&out)["cursor"], 3);
+        poll.assert();
+    }
+
+    #[test]
+    fn server_errors_exit_one() {
+        let mut server = mockito::Server::new();
+        let _poll = server
+            .mock("GET", "/api/v1/reviews/abc/comments/wait")
+            .match_query(Matcher::Any)
+            .with_status(404)
+            .with_body(r#"{"error_code":"review_not_found"}"#)
+            .create();
+
+        let home = home(&server.url());
+        let out = wait(home.path(), &["abc", "--timeout", "0"]);
+
+        assert_eq!(out.status.code(), Some(1), "out = {out:?}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("review_not_found"));
+    }
+}
