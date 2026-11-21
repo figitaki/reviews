@@ -12,8 +12,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   works, each printed once and in order; `--cursor-file` resumes after a
   restart. Without `--follow` it exits 0 after the first batch and 124 when
   `--timeout` passes. It long-polls the new `GET /api/v1/comments/wait`,
-  which holds a call for up to 30 seconds and wakes on the reviews' comment
-  broadcasts.
+  which holds a call for up to 30 seconds, wakes on the reviews' comment
+  broadcasts, leaves out the caller's own comments, and allows 5 waits per
+  identity at once.
 
 - idna is now 8.0.0, which fixes EEF-CVE-2026-117678: a long Punycode
   label in a hostname could keep the CPU busy. jsv still asks for idna 7,
