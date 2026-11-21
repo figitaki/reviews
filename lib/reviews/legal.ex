@@ -23,6 +23,8 @@ defmodule Reviews.Legal do
     terms: @shared ++ [:governing_law, :venue, :liability_cap]
   }
 
+  @url %{privacy: :privacy_url, terms: :terms_url}
+
   @own %{
     privacy: @fields.privacy -- @shared,
     terms: @fields.terms -- @shared
@@ -66,7 +68,7 @@ defmodule Reviews.Legal do
     config = Map.new(config, fn {key, value} -> {key, present(value)} end)
 
     cond do
-      url = config[:"#{kind}_url"] ->
+      url = config[@url[kind]] ->
         {:url, url}
 
       Enum.all?(@own[kind], &is_nil(config[&1])) ->
