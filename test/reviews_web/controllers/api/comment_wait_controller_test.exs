@@ -4,6 +4,19 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
   alias Reviews.Accounts
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
+  alias Reviews.Threads.WaitSlots
+
+  defp user!(github_id, username) do
+    {:ok, user} =
+      Accounts.upsert_from_github(%{
+        github_id: github_id,
+        username: username,
+        email: "#{username}@example.com",
+        avatar_url: nil
+      })
+
+    user
+  end
 
   defp review!(user, branch) do
     {:ok, %{review: review}} =
@@ -19,22 +32,16 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
   end
 
   setup do
-    {:ok, user} =
-      Accounts.upsert_from_github(%{
-        github_id: 99_101,
-        username: "dana",
-        email: "dana@example.com",
-        avatar_url: nil
-      })
-
+    user = user!(99_101, "dana")
+    reviewer = user!(99_102, "remy")
+    {:ok, identity} = Accounts.ensure_human_identity(user)
     {:ok, _token, raw} = Accounts.mint_token(user, %{"name" => "test"})
-
-    %{user: user, raw: raw, review: review!(user, "dana/wait")}
+    %{user: user, identity: identity, reviewer: reviewer, raw: raw, review: review!(user, "d/w")}
   end
 
-  defp comment!(review, user, body) do
+  defp comment!(review, author, body) do
     {:ok, %{comment: comment}} =
-      Threads.publish_comment(review, user, %{
+      Threads.publish_comment(review, author, %{
         "file_path" => "foo",
         "side" => "new",
         "body" => body,
@@ -46,32 +53,40 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
 
   defp wait(raw, reviews, query) do
     slugs = reviews |> List.wrap() |> Enum.map_join(",", & &1.slug)
+    wait_slugs(raw, slugs, query)
+  end
 
+  defp wait_slugs(raw, slugs, query) do
     build_conn()
     |> put_req_header("authorization", "Bearer #{raw}")
     |> get("/api/v1/comments/wait", Map.put(query, "reviews", slugs))
   end
 
-  # The request holds the test process, so a helper publishes once the
+  # The request runs in the test process, so `fun` runs in a task once the
   # request has subscribed to the review's topic.
-  defp publish_when_subscribed(review, user, waiter, body) do
+  defp once_subscribed(review, fun) do
+    waiter = self()
+
     Task.async(fn ->
       await_subscriber("review:#{review.slug}", waiter)
-      comment!(review, user, body)
+      fun.()
     end)
   end
 
   defp await_subscriber(topic, pid) do
-    if Enum.any?(Registry.lookup(Reviews.PubSub, topic), fn {sub, _} -> sub == pid end) do
+    if subscribed?(topic, pid) do
       :ok
     else
       receive after: (5 -> await_subscriber(topic, pid))
     end
   end
 
-  test "returns comments after the cursor at once", %{raw: raw, review: review, user: user} do
-    first = comment!(review, user, "first")
-    second = comment!(review, user, "second")
+  defp subscribed?(topic, pid),
+    do: Enum.any?(Registry.lookup(Reviews.PubSub, topic), fn {sub, _} -> sub == pid end)
+
+  test "returns comments after the cursor at once", %{raw: raw, review: review, reviewer: r} do
+    first = comment!(review, r, "first")
+    second = comment!(review, r, "second")
 
     body = wait(raw, review, %{"since" => "0", "timeout" => "30"}) |> json_response(200)
 
@@ -80,8 +95,9 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
     assert %{
              "review" => slug,
              "thread_id" => thread_id,
-             "author" => "dana",
+             "author" => "remy",
              "file_path" => "foo",
+             "side" => "new",
              "line" => 1,
              "body" => "first",
              "truncated" => false
@@ -97,9 +113,9 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
     assert limited["more"]
   end
 
-  test "wakes when a new comment is published", %{raw: raw, review: review, user: user} do
-    old = comment!(review, user, "old")
-    task = publish_when_subscribed(review, user, self(), "new")
+  test "wakes when a new thread is started", %{raw: raw, review: review, reviewer: r} do
+    old = comment!(review, r, "old")
+    task = once_subscribed(review, fn -> comment!(review, r, "new") end)
 
     body = wait(raw, review, %{"timeout" => "30"}) |> json_response(200)
     new = Task.await(task)
@@ -109,15 +125,30 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
     assert body["cursor"] == new.id
   end
 
-  test "one cursor covers several reviews", %{raw: raw, review: review, user: user} do
-    other = review!(user, "dana/other")
-    a = comment!(review, user, "on first")
-    b = comment!(other, user, "on second")
-    task = publish_when_subscribed(other, user, self(), "later")
+  test "wakes on a reply to an existing thread", %{raw: raw, review: review, reviewer: r} do
+    first = comment!(review, r, "question")
+    {:ok, identity} = Accounts.ensure_human_identity(r)
 
-    body =
-      wait(raw, [review, other], %{"since" => "#{b.id}", "timeout" => "30"}) |> json_response(200)
+    task =
+      once_subscribed(review, fn ->
+        {:ok, %{comment: reply}} = Threads.reply(review, identity, first.thread_id, "answer")
+        reply
+      end)
 
+    body = wait(raw, review, %{"since" => "#{first.id}"}) |> json_response(200)
+    reply = Task.await(task)
+
+    assert [%{"comment_id" => id, "thread_id" => thread_id}] = body["comments"]
+    assert id == reply.id and thread_id == first.thread_id
+  end
+
+  test "one cursor covers several reviews", %{raw: raw, review: review, user: u, reviewer: r} do
+    other = review!(u, "d/other")
+    a = comment!(review, r, "on first")
+    b = comment!(other, r, "on second")
+    task = once_subscribed(other, fn -> comment!(other, r, "later") end)
+
+    body = wait(raw, [review, other], %{"since" => "#{b.id}"}) |> json_response(200)
     later = Task.await(task)
 
     assert [%{"review" => slug, "comment_id" => id}] = body["comments"]
@@ -130,26 +161,139 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
              [{review.slug, a.id}, {other.slug, b.id}, {other.slug, later.id}]
   end
 
-  test "caps long bodies", %{raw: raw, review: review, user: user} do
-    comment!(review, user, String.duplicate("x", 9_000))
-    [item] = wait(raw, review, %{"since" => "0"}) |> json_response(200) |> Map.fetch!("comments")
-    assert item["truncated"]
-    assert byte_size(item["body"]) <= 8_000
-  end
-
-  test "returns no comments and the same cursor on timeout", %{raw: raw, review: review} do
-    body = wait(raw, review, %{"since" => "7", "timeout" => "0"}) |> json_response(200)
-    assert body == %{"comments" => [], "cursor" => 7, "more" => false}
-  end
-
-  test "without since, the cursor starts at the latest comment", %{
+  test "leaves out the caller's own comments but moves the cursor past them", %{
     raw: raw,
     review: review,
-    user: user
+    user: user,
+    reviewer: r
   } do
-    latest = comment!(review, user, "seen")
-    body = wait(raw, review, %{"timeout" => "0"}) |> json_response(200)
-    assert body == %{"comments" => [], "cursor" => latest.id, "more" => false}
+    theirs = comment!(review, r, "theirs")
+    mine = comment!(review, user, "mine")
+
+    body = wait(raw, review, %{"since" => "0", "timeout" => "0"}) |> json_response(200)
+    assert Enum.map(body["comments"], & &1["comment_id"]) == [theirs.id]
+    assert body["cursor"] == mine.id
+  end
+
+  test "a cursor above every comment starts from the newest one", %{
+    raw: raw,
+    review: review,
+    reviewer: r
+  } do
+    newest = comment!(review, r, "seen")
+    huge = "9223372036854775807"
+
+    body = wait(raw, review, %{"since" => huge, "timeout" => "0"}) |> json_response(200)
+    assert body == %{"comments" => [], "cursor" => newest.id, "more" => false}
+
+    task = once_subscribed(review, fn -> comment!(review, r, "next") end)
+    body = wait(raw, review, %{"since" => huge}) |> json_response(200)
+    assert [%{"comment_id" => id}] = body["comments"]
+    assert id == Task.await(task).id
+  end
+
+  test "broadcasts it would not return cost no query", %{
+    raw: raw,
+    review: review,
+    user: u,
+    reviewer: r
+  } do
+    seen = comment!(review, r, "seen")
+    other = review!(u, "d/elsewhere")
+
+    stale =
+      Reviews.Repo.preload(
+        Threads.get_review_thread(review, seen.thread_id) |> elem(1),
+        :comments
+      )
+
+    elsewhere = %{stale | review_id: other.id, comments: [%{seen | id: seen.id + 1_000}]}
+    waiter = self()
+    handler = "count-comment-reads-#{inspect(waiter)}"
+
+    :telemetry.attach(
+      handler,
+      [:reviews, :repo, :query],
+      fn _event, _measure, meta, _ ->
+        if self() == waiter and meta.source == "comments", do: send(waiter, :comment_read)
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    task =
+      once_subscribed(review, fn ->
+        for thread <- [stale, elsewhere, stale] do
+          Phoenix.PubSub.broadcast(
+            Reviews.PubSub,
+            "review:#{review.slug}",
+            {:thread_published, thread}
+          )
+        end
+
+        comment!(review, r, "new")
+      end)
+
+    body = wait(raw, review, %{"since" => "#{seen.id}"}) |> json_response(200)
+    new = Task.await(task)
+    assert [%{"comment_id" => id}] = body["comments"]
+    assert id == new.id
+
+    # The newest-id read and the list read, once before waiting and once on the wake.
+    reads = for _ <- 1..10, do: receive(do: (:comment_read -> 1), after: (0 -> 0))
+    assert Enum.sum(reads) == 4
+  end
+
+  test "returns early when a review is deleted", %{raw: raw, review: review, identity: id} do
+    task = once_subscribed(review, fn -> ReviewsContext.delete_review(review, id) end)
+    started = System.monotonic_time(:millisecond)
+
+    body = wait(raw, review, %{"since" => "0"}) |> json_response(200)
+    assert {:ok, _} = Task.await(task)
+    assert body["comments"] == []
+    assert System.monotonic_time(:millisecond) - started < 5_000
+  end
+
+  test "unsubscribes, frees its slot and leaves no broadcast in the mailbox", %{
+    raw: raw,
+    review: review,
+    reviewer: r,
+    identity: identity
+  } do
+    task = once_subscribed(review, fn -> comment!(review, r, "wake") end)
+    wait(raw, review, %{}) |> json_response(200)
+    Task.await(task)
+
+    refute subscribed?("review:#{review.slug}", self())
+    refute_received {:thread_published, _}
+    slots = Registry.lookup(Reviews.Threads.WaitRegistry, identity.id)
+    refute Enum.any?(slots, fn {pid, _} -> pid == self() end)
+  end
+
+  test "returns no comments and the newest cursor on timeout", %{raw: raw, review: review} do
+    body = wait(raw, review, %{"since" => "7", "timeout" => "0"}) |> json_response(200)
+    assert body == %{"comments" => [], "cursor" => 0, "more" => false}
+  end
+
+  test "refuses a sixth wait for the same identity", %{raw: raw, review: review, identity: id} do
+    test = self()
+
+    holders =
+      for _ <- 1..5 do
+        spawn_link(fn ->
+          :ok = WaitSlots.acquire(id.id)
+          send(test, :held)
+          receive do: (:stop -> :ok)
+        end)
+      end
+
+    for _ <- holders, do: assert_receive(:held)
+
+    conn = wait(raw, review, %{"timeout" => "0"})
+    assert json_response(conn, 429)["error_code"] == "rate_limited"
+
+    for pid <- holders, do: send(pid, :stop)
   end
 
   test "requires a token and existing reviews", %{raw: raw, review: review} do
@@ -163,17 +307,12 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
 
     assert json_response(conn, 401)
 
-    conn =
-      build_conn()
-      |> put_req_header("authorization", "Bearer #{raw}")
-      |> get("/api/v1/comments/wait", %{"reviews" => "#{review.slug},missing", "timeout" => "0"})
-
-    body = json_response(conn, 404)
+    body = wait_slugs(raw, "#{review.slug},missing", %{"timeout" => "0"}) |> json_response(404)
     assert body["error_code"] == "review_not_found"
     assert body["error_detail"] =~ "missing"
   end
 
-  test "rejects out-of-range parameters", %{raw: raw, review: review} do
+  test "rejects out-of-range parameters and malformed slugs", %{raw: raw, review: review} do
     for query <- [
           %{"timeout" => "31"},
           %{"timeout" => "-1"},
@@ -187,13 +326,8 @@ defmodule ReviewsWeb.Api.CommentWaitControllerTest do
 
     too_many = Enum.map_join(1..21, ",", &"r#{&1}")
 
-    for slugs <- ["", ",", too_many] do
-      conn =
-        build_conn()
-        |> put_req_header("authorization", "Bearer #{raw}")
-        |> get("/api/v1/comments/wait", %{"reviews" => slugs})
-
-      assert json_response(conn, 400)["error_code"] == "invalid_request"
+    for slugs <- ["", ",", too_many, "a\0b", "a b", String.duplicate("a", 65)] do
+      assert json_response(wait_slugs(raw, slugs, %{}), 400)["error_code"] == "invalid_request"
     end
   end
 end

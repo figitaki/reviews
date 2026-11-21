@@ -9,6 +9,7 @@ defmodule ReviewsWeb.Api.CommentWaitController do
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
   alias Reviews.Threads
+  alias Reviews.Threads.WaitSlots
   alias ReviewsWeb.MCP.Budget
 
   @default_wait_seconds 25
@@ -16,6 +17,8 @@ defmodule ReviewsWeb.Api.CommentWaitController do
   @max_results 50
   @max_reviews 20
   @max_body_bytes 8_000
+  # Slugs are URL-safe; anything else (such as a NUL byte) cannot name a review.
+  @slug_format ~r/\A[A-Za-z0-9_-]{1,64}\z/
   # Postgres bigint; a larger cursor could not name a comment.
   @max_comment_id 9_223_372_036_854_775_807
 
@@ -25,8 +28,10 @@ defmodule ReviewsWeb.Api.CommentWaitController do
   Returns at once when the reviews have comments with an id above `since`;
   otherwise holds the request until one is published or `timeout` seconds
   pass (default #{@default_wait_seconds}, at most #{@max_wait_seconds}).
-  Without `since` it waits for comments published after the request. Comment
-  ids are one sequence across reviews, so one cursor covers all of them.
+  Without `since`, or with one above the reviews' newest comment, it waits for
+  comments published after the request. Comment ids are one sequence across
+  reviews, so one cursor covers all of them. The caller's own comments are
+  left out, and an identity may hold at most 5 waits at once (429 beyond).
   """
   def wait(conn, params) do
     with {:ok, slugs} <- slugs(params["reviews"]),
@@ -34,18 +39,35 @@ defmodule ReviewsWeb.Api.CommentWaitController do
          {:ok, seconds} <-
            bounded_int(params["timeout"], @default_wait_seconds, 0, @max_wait_seconds),
          {:ok, limit} <- bounded_int(params["limit"], @max_results, 1, @max_results),
-         {:ok, reviews} <- fetch_reviews(slugs) do
-      ids = Enum.map(reviews, & &1.id)
-      since = since || Threads.latest_comment_id(ids)
-      {:ok, comments} = Threads.wait_for_comments(reviews, since, limit, seconds * 1000)
+         {:ok, reviews} <- fetch_reviews(slugs),
+         identity = conn.assigns.current_identity,
+         :ok <- WaitSlots.acquire(identity.id) do
+      {:ok, %{comments: comments, cursor: cursor}} =
+        try do
+          Threads.wait_for_comments(reviews, since,
+            limit: limit,
+            timeout_ms: seconds * 1000,
+            exclude_author_id: identity.id
+          )
+        after
+          WaitSlots.release(identity.id)
+        end
+
       slug_by_id = Map.new(reviews, &{&1.id, &1.slug})
 
       json(conn, %{
         comments: Enum.map(comments, &payload(&1, slug_by_id)),
-        cursor: comments |> List.last(%{id: since}) |> Map.fetch!(:id),
+        cursor: cursor,
         more: length(comments) == limit
       })
     else
+      {:error, :rate_limited} ->
+        ReviewsWeb.ApiErrors.render(
+          conn,
+          :rate_limited,
+          "Too many waits are open for this identity or server. Close one, or retry later."
+        )
+
       {:error, {:missing, slug}} ->
         reason = ReviewsContext.not_found_reason(slug)
 
@@ -77,6 +99,7 @@ defmodule ReviewsWeb.Api.CommentWaitController do
       comment_id: comment.id,
       author: comment.author && Budget.cap(comment.author.handle, 128),
       file_path: thread.file_path,
+      side: thread.side,
       line: get_in(thread.anchor || %{}, ["line_number_hint"]),
       body: Budget.cap(body, @max_body_bytes),
       truncated: byte_size(body) > @max_body_bytes
@@ -86,7 +109,7 @@ defmodule ReviewsWeb.Api.CommentWaitController do
   defp slugs(value) when is_binary(value) and byte_size(value) <= 2_000 do
     slugs = value |> String.split(",", trim: true) |> Enum.map(&String.trim/1) |> Enum.uniq()
 
-    if slugs != [] and length(slugs) <= @max_reviews and "" not in slugs,
+    if slugs != [] and length(slugs) <= @max_reviews and Enum.all?(slugs, &(&1 =~ @slug_format)),
       do: {:ok, slugs},
       else: {:error, :invalid}
   end
