@@ -224,17 +224,34 @@ a section of only config, docs, lockfiles or generated files placed before a
 section that changes code. It cannot check that the slug exists or that your
 token works.
 
-Wait for reviewer comments instead of re-running `reviews threads`:
+Wait for reviewer comments instead of re-running `reviews threads`. An agent
+that answers comments in a loop starts one follower in the background and reads
+its output between turns:
 
 ```sh
+# Once, in the background: one JSON line per new comment, across reviews.
+reviews wait <slug> [<slug>...] --follow --cursor-file ~/.cache/reviews-cursor > comments.ndjson &
+# Between turns: read the lines you have not read yet, answer each, repeat.
+reviews reply <slug> <thread-id> --body "Fixed in 4f2a1c9."
+# One-shot: block until the next comment, then exit.
 reviews wait <slug> --timeout 1800
-reviews wait <slug> --since <cursor>
 ```
 
-It prints new comments as JSON with a `cursor`; pass that as `--since` next
-time. It exits 0 when comments arrive, 124 when `--timeout` (default 600
-seconds) passes first, and 1 on errors, so an agent can run it in the
-background and be woken by it.
+Each line is one comment, with only what an agent needs to answer it:
+
+```json
+{"review":"Q4bwuxuZ","thread_id":7,"comment_id":41,"author":"dana","file_path":"lib/foo.ex","line":42,"body":"Why not Decimal?","truncated":false,"cursor":41}
+```
+
+`--follow` keeps one long poll open at a time and starts the next from the last
+printed comment, so comments posted while the agent is busy are printed once
+each, in order. `--cursor-file` saves that cursor after each batch, so a
+restarted follower resumes where it stopped (a crash between printing and
+saving can repeat the last batch, never skip one). Up to 20 slugs share one
+cursor. Without `--follow`, `reviews wait` exits 0 after the first batch and 124
+when `--timeout` (default 600 seconds) passes; with `--follow` it runs until an
+error or `--timeout`. It retries network errors and HTTP 429/5xx up to five
+times, and exits 1 on other errors.
 
 ## MCP (prototype)
 

@@ -304,14 +304,16 @@ Publishes one comment right away as the token identity. Request body:
 `file_path` over 255 characters → `422` with `{ "errors": { "detail": "..." } }`.
 Unknown slug → `404`.
 
-### `GET /api/v1/reviews/:slug/comments/wait`
+### `GET /api/v1/comments/wait`
 
-Long poll for new comments and replies, for `reviews wait`. Needs a bearer
-token; any signed-in identity with the link may wait, as for commenting.
-Query parameters:
+Long poll for new comments and replies on one or more reviews, for
+`reviews wait`. Needs a bearer token; any signed-in identity with the links
+may wait, as for commenting. Query parameters:
 
-- `since`: a comment id. Comments on the review with a higher id return at
+- `reviews`: 1–20 review slugs, separated by commas. Required.
+- `since`: a comment id. Comments on these reviews with a higher id return at
   once. Without it, the call waits for comments published after it starts.
+  Comment ids are one sequence across reviews, so one cursor covers them all.
 - `timeout`: seconds to hold the call when nothing is new. Default 25, 0–30.
 - `limit`: most comments returned. Default 50, 1–50.
 
@@ -320,22 +322,27 @@ Response `200`:
 ```json
 {
   "comments": [
-    { "id": 41, "body": "...", "author": {}, "attribution": null,
-      "inserted_at": "...", "thread_id": 7, "file_path": "lib/foo.ex",
-      "side": "new", "line": 42, "thread_status": "open" }
+    { "review": "Q4bwuxuZ", "thread_id": 7, "comment_id": 41, "author": "dana",
+      "file_path": "lib/foo.ex", "line": 42, "body": "...", "truncated": false }
   ],
   "cursor": 41,
   "more": false
 }
 ```
 
-Comments are oldest first. `cursor` is the `since` for the next call: the
-last comment's id, or the `since` used when none arrived before the timeout.
-`more` is true when `limit` comments were returned and more may be waiting.
-The server wakes on the review's `{:thread_published, _}` broadcast rather
-than polling the database, and returns early with no comments if the review
-is deleted. A bad parameter → `400` with `error_code: invalid_request`;
-unknown slug → `404`; deleted review → `410`.
+Comments are oldest first. `author` is the identity's handle; `body` is capped
+at 8000 bytes, and `truncated` says whether it was cut. `cursor` is the `since`
+for the next call: the last comment's id, or the `since` used when none arrived
+before the timeout. `more` is true when `limit` comments were returned and more
+may be waiting.
+
+The server wakes on the reviews' `{:thread_published, _}` broadcasts rather
+than polling the database, and returns early with no comments if a review is
+deleted. A cursor never skips a comment: each comment insert takes a per-review
+advisory lock until it commits, and the read takes the shared form of that lock
+for each review, so no lower id can commit after a read returns a higher one.
+A bad parameter → `400` with `error_code: invalid_request`; an unknown slug →
+`404` and a deleted review → `410`, with the slug in `error_detail`.
 
 ### `PATCH /api/v1/reviews/:slug/threads/:thread_id`
 

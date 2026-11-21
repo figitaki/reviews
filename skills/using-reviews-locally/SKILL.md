@@ -134,16 +134,22 @@ the question:
 cli/target/release/reviews reply <slug> <thread-id> --body "Switched to Decimal in 4f2a1c9."
 ```
 
-Wait for the next comment instead of polling `reviews threads`:
+Wait for comments instead of polling `reviews threads`. To answer comments in a
+loop, start one follower in the background, then read its new lines between
+turns:
 
 ```bash
-cli/target/release/reviews wait <slug> --timeout 1800
-cli/target/release/reviews wait <slug> --since <cursor>
+cli/target/release/reviews wait <slug> [<slug>...] --follow --cursor-file /private/tmp/reviews-cursor > /private/tmp/comments.ndjson &
+tail -n +$((HANDLED + 1)) /private/tmp/comments.ndjson   # between turns: lines after the HANDLED you answered
+cli/target/release/reviews wait <slug> --timeout 1800   # one-shot: next comments, then exit
 ```
 
-It prints new comments as JSON with a `cursor` to pass as `--since` next time.
-It exits 0 when comments arrive, 124 when `--timeout` (default 600 seconds)
-passes first, and 1 on errors.
+Each line is one comment: `review`, `thread_id`, `comment_id`, `author`,
+`file_path`, `line`, `body` (capped at 8 KB, with `truncated`) and `cursor`.
+The follower prints each comment once, in order, including ones posted while
+you were busy; `--cursor-file` lets a restart resume there. One-shot exits 0
+after the first batch, 124 when `--timeout` (default 600 seconds) passes, and 1
+on errors.
 
 Notes:
 - `reviews threads` can run anonymously against public review JSON.
@@ -160,7 +166,7 @@ Notes:
 - Keep local packet files in `/private/tmp` unless the user asks to commit them.
 - After pushing, return the review URL and patchset number.
 - After addressing review feedback, use `reviews threads <slug>` to find thread IDs, `reviews reply <slug> <thread-id>` to record what changed, then `reviews resolve <slug> <thread-id>` to mark the thread handled. Use `reviews reopen` if a thread was closed too early.
-- To wait for more feedback, run `reviews wait <slug> --since <cursor>` in the background rather than polling `reviews threads`; it exits 0 on new comments and 124 on timeout.
+- To keep answering feedback, start `reviews wait <slug> --follow --cursor-file <file> > <log> &` once, read new lines between turns, reply, and repeat, rather than polling `reviews threads`.
 - Use `mix compile --warnings-as-errors`, `mix format --check-formatted`, and `mix assets.build` after relevant code/CSS/JS changes.
 - If `mix test` fails before tests run because DB config points at the wrong local Postgres, report that separately from app failures.
 
