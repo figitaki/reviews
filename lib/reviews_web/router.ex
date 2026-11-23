@@ -10,7 +10,8 @@ defmodule ReviewsWeb.Router do
 
     plug :put_secure_browser_headers, %{
       "content-security-policy" =>
-        "base-uri 'self'; frame-ancestors 'self'; script-src 'self'; object-src 'none';"
+        "base-uri 'self'; frame-ancestors 'self'; script-src 'self'; object-src 'none'; " <>
+          "img-src 'self' data: blob: https://avatars.githubusercontent.com;"
     }
 
     plug ReviewsWeb.Plugs.FetchCurrentUser
