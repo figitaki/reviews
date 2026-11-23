@@ -9,10 +9,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 - A Helm chart in `charts/reviews` runs the server on Kubernetes, with its
   Postgres as a CloudNativePG cluster or a database you already have.
   Migrations run in an init container before each pod starts; seeding the
-  demo review is opt-in. Every pod needs a private `RELEASE_COOKIE`. A
-  `chart-v<version>` tag publishes it to
-  `oci://ghcr.io/figitaki/charts/reviews`. Its README covers installing,
-  every value, and deploying with Flux from pinned image tags.
+  demo review is opt-in. Every pod needs a private `RELEASE_COOKIE`. The
+  chart is versioned with each release and published to
+  `oci://ghcr.io/figitaki/charts/reviews` from the same `server-v<version>`
+  tag as the image; chart `<version>` runs `server-v<version>` by default.
+  Its README covers installing, every value, and deploying with Flux.
 - phoenix_live_view is now 1.2.14, which fixes EEF-CVE-2026-126334
   (GHSA-v4p7-3pm2-wq6c): a LiveView joined without `"url"` skipped its
   `live_session` `on_mount` hooks. Reviews uses no `live_session` or
