@@ -44,7 +44,8 @@ async function mountPacketProse(markdown) {
   el.dataset.markdown = markdown
   el.innerHTML = '<div data-markdown-output></div>'
   document.body.append(el)
-  MarkdownHook.mounted.call({ ...MarkdownHook, el })
+  el.hook = { ...MarkdownHook, el }
+  el.hook.mounted()
   for (let tries = 0; tries < 200; tries++) {
     const figures = [...el.querySelectorAll("figure.review-mermaid")]
     if (figures.every(figure => figure.querySelector(".review-mermaid-diagram, .review-mermaid-error"))) return el
@@ -122,6 +123,7 @@ test("the SVG sanitizer removes active content and remote references a renderer 
     <image href="https://tracker.example/e.png"/>
     <use xlink:href="https://tracker.example/f.svg#x"/>
     <filter id="f"><feImage href="https://tracker.example/g.png"/></filter>
+    <style>.z { fill: x(url(https://tracker.example/j)); }</style>
     <rect fill="url(https://tracker.example/h#x)" style="fill: url('https://tracker.example/i')" marker-end="url(#arrow)"/>
   </svg>`
   const root = document.createElement("div")
@@ -130,4 +132,54 @@ test("the SVG sanitizer removes active content and remote references a renderer 
   expect(root.querySelector("svg text").textContent).toBe("link label")
   expect(root.querySelector("rect").getAttribute("marker-end")).toBe("url(#arrow)")
   expect(root.querySelector("style").textContent).toContain(".ok { marker-end: url(#arrow); }")
+})
+
+test("an image shape never loads its URL and shows why the diagram was not drawn", async () => {
+  const requested = []
+  const SpyImage = class { set src(url) { requested.push(url) } decode() { return Promise.resolve() } }
+  globalThis.Image = SpyImage
+  const el = await mountPacketProse('```mermaid\nflowchart TD\n  A@{ img: "https://tracker.example/i.png?reviewer", label: "x", w: 60, h: 60 } --> B\n```\n')
+  expect(requested).toEqual([])
+  expect(globalThis.Image).toBe(SpyImage)
+  expect(el.querySelector(".review-mermaid-error").textContent).toContain("Diagrams cannot load images.")
+  expectNoLiveContent(el, "image shape")
+})
+
+test("diagram CSS that would fetch is refused before mermaid puts it in the page", async () => {
+  const liveStyles = []
+  const observer = new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        for (const style of node.querySelectorAll?.("style") ?? []) liveStyles.push(style.textContent)
+        if (node.nodeName === "STYLE") liveStyles.push(node.textContent)
+      }
+    }
+  })
+  observer.observe(document.body, { childList: true, subtree: true })
+  const classDef = css => `stateDiagram-v2\n  classDef evil ${css}\n  [*] --> A\n  class A evil`
+  const payloads = [
+    classDef("mask-image:url(https://tracker.example/m)"),
+    classDef("fill:url(https://tracker.example/f#p)"),
+    classDef("mask-image:image-set(url(https://tracker.example/s) 1x)"),
+    classDef("mask-image:u\\72l(https://tracker.example/e)"),
+    classDef("mask-image:url#40;https://tracker.example/n#41;"),
+    "classDiagram\n  class A\n  style A fill:x(url(https://tracker.example/w))",
+  ]
+  for (const payload of payloads) {
+    const el = await mountPacketProse(`\`\`\`mermaid\n${payload}\n\`\`\`\n`)
+    expect(el.querySelector(".review-mermaid-error").textContent, payload).toContain("cannot load images, fonts or other files")
+  }
+  await new Promise(resolve => setTimeout(resolve, 0))
+  observer.disconnect()
+  for (const css of liveStyles) {
+    expect(css).not.toMatch(FETCH)
+    expect(css).not.toContain("tracker.example")
+  }
+})
+
+test("a LiveView update with unchanged markdown keeps the drawn diagram", async () => {
+  const el = await mountPacketProse("```mermaid\nsequenceDiagram\n  A->>B: hi\n```\n")
+  const svg = el.querySelector(".review-mermaid-diagram svg")
+  el.hook.updated()
+  expect(el.querySelector(".review-mermaid-diagram svg")).toBe(svg)
 })

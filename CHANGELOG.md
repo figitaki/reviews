@@ -11,6 +11,11 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   security level and no HTML labels, then sanitized with DOMPurify; links,
   click actions and remote CSS references are removed. A fence that does not
   parse shows its source and a short error.
+- Diagrams never load images, fonts or other files. A diagram with an image
+  shape or with CSS that fetches (`url()`, `image-set()`, `@import`) is not
+  drawn and shows why. Pages now send `img-src 'self' data: blob:
+  https://avatars.githubusercontent.com` in their Content-Security-Policy, so
+  no page content can load images from other hosts.
 - phoenix_live_view is now 1.2.14, which fixes EEF-CVE-2026-126334
   (GHSA-v4p7-3pm2-wq6c): a LiveView joined without `"url"` skipped its
   `live_session` `on_mount` hooks. Reviews uses no `live_session` or

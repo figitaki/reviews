@@ -1,7 +1,8 @@
 defmodule ReviewsWeb.BrowserSecurityTest do
   use ReviewsWeb.ConnCase, async: true
 
-  test "browser responses restrict scripts without blocking styles and connections", %{conn: conn} do
+  test "browser responses restrict scripts and remote images without blocking styles and connections",
+       %{conn: conn} do
     conn = get(conn, ~p"/")
     assert [policy] = get_resp_header(conn, "content-security-policy")
 
@@ -9,7 +10,8 @@ defmodule ReviewsWeb.BrowserSecurityTest do
           "base-uri 'self'",
           "frame-ancestors 'self'",
           "script-src 'self'",
-          "object-src 'none'"
+          "object-src 'none'",
+          "img-src 'self' data: blob: https://avatars.githubusercontent.com;"
         ] do
       assert policy =~ directive
     end
