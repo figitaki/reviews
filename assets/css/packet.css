@@ -1855,6 +1855,30 @@ details[open] > summary .review-collapse-icon,
   font-variant-ligatures: none;
 }
 
+.review-mermaid {
+  margin: var(--space-4) 0;
+}
+
+.review-mermaid-diagram {
+  overflow-x: auto;
+  border: 1px solid var(--ds-line);
+  border-radius: var(--radius-md);
+  background: var(--ds-panel-raised);
+  padding: var(--space-4);
+}
+
+.review-mermaid-diagram svg {
+  display: block;
+  height: auto;
+  margin: 0 auto;
+}
+
+.review-mermaid-error {
+  margin-top: var(--space-1);
+  color: var(--ds-del);
+  font-size: var(--font-size-sm);
+}
+
 .review-packet-hunk {
   display: inline-flex;
   max-width: 100%;
