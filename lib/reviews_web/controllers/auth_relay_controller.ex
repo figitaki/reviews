@@ -5,8 +5,9 @@ defmodule ReviewsWeb.AuthRelayController do
   On the relay (production, when `Reviews.AuthRelay.relay?/0`):
 
     * `GET /auth/relay?host=<preview host>&state=<state>`: asks the user to
-      confirm the preview they are signing in to. Any host other than
-      `reviews-pr-<digits>.fly.dev` gets a 400 and no redirect.
+      confirm the preview they are signing in to. Any host that is not a
+      preview host (`Reviews.AuthRelay.allowed_host?/1`) gets a 400 and no
+      redirect.
     * `POST /auth/relay`: keeps the host and state in the session and starts
       production's own GitHub sign-in with `/auth/github?relay=1`. That binds
       the target to the OAuth state of this sign-in.

@@ -6,6 +6,15 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- `docs/CONFIGURATION.md` lists every environment variable the server reads:
+  what it does, its default, whether it is required or secret, and its Helm
+  value. The README, `docs/RELEASE.md`, `.env.example` and the chart README
+  link to it.
+- LiveView accepts sockets from `reviews-dev.fly.dev` only on Fly now.
+  `WEBSOCKET_EXTRA_ORIGINS` sets other extra origins, or none.
+- The preview sign-in relay's host pattern is configurable with
+  `AUTH_RELAY_PREVIEW_HOST` (default `reviews-pr-*.fly.dev`). A malformed
+  pattern stops the server from starting.
 - A Helm chart in `charts/reviews` runs the server on Kubernetes, with its
   Postgres as a CloudNativePG cluster or a database you already have.
   Migrations run in an init container before each pod starts; seeding the

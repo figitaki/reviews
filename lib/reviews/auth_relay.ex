@@ -1,6 +1,6 @@
 defmodule Reviews.AuthRelay do
   @moduledoc """
-  Sign-in relay for preview apps (`reviews-pr-<N>.fly.dev`).
+  Sign-in relay for preview apps, such as `reviews-pr-<N>.fly.dev`.
 
   A GitHub OAuth app has one callback URL, and GitHub only sends users back to
   that host, so a preview cannot finish GitHub sign-in on its own host. One
@@ -17,6 +17,9 @@ defmodule Reviews.AuthRelay do
     * relay: `:secret` and no `:url`. It signs in with the app's own GitHub
       OAuth app (`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`).
     * preview: `:secret` and `:url`, the relay's origin
+
+  Both read `:preview_host` (`AUTH_RELAY_PREVIEW_HOST`), the preview hostname
+  with `*` where the PR number goes. It defaults to `reviews-pr-*.fly.dev`.
   """
   import Ecto.Query
 
@@ -24,7 +27,7 @@ defmodule Reviews.AuthRelay do
 
   @salt "reviews auth relay code v1"
   @max_age 60
-  @host_pattern ~r/\Areviews-pr-[0-9]+\.fly\.dev\z/
+  @default_preview_host "reviews-pr-*.fly.dev"
   @state_pattern ~r/\A[A-Za-z0-9_-]{22,128}\z/
 
   @doc "Returns true when this app can act as the relay."
@@ -43,10 +46,19 @@ defmodule Reviews.AuthRelay do
 
   @doc """
   Returns true for the only hosts the relay sends users back to, and the only
-  hosts that accept relay codes: `reviews-pr-<digits>.fly.dev`, with no port,
-  path or other characters.
+  hosts that accept relay codes: the preview host template with digits in
+  place of `*`, such as `reviews-pr-42.fly.dev`, with no port, path or other
+  characters.
   """
-  def allowed_host?(host) when is_binary(host), do: Regex.match?(@host_pattern, host)
+  def allowed_host?(host) when is_binary(host) do
+    [prefix, suffix] = String.split(preview_host(), "*")
+
+    pattern =
+      Regex.compile!("\\A" <> Regex.escape(prefix) <> "[0-9]+" <> Regex.escape(suffix) <> "\\z")
+
+    Regex.match?(pattern, host)
+  end
+
   def allowed_host?(_), do: false
 
   @doc "Returns true when `state` has the shape `new_state/0` produces."
@@ -120,6 +132,9 @@ defmodule Reviews.AuthRelay do
   defp secret!, do: config()[:secret] || raise("AUTH_RELAY_SECRET is not set")
 
   defp config, do: Application.get_env(:reviews, :auth_relay, [])
+
+  # Checked at boot in config/runtime.exs: one `*`, hostname characters only.
+  defp preview_host, do: config()[:preview_host] || @default_preview_host
 
   defp present?(value), do: is_binary(value) and value != ""
 

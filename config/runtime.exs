@@ -86,9 +86,21 @@ end
 # Previews are clients: AUTH_RELAY_SECRET plus AUTH_RELAY_URL.
 env_present = fn name -> if System.get_env(name) not in [nil, ""], do: System.get_env(name) end
 
+# AUTH_RELAY_PREVIEW_HOST is the preview hostname with `*` for the PR
+# number. The relay and its previews must agree on it.
+preview_host = env_present.("AUTH_RELAY_PREVIEW_HOST") || "reviews-pr-*.fly.dev"
+
+unless Regex.match?(~r/\A[a-z0-9.-]*\*[a-z0-9.-]*\z/, preview_host) do
+  raise """
+  AUTH_RELAY_PREVIEW_HOST must be a hostname with one `*` where the PR number
+  goes, such as reviews-pr-*.fly.dev. Got: #{inspect(preview_host)}
+  """
+end
+
 config :reviews, :auth_relay,
   secret: env_present.("AUTH_RELAY_SECRET"),
-  url: env_present.("AUTH_RELAY_URL")
+  url: env_present.("AUTH_RELAY_URL"),
+  preview_host: preview_host
 
 if config_env() == :prod do
   database_url =
@@ -139,15 +151,20 @@ if config_env() == :prod do
 
   config :reviews, ReviewsWeb.Plugs.RequestBudget, trust_fly_client_ip: on_fly
 
+  # LiveView sockets connect only from https://PHX_HOST and the origins in
+  # WEBSOCKET_EXTRA_ORIGINS (comma-separated). Unset on Fly, that is the
+  # hosted site's legacy hostname, so pages opened there before the redirect
+  # to PHX_HOST keep their socket; elsewhere it is none. Empty means none.
+  extra_origins =
+    case System.get_env("WEBSOCKET_EXTRA_ORIGINS") do
+      nil when on_fly -> ["https://reviews-dev.fly.dev"]
+      nil -> []
+      list -> list |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+    end
+
   config :reviews, ReviewsWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
-    # Accept WebSocket origins from both the canonical host and the legacy
-    # Fly hostname, so LiveView sockets still connect during the redirect
-    # window after a 301 from reviews-dev.fly.dev.
-    check_origin: [
-      "https://#{host}",
-      "https://reviews-dev.fly.dev"
-    ],
+    check_origin: ["https://#{host}" | extra_origins],
     http: [
       # On Fly, listen on IPv4 only: Fly Proxy reaches the app over IPv4, and
       # other machines in the org reach it only over IPv6 (6PN), so they cannot

@@ -22,7 +22,7 @@ imagePullSecrets: []
 replicaCount: 1
 
 # Secret values reach the app as environment variables from one Secret,
-# loaded with envFrom. Use any key runtime.exs reads, for example
+# loaded with envFrom. Use any key in docs/CONFIGURATION.md, for example
 # SECRET_KEY_BASE and RELEASE_COOKIE (both required), GITHUB_CLIENT_ID,
 # GITHUB_CLIENT_SECRET, CODE_STORAGE_JWT_PRIVATE_KEY and AUTH_RELAY_SECRET.
 # Pods do not start without RELEASE_COOKIE: the image's built-in Erlang
@@ -112,7 +112,8 @@ legal:
   venue: ""             # LEGAL_VENUE, e.g. London
   liabilityCap: ""      # LEGAL_LIABILITY_CAP, e.g. US$100
 
-# Extra plain environment variables, for example
+# Extra plain environment variables (docs/CONFIGURATION.md), for example
+#   WEBSOCKET_EXTRA_ORIGINS: https://old.example.com
 #   CODE_STORAGE_ADAPTER: code_storage
 #   CODE_STORAGE_ORG: my-org
 env: {}

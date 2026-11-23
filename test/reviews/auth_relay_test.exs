@@ -38,6 +38,29 @@ defmodule Reviews.AuthRelayTest do
     end
   end
 
+  test "allowed_host? follows AUTH_RELAY_PREVIEW_HOST" do
+    Application.put_env(:reviews, :auth_relay,
+      secret: String.duplicate("s", 64),
+      preview_host: "pr-*.preview.example.com"
+    )
+
+    assert AuthRelay.allowed_host?("pr-7.preview.example.com")
+    assert AuthRelay.allowed_host?("pr-1234.preview.example.com")
+
+    for host <- [
+          "reviews-pr-7.fly.dev",
+          "pr-.preview.example.com",
+          "pr-7a.preview.example.com",
+          # The dots in the template are literal.
+          "pr-7xpreviewxexample.com",
+          "pr-7.preview.example.com.evil.example",
+          "evil.pr-7.preview.example.com",
+          "pr-7.preview.example.com:443"
+        ] do
+      refute AuthRelay.allowed_host?(host), "accepted #{inspect(host)}"
+    end
+  end
+
   test "a code redeems once, on its host, for its state", %{state: state} do
     code = AuthRelay.issue_code(@host, state, @user)
 
