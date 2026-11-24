@@ -152,8 +152,10 @@ defmodule Reviews.ConfigFileTest do
     assert errors(dir, "- a\n- b\n") =~ "(top level): must be a mapping"
     assert errors(dir, "server: [1\n") =~ "is not valid YAML"
 
-    assert_raise RuntimeError, ~r/cannot be read: no such file or directory/, fn ->
-      ConfigFile.load!(Path.join(dir, "nope.yaml"))
-    end
+    assert_raise RuntimeError,
+                 ~r/REVIEWS_CONFIG: Failed to open file .*nope.yaml.*: no such file or directory/,
+                 fn ->
+                   ConfigFile.load!(Path.join(dir, "nope.yaml"))
+                 end
   end
 end

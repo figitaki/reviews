@@ -118,8 +118,8 @@ defmodule Reviews.ConfigFile do
         {:ok, data} ->
           data
 
-        {:error, %YamlElixir.FileNotFoundError{}} ->
-          raise "the config file #{path} (REVIEWS_CONFIG) cannot be read: #{read_error(path)}"
+        {:error, %YamlElixir.FileNotFoundError{} = error} ->
+          raise "REVIEWS_CONFIG: #{Exception.message(error)}"
 
         {:error, error} ->
           raise "the config file #{path} (REVIEWS_CONFIG) is not valid YAML: " <>
@@ -127,13 +127,6 @@ defmodule Reviews.ConfigFile do
       end
     after
       unless running?, do: Application.stop(:yamerl)
-    end
-  end
-
-  defp read_error(path) do
-    case File.read(path) do
-      {:error, reason} -> :file.format_error(reason) |> to_string()
-      {:ok, _} -> "unknown error"
     end
   end
 
