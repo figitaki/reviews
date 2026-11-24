@@ -7,7 +7,7 @@ The app is Phoenix 1.8 + LiveView, with diffs rendered by vanilla
 `@pierre/diffs` from a LiveView hook, and a Rust CLI (`reviews push`) for
 uploading diffs.
 
-Current version: `0.0.3`.
+Current version: `0.0.4`.
 
 To run it on Kubernetes, see the Helm chart in
 [`charts/reviews`](charts/reviews/README.md).
