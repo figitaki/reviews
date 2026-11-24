@@ -7,6 +7,9 @@ defmodule Reviews.Application do
 
   @impl true
   def start(_type, _args) do
+    # A half-filled policy template fails the boot rather than shipping.
+    Reviews.Legal.validate!()
+
     children =
       [
         ReviewsWeb.Telemetry,

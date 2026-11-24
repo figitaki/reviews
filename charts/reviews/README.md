@@ -124,6 +124,8 @@ is known to anyone, so a pod whose Secret lacks the key does not start.
 | `clustering.enabled` | `false` | Join pods into one Erlang cluster through a headless Service. |
 | `mcp.enabled` | `false` | Hosted MCP endpoint at `/mcp` ([docs/MCP.md](../../docs/MCP.md)). |
 | `mcp.writesEnabled` | `false` | MCP write tools. |
+| `legal.privacyUrl`, `legal.termsUrl` | `""` | Link your own Privacy Policy or Terms of Service (`LEGAL_PRIVACY_URL`, `LEGAL_TERMS_URL`). |
+| `legal.operatorName`, `.contactEmail`, `.updated`, `.hostingRegion`, `.logRetention`, `.backupRetention`, `.governingLaw`, `.venue`, `.liabilityCap` | `""` | Fill in the built-in templates instead (`LEGAL_*`). All empty means no legal pages or links. See [docs/LEGAL_PAGES.md](../../docs/LEGAL_PAGES.md). |
 | `env` | `{}` | Extra plain environment variables, such as `CODE_STORAGE_ADAPTER` or `DESIGN_CATALOG`. |
 | `service.type`, `service.port` | `ClusterIP`, `80` | App Service. |
 | `ingress.enabled` | `false` | Create an Ingress for `host`. |

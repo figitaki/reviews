@@ -487,6 +487,7 @@ defmodule ReviewsWeb.SettingsLive do
                   </.ds_github_button>
                 </:actions>
               </.ds_empty_state>
+              <Layouts.legal_notice id="settings-sign-in-legal" />
             </div>
           <% end %>
         </div>

@@ -90,6 +90,28 @@ mcp:
   enabled: false
   writesEnabled: false
 
+# Privacy Policy and Terms of Service (docs/LEGAL_PAGES.md). All empty means
+# no legal pages and no links to them. For each document, either set its URL
+# to link your own policy, or fill in every field its built-in template needs:
+#   privacy: operatorName, contactEmail, updated, hostingRegion, logRetention,
+#            backupRetention
+#   terms:   operatorName, contactEmail, updated, governingLaw, venue,
+#            liabilityCap
+# A template with only some of its fields set stops the pods from starting.
+# The templates are a starting point, not legal advice.
+legal:
+  privacyUrl: ""        # LEGAL_PRIVACY_URL
+  termsUrl: ""          # LEGAL_TERMS_URL
+  operatorName: ""      # LEGAL_OPERATOR_NAME, e.g. Example Ltd.
+  contactEmail: ""      # LEGAL_CONTACT_EMAIL
+  updated: ""           # LEGAL_UPDATED, the "Last updated" date
+  hostingRegion: ""     # LEGAL_HOSTING_REGION, e.g. the European Union
+  logRetention: ""      # LEGAL_LOG_RETENTION, e.g. 30 days
+  backupRetention: ""   # LEGAL_BACKUP_RETENTION, e.g. 7 days
+  governingLaw: ""      # LEGAL_GOVERNING_LAW, e.g. England and Wales
+  venue: ""             # LEGAL_VENUE, e.g. London
+  liabilityCap: ""      # LEGAL_LIABILITY_CAP, e.g. US$100
+
 # Extra plain environment variables, for example
 #   CODE_STORAGE_ADAPTER: code_storage
 #   CODE_STORAGE_ORG: my-org

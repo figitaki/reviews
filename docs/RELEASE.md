@@ -142,6 +142,10 @@ Beyond the GitHub OAuth pair, the app needs:
 | `DATABASE_URL`     | Provisioned automatically by `fly postgres attach`    | `ecto://user:pass@host/db` format.                                    |
 | `PHX_HOST`         | Already set in `fly.toml` (`reviews.figitaki.dev`)    | Change here, not as a secret, if you move to a custom domain.         |
 
+Optional: a Privacy Policy and Terms of Service, through the `LEGAL_*`
+variables in [LEGAL_PAGES.md](LEGAL_PAGES.md). Without them the site has no
+legal pages or links. Production does not set them yet.
+
 To set the secret-class entries:
 
 ```sh

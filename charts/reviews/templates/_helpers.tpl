@@ -98,6 +98,13 @@ key: {{ .Values.database.existingSecretKey }}
   value: {{ .Values.mcp.enabled | quote }}
 - name: MCP_WRITES_ENABLED
   value: {{ .Values.mcp.writesEnabled | quote }}
+{{- /* Only the legal settings that are filled in; see docs/LEGAL_PAGES.md. */}}
+{{- range $key, $name := dict "privacyUrl" "LEGAL_PRIVACY_URL" "termsUrl" "LEGAL_TERMS_URL" "operatorName" "LEGAL_OPERATOR_NAME" "contactEmail" "LEGAL_CONTACT_EMAIL" "updated" "LEGAL_UPDATED" "hostingRegion" "LEGAL_HOSTING_REGION" "logRetention" "LEGAL_LOG_RETENTION" "backupRetention" "LEGAL_BACKUP_RETENTION" "governingLaw" "LEGAL_GOVERNING_LAW" "venue" "LEGAL_VENUE" "liabilityCap" "LEGAL_LIABILITY_CAP" }}
+{{- with index ($.Values.legal | default dict) $key }}
+- name: {{ $name }}
+  value: {{ . | toString | quote }}
+{{- end }}
+{{- end }}
 {{- /* The release writes its runtime config under RELEASE_TMP; the root filesystem is read-only. */}}
 {{- /* The BEAM sizes its port table from the open-file limit. Some container runtimes set it near 2^30, which costs about 1 GB at boot. */}}
 {{- if not (hasKey .Values.env "ERL_MAX_PORTS") }}
