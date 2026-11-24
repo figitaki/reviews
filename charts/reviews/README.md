@@ -97,11 +97,13 @@ is known to anyone, so a pod whose Secret lacks the key does not start.
 
 ## Values
 
-Each value sets one or more of the server's environment variables.
-[docs/CONFIGURATION.md](../../docs/CONFIGURATION.md) lists every variable,
-its default, whether it is a secret, and the value or Secret key that sets
-it, including the ones with no dedicated value that go under `env` or the
-Secret.
+The chart writes the server's settings into a config file, the
+`<release>-config` ConfigMap, mounted at `/etc/reviews/reviews.yaml` with
+`REVIEWS_CONFIG` pointing at it. Pods restart when it changes. Secrets stay
+in the Secret and reach the app as environment variables, which win over the
+file. [docs/CONFIGURATION.md](../../docs/CONFIGURATION.md) lists every
+setting, its default, whether it is a secret, and the value, `config` key or
+Secret key that sets it.
 
 | Key | Default | What it does |
 | --- | --- | --- |
@@ -132,7 +134,8 @@ Secret.
 | `mcp.writesEnabled` | `false` | MCP write tools. |
 | `legal.privacyUrl`, `legal.termsUrl` | `""` | Link your own Privacy Policy or Terms of Service (`LEGAL_PRIVACY_URL`, `LEGAL_TERMS_URL`). |
 | `legal.operatorName`, `.contactEmail`, `.updated`, `.hostingRegion`, `.logRetention`, `.backupRetention`, `.governingLaw`, `.venue`, `.liabilityCap` | `""` | Fill in the built-in templates instead (`LEGAL_*`). All empty means no legal pages or links. See [docs/LEGAL_PAGES.md](../../docs/LEGAL_PAGES.md). |
-| `env` | `{}` | Extra plain environment variables, such as `CODE_STORAGE_ADAPTER` or `DESIGN_CATALOG`. |
+| `config` | `{}` | Extra [config file](../../docs/CONFIGURATION.md#config-file) keys, merged over the ones the chart builds, such as `code_storage`, `limits` or `server.websocket_extra_origins`. No secrets. |
+| `env` | `{}` | Extra plain environment variables. They override the config file. |
 | `service.type`, `service.port` | `ClusterIP`, `80` | App Service. |
 | `ingress.enabled` | `false` | Create an Ingress for `host`. |
 | `ingress.className` | `""` | IngressClass, such as `traefik` or `nginx`. |
@@ -231,8 +234,8 @@ cert-manager sees the annotation, solves the challenge on port 80 and writes
 `reviews-tls`. LiveView uses WebSockets on `/live`; Traefik and ingress-nginx
 pass them through without extra settings. The app only accepts WebSocket
 connections whose `Origin` is `https://<host>`. While an old hostname
-redirects to `host`, add it with `env.WEBSOCKET_EXTRA_ORIGINS`
-(comma-separated `https://` origins) so pages opened there keep their socket.
+redirects to `host`, add it with `config.server.websocket_extra_origins`
+(a list of `https://` origins) so pages opened there keep their socket.
 
 ### Versions and image tags
 

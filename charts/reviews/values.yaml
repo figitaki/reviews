@@ -112,10 +112,24 @@ legal:
   venue: ""             # LEGAL_VENUE, e.g. London
   liabilityCap: ""      # LEGAL_LIABILITY_CAP, e.g. US$100
 
-# Extra plain environment variables (docs/CONFIGURATION.md), for example
-#   WEBSOCKET_EXTRA_ORIGINS: https://old.example.com
-#   CODE_STORAGE_ADAPTER: code_storage
-#   CODE_STORAGE_ORG: my-org
+# Extra keys for the server's config file (docs/CONFIGURATION.md,
+# config/reviews.example.yaml). The chart writes the file into a ConfigMap,
+# mounts it at /etc/reviews/reviews.yaml and sets REVIEWS_CONFIG; the keys
+# here are merged over the ones it builds from the values above. Do not put
+# secrets here: they belong in the Secret. For example
+#   server:
+#     websocket_extra_origins: [https://old.example.com]
+#   code_storage:
+#     enabled: true
+#     org: my-org
+#   limits:
+#     rate:
+#       writes: 120
+config: {}
+
+# Extra plain environment variables (docs/CONFIGURATION.md). They override
+# the config file. For example
+#   ERL_AFLAGS: "-proto_dist inet6_tcp"
 env: {}
 
 service:

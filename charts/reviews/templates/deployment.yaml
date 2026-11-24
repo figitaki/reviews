@@ -11,10 +11,12 @@ spec:
       {{- include "reviews.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        # Restart pods when the config file changes; the server reads it at boot.
+        checksum/config: {{ include "reviews.configFile" . | sha256sum }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
         {{- include "reviews.selectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
@@ -58,6 +60,9 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: config
+              mountPath: /etc/reviews
+              readOnly: true
       {{- end }}
       {{- if .Values.demo.enabled }}
         # Seeds the demo review under a Postgres advisory lock, so pods that
@@ -90,6 +95,9 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: config
+              mountPath: /etc/reviews
+              readOnly: true
       {{- end }}
       containers:
         - name: reviews
@@ -137,9 +145,15 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: config
+              mountPath: /etc/reviews
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir: {}
+        - name: config
+          configMap:
+            name: {{ include "reviews.configName" . }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

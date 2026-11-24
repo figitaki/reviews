@@ -5,7 +5,7 @@
 {{- /*
 At most 47 characters, so every derived name fits: the CloudNativePG Cluster
 <fullname>-db (the operator allows 50 and adds its own -rw, -app and other
-suffixes), <fullname>-headless and <fullname>-secrets. A longer name keeps its
+suffixes), <fullname>-headless, <fullname>-config and <fullname>-secrets. A longer name keeps its
 first 38 characters plus 8 hex of its SHA-256, so names that share a prefix
 stay distinct.
 */}}
@@ -65,6 +65,10 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- printf "%s-db" (include "reviews.fullname" .) }}
 {{- end }}
 
+{{- define "reviews.configName" -}}
+{{- printf "%s-config" (include "reviews.fullname" .) }}
+{{- end }}
+
 {{- define "reviews.headlessName" -}}
 {{- printf "%s-headless" (include "reviews.fullname" .) }}
 {{- end }}
@@ -82,29 +86,13 @@ key: {{ .Values.database.existingSecretKey }}
 
 {{/* Environment shared by the app container and the migration init container. */}}
 {{- define "reviews.env" -}}
-- name: PHX_HOST
-  value: {{ required "host is required" .Values.host | quote }}
-- name: PORT
-  value: "4000"
+{{- /* Plain settings are in the config file (reviews.configFile); an env var would override it. */}}
+- name: REVIEWS_CONFIG
+  value: /etc/reviews/reviews.yaml
 - name: DATABASE_URL
   valueFrom:
     secretKeyRef:
       {{- include "reviews.databaseUrlRef" . | trim | nindent 6 }}
-- name: POOL_SIZE
-  value: {{ .Values.database.poolSize | quote }}
-- name: ECTO_IPV6
-  value: {{ .Values.database.ipv6 | quote }}
-- name: MCP_ENABLED
-  value: {{ .Values.mcp.enabled | quote }}
-- name: MCP_WRITES_ENABLED
-  value: {{ .Values.mcp.writesEnabled | quote }}
-{{- /* Only the legal settings that are filled in; see docs/LEGAL_PAGES.md. */}}
-{{- range $key, $name := dict "privacyUrl" "LEGAL_PRIVACY_URL" "termsUrl" "LEGAL_TERMS_URL" "operatorName" "LEGAL_OPERATOR_NAME" "contactEmail" "LEGAL_CONTACT_EMAIL" "updated" "LEGAL_UPDATED" "hostingRegion" "LEGAL_HOSTING_REGION" "logRetention" "LEGAL_LOG_RETENTION" "backupRetention" "LEGAL_BACKUP_RETENTION" "governingLaw" "LEGAL_GOVERNING_LAW" "venue" "LEGAL_VENUE" "liabilityCap" "LEGAL_LIABILITY_CAP" }}
-{{- with index ($.Values.legal | default dict) $key }}
-- name: {{ $name }}
-  value: {{ . | toString | quote }}
-{{- end }}
-{{- end }}
 {{- /* The release writes its runtime config under RELEASE_TMP; the root filesystem is read-only. */}}
 {{- /* The BEAM sizes its port table from the open-file limit. Some container runtimes set it near 2^30, which costs about 1 GB at boot. */}}
 {{- if not (hasKey .Values.env "ERL_MAX_PORTS") }}
@@ -136,10 +124,6 @@ key: {{ .Values.database.existingSecretKey }}
 - name: ERL_ZFLAGS
   value: "-kernel inet_dist_use_interface {127,0,0,1}"
 {{- end }}
-{{- if .Values.clustering.enabled }}
-- name: DNS_CLUSTER_QUERY
-  value: {{ printf "%s.%s.svc.cluster.local" (include "reviews.headlessName" .) .Release.Namespace | quote }}
-{{- end }}
 {{- range $name, $value := .Values.env }}
 - name: {{ $name }}
   value: {{ $value | quote }}
@@ -151,4 +135,30 @@ allowPrivilegeEscalation: false
 readOnlyRootFilesystem: true
 capabilities:
   drop: ["ALL"]
+{{- end }}
+
+{{- /*
+The server's config file (docs/CONFIGURATION.md), built from the chart's
+values. `config` is merged over it, so any file key can be set there.
+Secrets stay in the Secret, which reaches the app as environment variables.
+*/}}
+{{- define "reviews.configFile" -}}
+{{- $file := dict
+  "server" (dict "host" (required "host is required" .Values.host))
+  "database" (dict "pool_size" (int .Values.database.poolSize) "ipv6" .Values.database.ipv6)
+  "mcp" (dict "enabled" .Values.mcp.enabled "writes_enabled" .Values.mcp.writesEnabled) -}}
+{{- if .Values.clustering.enabled }}
+{{- $_ := set $file "cluster" (dict "dns_query" (printf "%s.%s.svc.cluster.local" (include "reviews.headlessName" .) .Release.Namespace)) }}
+{{- end }}
+{{- /* Only the legal settings that are filled in; see docs/LEGAL_PAGES.md. */}}
+{{- $legal := dict }}
+{{- range $key, $name := dict "privacyUrl" "privacy_url" "termsUrl" "terms_url" "operatorName" "operator_name" "contactEmail" "contact_email" "updated" "updated" "hostingRegion" "hosting_region" "logRetention" "log_retention" "backupRetention" "backup_retention" "governingLaw" "governing_law" "venue" "venue" "liabilityCap" "liability_cap" }}
+{{- with index ($.Values.legal | default dict) $key }}
+{{- $_ := set $legal $name (toString .) }}
+{{- end }}
+{{- end }}
+{{- if $legal }}
+{{- $_ := set $file "legal" $legal }}
+{{- end }}
+{{- toYaml (mergeOverwrite $file (deepCopy (.Values.config | default dict))) }}
 {{- end }}

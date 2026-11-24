@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "reviews.configName" . }}
+  labels:
+    {{- include "reviews.labels" . | nindent 4 }}
+data:
+  reviews.yaml: |
+    {{- include "reviews.configFile" . | nindent 4 }}

@@ -1,0 +1,99 @@
+# Reviews deployment config file. Point REVIEWS_CONFIG at a copy of this file.
+# docs/CONFIGURATION.md describes every key and the environment variable it
+# stands for.
+#
+# - An environment variable that is set wins over the file, so you can keep
+#   some settings in the environment and the rest here.
+# - Secrets are never written here. A key ending in `_file` names a file that
+#   holds the secret, such as a mounted Kubernetes Secret; the file's trailing
+#   newline is dropped. The file is read only when the environment variable is
+#   unset.
+# - Unknown keys and wrong types stop the server at boot, with an error that
+#   names the key. Leave a key out, or set it to null, to use its default.
+
+server:
+  # Public hostname, without scheme or port (PHX_HOST).
+  host: reviews.example.com
+  # HTTP port (PORT). Default 4000.
+  port: 4000
+  # SECRET_KEY_BASE. Required. Generate with `openssl rand -hex 64`.
+  secret_key_base_file: /run/secrets/reviews/SECRET_KEY_BASE
+  # Extra origins LiveView sockets accept besides https://<host>, while an old
+  # hostname redirects here (WEBSOCKET_EXTRA_ORIGINS). Default none; on Fly,
+  # the hosted site's old hostname.
+  websocket_extra_origins: []
+  # Design-system pages at /design (DESIGN_CATALOG). Default false.
+  design_catalog: false
+
+database:
+  # DATABASE_URL, ecto://USER:PASS@HOST/DB. Required.
+  url_file: /run/secrets/reviews/DATABASE_URL
+  # Connections per instance (POOL_SIZE). Default 10.
+  pool_size: 10
+  # Connect over IPv6 (ECTO_IPV6). Default false.
+  ipv6: false
+
+cluster:
+  # DNS name whose records are the other instances (DNS_CLUSTER_QUERY).
+  # Unset means one node.
+  dns_query: null
+
+github:
+  # GitHub OAuth app for sign-in. Callback: https://<host>/auth/github/callback.
+  client_id: Iv1.0123456789abcdef
+  client_secret_file: /run/secrets/reviews/GITHUB_CLIENT_SECRET
+
+mcp:
+  # Hosted MCP endpoint at /mcp (MCP_ENABLED, MCP_WRITES_ENABLED).
+  enabled: false
+  writes_enabled: false
+
+code_storage:
+  # Store each patchset's commits in code.storage (CODE_STORAGE_ADAPTER).
+  enabled: false
+  org: null
+  jwt_private_key_file: null
+  # optional or required (CODE_STORAGE_POLICY).
+  policy: optional
+
+legal:
+  # Privacy Policy and Terms of Service (docs/LEGAL_PAGES.md). All unset means
+  # no legal pages. Per document, set its URL or every field of its template.
+  privacy_url: null
+  terms_url: null
+  operator_name: null
+  contact_email: null
+  updated: null
+  hosting_region: null
+  log_retention: null
+  backup_retention: null
+  governing_law: null
+  venue: null
+  liability_cap: null
+
+analytics:
+  # Aggregate export (docs/AGGREGATE_EXPORT.md). Off unless both are valid.
+  token_sha256_file: null
+  token_expires_at: null
+
+auth_relay:
+  # Preview sign-in relay (docs/PREVIEW_ENVS.md). A normal installation
+  # leaves these unset.
+  secret_file: null
+  url: null
+  preview_host: null
+
+limits:
+  # Requests per client address per minute (docs/ABUSE_PROTECTION.md). These
+  # have no environment variable.
+  rate:
+    requests: 300
+    writes: 60
+    uploads: 20
+    sockets: 60
+    owners: 60
+  # Largest request body, in bytes.
+  body_bytes:
+    upload: 50000000
+    mcp: 4000000
+    other: 64000
