@@ -6,96 +6,120 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
-- `docs/CONFIGURATION.md` lists every environment variable the server reads:
-  what it does, its default, whether it is required or secret, and its Helm
-  value. The README, `docs/RELEASE.md`, `.env.example` and the chart README
-  link to it.
-- LiveView accepts sockets from `reviews-dev.fly.dev` only on Fly now.
-  `WEBSOCKET_EXTRA_ORIGINS` sets other extra origins, or none.
+## [0.0.4] - 2026-11-24
+
+0.0.4 makes Reviews something you can run yourself. A Helm chart runs the
+server on Kubernetes with Postgres from CloudNativePG, every setting the
+server reads is documented in one place, and each deployment can publish its
+own Privacy Policy and Terms of Service. It also adds per-client request
+budgets, fixes three Phoenix and LiveView advisories, and makes review links
+unfurl in Slack, iMessage and Discord.
+
+### Added
+
+- **Helm chart.** `charts/reviews` runs the server on Kubernetes, with its
+  Postgres as a CloudNativePG cluster the chart creates or a database you
+  already have. Migrations run in an init container before each pod starts,
+  a pod is ready only while it can reach Postgres, and every pod needs a
+  private `RELEASE_COOKIE`. Seeding the demo review is opt-in. The chart is
+  versioned with each release and published to
+  `oci://ghcr.io/figitaki/charts/reviews` by the same `server-v<version>` tag
+  as the image, and chart `<version>` runs `server-v<version>` by default.
+  Its README covers installing, every value, and deploying with Flux (#271).
+- **Configuration reference.** `docs/CONFIGURATION.md` lists every
+  environment variable the server reads: what it does, its default, whether
+  it is required or secret, and its Helm value. The README,
+  `docs/RELEASE.md`, `.env.example` and the chart README link to it (#279).
+- **Privacy Policy and Terms of Service per deployment.** Link your own with
+  `LEGAL_PRIVACY_URL` and `LEGAL_TERMS_URL`, or fill in the built-in
+  templates at `/privacy` and `/terms` from `LEGAL_*` settings (operator,
+  contact email, date, hosting region, retention, governing law, venue,
+  liability cap). The landing page footer and every GitHub sign-in and
+  approval screen link whichever exist. With nothing set there are no legal
+  pages, links or "you agree" lines, and a partly filled template stops the
+  server from starting. The chart sets them from `legal.*` values. See
+  `docs/LEGAL_PAGES.md` (#277).
+- **Link previews.** Review links unfurl in Slack, iMessage, Discord and
+  other apps (Open Graph and Twitter card tags). A link to a comment shows
+  who wrote it, the file and line, and the comment as plain text (#257).
+- **The diff view's file tree is back.** Files sit under their folder with
+  their line counts and a letter for the change (M, A, D, R); a click
+  scrolls to the file's diff. On phones it folds behind a Files button. The
+  Guide map uses the same rows: sections show their decision as a letter
+  (A approved, C changes requested, S skipped), and the open section's files
+  show their path, counts and change letter (#261).
+- **The packet's author on the Overview.** The Guide's Overview shows who
+  published the packet: avatar, name and handle. An agent shows its provider
+  logo, an Agent badge and the person who owns it ("owned by @carey") (#260).
+
+### Changed
+
+- A person or agent looks the same everywhere: comment threads, the account
+  menu, the review list, Settings and the Guide's byline draw them the same
+  way (avatar, name, `@handle`, and an Agent marker for agents). Comments
+  show the display name beside the handle, and a missing avatar shows the
+  handle's first letter (#262).
+- Page titles no longer end in "· Phoenix Framework" (#257).
+- LiveView accepts sockets from `reviews-dev.fly.dev` only on Fly.
+  `WEBSOCKET_EXTRA_ORIGINS` sets other extra origins, or none (#279).
 - The preview sign-in relay's host pattern is configurable with
   `AUTH_RELAY_PREVIEW_HOST` (default `reviews-pr-*.fly.dev`). A malformed
-  pattern stops the server from starting.
-- A Helm chart in `charts/reviews` runs the server on Kubernetes, with its
-  Postgres as a CloudNativePG cluster or a database you already have.
-  Migrations run in an init container before each pod starts; seeding the
-  demo review is opt-in. Every pod needs a private `RELEASE_COOKIE`. The
-  chart is versioned with each release and published to
-  `oci://ghcr.io/figitaki/charts/reviews` from the same `server-v<version>`
-  tag as the image; chart `<version>` runs `server-v<version>` by default.
-  Its README covers installing, every value, and deploying with Flux.
-- phoenix is now 1.8.17, which fixes two HIGH advisories in 1.8.15:
+  pattern stops the server from starting (#279).
+- The server reads Markdown with MDEx (comrak), set up like the browser's
+  markdown-it, so a link preview shows the same text as the rendered comment
+  (#257).
+
+### Fixed
+
+- The favicon and the web app manifest load in production. The page linked
+  their digested names, which the static file allowlist refused with a 404
+  (#270).
+- Opening a thread from Comments in Diff mode stays in Diff mode and opens
+  the thread there, instead of switching to the Guide and loading every diff
+  again (#245, #267).
+- A comment link that opens the Changes view keeps `comment`, so it still
+  lands on that comment (#257).
+
+### Security
+
+- **Request budgets.** The server limits requests per client before
+  expensive handling, authenticates API writes before parsing their bodies,
+  and limits small bodies to 64KB while keeping 50MB review and patchset
+  uploads and 4MB MCP requests. A rejected request gets `429` with
+  `error_code: rate_limited`, unsupported multipart bodies get `415`, and
+  `reviews login` waits out a 429 and keeps polling. On Fly the app listens
+  on IPv4 only and budgets use a single valid `Fly-Client-IP`; IPv6 clients
+  share a budget per /64. See `docs/ABUSE_PROTECTION.md` (#157).
+- phoenix is 1.8.17, which fixes two HIGH advisories in 1.8.15:
   EEF-CVE-2026-128361 (GHSA-pvfx-rx4x-phrr), where an unsanitized presence
   key crashes the Presence tracker, and EEF-CVE-2026-129344
   (GHSA-5vmc-qgf8-rw36), where a client that picks the V1 serializer can
   crash shared broadcast dispatch with a binary payload. Reviews uses no
-  Presence, but its `/live` socket accepts the V1 serializer. 1.8.17 was
-  published on 2026-11-20, so this bump is an exception to the 7-day
-  release-age rule, approved by Carey for this security fix only.
-  phoenix_pubsub moves from 2.3.0 to 2.4.1 because phoenix 1.8.17 requires
-  `~> 2.4`; no other locked dependency changed.
-- phoenix_live_view is now 1.2.14, which fixes EEF-CVE-2026-126334
+  Presence, but its `/live` socket accepts the V1 serializer. phoenix_pubsub
+  moves to 2.4.1, which phoenix 1.8.17 requires (#281).
+- phoenix_live_view is 1.2.14, which fixes EEF-CVE-2026-126334
   (GHSA-v4p7-3pm2-wq6c): a LiveView joined without `"url"` skipped its
-  `live_session` `on_mount` hooks. Reviews uses no `live_session` or
-  `on_mount` hooks, so it was not exposed, but the Hex audit failed on
-  1.2.12. 1.2.14 was published on 2026-11-20, so this bump is an exception
-  to the 7-day release-age rule, approved by Carey for this security fix
-  only. No other locked dependency changed.
-- Each deployment can have a Privacy Policy and Terms of Service: link its
-  own with `LEGAL_PRIVACY_URL` and `LEGAL_TERMS_URL`, or fill in the
-  built-in templates at `/privacy` and `/terms` from `LEGAL_*` settings
-  (operator, contact email, date, hosting region, log and backup retention,
-  governing law, venue, liability cap). The landing page footer and every
-  GitHub sign-in and approval screen link whichever exist. With nothing set,
-  there are no legal pages, links or "you agree" lines. A partly filled
-  template stops the server from starting. The Helm chart sets them from
-  `legal.*` values. See `docs/LEGAL_PAGES.md`.
-- The favicon and the web app manifest now load in production. The page
-  linked their digested names, such as `/site-<hash>.webmanifest`, which
-  the static file allowlist refused with a 404.
-- Opening a thread from Comments in Diff mode now stays in Diff mode and opens the thread there, instead of switching to the Guide and loading every diff again (#245).
-- Review links now unfurl in Slack, iMessage, Discord and other apps (Open
-  Graph and Twitter card tags). A link to a comment shows who wrote it, the
-  file and line, and the comment as plain text. Page titles no longer end in
-  "· Phoenix Framework". A comment link that opens the Changes view now keeps
-  `comment`, so it still lands on that comment.
-- The server now reads Markdown with MDEx (comrak), set up like the
-  browser's markdown-it in `Reviews.Markdown`. Link previews use it, so a
-  preview shows the same text as the rendered comment. MDEx is pinned to
-  0.14.6 and mdex_native to 0.3.1, the newest releases at least 7 days old.
-- A person or agent looks the same everywhere: comment threads, the account
-  menu, the review list, Settings and the Guide's byline all draw them with
-  one `<.ds_identity>` (avatar, name, `@handle`, and an Agent marker for
-  agents). Comments now show the display name beside the handle and mark
-  agents. The review list's "(agent)" becomes the same Agent marker. The
-  account menu and the review list show the handle's first letter when there
-  is no avatar instead of nothing. Every avatar keeps a thin ring, so a
-  provider logo reads as a circle on both themes, and the Agent marker's
-  outline is strong enough to see on dark. The handle is left out where it
-  only repeats the name. Settings keeps its square, stacked rows.
-- The Guide's Overview names who published the packet: their avatar, name
-  and handle. The avatar is round and sized like comment avatars, with the
-  same first-letter fallback. An agent shows its provider logo, an Agent badge, and the
-  person who owns it ("owned by @carey"). The owner comes in the same query
-  that already loads the author, so the review page makes no extra request.
-  Settings and the Overview share the new `<.ds_avatar_mark>`.
-- The diff view has a file tree again. Files sit under their folder with
-  their line counts and a letter for the change (M, A, D, R); a click
-  scrolls to the file's diff. On phones it folds behind a Files button.
-- The Guide map uses the same tree rows: sections show their decision as a
-  letter (A approved, C changes requested, S skipped), and the open
-  section's files show their path, counts and change letter. Rows are 44px.
+  `live_session` `on_mount` hooks. Reviews uses neither, so it was not
+  exposed (#274).
+- Both bumps were published on 2026-11-20, inside the 7-day release-age
+  rule; Carey approved an exception for these security fixes only.
 
-### Security
+### For integrators
 
-- Add bounded per-instance request budgets before expensive request handling,
-  authenticate API writes before body parsing, and limit small bodies to 64KB
-  while keeping authenticated 50MB review/patchset uploads and 4MB MCP
-  requests. A rejected request gets `429` with `error_code: rate_limited`.
-  Unsupported multipart bodies now return 415. A 429 from an OAuth endpoint
-  keeps its CORS headers and exposes `Retry-After`, and `reviews login` waits
-  out a 429 and keeps polling. On Fly the app now listens on IPv4 only and
-  budgets use a single valid `Fly-Client-IP` (else the socket peer); IPv6
-  clients share a budget per /64. See `docs/ABUSE_PROTECTION.md`.
+- MDEx is pinned to 0.14.6 and mdex_native to 0.3.1 (#257).
+- The chart publishes from `release-server-image.yml`, after the image.
+  CI's Helm chart job fails if `charts/reviews/Chart.yaml`'s `version` or
+  `appVersion` differs from `mix.exs` (#271).
+
+### Not yet live
+
+- Code storage is still off on reviews.figitaki.dev; its
+  `/api/v1/capabilities` reports it disabled, so pushes there stay
+  diff-only.
+- reviews.figitaki.dev sets no `LEGAL_*` variable, so it shows no legal
+  pages yet.
+- The private aggregate analytics export is off unless its own credentials
+  are set, and the design catalog is on only in development and on previews.
 
 ## [0.0.3] - 2026-11-19
 

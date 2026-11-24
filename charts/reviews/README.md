@@ -75,7 +75,7 @@ What you get:
 
    ```sh
    helm install reviews oci://ghcr.io/figitaki/charts/reviews \
-     --version 0.0.3 --namespace reviews -f values.yaml --wait --timeout 10m
+     --version 0.0.4 --namespace reviews -f values.yaml --wait --timeout 10m
    ```
 
 The first install takes a minute or two. CloudNativePG starts Postgres and
@@ -236,8 +236,8 @@ redirects to `host`, add it with `env.WEBSOCKET_EXTRA_ORIGINS`
 
 ### Versions and image tags
 
-The chart is versioned with the rest of Reviews: chart `0.0.3` is part of
-release `0.0.3`, and by default it runs the image `server-v0.0.3`, the server
+The chart is versioned with the rest of Reviews: chart `0.0.4` is part of
+release `0.0.4`, and by default it runs the image `server-v0.0.4`, the server
 it was released and tested with. To run a release, install the chart
 version of the same number and leave `image.tag` empty.
 
@@ -374,7 +374,7 @@ spec:
   chart:
     spec:
       chart: reviews
-      version: "0.0.3"
+      version: "0.0.4"
       sourceRef:
         kind: HelmRepository
         name: reviews
@@ -531,7 +531,7 @@ Then mark the line in `pins.yaml` that Flux should rewrite:
 
 ```yaml
 image:
-  tag: 0.0.3 # {"$imagepolicy": "flux-system:reviews:tag"}
+  tag: 0.0.4 # {"$imagepolicy": "flux-system:reviews:tag"}
 ```
 
 This changes only the image, not the chart: the release's server then runs
@@ -548,14 +548,12 @@ gives the same result with a review step.
 
 ## Known limits
 
-- **Request budgets.** Release `0.0.3`, the chart's default image, has no
-  per-client request budgets. They are in images built from `main` since
-  [#157](https://github.com/figitaki/reviews/pull/157) (`sha-` tags) and will be in the next release; see
-  [docs/ABUSE_PROTECTION.md](../../docs/ABUSE_PROTECTION.md). Those budgets
-  key on the socket peer. Behind an ingress that peer is the ingress pod, so
-  every visitor that comes through the same ingress pod shares one budget
-  (300 requests a minute per app pod). Only Fly's `Fly-Client-IP` header is
-  trusted today.
+- **Request budgets behind a proxy.** The app's per-client request budgets
+  ([docs/ABUSE_PROTECTION.md](../../docs/ABUSE_PROTECTION.md)), new in
+  0.0.4, key on the socket peer. Behind an ingress that peer is the ingress
+  pod, so every visitor that comes through the same ingress pod shares one
+  budget (300 requests a minute per app pod). Only Fly's `Fly-Client-IP`
+  header is trusted today.
 - **Database traffic is not encrypted.** The app connects to Postgres without
   TLS, which CloudNativePG allows by default. Restrict who can reach the
   database pods with a NetworkPolicy if that matters.
@@ -577,8 +575,8 @@ runs `.github/scripts/check_chart.sh` and pushes the chart to
 `oci://ghcr.io/figitaki/charts/reviews`.
 
 A fix to the chart alone ships as a new patch release: bump every version
-(for example `0.0.3` to `0.0.4`), add the fix to `CHANGELOG.md`, and tag
-`server-v0.0.4`. The release also rebuilds the server image from the same
+(for example `0.0.4` to `0.0.5`), add the fix to `CHANGELOG.md`, and tag
+`server-v0.0.5`. The release also rebuilds the server image from the same
 commit, so the new chart and its default image still match.
 
 To check the chart locally, including that its versions match `mix.exs`:
