@@ -6,6 +6,14 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- A Helm chart in `charts/reviews` runs the server on Kubernetes, with its
+  Postgres as a CloudNativePG cluster or a database you already have.
+  Migrations run in an init container before each pod starts; seeding the
+  demo review is opt-in. Every pod needs a private `RELEASE_COOKIE`. The
+  chart is versioned with each release and published to
+  `oci://ghcr.io/figitaki/charts/reviews` from the same `server-v<version>`
+  tag as the image; chart `<version>` runs `server-v<version>` by default.
+  Its README covers installing, every value, and deploying with Flux.
 - phoenix is now 1.8.17, which fixes two HIGH advisories in 1.8.15:
   EEF-CVE-2026-128361 (GHSA-pvfx-rx4x-phrr), where an unsanitized presence
   key crashes the Presence tracker, and EEF-CVE-2026-129344

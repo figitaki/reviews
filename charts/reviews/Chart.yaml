@@ -1,0 +1,18 @@
+apiVersion: v2
+name: reviews
+description: Reviews server, with its Postgres run by the CloudNativePG operator.
+type: application
+# Both match the Reviews release (mix.exs). The release process bumps them
+# with the rest of the code, and the server-v<version> tag publishes this
+# chart to oci://ghcr.io/figitaki/charts/reviews with the server image.
+version: 0.0.3
+# The default image is ghcr.io/figitaki/reviews-server:server-v<appVersion>,
+# the server this chart version was released with.
+appVersion: "0.0.3"
+home: https://github.com/figitaki/reviews
+sources:
+  - https://github.com/figitaki/reviews
+keywords:
+  - code-review
+  - phoenix
+  - cloudnative-pg

@@ -9,6 +9,9 @@ uploading diffs.
 
 Current version: `0.0.3`.
 
+To run it on Kubernetes, see the Helm chart in
+[`charts/reviews`](charts/reviews/README.md).
+
 ## What It Provides
 
 - Link-based reviews for any uploaded diff.

@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "reviews.fullname" . }}
+  labels:
+    {{- include "reviews.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "reviews.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+{{- if .Values.clustering.enabled }}
+---
+# DNS for DNS_CLUSTER_QUERY: one A record per pod, ready or not, so a new pod
+# joins the cluster before it takes traffic.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "reviews.headlessName" . }}
+  labels:
+    {{- include "reviews.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "reviews.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: epmd
+      port: 4369
+      targetPort: 4369
+      protocol: TCP
+{{- end }}
