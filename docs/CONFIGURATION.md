@@ -156,7 +156,8 @@ instead of many environment variables.
 [`config/reviews.example.yaml`](../config/reviews.example.yaml) is an
 annotated example with every key. The Helm chart writes this file from its
 values into a ConfigMap, mounts it at `/etc/reviews/reviews.yaml` and sets
-`REVIEWS_CONFIG`.
+`REVIEWS_CONFIG`. For one release it also copies the plain settings into pod
+environment variables; see the [chart README](../charts/reviews/README.md#values).
 
 - **Environment wins.** Each key stands for one environment variable (below).
   When that variable is set, even to an empty string, the file's key is

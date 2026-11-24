@@ -101,7 +101,13 @@ The chart writes the server's settings into a config file, the
 `<release>-config` ConfigMap, mounted at `/etc/reviews/reviews.yaml` with
 `REVIEWS_CONFIG` pointing at it. Pods restart when it changes. Secrets stay
 in the Secret and reach the app as environment variables, which win over the
-file. [docs/CONFIGURATION.md](../../docs/CONFIGURATION.md) lists every
+file.
+
+For one release, the chart also sets `PHX_HOST`, `PORT`, `POOL_SIZE`,
+`ECTO_IPV6`, `MCP_*`, `LEGAL_*` and `DNS_CLUSTER_QUERY` as pod environment
+variables, copied from the rendered file so the two always agree. These
+copies go away in the release after this one. Tooling that reads them from
+the pod's environment should read the config file instead. [docs/CONFIGURATION.md](../../docs/CONFIGURATION.md) lists every
 setting, its default, whether it is a secret, and the value, `config` key or
 Secret key that sets it.
 

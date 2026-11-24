@@ -93,6 +93,32 @@ key: {{ .Values.database.existingSecretKey }}
   valueFrom:
     secretKeyRef:
       {{- include "reviews.databaseUrlRef" . | trim | nindent 6 }}
+{{- /*
+Copies of config file settings as environment variables, for one release so
+tooling that reads pod env keeps working. They come from the rendered file,
+so they always agree with it. Removed in the release after 0.0.5.
+*/}}
+{{- $file := include "reviews.configFile" . | fromYaml }}
+- name: PHX_HOST
+  value: {{ $file.server.host | quote }}
+- name: PORT
+  value: "4000"
+- name: POOL_SIZE
+  value: {{ $file.database.pool_size | int | toString | quote }}
+- name: ECTO_IPV6
+  value: {{ $file.database.ipv6 | toString | quote }}
+- name: MCP_ENABLED
+  value: {{ $file.mcp.enabled | toString | quote }}
+- name: MCP_WRITES_ENABLED
+  value: {{ $file.mcp.writes_enabled | toString | quote }}
+{{- range $key, $value := ($file.legal | default dict) }}
+- name: {{ printf "LEGAL_%s" (upper $key) }}
+  value: {{ $value | toString | quote }}
+{{- end }}
+{{- with ($file.cluster | default dict).dns_query }}
+- name: DNS_CLUSTER_QUERY
+  value: {{ . | quote }}
+{{- end }}
 {{- /* The release writes its runtime config under RELEASE_TMP; the root filesystem is read-only. */}}
 {{- /* The BEAM sizes its port table from the open-file limit. Some container runtimes set it near 2^30, which costs about 1 GB at boot. */}}
 {{- if not (hasKey .Values.env "ERL_MAX_PORTS") }}
