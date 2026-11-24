@@ -14,6 +14,16 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
   `oci://ghcr.io/figitaki/charts/reviews` from the same `server-v<version>`
   tag as the image; chart `<version>` runs `server-v<version>` by default.
   Its README covers installing, every value, and deploying with Flux.
+- phoenix is now 1.8.17, which fixes two HIGH advisories in 1.8.15:
+  EEF-CVE-2026-128361 (GHSA-pvfx-rx4x-phrr), where an unsanitized presence
+  key crashes the Presence tracker, and EEF-CVE-2026-129344
+  (GHSA-5vmc-qgf8-rw36), where a client that picks the V1 serializer can
+  crash shared broadcast dispatch with a binary payload. Reviews uses no
+  Presence, but its `/live` socket accepts the V1 serializer. 1.8.17 was
+  published on 2026-11-20, so this bump is an exception to the 7-day
+  release-age rule, approved by Carey for this security fix only.
+  phoenix_pubsub moves from 2.3.0 to 2.4.1 because phoenix 1.8.17 requires
+  `~> 2.4`; no other locked dependency changed.
 - phoenix_live_view is now 1.2.14, which fixes EEF-CVE-2026-126334
   (GHSA-v4p7-3pm2-wq6c): a LiveView joined without `"url"` skipped its
   `live_session` `on_mount` hooks. Reviews uses no `live_session` or
