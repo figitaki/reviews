@@ -26,6 +26,8 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match mix.exs version $mix_version" >&2
             exit 1
           fi
+          # Also checks that the chart's version and appVersion equal mix.exs.
+          .github/scripts/check_chart.sh
           echo "version=$version" >> "$GITHUB_ENV"
 
       - name: Compute image metadata
@@ -53,3 +55,26 @@ jobs:
             ${{ steps.image.outputs.image_name }}:server-v${{ env.version }}
             ${{ steps.image.outputs.image_name }}:${{ env.version }}
             ${{ steps.image.outputs.image_name }}:sha-${{ steps.image.outputs.short_sha }}
+
+  # The chart's default image is server-v<version>, so it is pushed only after
+  # that image exists.
+  publish_chart:
+    name: Publish Helm chart
+    runs-on: ubuntu-latest
+    needs: publish
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner image ships Helm, which pushes OCI charts. The publish job
+      # already checked that the chart's versions match this tag.
+      - name: Package and push
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#server-v}"
+          registry="oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"
+          echo "$GHCR_TOKEN" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          helm package charts/reviews --destination dist
+          helm push "dist/reviews-${version}.tgz" "$registry"

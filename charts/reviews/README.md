@@ -61,8 +61,6 @@ What you get:
 
    ```yaml
    host: reviews.example.com
-   image:
-     tag: "0.0.3"
    secrets:
      existingSecret: reviews-env
    ingress:
@@ -77,7 +75,7 @@ What you get:
 
    ```sh
    helm install reviews oci://ghcr.io/figitaki/charts/reviews \
-     --version 0.1.0 --namespace reviews -f values.yaml --wait --timeout 10m
+     --version 0.0.3 --namespace reviews -f values.yaml --wait --timeout 10m
    ```
 
 The first install takes a minute or two. CloudNativePG starts Postgres and
@@ -103,7 +101,7 @@ is known to anyone, so a pod whose Secret lacks the key does not start.
 | --- | --- | --- |
 | `host` | `reviews.example.com` | Public hostname. Sets `PHX_HOST` and the Ingress host. Other hosts redirect here. |
 | `image.repository` | `ghcr.io/figitaki/reviews-server` | Server image. |
-| `image.tag` | chart `appVersion` | Image tag. Pin a release (`0.0.3`) or a commit (`sha-<12 hex>`). |
+| `image.tag` | `server-v<appVersion>` | Image tag. Empty runs the server released with this chart version. Set a commit build (`sha-<12 hex>`) to run something else. |
 | `image.digest` | `""` | Pull by digest (`sha256:...`) instead of by tag. |
 | `replicaCount` | `1` | App pods. Turn on `clustering` when it is more than 1. |
 | `secrets.existingSecret` | `""` | Secret loaded as environment variables. Must hold `SECRET_KEY_BASE` and `RELEASE_COOKIE`; add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` for sign-in, and any other secret setting such as `CODE_STORAGE_JWT_PRIVATE_KEY`. Empty means a generated Secret. |
@@ -229,12 +227,18 @@ pass them through without extra settings. The app only accepts WebSocket
 connections whose `Origin` is `https://<host>` or `https://reviews-dev.fly.dev`,
 the hosted site's legacy hostname, which `config/runtime.exs` also allows.
 
-### Image tags
+### Versions and image tags
 
-Every push to `main` publishes `main` and `sha-<first 12 hex of the commit>`.
-Every server release publishes `<version>` (such as `0.0.3`) and
-`server-v<version>`. `main` moves, so do not deploy it. Pin a release or a
-`sha-` tag, and change the pin to deploy.
+The chart is versioned with the rest of Reviews: chart `0.0.3` is part of
+release `0.0.3`, and by default it runs the image `server-v0.0.3`, the server
+it was released and tested with. To run a release, install the chart
+version of the same number and leave `image.tag` empty.
+
+Every push to `main` also publishes `main` and
+`sha-<first 12 hex of the commit>`. `main` moves, so do not deploy it. A
+`sha-` tag runs a build from `main` with the chart you have installed; a
+build newer than the chart may need chart changes that come only with the
+next release.
 
 ## Continuous deployment with Flux
 
@@ -363,7 +367,7 @@ spec:
   chart:
     spec:
       chart: reviews
-      version: "0.1.0"
+      version: "0.0.3"
       sourceRef:
         kind: HelmRepository
         name: reviews
@@ -435,13 +439,17 @@ ingress:
 
 ```yaml
 # pins.yaml
+# Empty runs server-v<chart version>. Set a sha- tag to run a build from main
+# between releases, such as sha-8599da003156.
 image:
-  tag: sha-8599da003156
+  tag: ""
 ```
 
 ### Deploying a new version
 
-To deploy, change the tag in `pins.yaml` and merge the change. Flux upgrades
+To deploy a release, change `chart.spec.version` in `helmrelease.yaml` and
+merge the change; the image follows the chart. To deploy a build from `main`
+between releases, set its `sha-` tag in `pins.yaml` instead. Flux upgrades
 the release on its next reconcile; `flux reconcile kustomization <name>
 --with-source` does it now. If the new pods do not become ready within
 `timeout`, Flux rolls back to the last good revision. The old pods keep
@@ -449,12 +457,11 @@ serving meanwhile, as long as the new image's migrations, which have already
 run, are compatible with them. Flux's rollback does not revert migrations;
 see [Migrations](#migrations).
 
-A scheduled CI job can open that pull request: read the newest `sha-` tag for
-a commit on `main` (or the newest release), write it to `pins.yaml`, and open
-a pull request. The merged commit is then the deploy record.
-
-To upgrade the chart itself, change `chart.spec.version`. Each chart version
-has a `chart-v<version>` tag in this repository.
+A scheduled CI job can open that pull request: read the newest release (or
+the newest `sha-` tag for a commit on `main`), write it to
+`helmrelease.yaml` (or `pins.yaml`), and open a pull request. The merged
+commit is then the deploy record. Chart versions are the `server-v<version>`
+tags in this repository.
 
 ### Optional: image automation for releases
 
@@ -520,6 +527,10 @@ image:
   tag: 0.0.3 # {"$imagepolicy": "flux-system:reviews:tag"}
 ```
 
+This changes only the image, not the chart: the release's server then runs
+on the chart version you pinned. Prefer bumping `chart.spec.version`, which
+moves both together.
+
 The tradeoff: you deploy only releases, which ship less often than `main`,
 and the deploy commit comes from Flux rather than a reviewed pull request.
 Set `push.branch` to another branch if you want a pull request instead.
@@ -530,7 +541,7 @@ gives the same result with a review step.
 
 ## Known limits
 
-- **Request budgets.** The chart's default image, release `0.0.3`, has no
+- **Request budgets.** Release `0.0.3`, the chart's default image, has no
   per-client request budgets. They are in images built from `main` since
   [#157](https://github.com/figitaki/reviews/pull/157) (`sha-` tags) and will be in the next release; see
   [docs/ABUSE_PROTECTION.md](../../docs/ABUSE_PROTECTION.md). Those budgets
@@ -550,19 +561,20 @@ gives the same result with a review step.
 
 ## Releasing the chart
 
-Bump `version` in `Chart.yaml` for every chart change, and `appVersion` when
-the default image should move to a new server release. Then tag and push:
-
-```sh
-git tag chart-v0.1.0
-git push origin chart-v0.1.0
-```
-
-`.github/workflows/release-chart.yml` checks that the tag matches
-`Chart.yaml`, runs `.github/scripts/check_chart.sh`, and pushes it to
+The chart ships with every Reviews release; there are no chart-only tags.
+[docs/RELEASE.md](../../docs/RELEASE.md) bumps `version` and `appVersion` in
+`Chart.yaml` along with `mix.exs` and the other manifests. Pushing the
+`server-v<version>` tag runs `.github/workflows/release-server-image.yml`,
+which checks that every version matches the tag, publishes the image, then
+runs `.github/scripts/check_chart.sh` and pushes the chart to
 `oci://ghcr.io/figitaki/charts/reviews`.
 
-To check the chart locally:
+A fix to the chart alone ships as a new patch release: bump every version
+(for example `0.0.3` to `0.0.4`), add the fix to `CHANGELOG.md`, and tag
+`server-v0.0.4`. The release also rebuilds the server image from the same
+commit, so the new chart and its default image still match.
+
+To check the chart locally, including that its versions match `mix.exs`:
 
 ```sh
 .github/scripts/check_chart.sh
