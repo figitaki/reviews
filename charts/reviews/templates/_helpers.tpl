@@ -38,7 +38,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{- define "reviews.imageTag" -}}
-{{- .Values.image.tag | default .Chart.AppVersion }}
+{{- .Values.image.tag | default (printf "server-v%s" .Chart.AppVersion) }}
 {{- end }}
 
 {{- define "reviews.image" -}}

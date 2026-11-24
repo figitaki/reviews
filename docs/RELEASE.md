@@ -32,8 +32,10 @@ and known limits. Versions with a `-` suffix publish as GitHub prereleases.
 
 Before cutting a release:
 
-1. Update the version in `mix.exs`, `cli/Cargo.toml`, `cli/Cargo.lock`, and
-   `assets/package.json`.
+1. Update the version in `mix.exs`, `cli/Cargo.toml`, `cli/Cargo.lock`,
+   `assets/package.json`, and both `version` and `appVersion` in
+   `charts/reviews/Chart.yaml`. CI's Helm chart job fails if the chart's
+   versions differ from `mix.exs`.
 2. Add the user-facing changes to `CHANGELOG.md` under a `## [<version>] -
    <date>` heading. The CLI release's GitHub body is that section, after a
    short header and before a compare link from the previous `cli-v*` tag
@@ -47,12 +49,13 @@ Before cutting a release:
    git push origin cli-v0.0.1-alpha.0 server-v0.0.1-alpha.0
    ```
 
-4. If the Helm chart should default to the new server image, set
-   `appVersion` in `charts/reviews/Chart.yaml` to the server version, bump the
-   chart's own `version`, and push a `chart-v<chart version>` tag. The
-   `release-chart.yml` workflow publishes it to
-   `oci://ghcr.io/figitaki/charts/reviews`. See
-   [`charts/reviews/README.md`](../charts/reviews/README.md).
+The `server-v*` tag also publishes the Helm chart. `release-server-image.yml`
+checks that `mix.exs` and the chart's `version` and `appVersion` match the
+tag, pushes the image, then pushes the chart to
+`oci://ghcr.io/figitaki/charts/reviews` at the same version. Chart `<version>`
+runs the image `server-v<version>` by default. A fix to the chart alone ships
+as a new patch release, with every version bumped as above. See
+[`charts/reviews/README.md`](../charts/reviews/README.md).
 
 The `release-cli.yml` workflow publishes GitHub release assets named:
 

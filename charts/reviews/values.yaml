@@ -8,9 +8,9 @@ fullnameOverride: ""
 
 image:
   repository: ghcr.io/figitaki/reviews-server
-  # Image tag. Empty means the chart's appVersion, a server release such as
-  # 0.0.3. Pin an immutable tag: a release, or sha-<12 hex> for a commit on
-  # main. Avoid the moving `main` tag.
+  # Image tag. Empty means server-v<appVersion>, the server released with
+  # this chart version. To run another build, set an immutable tag such as
+  # sha-<12 hex> for a commit on main. Avoid the moving `main` tag.
   tag: ""
   # Optional digest (sha256:...). When set, the image is pulled by digest and
   # the tag is only a label.

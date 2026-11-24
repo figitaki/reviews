@@ -5,6 +5,17 @@ set -euo pipefail
 chart=charts/reviews
 prod="$chart/ci/production-values.yaml"
 
+# The chart is released with the server, so its version and appVersion must
+# both equal the version in mix.exs.
+mix_version="$(sed -n 's/.*version: "\([^"]*\)".*/\1/p' mix.exs | head -n 1)"
+chart_version="$(sed -n 's/^version: *//p' "$chart/Chart.yaml")"
+app_version="$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$chart/Chart.yaml")"
+if [ "$chart_version" != "$mix_version" ] || [ "$app_version" != "$mix_version" ]; then
+  echo "charts/reviews/Chart.yaml has version $chart_version and appVersion $app_version;" \
+    "both must equal the mix.exs version $mix_version." >&2
+  exit 1
+fi
+
 helm lint --strict "$chart"
 helm lint --strict "$chart" -f "$prod"
 helm template reviews "$chart" > /dev/null
