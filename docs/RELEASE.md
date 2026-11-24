@@ -134,7 +134,9 @@ curl -sI https://reviews.figitaki.dev/ | head -1   # expect: HTTP/2 200
 
 ## 4. Other required Fly secrets
 
-Beyond the GitHub OAuth pair, the app needs:
+Beyond the GitHub OAuth pair, the app needs the settings below. Every
+other setting, and what each defaults to, is in
+[CONFIGURATION.md](CONFIGURATION.md).
 
 | Secret             | How to generate                                       | Notes                                                                 |
 | ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------- |
@@ -142,9 +144,9 @@ Beyond the GitHub OAuth pair, the app needs:
 | `DATABASE_URL`     | Provisioned automatically by `fly postgres attach`    | `ecto://user:pass@host/db` format.                                    |
 | `PHX_HOST`         | Already set in `fly.toml` (`reviews.figitaki.dev`)    | Change here, not as a secret, if you move to a custom domain.         |
 
-Optional: a Privacy Policy and Terms of Service, through the `LEGAL_*`
-variables in [LEGAL_PAGES.md](LEGAL_PAGES.md). Without them the site has no
-legal pages or links. Production does not set them yet.
+Optional settings, such as the `LEGAL_*` legal pages, MCP and code
+storage, are in [CONFIGURATION.md](CONFIGURATION.md). Production does not set
+`LEGAL_*` yet.
 
 To set the secret-class entries:
 
@@ -300,7 +302,10 @@ in Vercel (Vercel nameservers); the subdomain points at the Fly app via an
 
 Fly issues the TLS cert via Let's Encrypt (allowed by the `figitaki.dev` CAA
 records). `ReviewsWeb.Plugs.CanonicalHost` 301-redirects the legacy
-`reviews-dev.fly.dev` hostname to the custom domain.
+`reviews-dev.fly.dev` hostname to the custom domain. On Fly, LiveView also
+accepts sockets from that hostname, so pages opened there before the redirect
+keep working; set `WEBSOCKET_EXTRA_ORIGINS` to change that
+([CONFIGURATION.md](CONFIGURATION.md#external-url-tls-and-proxies)).
 
 To repoint at a different domain:
 

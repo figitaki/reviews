@@ -97,6 +97,12 @@ is known to anyone, so a pod whose Secret lacks the key does not start.
 
 ## Values
 
+Each value sets one or more of the server's environment variables.
+[docs/CONFIGURATION.md](../../docs/CONFIGURATION.md) lists every variable,
+its default, whether it is a secret, and the value or Secret key that sets
+it, including the ones with no dedicated value that go under `env` or the
+Secret.
+
 | Key | Default | What it does |
 | --- | --- | --- |
 | `host` | `reviews.example.com` | Public hostname. Sets `PHX_HOST` and the Ingress host. Other hosts redirect here. |
@@ -224,8 +230,9 @@ ingress:
 cert-manager sees the annotation, solves the challenge on port 80 and writes
 `reviews-tls`. LiveView uses WebSockets on `/live`; Traefik and ingress-nginx
 pass them through without extra settings. The app only accepts WebSocket
-connections whose `Origin` is `https://<host>` or `https://reviews-dev.fly.dev`,
-the hosted site's legacy hostname, which `config/runtime.exs` also allows.
+connections whose `Origin` is `https://<host>`. While an old hostname
+redirects to `host`, add it with `env.WEBSOCKET_EXTRA_ORIGINS`
+(comma-separated `https://` origins) so pages opened there keep their socket.
 
 ### Versions and image tags
 

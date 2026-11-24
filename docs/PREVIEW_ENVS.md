@@ -176,7 +176,10 @@ GitHub OAuth app and its existing callback,
    `https://reviews.figitaki.dev/auth/relay?host=reviews-pr-42.fly.dev&state=…`.
    The preview keeps `state` and the starting page (`return_to`) in its
    own session.
-2. The relay accepts only hosts matching `reviews-pr-<digits>.fly.dev`.
+2. The relay accepts only hosts matching `reviews-pr-<digits>.fly.dev`
+   (`AUTH_RELAY_PREVIEW_HOST`, default `reviews-pr-*.fly.dev`; the relay
+   and its previews must agree on it, see
+   [CONFIGURATION.md](CONFIGURATION.md#preview-deployments)).
    Anything else gets a 400 and no redirect. It asks the user to confirm
    the host, then starts production's normal GitHub sign-in
    (`/auth/github?relay=1`). That binds the preview host to this sign-in's

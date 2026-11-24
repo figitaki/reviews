@@ -128,12 +128,9 @@ URL:
 http://localhost:4000/auth/github/callback
 ```
 
-Then set these in `.env.local`:
-
-```sh
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-```
+Then set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in `.env.local`.
+Every setting the server reads, with its default and Helm value, is in
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 If the env vars are missing, `/auth/github` redirects home with a flash
 explaining what to set.
@@ -145,15 +142,10 @@ features can read the source around a hunk. The backend is
 [code.storage](https://code.storage). Storage is off by default, and pushes
 work diff-only when it is off.
 
-To turn it on, set these in `.env.local` (or the deploy environment):
-
-```sh
-CODE_STORAGE_ADAPTER=code_storage
-CODE_STORAGE_ORG=<code.storage org>
-CODE_STORAGE_JWT_PRIVATE_KEY="<named-curve P-256 private key, unencrypted PKCS8 PEM>"
-# Optional. "optional" (default) or "required".
-CODE_STORAGE_POLICY=optional
-```
+To turn it on, set `CODE_STORAGE_ADAPTER=code_storage`, `CODE_STORAGE_ORG`
+and `CODE_STORAGE_JWT_PRIVATE_KEY`, and optionally `CODE_STORAGE_POLICY`, in
+`.env.local` or the deploy environment. See
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md#optional-features).
 
 The server signs short-lived ES256 tokens with the private key. The CLI gets a
 token that can write only the two refs of one snapshot. Signing goes through
