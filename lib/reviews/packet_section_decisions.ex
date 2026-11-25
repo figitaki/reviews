@@ -49,6 +49,55 @@ defmodule Reviews.PacketSectionDecisions do
   end
 
   @doc """
+  Every account's decision on each of `sections` (from
+  `Reviews.ReviewPacket.sections/1`) of the `selected` patchset, for public
+  reads (API, CLI and MCP). `selected` and `patchsets` need `id` and
+  `number`.
+
+  Returns the sections, each with a `decisions` key added. A section's
+  `decisions` hold one entry per account that has a decision in effect:
+
+    * `status` is `"approved"`, `"denied"`, `"ignored"` or `"pending"`.
+      Pending means the account pinned the section back to undecided.
+    * `author` is the identity that made the decision.
+    * `patchset_number` is where it was made, and `carried_forward` is true
+      when that is an earlier patchset whose decision still applies.
+    * `decided_at` is when it was last set.
+
+  A decision on an earlier patchset carries forward only while the section's
+  hunks are unchanged, the same rule the review page uses; a changed section
+  has no decision until someone decides again.
+  """
+  def by_section(%Review{id: review_id}, sections, selected, patchsets) do
+    numbers = Map.new(patchsets, &{&1.id, &1.number})
+
+    by_account =
+      PacketSectionDecision
+      |> where([d], d.review_id == ^review_id)
+      |> order_by([d], asc: d.account_id, asc: d.patchset_id, asc: d.section_index)
+      |> preload(:author)
+      |> Repo.all()
+      |> Enum.group_by(& &1.account_id)
+      |> Enum.sort_by(&elem(&1, 0))
+
+    for section <- sections do
+      decisions =
+        for {_account_id, decisions} <- by_account,
+            state = section_state(section, decisions, selected, patchsets),
+            decision = state.current || state.effective,
+            do: %{
+              status: decision.status,
+              author: decision.author,
+              patchset_number: Map.fetch!(numbers, decision.patchset_id),
+              carried_forward: decision.patchset_id != selected.id,
+              decided_at: decision.updated_at
+            }
+
+      Map.put(section, :decisions, decisions)
+    end
+  end
+
+  @doc """
   Sets the actor's account decision for `section` on `patchset` to `status`
   (`"approved"`, `"denied"`, `"ignored"`, or `"pending"`). When the section
   already has that status, nothing changes, including who made the decision.

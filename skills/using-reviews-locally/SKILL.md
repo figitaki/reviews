@@ -142,6 +142,7 @@ Notes:
 - Thread IDs are accepted bare (`7`) or as printed by the listing (`#7`).
 - `reviews reply` appends to the thread. `reviews comment` always opens a new one.
 - `reviews show --format md` also includes thread IDs and status, which can be used as targets for reply/resolve/reopen.
+- `reviews show` lists each packet section's decisions for the selected patchset (`selected_patchset.section_decisions` in JSON, `## Section decisions` in Markdown). An agent waiting for approval can poll it: a section is approved when its decisions include `approved`, and an empty list means undecided.
 - Resolved threads remain visible inline on the review page with a resolved status pill, but drop out of the Open threads sidebar.
 
 ## Codex Workflow

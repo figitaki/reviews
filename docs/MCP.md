@@ -155,7 +155,7 @@ the whole review.
 | `search` | Reviews this account owns whose title, description or slug contains `query`, as `{results: [{id, title, url}]}`, the shape ChatGPT connectors and deep research use. A blank query lists the newest. |
 | `fetch` | One review by the `id` from `search` (its slug): `{id, title, text, url, metadata}`, where `text` is the description and the open feedback as Markdown. The result fits in 120,000 bytes. `metadata.complete` is false when anything is left out: a longer review is cut short with a note, and left-out threads or comments are named in the feedback. |
 | `reviews_whoami` | The token's identity (human or agent), its scopes, and whether writes are on. |
-| `reviews_get_review` | Title, URL, thread counts, description and packet summary, packet outline, then revisions with stats, newest first. |
+| `reviews_get_review` | Title, URL, thread counts, description and packet summary, packet outline with each section's decisions, then revisions with stats, newest first. |
 | `reviews_get_packet_section` | One section's rows in reading order: Markdown prose and hunk diffs. A row with `complete: false` continues on the next page. |
 | `reviews_list_files` | Files in a revision, in path order, with status, line counts, size and open threads. |
 | `reviews_get_file_diff` | One file's diff in pieces; continue with `next_offset` and the same `revision`. |

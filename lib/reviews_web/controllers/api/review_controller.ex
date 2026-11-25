@@ -17,7 +17,7 @@ defmodule ReviewsWeb.Api.ReviewController do
   """
   use ReviewsWeb, :controller
 
-  alias Reviews.{ReviewIndex, ReviewNavigation, ReviewPacket, ReviewView}
+  alias Reviews.{PacketSectionDecisions, ReviewIndex, ReviewNavigation, ReviewPacket, ReviewView}
   alias Reviews.Reviews, as: ReviewsContext
 
   @doc "GET /api/v1/reviews"
@@ -133,7 +133,28 @@ defmodule ReviewsWeb.Api.ReviewController do
       pushed_at: ps.pushed_at,
       packet: ps.packet,
       stats: ReviewNavigation.patchset_stats(ps),
-      files: Enum.map(ReviewView.file_payloads(snapshot), &render_file/1)
+      files: Enum.map(ReviewView.file_payloads(snapshot), &render_file/1),
+      section_decisions:
+        snapshot.review
+        |> PacketSectionDecisions.by_section(
+          ReviewPacket.sections(ps.packet || %{}),
+          ps,
+          snapshot.patchsets
+        )
+        |> Enum.map(&render_section_decisions/1)
+    }
+  end
+
+  defp render_section_decisions(section) do
+    %{
+      index: section.index,
+      title: section.title,
+      decisions:
+        Enum.map(section.decisions, fn decision ->
+          decision
+          |> Map.take([:status, :patchset_number, :carried_forward, :decided_at])
+          |> Map.put(:author, ReviewsWeb.Payloads.identity(decision.author))
+        end)
     }
   end
 

@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Agents can read section decisions (issue #266). `GET /api/v1/reviews/:slug`,
+  `reviews show` and MCP's `reviews_get_review` list each packet section's
+  decisions for the selected patchset: status, who set it, and whether it
+  carried forward from an earlier patchset.
 - The server can read its settings from a YAML file named by
   `REVIEWS_CONFIG` (`config/reviews.example.yaml`, docs/CONFIGURATION.md).
   A set environment variable wins over the file, so existing deployments do

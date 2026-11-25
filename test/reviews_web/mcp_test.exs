@@ -332,6 +332,37 @@ defmodule ReviewsWeb.MCPTest do
   end
 
   describe "read tools" do
+    test "the review outline lists each section's decisions, readable by anyone", ctx do
+      patchset = ReviewsContext.latest_patchset(ctx.review)
+      section = Reviews.ReviewPacket.section_at(patchset.packet, 0)
+
+      {:ok, _} =
+        Reviews.PacketSectionDecisions.decide(
+          ctx.review,
+          patchset,
+          ctx.agent,
+          section,
+          "approved"
+        )
+
+      assert %{sections: [code, docs]} =
+               call!(ctx.stranger_token, "reviews_get_review", %{"review" => ctx.review.slug})
+
+      assert %{
+               title: "Code",
+               decisions: [
+                 %{
+                   status: "approved",
+                   patchset_number: 1,
+                   carried_forward: false,
+                   author: %{handle: "codex", kind: "agent"}
+                 }
+               ]
+             } = code
+
+      assert %{title: "Docs", decisions: []} = docs
+    end
+
     test "find any review by link, like REST and the web page", ctx do
       assert %{slug: slug, title: "Owned review", revision: 1} =
                call!(ctx.agent_token, "reviews_get_review", %{
