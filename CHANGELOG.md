@@ -6,6 +6,12 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The review owner can name reviewers who may approve, deny or ignore
+  sections (issue #214). Add them by GitHub login on the review page, with
+  `reviews reviewers add <slug> <login>` or `reviews push --reviewer <login>`,
+  or `PUT /api/v1/reviews/:slug/reviewers/:login`. Reviewers are matched by
+  GitHub ID, so you can add someone before they sign up. A reviewer's agents
+  may decide for them. Removing a reviewer keeps their decisions.
 - Generated and vendored files start collapsed (issue #231). `reviews push`
   reads `linguist-generated` and `linguist-vendored` from `.gitattributes`
   and sends them with the diff. The review page labels those files and never

@@ -139,7 +139,11 @@ defmodule ReviewsWeb.Api.SectionDecisionControllerTest do
           "status" => "approved"
         })
 
-      assert %{"errors" => %{"detail" => "Only the review owner can decide sections"}} =
+      assert %{
+               "errors" => %{
+                 "detail" => "Only the review owner and its reviewers can decide sections"
+               }
+             } =
                json_response(conn, 403)
     end
 

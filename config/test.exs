@@ -104,3 +104,6 @@ config :reviews, ReviewsWeb.Plugs.RequestBudget,
   ]
 
 config :reviews, :design_catalog, true
+
+# Named reviewers look logins up with GitHub's API; tests stub it.
+config :reviews, Reviews.GitHubUsers, req_options: [plug: {Req.Test, Reviews.GitHubUsers}]

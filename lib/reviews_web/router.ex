@@ -175,6 +175,7 @@ defmodule ReviewsWeb.Router do
     get "/reviews/:slug/files", ReviewPageController, :files
     get "/reviews/:slug/threads", ReviewPageController, :threads
     get "/reviews/:slug/threads/:thread_id/comments", ReviewPageController, :comments
+    get "/reviews/:slug/reviewers", ReviewerController, :index
   end
 
   scope "/api/v1", ReviewsWeb.Api do
@@ -190,6 +191,8 @@ defmodule ReviewsWeb.Router do
     post "/reviews/:slug/comments", CommentController, :create
     patch "/reviews/:slug/threads/:thread_id", ThreadController, :update
     post "/reviews/:slug/sections/:section_index/decision", SectionDecisionController, :create
+    put "/reviews/:slug/reviewers/:login", ReviewerController, :update
+    delete "/reviews/:slug/reviewers/:login", ReviewerController, :delete
     get "/me", MeController, :show
   end
 

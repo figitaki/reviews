@@ -96,6 +96,7 @@ defmodule ReviewsWeb.Api.ReviewController do
       title: review.title,
       description: review.description,
       url: url(~p"/r/#{review.slug}"),
+      reviewers: Enum.map(snapshot.reviewers, &ReviewsWeb.Api.ReviewerController.reviewer/1),
       patchsets: Enum.map(snapshot.patchsets, &render_patchset_meta/1),
       selected_patchset: snapshot.selected_patchset && render_patchset(snapshot),
       threads: Enum.map(snapshot.published_threads, &render_thread/1)

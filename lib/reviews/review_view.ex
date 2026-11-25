@@ -27,6 +27,7 @@ defmodule Reviews.ReviewView do
           hunks_by_path: map(),
           packet_hunk_views: [map()],
           packet_section_decisions: [map()],
+          reviewers: [Reviews.Reviewers.reviewer()],
           published_threads: [map()],
           viewer: Identity.t() | nil
         }
@@ -116,6 +117,7 @@ defmodule Reviews.ReviewView do
       hunks_by_path: hunks_by_path,
       packet_hunk_views: packet_hunk_views,
       packet_section_decisions: PacketSectionDecisions.list_for_review(review, viewer),
+      reviewers: Reviews.Reviewers.list(review),
       published_threads:
         review
         |> project_threads(patchsets, selected)
