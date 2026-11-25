@@ -675,6 +675,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       export default {
         mounted() {
           this.editing = this.el.dataset.editing
+          this.serverEditing = this.editing
           const control = this.el.querySelector(".review-section-decision-control")
           // Open or close the panel at once (issue #235). The panel's
           // visibility is CSS on is-editing, and the server's reply patches
@@ -705,6 +706,11 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             setTimeout(() => toggle?.setAttribute("phx-value-open", String(!editing)))
           }
           const showEditing = (editing) => {
+            // A new open must not inherit the guard of an unanswered close.
+            if (editing) {
+              this.closing = false
+              clearTimeout(this.closingTimer)
+            }
             this.inflight += 1
             this.wanted = editing
             clearTimeout(this.wantedTimer)
@@ -750,23 +756,30 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         },
         updated() {
           const editing = this.el.dataset.editing
+          const changed = editing !== this.serverEditing
+          this.serverEditing = editing
           if (this.wanted !== null) {
-            if (editing !== this.editing) this.inflight -= 1
-            if (this.inflight <= 0) {
-              this.inflight = 0
-              this.wanted = null
-              clearTimeout(this.wantedTimer)
-            } else {
+            if (changed) this.inflight -= 1
+            if (this.inflight > 0) {
+              // Replies to earlier toggles are still due: keep the latest
+              // wish on screen and leave focus alone until they settle.
               this.paint(this.wanted)
+              return
             }
+            this.inflight = 0
+            this.wanted = null
+            clearTimeout(this.wantedTimer)
           }
           if (editing !== "true") {
             this.closing = false
             clearTimeout(this.closingTimer)
           }
-          if (editing !== this.editing && this.keepFocus) {
+          if (editing === this.editing) {
+            // Toggles that cancelled out leave focus alone.
             this.keepFocus = false
-          } else if (editing !== this.editing) {
+          } else if (this.keepFocus) {
+            this.keepFocus = false
+          } else {
             const target = editing === "true"
               ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector("[aria-expanded]")
               : this.el.querySelector("[aria-expanded]")
@@ -778,6 +791,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           this.closing = false
           this.inflight = 0
           this.wanted = null
+          this.serverEditing = this.el.dataset.editing
         },
         destroyed() {
           clearTimeout(this.closingTimer)
