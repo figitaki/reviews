@@ -21,6 +21,10 @@ defmodule Reviews.Reviews.File do
     field :additions, :integer, default: 0
     field :deletions, :integer, default: 0
     field :raw_diff, :string, default: ""
+    # From the pusher's .gitattributes (linguist-generated, linguist-vendored).
+    # The review page collapses these files until someone opens one.
+    field :generated, :boolean, default: false
+    field :vendored, :boolean, default: false
 
     belongs_to :patchset, Reviews.Reviews.Patchset
 
@@ -28,7 +32,7 @@ defmodule Reviews.Reviews.File do
   end
 
   @required ~w(patchset_id path status)a
-  @optional ~w(old_path additions deletions raw_diff)a
+  @optional ~w(old_path additions deletions raw_diff generated vendored)a
 
   def changeset(file, attrs) do
     file

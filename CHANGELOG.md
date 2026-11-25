@@ -6,6 +6,12 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Generated and vendored files start collapsed (issue #231). `reviews push`
+  reads `linguist-generated` and `linguist-vendored` from `.gitattributes`
+  and sends them with the diff. The review page labels those files and never
+  opens them on its own, so a lockfile no longer opens with its section.
+  Open one with its toggle. Older CLIs send no flags, so nothing changes for
+  their pushes.
 - A tab left open across a deploy now says a new version is available and
   offers a reload link, instead of showing new pages with the old CSS
   (issue #268). It asks rather than reloads, so a comment in progress is not

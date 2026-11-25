@@ -175,6 +175,7 @@ When updating a packet, recheck each note against the new diff and remove or rew
 - Use full hunk refs for small cohesive changes.
 - Explain multiple review topics in the surrounding prose. Use slices only when an author note needs to appear between code excerpts, following Author Notes Beside Code.
 - Keep generated files, lockfiles, or purely mechanical output out of the packet unless they need review.
+- Files that `.gitattributes` marks `linguist-generated` or `linguist-vendored` start collapsed on the review page, labelled "Generated file" or "Vendored file". Mark lockfiles and bundles that way so they do not open with their section.
 - If the packet is only for local review, put it in `/private/tmp` or another temporary path to avoid accidentally committing it.
 
 ## Pre-Push Packet Review
