@@ -16,7 +16,17 @@ defmodule ReviewsWeb.MCP.Handlers do
   """
 
   alias FastestMCP.Tools.Result
-  alias Reviews.{Accounts, Paging, Principal, ReviewHunks, ReviewPacket, ReviewView}
+
+  alias Reviews.{
+    Accounts,
+    PacketSectionDecisions,
+    Paging,
+    Principal,
+    ReviewHunks,
+    ReviewPacket,
+    ReviewView
+  }
+
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Reviews.Review
   alias Reviews.Threads
@@ -75,12 +85,14 @@ defmodule ReviewsWeb.MCP.Handlers do
           next_cursor: nil
         }
 
+        sections = ReviewPacket.sections(packet)
+
         data = %{
           fields: [
             description: review.description || "",
             packet_summary: ReviewPacket.text(packet, "summary")
           ],
-          sections: ReviewPacket.sections(packet),
+          sections: PacketSectionDecisions.by_section(review, sections, selected, revisions),
           revisions: Enum.reverse(revisions)
         }
 
@@ -852,7 +864,8 @@ defmodule ReviewsWeb.MCP.Handlers do
         %{
           index: section.index,
           title: Budget.cap(section.title, @title_cap),
-          hunks: length(section.refs)
+          hunks: length(section.refs),
+          decisions: Enum.map(section.decisions, &decision_payload/1)
         }
       end)
 
@@ -1041,6 +1054,12 @@ defmodule ReviewsWeb.MCP.Handlers do
   end
 
   defp identity_payload(identity), do: ReviewsWeb.Payloads.identity(identity, :compact)
+
+  defp decision_payload(decision) do
+    decision
+    |> Map.take([:status, :patchset_number, :carried_forward, :decided_at])
+    |> Map.put(:author, identity_payload(decision.author))
+  end
 
   defp review_url(review), do: ReviewsWeb.Endpoint.url() <> "/r/" <> review.slug
 

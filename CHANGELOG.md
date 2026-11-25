@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- Agents can read section decisions (issue #266). `GET /api/v1/reviews/:slug`,
+  `reviews show` and MCP's `reviews_get_review` list each packet section's
+  decisions for the selected patchset: status, who set it, and whether it
+  carried forward from an earlier patchset.
 - A tab left open across a deploy now says a new version is available and
   offers a reload link, instead of showing new pages with the old CSS
   (issue #268). It asks rather than reloads, so a comment in progress is not

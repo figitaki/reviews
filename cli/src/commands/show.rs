@@ -141,6 +141,54 @@ fn render_markdown(body: &Value) -> Result<String> {
         }
     }
 
+    let sections = obj
+        .get("selected_patchset")
+        .and_then(|p| p.get("section_decisions"))
+        .and_then(Value::as_array);
+    if let Some(sections) = sections.filter(|s| !s.is_empty()) {
+        out.push_str("## Section decisions\n\n");
+        for section in sections {
+            let index = section.get("index").and_then(Value::as_i64).unwrap_or(0);
+            let title = section.get("title").and_then(Value::as_str).unwrap_or("");
+            let decisions = section
+                .get("decisions")
+                .and_then(Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            let summary = if decisions.is_empty() {
+                "undecided".to_string()
+            } else {
+                decisions
+                    .iter()
+                    .map(|d| {
+                        let status = d.get("status").and_then(Value::as_str).unwrap_or("?");
+                        let who = d
+                            .get("author")
+                            .and_then(|a| a.get("handle"))
+                            .and_then(Value::as_str)
+                            .unwrap_or("unknown");
+                        let n = d
+                            .get("patchset_number")
+                            .and_then(Value::as_i64)
+                            .unwrap_or(0);
+                        let carried = d
+                            .get("carried_forward")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false);
+                        if carried {
+                            format!("{status} by @{who} (carried forward from v{n})")
+                        } else {
+                            format!("{status} by @{who}")
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            };
+            out.push_str(&format!("- {index}. {title}: {summary}\n"));
+        }
+        out.push('\n');
+    }
+
     if let Some(threads) = obj.get("threads").and_then(Value::as_array) {
         if !threads.is_empty() {
             out.push_str("## Threads\n\n");
@@ -257,6 +305,38 @@ mod tests {
         let md = render_markdown(&body).unwrap();
         assert!(md.contains("### #7 `foo:1` — resolved (opened by @carey)"));
         assert!(!md.contains("resolved by @carey"));
+    }
+
+    #[test]
+    fn markdown_lists_section_decisions() {
+        let body = json!({
+            "title": "x",
+            "selected_patchset": {
+                "number": 2,
+                "files": [],
+                "section_decisions": [
+                    {"index": 0, "title": "Core", "decisions": [{
+                        "status": "approved",
+                        "author": {"handle": "carey", "kind": "human"},
+                        "patchset_number": 1,
+                        "carried_forward": true
+                    }]},
+                    {"index": 1, "title": "Tests", "decisions": [{
+                        "status": "denied",
+                        "author": {"handle": "codex", "kind": "agent"},
+                        "patchset_number": 2,
+                        "carried_forward": false
+                    }]},
+                    {"index": 2, "title": "Docs", "decisions": []}
+                ]
+            }
+        });
+
+        let md = render_markdown(&body).unwrap();
+        assert!(md.contains("## Section decisions"));
+        assert!(md.contains("- 0. Core: approved by @carey (carried forward from v1)"));
+        assert!(md.contains("- 1. Tests: denied by @codex\n"));
+        assert!(md.contains("- 2. Docs: undecided"));
     }
 
     #[test]

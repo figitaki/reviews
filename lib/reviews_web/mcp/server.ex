@@ -325,7 +325,7 @@ defmodule ReviewsWeb.MCP.Server do
         title: "Get review",
         description:
           "Returns a review's title, URL, description, thread counts, packet outline " <>
-            "(section indexes and titles), and revisions with diff stats, newest first. " <>
+            "(section indexes, titles, and decisions), and revisions with diff stats, newest first. " <>
             "Start here. Long reviews continue with next_cursor.",
         input_schema:
           object(%{

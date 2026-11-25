@@ -255,6 +255,39 @@ originating in later patchsets are omitted. `line_hint` is null when the code
 cannot be located unambiguously in the selected diff; the thread and comments
 remain visible and its open/resolved status is unchanged.
 
+`selected_patchset.section_decisions` lists every packet section of the
+selected patchset, in order, with the decisions in effect on it (empty when
+the patchset has no packet):
+
+```json
+[
+  {
+    "index": 0,
+    "title": "Retry failed deliveries",
+    "decisions": [
+      {
+        "status": "approved",
+        "author": {"id": 12, "kind": "agent", "handle": "codex", "username": "codex", "display_name": "Codex", "avatar_url": null},
+        "patchset_number": 1,
+        "carried_forward": true,
+        "decided_at": "2026-11-25T07:00:00Z"
+      }
+    ]
+  }
+]
+```
+
+A section has at most one decision per account (a person and their agent
+identities); `author` is the identity that set it. `status` is `approved`,
+`denied`, `ignored` or `pending` (pinned back to undecided). A decision made on
+an earlier patchset is listed with `carried_forward: true` while the section
+has the same hunk references (`path#N`), the rule the review page uses. When
+the section gains or loses a hunk, the decision is dropped until someone
+decides again, so an empty `decisions` list means undecided. Edited lines
+inside a hunk that keeps its reference do not drop the decision. MCP's
+`reviews_get_review` returns the same `decisions` on each outline section,
+with the compact author.
+
 Unknown slug or patchset number → `404`. A deleted review's slug → `410`
 with `error_code` `review_deleted`.
 

@@ -363,6 +363,10 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
 
       assert body["selected_patchset"]["number"] == ps1.number
       assert body["selected_patchset"]["packet"]["title"] == "Packet v1"
+
+      assert [%{"index" => 0, "title" => "S", "decisions" => []}] =
+               body["selected_patchset"]["section_decisions"]
+
       [file] = body["selected_patchset"]["files"]
       assert file["raw_diff"] =~ "+new\n"
       refute file["raw_diff"] =~ "newer"
@@ -397,6 +401,28 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
 
       assert thread_id == thread.id
       assert is_binary(resolved_at)
+    end
+
+    test "lists section decisions anonymously, with author and patchset",
+         %{review: review, ps1: ps1, user: user} do
+      {:ok, human} = Accounts.ensure_human_identity(user)
+      section = Reviews.ReviewPacket.section_at(ps1.packet, 0)
+      {:ok, _} = Reviews.PacketSectionDecisions.decide(review, ps1, human, section, "approved")
+
+      body =
+        build_conn() |> get(~p"/api/v1/reviews/#{review.slug}?patchset=1") |> json_response(200)
+
+      assert [%{"index" => 0, "title" => "S", "decisions" => [decision]}] =
+               body["selected_patchset"]["section_decisions"]
+
+      assert %{
+               "status" => "approved",
+               "patchset_number" => 1,
+               "carried_forward" => false,
+               "author" => %{"handle" => "carey", "kind" => "human"}
+             } = decision
+
+      assert is_binary(decision["decided_at"])
     end
 
     test "returns 404 for an unknown slug", %{conn: conn} do
