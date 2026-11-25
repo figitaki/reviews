@@ -1787,6 +1787,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       |> assign(
         :hunk_label,
         hunk_header_label(
+          file_kind_label(assigns.file),
           hunk_title(
             assigns.hunk,
             Map.get(assigns, :file_label),
@@ -1847,8 +1848,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
     """
   end
 
-  defp hunk_header_label(title) do
-    [title.hunk, title.lines]
+  # Generated and vendored files start collapsed (issue #231); the label says why.
+  defp file_kind_label(%{generated: true}), do: "Generated file"
+  defp file_kind_label(%{vendored: true}), do: "Vendored file"
+  defp file_kind_label(_file), do: ""
+
+  defp hunk_header_label(kind, title) do
+    [kind, title.hunk, title.lines]
     |> Enum.reject(&(&1 == ""))
     |> Enum.join(" · ")
   end

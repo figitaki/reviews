@@ -163,6 +163,17 @@ pub fn run(args: PushArgs) -> Result<()> {
         ),
     };
 
+    // Attributes only change how the page first shows a file, so a failure
+    // here warns instead of stopping the push.
+    let paths: Vec<String> = packet::diff_files(&cap.raw_diff)
+        .into_iter()
+        .map(|f| f.path)
+        .collect();
+    let file_attributes = git::file_attributes(&cwd, &paths).unwrap_or_else(|err| {
+        eprintln!("warning: could not read .gitattributes ({err:#}); no files will be collapsed");
+        Vec::new()
+    });
+
     match args.update {
         Some(slug) => {
             let req = CreatePatchsetRequest {
@@ -171,6 +182,7 @@ pub fn run(args: PushArgs) -> Result<()> {
                 raw_diff: &cap.raw_diff,
                 packet: packet.as_ref(),
                 code_snapshot_id: snapshot_id.as_deref(),
+                file_attributes: &file_attributes,
             };
             let resp = client.create_patchset(&slug, &req)?;
             warn_if_skipped(resp.code_snapshot.as_ref());
@@ -187,6 +199,7 @@ pub fn run(args: PushArgs) -> Result<()> {
                 raw_diff: &cap.raw_diff,
                 packet: packet.as_ref(),
                 code_snapshot_id: snapshot_id.as_deref(),
+                file_attributes: &file_attributes,
             };
             let resp = client.create_review(&req)?;
             warn_if_skipped(resp.code_snapshot.as_ref());
