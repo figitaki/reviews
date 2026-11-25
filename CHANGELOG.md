@@ -6,6 +6,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The section decision button and the split/stacked diff buttons respond on
+  click instead of after the server's reply (issue #235). The server still
+  saves and confirms each change.
 - A tab left open across a deploy now says a new version is available and
   offers a reload link, instead of showing new pages with the old CSS
   (issue #268). It asks rather than reloads, so a comment in progress is not

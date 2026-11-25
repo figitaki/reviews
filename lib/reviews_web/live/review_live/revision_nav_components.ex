@@ -233,7 +233,18 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
               const currentBtn = this.el.querySelector('[aria-pressed="true"]')
               return currentBtn?.id === "diff-style-unified" ? "unified" : "split"
             }
+            // Show the new style at once (issue #235): flip the buttons and
+            // tell every diff island, then let the server's reply confirm it.
+            const showStyle = (style) => {
+              for (const btn of this.el.querySelectorAll("[phx-value-style]")) {
+                const active = btn.getAttribute("phx-value-style") === style
+                btn.setAttribute("aria-pressed", active ? "true" : "false")
+                btn.classList.toggle("is-active", active)
+              }
+              window.dispatchEvent(new CustomEvent("reviews:diff-style", { detail: { style } }))
+            }
             const pushStyle = (style, viewport = media.matches ? "tablet" : "wide") => {
+              showStyle(style)
               this.pushEvent("select_diff_style", { style, viewport })
             }
             this.syncViewport = () => {
@@ -280,6 +291,7 @@ defmodule ReviewsWeb.ReviewLive.RevisionNavComponents do
               }
               if (style === "split" || style === "unified") {
                 localStorage.setItem(KEY, style)
+                showStyle(style)
               }
             })
           },

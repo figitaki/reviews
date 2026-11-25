@@ -676,6 +676,33 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         mounted() {
           this.editing = this.el.dataset.editing
           const control = this.el.querySelector(".review-section-decision-control")
+          // Open or close the panel at once (issue #235). The panel's
+          // visibility is CSS on is-editing, and the server's reply patches
+          // the same class, label and attributes back in.
+          const showEditing = (editing) => {
+            if (editing) {
+              for (const other of document.querySelectorAll(".review-section-decision.is-editing")) {
+                if (other !== this.el) other.classList.remove("is-editing")
+              }
+            }
+            this.el.classList.toggle("is-editing", editing)
+            const toggle = this.el.querySelector("[aria-expanded]")
+            toggle?.setAttribute("aria-expanded", String(editing))
+            const label = toggle?.querySelector(".review-section-decision-toggle-label")
+            if (label && editing) {
+              this.closedLabel = label.textContent
+              label.textContent = "Dismiss"
+            } else if (label && this.closedLabel) {
+              label.textContent = this.closedLabel
+            }
+            // After LiveView has read this click's phx-value-open, so a
+            // second click before the reply asks for the other state.
+            setTimeout(() => toggle?.setAttribute("phx-value-open", String(!editing)))
+          }
+          this.el.addEventListener("click", event => {
+            const toggle = event.target.closest("button[phx-click='toggle_section_decision']")
+            if (toggle) showEditing(toggle.getAttribute("phx-value-open") === "true")
+          })
           // One close at a time: a second outside click or Escape before the
           // closed state arrives is ignored. The server also treats a repeated
           // close as a no-op. A lost reply clears the pending flag after a
@@ -685,6 +712,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             const toggle = this.el.querySelector("[aria-expanded='true']")
             if (!toggle) return
             this.closing = true
+            showEditing(false)
             clearTimeout(this.closingTimer)
             this.closingTimer = setTimeout(() => { this.closing = false }, 4000)
             this.pushEvent("toggle_section_decision", {section_index: toggle.getAttribute("phx-value-section_index"), open: "false"})
