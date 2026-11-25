@@ -85,6 +85,18 @@ defmodule ReviewsWeb.Layouts do
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
+      <%!-- Set by ReviewsWeb.StaleAssets. A plain link reloads the page even
+      when the tab's old app.js predates this toast. --%>
+      <.flash
+        :if={Phoenix.Flash.get(@flash, :assets_changed)}
+        id="assets-changed"
+        kind={:info}
+        key={:assets_changed}
+        title={Phoenix.Flash.get(@flash, :assets_changed)}
+      >
+        Save any comment you are writing, then <a href="" class="underline">reload</a>.
+      </.flash>
+
       <.flash
         id="client-error"
         kind={:error}

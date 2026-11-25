@@ -46,6 +46,8 @@ defmodule ReviewsWeb do
     quote do
       use Phoenix.LiveView
 
+      on_mount ReviewsWeb.StaleAssets
+
       unquote(html_helpers())
     end
   end
