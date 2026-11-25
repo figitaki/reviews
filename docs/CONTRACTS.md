@@ -234,6 +234,24 @@ Response `201`:
 
 Unknown slug → `404`. A token whose account does not own the review → `403`.
 
+Both create endpoints accept an optional `file_attributes` list naming the
+files the pusher's `.gitattributes` marks `linguist-generated` or
+`linguist-vendored`. The CLI reads them with `git check-attr` and sends only
+flagged files:
+
+```json
+"file_attributes": [
+  { "path": "Cargo.lock", "generated": true, "vendored": false },
+  { "path": "vendor/lib.js", "generated": false, "vendored": true }
+]
+```
+
+Paths that are not in `raw_diff` and malformed entries are ignored. The flags
+are stored per file and returned as `generated` and `vendored` on each file of
+`GET /api/v1/reviews/:slug`. The review page starts these files collapsed,
+labelled "Generated file" or "Vendored file", and never opens them on its own;
+packet coverage still counts their lines.
+
 Both create endpoints accept an optional `code_snapshot_id` (a snapshot UUID
 from `POST /api/v1/code-snapshots` that has been completed). When present, the
 201 response carries a `code_snapshot` key: `{"id": "<uuid>", "status": "claimed"}`

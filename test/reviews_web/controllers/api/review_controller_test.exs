@@ -148,6 +148,42 @@ defmodule ReviewsWeb.Api.ReviewControllerTest do
       assert review.author_id == agent.id
     end
 
+    test "stores generated and vendored flags from file_attributes", %{conn: conn, raw_token: raw} do
+      file = fn path ->
+        "diff --git a/#{path} b/#{path}\n--- a/#{path}\n+++ b/#{path}\n@@ -1 +1 @@\n-a\n+b\n"
+      end
+
+      body = %{
+        "title" => "Bump deps",
+        "raw_diff" => file.("Cargo.lock") <> file.("vendor/x.js") <> file.("src/main.rs"),
+        "file_attributes" => [
+          %{"path" => "Cargo.lock", "generated" => true, "vendored" => false},
+          %{"path" => "vendor/x.js", "generated" => false, "vendored" => true}
+        ]
+      }
+
+      conn =
+        conn
+        |> put_req_header("authorization", "Bearer #{raw}")
+        |> put_req_header("content-type", "application/json")
+        |> post(~p"/api/v1/reviews", body)
+
+      %{"slug" => slug} = json_response(conn, 201)
+
+      files =
+        build_conn()
+        |> get(~p"/api/v1/reviews/#{slug}")
+        |> json_response(200)
+        |> get_in(["selected_patchset", "files"])
+        |> Map.new(&{&1["path"], {&1["generated"], &1["vendored"]}})
+
+      assert files == %{
+               "Cargo.lock" => {true, false},
+               "src/main.rs" => {false, false},
+               "vendor/x.js" => {false, true}
+             }
+    end
+
     test "stores optional packet JSON on the initial patchset", %{conn: conn, raw_token: raw} do
       packet = %{
         "format_version" => 1,

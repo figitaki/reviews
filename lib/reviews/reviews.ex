@@ -205,7 +205,7 @@ defmodule Reviews.Reviews do
       Patchset.changeset(%Patchset{}, Map.put(patchset_attrs, :review_id, review.id))
     end)
     |> Ecto.Multi.run(:files, fn _repo, %{patchset: patchset} ->
-      insert_files_for_patchset(patchset, raw_diff)
+      insert_files_for_patchset(patchset, raw_diff, attrs)
     end)
     |> Ecto.Multi.run(:code_snapshot, fn _repo, %{review: review, patchset: patchset} ->
       Reviews.CodeSnapshots.maybe_claim(author, review, patchset, code_snapshot_id)
@@ -269,7 +269,7 @@ defmodule Reviews.Reviews do
     Ecto.Multi.new()
     |> Ecto.Multi.insert(:patchset, Patchset.changeset(%Patchset{}, patchset_attrs))
     |> Ecto.Multi.run(:files, fn _repo, %{patchset: patchset} ->
-      insert_files_for_patchset(patchset, raw_diff)
+      insert_files_for_patchset(patchset, raw_diff, attrs)
     end)
     |> Ecto.Multi.run(:code_snapshot, fn _repo, %{patchset: patchset} ->
       maybe_claim_snapshot(identity, review, patchset, code_snapshot_id)
@@ -530,11 +530,15 @@ defmodule Reviews.Reviews do
     end)
   end
 
-  defp insert_files_for_patchset(%Patchset{id: patchset_id}, raw_diff) do
+  defp insert_files_for_patchset(%Patchset{id: patchset_id}, raw_diff, push_attrs) do
+    flags = file_flags(push_attrs[:file_attributes] || push_attrs["file_attributes"])
+
     files =
       raw_diff
       |> parse_diff_files()
       |> Enum.map(fn meta ->
+        file_flags = Map.get(flags, meta.path, %{})
+
         attrs = %{
           patchset_id: patchset_id,
           path: meta.path,
@@ -542,7 +546,9 @@ defmodule Reviews.Reviews do
           status: meta.status,
           additions: meta.additions,
           deletions: meta.deletions,
-          raw_diff: meta.raw_diff
+          raw_diff: meta.raw_diff,
+          generated: Map.get(file_flags, "generated") == true,
+          vendored: Map.get(file_flags, "vendored") == true
         }
 
         case %File{} |> File.changeset(attrs) |> Repo.insert() do
@@ -556,6 +562,17 @@ defmodule Reviews.Reviews do
       nil -> {:ok, Enum.map(files, fn {:ok, f} -> f end)}
     end
   end
+
+  # `file_attributes` from the CLI: a list of `%{"path" => ..., "generated" =>
+  # bool, "vendored" => bool}`, only for flagged files. Anything else is
+  # ignored; the flags only change how the page first shows a file.
+  defp file_flags(list) when is_list(list) do
+    for %{"path" => path} = entry <- list, is_binary(path), into: %{} do
+      {path, Map.take(entry, ["generated", "vendored"])}
+    end
+  end
+
+  defp file_flags(_), do: %{}
 
   @doc """
   Returns the raw chunk for a single file inside a patchset (the substring

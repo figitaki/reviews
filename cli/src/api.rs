@@ -82,6 +82,9 @@ pub struct CreateReviewRequest<'a> {
     pub packet: Option<&'a Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code_snapshot_id: Option<&'a str>,
+    /// Files `.gitattributes` marks generated or vendored; empty is omitted.
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub file_attributes: &'a [crate::git::FileAttributes],
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -105,6 +108,9 @@ pub struct CreatePatchsetRequest<'a> {
     pub packet: Option<&'a Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code_snapshot_id: Option<&'a str>,
+    /// Files `.gitattributes` marks generated or vendored; empty is omitted.
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub file_attributes: &'a [crate::git::FileAttributes],
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -630,6 +636,7 @@ mod tests {
                 raw_diff: "diff --git a/x b/x\n",
                 packet: None,
                 code_snapshot_id: None,
+                file_attributes: &[],
             })
             .unwrap();
         assert_eq!(resp.slug, "k7m2qz");
@@ -658,6 +665,7 @@ mod tests {
                     raw_diff: "diff --git a/x b/x\n",
                     packet: None,
                     code_snapshot_id: None,
+                    file_attributes: &[],
                 },
             )
             .unwrap();
@@ -684,6 +692,7 @@ mod tests {
                     raw_diff: "z",
                     packet: None,
                     code_snapshot_id: None,
+                    file_attributes: &[],
                 },
             )
             .unwrap_err();
@@ -989,9 +998,30 @@ mod tests {
             raw_diff: "d",
             packet: None,
             code_snapshot_id: None,
+            file_attributes: &[],
         };
         let json = serde_json::to_value(&req).unwrap();
         assert!(json.get("code_snapshot_id").is_none());
+        assert!(json.get("file_attributes").is_none());
+
+        let attrs = [crate::git::FileAttributes {
+            path: "Cargo.lock".into(),
+            generated: true,
+            vendored: false,
+        }];
+        let with_attrs = CreateReviewRequest {
+            file_attributes: &attrs,
+            ..req
+        };
+        let json = serde_json::to_value(&with_attrs).unwrap();
+        assert_eq!(
+            json["file_attributes"],
+            serde_json::json!([{"path": "Cargo.lock", "generated": true, "vendored": false}])
+        );
+        let req = CreateReviewRequest {
+            file_attributes: &[],
+            ..with_attrs
+        };
 
         let req = CreateReviewRequest {
             code_snapshot_id: Some("snap-1"),
@@ -1024,6 +1054,7 @@ mod tests {
                     raw_diff: "z",
                     packet: None,
                     code_snapshot_id: Some("snap-1"),
+                    file_attributes: &[],
                 },
             )
             .unwrap();
