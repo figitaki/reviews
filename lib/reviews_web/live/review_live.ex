@@ -26,12 +26,14 @@ defmodule ReviewsWeb.ReviewLive do
   alias Reviews.Policy
   alias Reviews.ReviewNavigation
   alias Reviews.ReviewPacket
+  alias Reviews.Reviewers
   alias Reviews.ReviewView
   alias Reviews.Reviews, as: ReviewsContext
   alias Reviews.Threads
   alias ReviewsWeb.ReviewLive.DeleteReviewComponents
   alias ReviewsWeb.ReviewLive.DiffComponents
   alias ReviewsWeb.ReviewLive.PacketComponents
+  alias ReviewsWeb.ReviewLive.ReviewerComponents
   alias ReviewsWeb.ReviewLive.RevisionNavComponents
 
   @section_auto_open_loc_budget 25
@@ -62,9 +64,10 @@ defmodule ReviewsWeb.ReviewLive do
               |> assign(:current_user, current_user)
               |> assign(:current_identity, current_identity)
               |> assign(
-                :can_decide_sections,
-                Policy.can?(current_identity, :decide_section, snapshot.review)
+                :can_manage_reviewers,
+                Policy.can?(current_identity, :manage_reviewers, review)
               )
+              |> assign(:reviewer_login, "")
               |> assign(:can_delete_review, Policy.can?(current_identity, :delete, review))
               |> assign(:delete_review, nil)
               |> assign(:banner_message, nil)
@@ -201,7 +204,8 @@ defmodule ReviewsWeb.ReviewLive do
         {:noreply, put_flash(socket, :error, "Sign in to review sections.")}
 
       {:error, :forbidden} ->
-        {:noreply, put_flash(socket, :error, "Only the review owner can decide sections.")}
+        {:noreply,
+         put_flash(socket, :error, "Only the review owner and its reviewers can decide sections.")}
 
       _ ->
         {:noreply, put_flash(socket, :error, "Could not update section.")}
@@ -428,6 +432,26 @@ defmodule ReviewsWeb.ReviewLive do
     end
   end
 
+  def handle_event("add_reviewer", %{"reviewer" => %{"login" => login}}, socket) do
+    case Reviewers.add(socket.assigns.review, socket.assigns.current_identity, login) do
+      {:ok, _reviewers} ->
+        {:noreply, socket |> assign(:reviewer_login, "") |> refresh_snapshot!()}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> assign(:reviewer_login, login)
+         |> put_flash(:error, Reviews.Errors.detail(reason))}
+    end
+  end
+
+  def handle_event("remove_reviewer", %{"login" => login}, socket) do
+    case Reviewers.remove(socket.assigns.review, socket.assigns.current_identity, login) do
+      {:ok, _reviewers} -> {:noreply, refresh_snapshot!(socket)}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, Reviews.Errors.detail(reason))}
+    end
+  end
+
   def handle_event("open_delete_review", _params, socket) do
     if socket.assigns.can_delete_review do
       summary = ReviewsContext.deletion_summary(socket.assigns.review)
@@ -488,6 +512,11 @@ defmodule ReviewsWeb.ReviewLive do
      socket
      |> refresh_snapshot!()
      |> assign(:banner_message, "Patchset #{number} just pushed.")}
+  end
+
+  @impl true
+  def handle_info(:reviewers_changed, socket) do
+    {:noreply, refresh_snapshot!(socket)}
   end
 
   @impl true
@@ -725,6 +754,11 @@ defmodule ReviewsWeb.ReviewLive do
                   <span :if={@current_user}>({packet_effort.remaining_time} remaining)</span>
                 </span>
               </div>
+              <ReviewerComponents.reviewers
+                reviewers={@reviewers}
+                can_manage={@can_manage_reviewers}
+                login={@reviewer_login}
+              />
             </header>
           </RevisionNavComponents.revision_nav>
 
@@ -1205,6 +1239,12 @@ defmodule ReviewsWeb.ReviewLive do
     )
     |> assign(:changes_default_expanded_patchset_ids, changes_default_expanded_patchset_ids)
     |> assign(:packet_section_decisions, snapshot.packet_section_decisions)
+    |> assign(:reviewers, snapshot.reviewers)
+    # Adding or removing a reviewer changes who may decide, so recheck it here.
+    |> assign(
+      :can_decide_sections,
+      Policy.can?(socket.assigns.current_identity, :decide_section, snapshot.review)
+    )
     |> assign(:published_threads, snapshot.published_threads)
   end
 

@@ -11,14 +11,17 @@ defmodule Reviews.Policy do
       `reviews:write`.
     * Resolve or reopen a thread: the review owner or the thread's author. A
       delegated principal also needs `threads:write`.
-    * Decide a packet section: the review owner.
+    * Decide a packet section: the review owner or a named reviewer
+      (`Reviews.Reviewers`).
+    * Add or remove named reviewers: the review owner. A delegated principal
+      also needs `reviews:write`.
     * Delete the review: the review owner.
     * List reviews (`list_viewer/1`): a human identity or an OAuth connector
       grant at `/mcp` lists the whole account's reviews; an agent identity,
       such as an agent API token, lists only its own.
 
-  "Owner" and "author" mean the account, not one identity: an account's human
-  identity and its agent identities share its permissions.
+  "Owner", "author" and "reviewer" mean the account, not one identity: an
+  account's human identity and its agent identities share its permissions.
 
   The actor is a `Reviews.Principal`, or a bare `Identity` (treated as a
   principal with every scope), or nil for a signed-out reader.
@@ -33,6 +36,7 @@ defmodule Reviews.Policy do
           | :comment
           | :push
           | :decide_section
+          | :manage_reviewers
           | :delete
           | {:update_thread_status, thread :: map()}
 
@@ -41,6 +45,7 @@ defmodule Reviews.Policy do
   @scopes %{
     comment: "comments:write",
     push: "reviews:write",
+    manage_reviewers: "reviews:write",
     update_thread_status: "threads:write"
   }
 
@@ -90,8 +95,11 @@ defmodule Reviews.Policy do
   defp allowed?(_principal, :comment, _review), do: true
   defp allowed?(%{identity: actor}, :push, review), do: owner?(actor, review)
 
-  # Explicitly added reviewers will also be allowed here once that feature exists.
-  defp allowed?(%{identity: actor}, :decide_section, review), do: owner?(actor, review)
+  defp allowed?(%{identity: actor}, :decide_section, review) do
+    owner?(actor, review) or Reviews.Reviewers.reviewer?(review, actor)
+  end
+
+  defp allowed?(%{identity: actor}, :manage_reviewers, review), do: owner?(actor, review)
 
   defp allowed?(%{identity: actor}, :delete, review), do: owner?(actor, review)
 

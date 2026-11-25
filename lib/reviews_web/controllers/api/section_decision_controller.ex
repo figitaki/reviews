@@ -50,7 +50,10 @@ defmodule ReviewsWeb.Api.SectionDecisionController do
         conn
         |> put_status(:forbidden)
         |> json(
-          ReviewsWeb.ApiErrors.detail(:forbidden, "Only the review owner can decide sections")
+          ReviewsWeb.ApiErrors.detail(
+            :forbidden,
+            "Only the review owner and its reviewers can decide sections"
+          )
         )
 
       _ ->

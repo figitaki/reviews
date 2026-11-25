@@ -36,6 +36,11 @@ defmodule Reviews.Errors do
     empty_body: {422, "body cannot be empty"},
     invalid_packet: {422, "Invalid packet"},
     validation_failed: {422, "Invalid input"},
+    # Named reviewers (`Reviews.Reviewers`).
+    github_user_not_found: {404, "No GitHub account has that login."},
+    github_unavailable:
+      {503, "GitHub could not be reached to look up that login. Try again later."},
+    reviewer_is_owner: {422, "The review owner cannot be one of its reviewers."},
     # Code storage (`Reviews.CodeSnapshots`). 404 for a disabled server matches
     # an older server without the routes, so the CLI pushes diff-only.
     code_storage_disabled: {404, "Code storage is not enabled on this server."},

@@ -60,6 +60,9 @@ enum Command {
 
     /// Permanently delete a review you own, after typing its slug to confirm
     Delete(commands::delete::DeleteArgs),
+
+    /// List a review's named reviewers, or add or remove them (owner only)
+    Reviewers(commands::reviewers::ReviewersArgs),
 }
 
 fn main() {
@@ -85,5 +88,6 @@ fn run() -> Result<()> {
         Command::Reopen(args) => commands::thread_status::run(args, "open"),
         Command::Section(args) => commands::section::run(args),
         Command::Delete(args) => commands::delete::run(args),
+        Command::Reviewers(args) => commands::reviewers::run(args),
     }
 }

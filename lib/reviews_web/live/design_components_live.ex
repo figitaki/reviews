@@ -15,7 +15,13 @@ defmodule ReviewsWeb.DesignComponentsLive do
 
   alias Reviews.ReviewView
   alias ReviewsWeb.{DesignFixtures, DesignLive}
-  alias ReviewsWeb.ReviewLive.{ActivityComponents, DiffComponents, PacketComponents}
+
+  alias ReviewsWeb.ReviewLive.{
+    ActivityComponents,
+    DiffComponents,
+    PacketComponents,
+    ReviewerComponents
+  }
 
   @hunk_id "dcp-hunk"
 
@@ -52,6 +58,7 @@ defmodule ReviewsWeb.DesignComponentsLive do
          ),
        viewer: DesignFixtures.viewer(),
        decisions: decisions,
+       reviewers: DesignFixtures.reviewers(),
        decision_samples: @decision_samples,
        hunk_id: @hunk_id,
        expanded_hunk_ids: MapSet.new([@hunk_id]),
@@ -126,6 +133,10 @@ defmodule ReviewsWeb.DesignComponentsLive do
        }
      end)}
   end
+
+  # The reviewers sample does not save.
+  def handle_event(event, _params, socket) when event in ["add_reviewer", "remove_reviewer"],
+    do: {:noreply, socket}
 
   defp update_decision(socket, index, fun) do
     update(socket, :decisions, &Map.update!(&1, String.to_integer(index), fun))
@@ -565,6 +576,28 @@ defmodule ReviewsWeb.DesignComponentsLive do
                 <figcaption class="dc-name">{decision_caption(who)}</figcaption>
               </figure>
             <% end %>
+          </div>
+        </DesignLive.catalog_section>
+
+        <DesignLive.catalog_section :let={theme} id="dcp-reviewers" title="Reviewers">
+          <:rules>
+            <li>
+              The review header lists named reviewers by GitHub login. An invited reviewer has not
+              signed up yet and shows Invited.
+            </li>
+            <li>The owner adds reviewers with the field and removes them with the cross.</li>
+          </:rules>
+          <div class="dcp-decisions">
+            <figure :for={{who, manage} <- [{"owner", true}, {"reader", false}]} :key={who}>
+              <ReviewerComponents.reviewers
+                reviewers={@reviewers}
+                can_manage={manage}
+                id_prefix={"dcp-#{who}-#{theme}-"}
+              />
+              <figcaption class="dc-name">
+                {if manage, do: "The owner", else: "Anyone else with the link"}
+              </figcaption>
+            </figure>
           </div>
         </DesignLive.catalog_section>
 

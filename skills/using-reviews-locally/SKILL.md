@@ -137,7 +137,8 @@ cli/target/release/reviews reply <slug> <thread-id> --body "Switched to Decimal 
 Notes:
 - `reviews threads` can run anonymously against public review JSON.
 - `reviews reply`, `reviews resolve`, and `reviews reopen` require `reviews login` (or `reviews login --token` with an API token).
-- `reviews resolve` and `reviews reopen` work only for the review owner or the thread's author; `reviews section` works only for the review owner. Others get HTTP 403.
+- `reviews resolve` and `reviews reopen` work only for the review owner or the thread's author; `reviews section` works for the review owner and its named reviewers (and their agents). Others get HTTP 403.
+- `reviews reviewers <slug>` lists a review's named reviewers. The owner adds them with `reviews reviewers add <slug> <login>...` or `reviews push --reviewer <login>`, and removes them with `reviews reviewers remove <slug> <login>...`. Reviewers are GitHub logins matched by GitHub ID, so someone who has not signed up yet shows as invited.
 - `reviews delete <slug>` permanently deletes a review you own, with its comments. It shows what goes and asks you to type the slug; `--yes` skips the prompt for scripts. Only the review owner can delete; others get HTTP 403.
 - Thread IDs are accepted bare (`7`) or as printed by the listing (`#7`).
 - `reviews reply` appends to the thread. `reviews comment` always opens a new one.

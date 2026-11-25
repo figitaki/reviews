@@ -613,7 +613,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
                   id={"packet-section-#{@section.index}-decision-owner-only"}
                   class="review-packet-section-note"
                 >
-                  Only the review owner can record section decisions.
+                  Only the review owner and its reviewers can record section decisions.
                 </p>
             <% end %>
           </div>

@@ -242,6 +242,20 @@ pub struct SectionDecisionResponse {
     pub status: Option<String>,
 }
 
+/// A review's named reviewers (`/api/v1/reviews/:slug/reviewers`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct ReviewersResponse {
+    pub review: String,
+    pub reviewers: Vec<Reviewer>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Reviewer {
+    pub login: String,
+    /// `active` once the GitHub account has signed up, else `invited`.
+    pub status: String,
+}
+
 /// What deleting a review would remove (`GET /api/v1/reviews/:slug/deletion`).
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeletionPreview {
@@ -476,6 +490,36 @@ impl ApiClient {
             .with_context(|| format!("could not parse {path} response as JSON"))
     }
 
+    pub fn list_reviewers(&self, slug: &str) -> Result<ReviewersResponse> {
+        let path = format!("/api/v1/reviews/{slug}/reviewers");
+        let resp = self
+            .auth(self.http.get(self.url(&path)))
+            .send()
+            .with_context(|| format!("could not reach server for GET {path}"))?;
+        let resp = check_status(resp, &format!("GET {path}"))?;
+        resp.json::<ReviewersResponse>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
+    /// Adds (`add == true`, idempotent PUT) or removes (DELETE) one reviewer.
+    pub fn change_reviewer(&self, slug: &str, login: &str, add: bool) -> Result<ReviewersResponse> {
+        let path = format!("/api/v1/reviews/{slug}/reviewers/{login}");
+        let method = if add { "PUT" } else { "DELETE" };
+        let _ = self.require_token(&format!("{method} {path}"))?;
+        let req = if add {
+            self.http.put(self.url(&path))
+        } else {
+            self.http.delete(self.url(&path))
+        };
+        let resp = self
+            .auth(req)
+            .send()
+            .with_context(|| format!("could not reach server for {method} {path}"))?;
+        let resp = check_status(resp, &format!("{method} {path}"))?;
+        resp.json::<ReviewersResponse>()
+            .with_context(|| format!("could not parse {path} response as JSON"))
+    }
+
     pub fn deletion_preview(&self, slug: &str) -> Result<DeletionPreview> {
         let path = format!("/api/v1/reviews/{slug}/deletion");
         let _ = self.require_token(&format!("GET {path}"))?;
@@ -520,7 +564,7 @@ fn check_status(resp: Response, what: &str) -> Result<Response> {
             " — the server rejected your sign-in. Run `reviews login` again."
         }
         StatusCode::FORBIDDEN => {
-            " — this identity is not allowed to do that on this review. Only the review owner can push revisions, decide sections or delete the review; the owner or the thread's author can resolve or reopen a thread."
+            " — this identity is not allowed to do that on this review. Only the review owner can push revisions, add or remove reviewers, or delete the review; the owner or a named reviewer can decide sections; the owner or the thread's author can resolve or reopen a thread."
         }
         StatusCode::NOT_FOUND => " — the resource does not exist (check the slug?).",
         StatusCode::UNPROCESSABLE_ENTITY => " — server rejected the payload (validation error).",

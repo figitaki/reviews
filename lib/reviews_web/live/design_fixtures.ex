@@ -104,6 +104,20 @@ defmodule ReviewsWeb.DesignFixtures do
   @doc "The signed-in viewer for the app shell and new comments."
   def viewer, do: %{identity(4, "you", "You") | avatar_url: nil} |> Map.put(:username, "you")
 
+  @doc "Named reviewers: one who has signed up, one still invited."
+  def reviewers(now \\ DateTime.utc_now()) do
+    [
+      %{
+        github_id: 2,
+        login: "sam",
+        status: "active",
+        identity: identity(2, "sam", "Sam"),
+        added_at: now
+      },
+      %{github_id: 9, login: "riley", status: "invited", identity: nil, added_at: now}
+    ]
+  end
+
   @doc "A packet section in each decision state."
   def section(index, status, title) do
     %{

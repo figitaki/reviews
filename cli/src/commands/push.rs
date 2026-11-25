@@ -44,6 +44,11 @@ pub struct PushArgs {
     /// Skip uploading repository code for this push (diff only).
     #[arg(long)]
     pub no_code_storage: bool,
+
+    /// Add a named reviewer by GitHub login after pushing; repeat for more.
+    /// Reviewers can decide sections.
+    #[arg(long = "reviewer", value_name = "LOGIN")]
+    pub reviewers: Vec<String>,
 }
 
 /// What to do about code upload for this push, from server capabilities and
@@ -187,6 +192,7 @@ pub fn run(args: PushArgs) -> Result<()> {
             let resp = client.create_patchset(&slug, &req)?;
             warn_if_skipped(resp.code_snapshot.as_ref());
             println!("Patchset {} added to {}", resp.patchset_number, resp.url);
+            add_reviewers(&client, &slug, &args.reviewers)?;
         }
         None => {
             let title = review_title(&args, &cap);
@@ -205,8 +211,21 @@ pub fn run(args: PushArgs) -> Result<()> {
             warn_if_skipped(resp.code_snapshot.as_ref());
             println!("Review created: {}", resp.url);
             println!("  slug: {}  patchset: {}", resp.slug, resp.patchset_number);
+            add_reviewers(&client, &resp.slug, &args.reviewers)?;
         }
     }
+    Ok(())
+}
+
+/// The review exists by now, so a failure here says so instead of hiding it.
+fn add_reviewers(client: &crate::api::ApiClient, slug: &str, logins: &[String]) -> Result<()> {
+    if logins.is_empty() {
+        return Ok(());
+    }
+    let resp = super::reviewers::change(client, slug, logins, true).with_context(|| {
+        format!("the push succeeded, but adding reviewers failed; retry with `reviews reviewers add {slug} ...`")
+    })?;
+    println!("{}", super::reviewers::format_reviewers(&resp));
     Ok(())
 }
 

@@ -505,8 +505,46 @@ same status again cleared the decision and returned `"status": null`; the CLI
 still accepts that reply from older servers. Writes for one patchset are
 serialized, so concurrent requests never act on stale state.
 
-Only the review owner's identities may decide sections; any other token →
-`403` with `{ "errors": { "detail": "Only the review owner can decide sections" } }`.
+The review owner's identities and the identities of its named reviewers'
+accounts may decide sections, so a reviewer's agent can decide for them; any
+other token → `403` with
+`{ "errors": { "detail": "Only the review owner and its reviewers can decide sections" } }`.
+
+### Named reviewers: `/api/v1/reviews/:slug/reviewers`
+
+A review's named reviewers (#214, `docs/design/named-reviewers.md`). A
+reviewer is a GitHub account. The server looks the login up with GitHub's
+public `GET /users/{login}` and stores and matches the numeric GitHub ID, never
+the login text, so the owner can add someone who has not signed up yet.
+
+- `GET /api/v1/reviews/:slug/reviewers` — anyone with the link, no token.
+- `PUT /api/v1/reviews/:slug/reviewers/:login` — adds a reviewer. Owner only.
+  Adding one twice changes nothing.
+- `DELETE /api/v1/reviews/:slug/reviewers/:login` — removes the reviewer
+  listed under `:login`. Owner only. Their decisions stay stored but they can
+  no longer decide.
+
+Each returns `200` with the updated list, in the order reviewers were added:
+
+```json
+{
+  "review": "k7m2qz",
+  "reviewers": [
+    {"login": "sam", "github_id": 5002, "status": "active", "identity": {"id": 12, "kind": "human", "handle": "sam", "username": "sam", "display_name": "sam", "avatar_url": null}, "added_at": "2026-11-25T09:00:00Z"},
+    {"login": "riley", "github_id": 5003, "status": "invited", "identity": null, "added_at": "2026-11-25T09:01:00Z"}
+  ]
+}
+```
+
+`status` is `invited` until an account with that GitHub ID signs in, then
+`active`; `identity` is that account's human identity. `login` is the account's
+current login once active, else the login GitHub returned when it was added.
+`GET /api/v1/reviews/:slug` returns the same list as `reviewers`.
+
+Errors: a token that is not the owner's → `403` `forbidden` ("Only the review
+owner can add or remove reviewers"); an unknown login → `404`
+`github_user_not_found`; the owner's own login → `422` `reviewer_is_owner`;
+GitHub unreachable → `503` `github_unavailable`.
 
 ### OAuth issuer (`/oauth`)
 

@@ -2461,7 +2461,7 @@ defmodule ReviewsWeb.ReviewLiveTest do
       assert render_hook(view, "set_section_status", %{
                "section_index" => "0",
                "status" => "approved"
-             }) =~ "Only the review owner can decide sections."
+             }) =~ "Only the review owner and its reviewers can decide sections."
 
       assert [] = Reviews.PacketSectionDecisions.list_for_review(packet_review, stranger)
     end

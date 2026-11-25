@@ -5,6 +5,7 @@ pub mod list;
 pub mod login;
 pub mod push;
 pub mod reply;
+pub mod reviewers;
 pub mod section;
 pub mod show;
 pub mod thread_status;
