@@ -246,8 +246,8 @@ defmodule Reviews.Threads do
       true ->
         with {:ok, origin_id} <- originating_patchset_id(review, params),
              :ok <- validate_new_thread(review, author, file_path, side, anchor, origin_id),
-             patchset = ReviewsContext.get_patchset!(origin_id),
-             {:ok, anchor} <- Reviews.Anchoring.validate_anchor(patchset, file_path, side, anchor) do
+             {:ok, anchor} <-
+               Reviews.Anchoring.validate_anchor(%{id: origin_id}, file_path, side, anchor) do
           insert_comment(
             review,
             author,
