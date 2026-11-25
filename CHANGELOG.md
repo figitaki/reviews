@@ -6,6 +6,18 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The server can read its settings from a YAML file named by
+  `REVIEWS_CONFIG` (`config/reviews.example.yaml`, docs/CONFIGURATION.md).
+  A set environment variable wins over the file, so existing deployments do
+  not change. Secrets are named by `_file` keys, never written inline.
+  Unknown keys and wrong types stop the server at boot with an error naming
+  the key. The file can also set the rate and body-size limits.
+- The Helm chart writes that file into a ConfigMap, mounts it and sets
+  `REVIEWS_CONFIG`. A new `config` value adds any file key. For this release
+  the chart also still sets `PHX_HOST`, `PORT`, `POOL_SIZE`, `ECTO_IPV6`,
+  `MCP_*`, `LEGAL_*` and `DNS_CLUSTER_QUERY` as pod environment variables,
+  copied from the file. Those copies go away in the release after this one;
+  read the settings from the config file instead.
 ## [0.0.4] - 2026-11-24
 
 0.0.4 makes Reviews something you can run yourself. A Helm chart runs the

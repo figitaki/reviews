@@ -1,9 +1,13 @@
 # Runtime configuration
 
-Every environment variable the Reviews server reads, in one place. The
-server reads them at boot, in `config/runtime.exs`, the release scripts in
-`rel/` and `lib/reviews/release.ex`; nothing is read from the environment at
-compile time. Change a variable, then restart every instance.
+Every setting the Reviews server reads, in one place. The server reads them
+at boot, in `config/runtime.exs`, the release scripts in `rel/` and
+`lib/reviews/release.ex`; nothing is read at compile time. Change a setting,
+then restart every instance.
+
+Settings come from environment variables, from a [config file](#config-file)
+named by `REVIEWS_CONFIG`, or both. A set environment variable always wins
+over the file.
 
 Columns:
 
@@ -12,8 +16,9 @@ Columns:
   secret (a Kubernetes Secret, `fly secrets`, `.env.local` in dev).
 - **Helm value**: the [chart](../charts/reviews/README.md) value that sets
   it. `secret` means a key in the Secret named by `secrets.existingSecret`
-  (every key there becomes an environment variable). `env.NAME` means the
-  chart has no dedicated value; set it under `env:`.
+  (every key there becomes an environment variable). `config.KEY` means the
+  chart has no dedicated value; set that [config file](#config-file) key
+  under `config:`. `env.NAME` means an environment variable under `env:`.
 
 Unless a row says otherwise, a variable that is unset or empty counts as
 unset, and boolean switches are on only for `true` or `1`.
@@ -42,7 +47,7 @@ header.
 
 | Variable | What it does | Default | Required | Secret | Helm value |
 | --- | --- | --- | --- | --- | --- |
-| `WEBSOCKET_EXTRA_ORIGINS` | Comma-separated origins, besides `https://PHX_HOST`, that LiveView sockets accept, such as `https://old.example.com`. Use it while an old hostname redirects to a new one, so pages opened on the old host keep their socket. Set to empty for none. | none; on Fly, `https://reviews-dev.fly.dev` (the hosted site's old hostname) | no | no | `env.WEBSOCKET_EXTRA_ORIGINS` |
+| `WEBSOCKET_EXTRA_ORIGINS` | Comma-separated origins, besides `https://PHX_HOST`, that LiveView sockets accept, such as `https://old.example.com`. Use it while an old hostname redirects to a new one, so pages opened on the old host keep their socket. Set to empty for none. | none; on Fly, `https://reviews-dev.fly.dev` (the hosted site's old hostname) | no | no | `config.server.websocket_extra_origins` |
 | `FLY_APP_NAME` | Set by Fly, not by you. When present, the server listens on IPv4 only and trusts `Fly-Client-IP` for rate limits ([ABUSE_PROTECTION.md](ABUSE_PROTECTION.md#client-ips-on-fly)), defaults `WEBSOCKET_EXTRA_ORIGINS` as above, and `rel/env.sh.eex` derives the node name and `DNS_CLUSTER_QUERY` from `FLY_APP_NAME`, `FLY_IMAGE_REF` and `FLY_PRIVATE_IP`. Elsewhere the server binds all IPv6 and IPv4 interfaces and rate-limits by socket peer. | unset | no | no | never set it |
 
 Off Fly, rate limits key on the TCP peer, which behind a proxy is the
@@ -79,11 +84,11 @@ distribution port and knows the cookie can run code on the node.
 | --- | --- | --- | --- | --- | --- |
 | `MCP_ENABLED` | Hosted MCP endpoint at `/mcp` ([MCP.md](MCP.md)). | off | no | no | `mcp.enabled` |
 | `MCP_WRITES_ENABLED` | MCP write tools. Needs `MCP_ENABLED`. | off | no | no | `mcp.writesEnabled` |
-| `DESIGN_CATALOG` | Design-system pages at `/design`. Production only; always on in dev. | off | no | no | `env.DESIGN_CATALOG` |
-| `CODE_STORAGE_ADAPTER` | `code_storage` turns on storing each patchset's commits in [code.storage](https://code.storage). Any other value leaves it off. | off | no | no | `env.CODE_STORAGE_ADAPTER` |
-| `CODE_STORAGE_ORG` | code.storage organization. | none | with the adapter | no | `env.CODE_STORAGE_ORG` |
+| `DESIGN_CATALOG` | Design-system pages at `/design`. Production only; always on in dev. | off | no | no | `config.server.design_catalog` |
+| `CODE_STORAGE_ADAPTER` | `code_storage` turns on storing each patchset's commits in [code.storage](https://code.storage). Any other value leaves it off. | off | no | no | `config.code_storage.enabled` |
+| `CODE_STORAGE_ORG` | code.storage organization. | none | with the adapter | no | `config.code_storage.org` |
 | `CODE_STORAGE_JWT_PRIVATE_KEY` | Unencrypted PKCS8 PEM, named-curve P-256 key that signs upload tokens. Real newlines or literal `\n` both work. | none | with the adapter | yes | `secret` |
-| `CODE_STORAGE_POLICY` | `required` stops a push whose code upload fails; anything else is `optional`. | `optional` | no | no | `env.CODE_STORAGE_POLICY` |
+| `CODE_STORAGE_POLICY` | `required` stops a push whose code upload fails; anything else is `optional`. | `optional` | no | no | `config.code_storage.policy` |
 | `REVIEWS_ANALYTICS_TOKEN_SHA256` | SHA-256 (hex) of the aggregate-export credential ([AGGREGATE_EXPORT.md](AGGREGATE_EXPORT.md)). The export is off unless this and the expiry are both valid. | off | no | yes | `secret` |
 | `REVIEWS_ANALYTICS_TOKEN_EXPIRES_AT` | UTC ISO-8601 expiry of that credential, at most 90 days ahead. | off | no | yes | `secret` |
 
@@ -119,8 +124,8 @@ installation sets none of these.
 | Variable | What it does | Default | Required | Secret | Helm value |
 | --- | --- | --- | --- | --- | --- |
 | `AUTH_RELAY_SECRET` | Shared key for the GitHub sign-in relay. On the relay (a site with its own GitHub OAuth app) it turns the relay on; on a preview, together with `AUTH_RELAY_URL`, it signs in through the relay. | off | no | yes | `secret` |
-| `AUTH_RELAY_URL` | On a preview: the relay's origin, such as `https://reviews.example.com`. | unset (this site is not a preview) | no | no | `env.AUTH_RELAY_URL` |
-| `AUTH_RELAY_PREVIEW_HOST` | Preview hostname with `*` where the PR number goes. The relay sends users only to hosts that match it, with digits for `*`, and previews accept relay codes only on such a host. Set the same value on the relay and its previews. Lowercase hostname characters and exactly one `*`, or the server refuses to start. | `reviews-pr-*.fly.dev` | no | no | `env.AUTH_RELAY_PREVIEW_HOST` |
+| `AUTH_RELAY_URL` | On a preview: the relay's origin, such as `https://reviews.example.com`. | unset (this site is not a preview) | no | no | `config.auth_relay.url` |
+| `AUTH_RELAY_PREVIEW_HOST` | Preview hostname with `*` where the PR number goes. The relay sends users only to hosts that match it, with digits for `*`, and previews accept relay codes only on such a host. Set the same value on the relay and its previews. Lowercase hostname characters and exactly one `*`, or the server refuses to start. | `reviews-pr-*.fly.dev` | no | no | `config.auth_relay.preview_host` |
 | `PREVIEW_DB_NAME` | `bin/migrate` creates this database if it is missing. Must be `reviews_pr_<digits>` and match `DATABASE_URL`. | unset (no create) | no | no | not used |
 | `PREVIEW_API_TOKEN` | `bin/migrate` seeds a "preview" user with this API token, so the CLI can push without GitHub. Never set it on a real installation. | unset (no user) | no | yes | not used |
 
@@ -143,6 +148,68 @@ Read by `config/dev.exs` and `config/test.exs`; ignored in production.
 
 `.env.example` lists the ones a new checkout usually needs; copy it to
 `.env.local`, which `./bin/server` loads.
+
+## Config file
+
+Set `REVIEWS_CONFIG` to the path of a YAML file to keep settings in one file
+instead of many environment variables.
+[`config/reviews.example.yaml`](../config/reviews.example.yaml) is an
+annotated example with every key. The Helm chart writes this file from its
+values into a ConfigMap, mounts it at `/etc/reviews/reviews.yaml` and sets
+`REVIEWS_CONFIG`. For one release it also copies the plain settings into pod
+environment variables; see the [chart README](../charts/reviews/README.md#values).
+
+- **Environment wins.** Each key stands for one environment variable (below).
+  When that variable is set, even to an empty string, the file's key is
+  ignored. A deployment with no file, such as the hosted site on Fly, works
+  exactly as before. The image sets `PORT=4000`, so `server.port` only
+  applies where `PORT` is unset.
+- **Secrets are files, never inline.** A secret's key ends in `_file` and
+  names a file holding the value, such as a Kubernetes Secret mounted as a
+  volume or a Docker secret under `/run/secrets`. A trailing newline is
+  dropped. The file is read only when the environment variable is unset, so
+  a secret can also come from the environment. Writing a secret inline, such
+  as `github.client_secret: …`, is an error that names the `_file` key to use.
+  There is no `${VAR}` substitution.
+- **Checked at boot.** An unknown key, a wrong type, an unreadable or empty
+  secret file, or invalid YAML stops the server. The error names every bad
+  key by its path, such as `server.port: must be a port number from 1 to
+  65535, got 70000`, and never prints a secret.
+- **Types.** Booleans are `true` or `false`; numbers are whole numbers above
+  0. A key that is missing or `null` takes its default.
+
+| File key | Environment variable | Type |
+| --- | --- | --- |
+| `server.host` | `PHX_HOST` | string |
+| `server.port` | `PORT` | port |
+| `server.secret_key_base_file` | `SECRET_KEY_BASE` | secret file |
+| `server.websocket_extra_origins` | `WEBSOCKET_EXTRA_ORIGINS` | list of origins, `[]` for none |
+| `server.design_catalog` | `DESIGN_CATALOG` | boolean |
+| `database.url_file` | `DATABASE_URL` | secret file |
+| `database.pool_size` | `POOL_SIZE` | number |
+| `database.ipv6` | `ECTO_IPV6` | boolean |
+| `cluster.dns_query` | `DNS_CLUSTER_QUERY` | string |
+| `github.client_id` | `GITHUB_CLIENT_ID` | string |
+| `github.client_secret_file` | `GITHUB_CLIENT_SECRET` | secret file |
+| `mcp.enabled`, `mcp.writes_enabled` | `MCP_ENABLED`, `MCP_WRITES_ENABLED` | boolean |
+| `code_storage.enabled` | `CODE_STORAGE_ADAPTER` (`true` means `code_storage`) | boolean |
+| `code_storage.org` | `CODE_STORAGE_ORG` | string |
+| `code_storage.jwt_private_key_file` | `CODE_STORAGE_JWT_PRIVATE_KEY` | secret file |
+| `code_storage.policy` | `CODE_STORAGE_POLICY` | `optional` or `required` |
+| `legal.privacy_url`, `legal.terms_url`, `legal.operator_name`, `legal.contact_email`, `legal.updated`, `legal.hosting_region`, `legal.log_retention`, `legal.backup_retention`, `legal.governing_law`, `legal.venue`, `legal.liability_cap` | the matching `LEGAL_*` variable | string |
+| `analytics.token_sha256_file` | `REVIEWS_ANALYTICS_TOKEN_SHA256` | secret file |
+| `analytics.token_expires_at` | `REVIEWS_ANALYTICS_TOKEN_EXPIRES_AT` | string |
+| `auth_relay.secret_file` | `AUTH_RELAY_SECRET` | secret file |
+| `auth_relay.url`, `auth_relay.preview_host` | `AUTH_RELAY_URL`, `AUTH_RELAY_PREVIEW_HOST` | string |
+| `limits.rate.requests`, `.writes`, `.uploads`, `.sockets`, `.owners` | none; per-client requests per minute ([ABUSE_PROTECTION.md](ABUSE_PROTECTION.md)), defaults 300, 60, 20, 60, 60 | number |
+| `limits.body_bytes.upload`, `.mcp`, `.other` | none; largest request body in bytes, defaults 50000000, 4000000, 64000 | number |
+
+Some settings are environment-only, because something reads them before the
+file or outside the server: `REVIEWS_CONFIG` itself, `PHX_SERVER`,
+`FLY_APP_NAME`, the Erlang release variables (`RELEASE_*`, `ERL_*`, read by
+the release scripts before `runtime.exs`), the preview seeding variables
+`PREVIEW_DB_NAME` and `PREVIEW_API_TOKEN`, and the development and test
+variables.
 
 ## Database and migrations
 

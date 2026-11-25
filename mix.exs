@@ -88,6 +88,9 @@ defmodule Reviews.MixProject do
       {:mdex, "== 0.14.6"},
       {:mdex_native, "== 0.3.1"},
       {:fastest_mcp, "~> 1.0.1"},
+      # Reads the deployment config file (Reviews.ConfigFile). yamerl comes
+      # with it, and through fastest_mcp already.
+      {:yaml_elixir, "~> 2.12"},
       # idna 7.1.0 has EEF-CVE-2026-117678. jsv (through fastest_mcp) still
       # asks for ~> 6.0 or ~> 7.0; drop the override once it allows 8.
       {:idna, "~> 8.0", override: true},

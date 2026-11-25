@@ -1,10 +1,25 @@
 import Config
 
+# The deployment config file (Reviews.ConfigFile, docs/CONFIGURATION.md).
+# A set environment variable wins over the file; get_env reads both, in that
+# order, and returns a string or nil like System.get_env/1.
+config_file = Reviews.ConfigFile.load!(System.get_env("REVIEWS_CONFIG"))
+get_env = fn name -> System.get_env(name) || config_file.env[name] end
+
+# The file's limits keys, which have no environment variable.
+if config_file.rate_limits != [] do
+  config :reviews, ReviewsWeb.Plugs.RequestBudget, limits: config_file.rate_limits
+end
+
+if config_file.body_limits != [] do
+  config :reviews, ReviewsWeb.Plugs.BodyBudget, config_file.body_limits
+end
+
 # Disabled unless both a SHA-256 digest and a UTC expiry (at most 90 days away) are valid.
 # Only the collector holds the raw aggregate credential; never reuse an account API token.
 config :reviews, :analytics_export,
-  token_sha256: System.get_env("REVIEWS_ANALYTICS_TOKEN_SHA256"),
-  expires_at: System.get_env("REVIEWS_ANALYTICS_TOKEN_EXPIRES_AT")
+  token_sha256: get_env.("REVIEWS_ANALYTICS_TOKEN_SHA256"),
+  expires_at: get_env.("REVIEWS_ANALYTICS_TOKEN_EXPIRES_AT")
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -26,21 +41,20 @@ if System.get_env("PHX_SERVER") do
   config :reviews, ReviewsWeb.Endpoint, server: true
 end
 
-config :reviews, ReviewsWeb.Endpoint,
-  http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+config :reviews, ReviewsWeb.Endpoint, http: [port: String.to_integer(get_env.("PORT") || "4000")]
 
 # GitHub OAuth credentials. Read in every environment so dev/test can opt in via env vars.
 # In prod you should set these; in dev/test they may be nil (OAuth simply won't work).
 config :ueberauth, Ueberauth.Strategy.Github.OAuth,
-  client_id: System.get_env("GITHUB_CLIENT_ID"),
-  client_secret: System.get_env("GITHUB_CLIENT_SECRET")
+  client_id: get_env.("GITHUB_CLIENT_ID"),
+  client_secret: get_env.("GITHUB_CLIENT_SECRET")
 
 # Code storage (code.storage backend). Off unless CODE_STORAGE_ADAPTER is set.
 # CODE_STORAGE_ORG is the code.storage organization; CODE_STORAGE_JWT_PRIVATE_KEY
 # is the P-256 private key in PKCS8 PEM format that signs ES256 upload tokens.
-if System.get_env("CODE_STORAGE_ADAPTER") == "code_storage" do
-  org = System.get_env("CODE_STORAGE_ORG")
-  key_pem = System.get_env("CODE_STORAGE_JWT_PRIVATE_KEY")
+if get_env.("CODE_STORAGE_ADAPTER") == "code_storage" do
+  org = get_env.("CODE_STORAGE_ORG")
+  key_pem = get_env.("CODE_STORAGE_JWT_PRIVATE_KEY")
 
   if config_env() == :prod and (is_nil(org) or is_nil(key_pem)) do
     raise """
@@ -50,7 +64,7 @@ if System.get_env("CODE_STORAGE_ADAPTER") == "code_storage" do
   end
 
   policy =
-    case System.get_env("CODE_STORAGE_POLICY", "optional") do
+    case get_env.("CODE_STORAGE_POLICY") || "optional" do
       "required" -> :required
       _ -> :optional
     end
@@ -68,23 +82,23 @@ end
 # used once every field it needs is set. Tests use config/test.exs.
 if config_env() != :test do
   config :reviews, :legal,
-    privacy_url: System.get_env("LEGAL_PRIVACY_URL"),
-    terms_url: System.get_env("LEGAL_TERMS_URL"),
-    operator_name: System.get_env("LEGAL_OPERATOR_NAME"),
-    contact_email: System.get_env("LEGAL_CONTACT_EMAIL"),
-    updated: System.get_env("LEGAL_UPDATED"),
-    hosting_region: System.get_env("LEGAL_HOSTING_REGION"),
-    log_retention: System.get_env("LEGAL_LOG_RETENTION"),
-    backup_retention: System.get_env("LEGAL_BACKUP_RETENTION"),
-    governing_law: System.get_env("LEGAL_GOVERNING_LAW"),
-    venue: System.get_env("LEGAL_VENUE"),
-    liability_cap: System.get_env("LEGAL_LIABILITY_CAP")
+    privacy_url: get_env.("LEGAL_PRIVACY_URL"),
+    terms_url: get_env.("LEGAL_TERMS_URL"),
+    operator_name: get_env.("LEGAL_OPERATOR_NAME"),
+    contact_email: get_env.("LEGAL_CONTACT_EMAIL"),
+    updated: get_env.("LEGAL_UPDATED"),
+    hosting_region: get_env.("LEGAL_HOSTING_REGION"),
+    log_retention: get_env.("LEGAL_LOG_RETENTION"),
+    backup_retention: get_env.("LEGAL_BACKUP_RETENTION"),
+    governing_law: get_env.("LEGAL_GOVERNING_LAW"),
+    venue: get_env.("LEGAL_VENUE"),
+    liability_cap: get_env.("LEGAL_LIABILITY_CAP")
 end
 
 # Preview sign-in relay (Reviews.AuthRelay, docs/PREVIEW_ENVS.md). Production
 # is the relay: AUTH_RELAY_SECRET plus the GitHub OAuth app above.
 # Previews are clients: AUTH_RELAY_SECRET plus AUTH_RELAY_URL.
-env_present = fn name -> if System.get_env(name) not in [nil, ""], do: System.get_env(name) end
+env_present = fn name -> if get_env.(name) not in [nil, ""], do: get_env.(name) end
 
 # AUTH_RELAY_PREVIEW_HOST is the preview hostname with `*` for the PR
 # number. The relay and its previews must agree on it.
@@ -104,18 +118,18 @@ config :reviews, :auth_relay,
 
 if config_env() == :prod do
   database_url =
-    System.get_env("DATABASE_URL") ||
+    get_env.("DATABASE_URL") ||
       raise """
       environment variable DATABASE_URL is missing.
       For example: ecto://USER:PASS@HOST/DATABASE
       """
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
+  maybe_ipv6 = if get_env.("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
   config :reviews, Reviews.Repo,
     # ssl: true,
     url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+    pool_size: String.to_integer(get_env.("POOL_SIZE") || "10"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
     # pool_count: 4,
     socket_options: maybe_ipv6
@@ -126,23 +140,23 @@ if config_env() == :prod do
   # to check this value into version control, so we use an environment
   # variable instead.
   secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
+    get_env.("SECRET_KEY_BASE") ||
       raise """
       environment variable SECRET_KEY_BASE is missing.
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  host = get_env.("PHX_HOST") || "example.com"
 
-  config :reviews, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+  config :reviews, :dns_cluster_query, get_env.("DNS_CLUSTER_QUERY")
 
-  config :reviews, :design_catalog, System.get_env("DESIGN_CATALOG") in ~w(true 1)
+  config :reviews, :design_catalog, get_env.("DESIGN_CATALOG") in ~w(true 1)
 
-  mcp_enabled = System.get_env("MCP_ENABLED") in ~w(true 1)
+  mcp_enabled = get_env.("MCP_ENABLED") in ~w(true 1)
 
   config :reviews, :mcp,
     enabled: mcp_enabled,
-    writes_enabled: mcp_enabled and System.get_env("MCP_WRITES_ENABLED") in ~w(true 1),
+    writes_enabled: mcp_enabled and get_env.("MCP_WRITES_ENABLED") in ~w(true 1),
     allowed_hosts: [host]
 
   # Fly sets FLY_APP_NAME on every machine. The IPv4-only listener below is
@@ -156,7 +170,7 @@ if config_env() == :prod do
   # hosted site's legacy hostname, so pages opened there before the redirect
   # to PHX_HOST keep their socket; elsewhere it is none. Empty means none.
   extra_origins =
-    case System.get_env("WEBSOCKET_EXTRA_ORIGINS") do
+    case get_env.("WEBSOCKET_EXTRA_ORIGINS") do
       nil when on_fly -> ["https://reviews-dev.fly.dev"]
       nil -> []
       list -> list |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
