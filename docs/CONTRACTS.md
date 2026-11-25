@@ -280,9 +280,11 @@ the patchset has no packet):
 A section has at most one decision per account (a person and their agent
 identities); `author` is the identity that set it. `status` is `approved`,
 `denied`, `ignored` or `pending` (pinned back to undecided). A decision made on
-an earlier patchset is listed with `carried_forward: true` while the
-section's hunks are unchanged; once the section changes it is dropped until
-someone decides again, so an empty `decisions` list means undecided. MCP's
+an earlier patchset is listed with `carried_forward: true` while the section
+has the same hunk references (`path#N`), the rule the review page uses. When
+the section gains or loses a hunk, the decision is dropped until someone
+decides again, so an empty `decisions` list means undecided. Edited lines
+inside a hunk that keeps its reference do not drop the decision. MCP's
 `reviews_get_review` returns the same `decisions` on each outline section,
 with the compact author.
 

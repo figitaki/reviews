@@ -64,9 +64,10 @@ defmodule Reviews.PacketSectionDecisions do
       when that is an earlier patchset whose decision still applies.
     * `decided_at` is when it was last set.
 
-  A decision on an earlier patchset carries forward only while the section's
-  hunks are unchanged, the same rule the review page uses; a changed section
-  has no decision until someone decides again.
+  A decision on an earlier patchset carries forward while the section has the
+  same hunk references (`path#N`), the same rule the review page uses. When a
+  section gains or loses a hunk it has no decision until someone decides
+  again. Edited lines inside a hunk that keeps its reference do not drop it.
   """
   def by_section(%Review{id: review_id}, sections, selected, patchsets) do
     numbers = Map.new(patchsets, &{&1.id, &1.number})
