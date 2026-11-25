@@ -1,6 +1,6 @@
 # Named reviewers
 
-Status: draft for discussion. Issue [#214](https://github.com/figitaki/reviews/issues/214). No code yet.
+Status: accepted by Carey on 2026-11-25 (see [Decisions](#decisions)). Issue [#214](https://github.com/figitaki/reviews/issues/214).
 
 ## Problem
 
@@ -21,7 +21,7 @@ This doc proposes how the owner names reviewers, what those reviewers may do, an
 
 ## Recommendation
 
-**A reviewer is an account, named by GitHub login, added by the owner.** A reviewer's agents may decide for them, and each decision shows which identity made it. Every reviewer's decision is shown; the section and review states are a plain roll-up of all current reviewers, and nothing is gated on them yet.
+**A reviewer is an account, named by GitHub login, added by the owner.** A reviewer's agents may decide for them, and each decision shows which identity made it. Every reviewer's decision is shown; the section and review states are a plain roll-up of the owner and all current reviewers, and nothing is gated on them yet.
 
 ### Who is a reviewer
 
@@ -65,22 +65,22 @@ For MCP connectors, add a `sections:write` scope ("Decide packet sections") and 
 
 ### How decisions add up
 
-Per section, for the selected patchset, using each account's effective decision (`PacketSectionDecisions.section_state/4`, so carry-forward and invalidation stay as they are):
+The voters are the owner's account plus every current (claimed) reviewer. Per section, for the selected patchset, using each voter's effective decision (`PacketSectionDecisions.section_state/4`, so carry-forward and invalidation stay as they are):
 
 | Section state | When |
 | --- | --- |
-| Denied | Any current reviewer denied it. |
-| Approved | Every current reviewer approved or ignored it, and at least one approved. |
-| Ignored | Every current reviewer ignored it. |
+| Denied | Any voter denied it. |
+| Approved | Every voter approved or ignored it, and at least one approved. |
+| Ignored | Every voter ignored it. |
 | In review, "1 of 3" | Otherwise. |
 
-The review's overall state uses the same rule over sections: **Denied** if any section is denied, **Approved** if every section is approved or ignored, otherwise **In review** with a count of sections left. A review with no named reviewers keeps today's behaviour: the owner's decisions are the only ones and the roll-up uses them.
+The review's overall state uses the same rule over sections: **Denied** if any section is denied, **Approved** if every section is approved or ignored, otherwise **In review** with a count of sections left. A review with no named reviewers keeps today's behaviour: the owner is the only voter.
 
-The owner's own decisions are shown beside the reviewers' as self-checks but do not count once reviewers exist. This is display only. Nothing blocks a push or a merge on it.
+The owner's decision counts as one more vote, so the owner must also approve or ignore a section for it to be approved. Pending invites (no account yet) are not voters until they sign up. This is display only. Nothing blocks a push or a merge on it; a quorum can come later.
 
 ### Notifications
 
-None in the first version. A reviewer finds the review in a **Requested** list on `/reviews` (and `reviews list --role requested`, `GET /api/v1/reviews?role=requested`), and the stack updates live over the existing `"review:<slug>"` PubSub topic. Email needs a mailer, sender setup and an unsubscribe path; it can follow once the Requested list shows whether people miss requests.
+None in the first version. A reviewer finds the review in a **Requested** list on `/reviews` (and `reviews list --role requested`, `GET /api/v1/reviews?role=requested`; an agent token sees its account's Requested list, unlike the other roles where it sees only its own reviews), and the stack updates live over the existing `"review:<slug>"` PubSub topic. Email needs a mailer, sender setup and an unsubscribe path; it can follow once the Requested list shows whether people miss requests.
 
 ### The #82 reviewers row
 
@@ -114,17 +114,19 @@ One additive migration creates `review_reviewers` with its indexes and foreign k
 
 ## Phases
 
-1. **Reviewers can decide.** Table, `Reviews.Reviewers`, invite claiming on sign-in, `Policy` changes, REST and CLI add/remove/list, `--reviewer` on push, reviewers and roll-up in the snapshot (on top of #286), owner controls on the review page. Docs in `CONTRACTS.md` and the skills.
+1. **Reviewers can decide.** Table, `Reviews.Reviewers`, invite claiming on sign-in, `Policy` changes, REST and CLI add/remove/list, `--reviewer` on push, `reviewers` in the snapshot, owner controls on the review page. Docs in `CONTRACTS.md` and the skills. The per-section roll-up in the snapshot lands with or after #286, which owns the per-section decision list it extends.
 2. **Reviewers stack and Requested list.** Port #82's stack onto membership; the Requested role in `ReviewIndex`, `/reviews`, the API and `reviews list`. This is the base for #272.
 3. **MCP.** `reviews_update_reviewers`, the `sections:write` scope and `reviews_set_section_decision`, with docs in `MCP.md`.
 4. **Later, if wanted.** Email on add, required approvals or quorum, a reviewer stepping down.
 
-## Questions for Carey
+## Decisions
 
-1. **Combining.** Is "every current reviewer" the right roll-up, or is one approval enough? Should the owner's decision count once reviewers exist?
-2. **Agents.** May a reviewer's agents decide for them, as proposed, or should reviewer decisions need the person (human identity) for now?
-3. **Invites.** Is it fine to call GitHub's public user API when an owner adds a login, so invites match on GitHub ID? The alternative is matching on login text, which is simpler but lets a renamed or reused login claim the invite.
-4. **Visibility.** Reviews are readable by anyone with the link. Is it fine that the reviewers list, including pending invite logins, is visible to them too?
-5. **Reviewer rights.** Can a reviewer remove themselves, or add other reviewers? The proposal says no to both in phase 1.
-6. **Notifications.** Is the Requested list enough for a first version, or is email on add needed before people will use it?
-7. **Agent queues.** Should an agent token see its account's Requested list (`role=requested`), given that agent tokens today list only their own reviews?
+Carey answered the open questions on 2026-11-25 and accepted the recommendation:
+
+1. **Combining.** Every current reviewer must approve or ignore a section. The owner's decision counts as one more vote. Quorum can come later.
+2. **Agents.** A reviewer's agents may decide for them, labelled "for @login".
+3. **Invites.** Look up GitHub's public user API when a reviewer is added, and match on GitHub ID, never on login text.
+4. **Visibility.** Anyone with the link may see the reviewer list, including pending invites.
+5. **Reviewer rights.** Reviewers cannot remove themselves or add other reviewers for now.
+6. **Notifications.** The Requested list is enough for v1; no email.
+7. **Agent queues.** Agent tokens see their account's Requested list.
