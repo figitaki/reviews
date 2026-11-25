@@ -47,18 +47,22 @@ defmodule ReviewsWeb.CoreComponents do
   attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
   attr :title, :string, default: nil
   attr :kind, :atom, values: [:info, :error], doc: "used for styling and flash lookup"
+  attr :key, :atom, default: nil, doc: "the flash key to show and clear, when it is not `kind`"
   attr :rest, :global, doc: "the arbitrary HTML attributes to add to the flash container"
 
   slot :inner_block, doc: "the optional inner block that renders the flash message"
 
   def flash(assigns) do
-    assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
+    assigns =
+      assigns
+      |> assign_new(:id, fn -> "flash-#{assigns.kind}" end)
+      |> assign(:key, assigns.key || assigns.kind)
 
     ~H"""
     <div
-      :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
+      :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @key)}
       id={@id}
-      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
+      phx-click={JS.push("lv:clear-flash", value: %{key: @key}) |> hide("##{@id}")}
       role="alert"
       class="toast toast-bottom toast-end z-50"
       {@rest}
