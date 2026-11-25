@@ -24,7 +24,8 @@ defmodule ReviewsWeb.Api.PatchsetController do
           branch_name: params["branch_name"],
           raw_diff: params["raw_diff"],
           packet: params["packet"],
-          code_snapshot_id: params["code_snapshot_id"]
+          code_snapshot_id: params["code_snapshot_id"],
+          file_attributes: params["file_attributes"]
         }
 
         case Reviews.append_patchset(review, conn.assigns.current_principal, attrs) do

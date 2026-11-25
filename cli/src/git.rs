@@ -102,6 +102,91 @@ fn canonical_diff(repo: &Path, extra: &[&str]) -> Result<String> {
     run_git(repo, &args)
 }
 
+/// A changed file that `.gitattributes` marks `linguist-generated` or
+/// `linguist-vendored`. The server collapses these files on the review page.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct FileAttributes {
+    pub path: String,
+    pub generated: bool,
+    pub vendored: bool,
+}
+
+/// Reads `linguist-generated` and `linguist-vendored` for `paths` with
+/// `git check-attr`, from the checkout's attribute files. Returns only the
+/// files that have at least one of them set (`attr`, or `attr=true`).
+pub fn file_attributes(repo: &Path, paths: &[String]) -> Result<Vec<FileAttributes>> {
+    use std::io::Write as _;
+    use std::process::Stdio;
+
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    // Diff paths are relative to the repository root; check-attr resolves
+    // them against its working directory, so run it from the root.
+    let root = run_git(repo, &["rev-parse", "--show-toplevel"])?;
+    let mut child = Command::new("git")
+        .args([
+            "check-attr",
+            "-z",
+            "--stdin",
+            "linguist-generated",
+            "linguist-vendored",
+        ])
+        .current_dir(root.trim_end_matches('\n'))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("could not execute `git check-attr`")?;
+    let mut input = Vec::new();
+    for path in paths {
+        input.extend_from_slice(path.as_bytes());
+        input.push(0);
+    }
+    // Write from another thread so a full stdout pipe cannot deadlock us.
+    let mut stdin = child.stdin.take().expect("piped stdin");
+    let writer = std::thread::spawn(move || stdin.write_all(&input));
+    let output = child.wait_with_output()?;
+    writer
+        .join()
+        .map_err(|_| anyhow!("`git check-attr` input thread panicked"))??;
+    if !output.status.success() {
+        bail!(
+            "`git check-attr` failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(parse_check_attr(&String::from_utf8_lossy(&output.stdout)))
+}
+
+/// Parses `git check-attr -z` output: `path NUL attr NUL value NUL` triples.
+fn parse_check_attr(out: &str) -> Vec<FileAttributes> {
+    let fields: Vec<&str> = out.split('\0').collect();
+    let mut files: Vec<FileAttributes> = Vec::new();
+    for &[path, attr, value] in fields.as_chunks::<3>().0 {
+        if !matches!(value, "set" | "true") {
+            continue;
+        }
+        let index = match files.iter().position(|f| f.path == path) {
+            Some(index) => index,
+            None => {
+                files.push(FileAttributes {
+                    path: path.to_string(),
+                    generated: false,
+                    vendored: false,
+                });
+                files.len() - 1
+            }
+        };
+        match attr {
+            "linguist-generated" => files[index].generated = true,
+            "linguist-vendored" => files[index].vendored = true,
+            _ => {}
+        }
+    }
+    files
+}
+
 /// Resolve a git ref (or range start) to a full SHA.
 pub fn rev_parse(repo: &Path, rev: &str) -> Result<String> {
     let s = run_git(repo, &["rev-parse", rev])?;
@@ -490,6 +575,58 @@ mod tests {
         fs::write(repo.join(name), contents).unwrap();
         run_git(repo, &["add", name]).unwrap();
         run_git(repo, &["commit", "-q", "-m", msg]).unwrap();
+    }
+
+    #[test]
+    fn file_attributes_reads_linguist_generated_and_vendored() {
+        let (_g, repo) = init_repo();
+        fs::write(
+            repo.join(".gitattributes"),
+            "*.lock linguist-generated\nvendor/** linguist-vendored\nkeep.lock -linguist-generated\nflag.js linguist-generated=true\noff.js linguist-generated=false\n",
+        )
+        .unwrap();
+
+        let paths: Vec<String> = [
+            "Cargo.lock",
+            "keep.lock",
+            "vendor/lib.js",
+            "flag.js",
+            "off.js",
+            "src/main.rs",
+            "a dir/with space.lock",
+        ]
+        .iter()
+        .map(|p| p.to_string())
+        .collect();
+        let attrs = file_attributes(&repo, &paths).unwrap();
+
+        let flagged = |path: &str| attrs.iter().find(|a| a.path == path).cloned();
+        assert_eq!(
+            flagged("Cargo.lock"),
+            Some(FileAttributes {
+                path: "Cargo.lock".into(),
+                generated: true,
+                vendored: false
+            })
+        );
+        assert_eq!(
+            flagged("vendor/lib.js").map(|a| (a.generated, a.vendored)),
+            Some((false, true))
+        );
+        assert_eq!(flagged("flag.js").map(|a| a.generated), Some(true));
+        assert_eq!(
+            flagged("a dir/with space.lock").map(|a| a.generated),
+            Some(true)
+        );
+        assert_eq!(flagged("keep.lock"), None);
+        assert_eq!(flagged("off.js"), None);
+        assert_eq!(flagged("src/main.rs"), None);
+        assert_eq!(attrs.len(), 4);
+
+        // From a subdirectory, root-relative diff paths still match root rules.
+        fs::create_dir(repo.join("cli")).unwrap();
+        let from_sub = file_attributes(&repo.join("cli"), &paths).unwrap();
+        assert_eq!(from_sub, attrs);
     }
 
     #[test]

@@ -144,6 +144,8 @@ defmodule ReviewsWeb.Api.ReviewController do
       status: file.status,
       additions: file.additions,
       deletions: file.deletions,
+      generated: file.generated,
+      vendored: file.vendored,
       raw_diff: file.raw_diff
     }
   end
@@ -238,7 +240,8 @@ defmodule ReviewsWeb.Api.ReviewController do
       branch_name: params["branch_name"],
       raw_diff: params["raw_diff"],
       packet: params["packet"],
-      code_snapshot_id: params["code_snapshot_id"]
+      code_snapshot_id: params["code_snapshot_id"],
+      file_attributes: params["file_attributes"]
     }
   end
 

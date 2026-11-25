@@ -942,7 +942,7 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp open_preview_hunks(hunks, socket) do
-    hunk_ids = preview_hunk_ids(hunks)
+    hunk_ids = hunks |> reject_auto_collapsed(socket.assigns.file_diffs) |> preview_hunk_ids()
 
     assign(
       socket,
@@ -952,7 +952,8 @@ defmodule ReviewsWeb.ReviewLive do
   end
 
   defp open_section_hunks(hunks, socket) do
-    hunk_ids = section_hunk_ids_to_open(hunks)
+    hunk_ids =
+      hunks |> reject_auto_collapsed(socket.assigns.file_diffs) |> section_hunk_ids_to_open()
 
     assign(
       socket,
@@ -960,6 +961,15 @@ defmodule ReviewsWeb.ReviewLive do
       MapSet.union(socket.assigns.expanded_hunk_ids, MapSet.new(hunk_ids))
     )
   end
+
+  # Generated and vendored files (issue #231) never open by themselves; the
+  # reader opens one with its own toggle.
+  defp reject_auto_collapsed(hunks, file_diffs) do
+    collapsed = for file <- file_diffs, auto_collapsed?(file), into: MapSet.new(), do: file.path
+    Enum.reject(hunks, &MapSet.member?(collapsed, Map.get(&1, :file_path)))
+  end
+
+  defp auto_collapsed?(file), do: Map.get(file, :generated) || Map.get(file, :vendored) || false
 
   defp section_hunk_ids_to_open(hunks) do
     Enum.map(hunks, & &1.id)
@@ -1246,6 +1256,7 @@ defmodule ReviewsWeb.ReviewLive do
     hunk_ids =
       sections
       |> Enum.flat_map(&section_hunks(&1, snapshot.hunks_by_path))
+      |> reject_auto_collapsed(snapshot.file_diffs)
       |> section_hunk_ids_to_open()
       |> MapSet.new()
 
@@ -1255,6 +1266,7 @@ defmodule ReviewsWeb.ReviewLive do
   defp default_expanded_changes_hunk_ids(socket, snapshot) do
     if socket.assigns[:live_action] == :changes do
       snapshot.file_diffs
+      |> Enum.reject(&auto_collapsed?/1)
       |> Enum.map(&file_diff_id/1)
       |> MapSet.new()
     else
