@@ -675,7 +675,53 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
       export default {
         mounted() {
           this.editing = this.el.dataset.editing
+          this.serverEditing = this.editing
           const control = this.el.querySelector(".review-section-decision-control")
+          // Open or close the panel at once (issue #235). The panel's
+          // visibility is CSS on is-editing, and the server's reply patches
+          // the same class, label and attributes back in. Each toggle flips
+          // the server's state once, so until every reply is in, updated()
+          // repaints the latest wish over older replies. A lost reply stops
+          // that after a few seconds.
+          this.inflight = 0
+          this.wanted = null
+          this.paint = (editing) => {
+            if (editing) {
+              for (const other of document.querySelectorAll(".review-section-decision.is-editing")) {
+                if (other !== this.el) other.classList.remove("is-editing")
+              }
+            }
+            this.el.classList.toggle("is-editing", editing)
+            const toggle = this.el.querySelector("[aria-expanded]")
+            toggle?.setAttribute("aria-expanded", String(editing))
+            const label = toggle?.querySelector(".review-section-decision-toggle-label")
+            if (label && editing) {
+              if (label.textContent.trim() !== "Dismiss") this.closedLabel = label.textContent
+              label.textContent = "Dismiss"
+            } else if (label && this.closedLabel) {
+              label.textContent = this.closedLabel
+            }
+            // After LiveView has read this click's phx-value-open, so a
+            // second click before the reply asks for the other state.
+            setTimeout(() => toggle?.setAttribute("phx-value-open", String(!editing)))
+          }
+          const showEditing = (editing) => {
+            // A new open must not inherit the guard of an unanswered close.
+            if (editing) {
+              this.closing = false
+              clearTimeout(this.closingTimer)
+            }
+            this.inflight += 1
+            this.wanted = editing
+            clearTimeout(this.wantedTimer)
+            this.wantedTimer = setTimeout(() => { this.inflight = 0; this.wanted = null }, 4000)
+            this.paint(editing)
+          }
+          const shown = () => this.el.classList.contains("is-editing")
+          this.el.addEventListener("click", event => {
+            const toggle = event.target.closest("button[phx-click='toggle_section_decision']")
+            if (toggle) showEditing(toggle.getAttribute("phx-value-open") === "true")
+          })
           // One close at a time: a second outside click or Escape before the
           // closed state arrives is ignored. The server also treats a repeated
           // close as a no-op. A lost reply clears the pending flag after a
@@ -685,13 +731,14 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
             const toggle = this.el.querySelector("[aria-expanded='true']")
             if (!toggle) return
             this.closing = true
+            showEditing(false)
             clearTimeout(this.closingTimer)
             this.closingTimer = setTimeout(() => { this.closing = false }, 4000)
             this.pushEvent("toggle_section_decision", {section_index: toggle.getAttribute("phx-value-section_index"), open: "false"})
           }
           // While open, Escape or a click anywhere outside the control closes it.
           this.onKey = event => {
-            if (event.key === "Escape" && this.el.dataset.editing === "true") {
+            if (event.key === "Escape" && shown()) {
               event.stopPropagation()
               close()
             }
@@ -699,7 +746,7 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
           // An outside click leaves focus where the reader clicked, such as a
           // reply box; only Escape, the pill and a choice return it to the pill.
           this.onClick = event => {
-            if (this.el.dataset.editing === "true" && !control.contains(event.target)) {
+            if (shown() && !control.contains(event.target)) {
               this.keepFocus = true
               close()
             }
@@ -709,13 +756,30 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         },
         updated() {
           const editing = this.el.dataset.editing
+          const changed = editing !== this.serverEditing
+          this.serverEditing = editing
+          if (this.wanted !== null) {
+            if (changed) this.inflight -= 1
+            if (this.inflight > 0) {
+              // Replies to earlier toggles are still due: keep the latest
+              // wish on screen and leave focus alone until they settle.
+              this.paint(this.wanted)
+              return
+            }
+            this.inflight = 0
+            this.wanted = null
+            clearTimeout(this.wantedTimer)
+          }
           if (editing !== "true") {
             this.closing = false
             clearTimeout(this.closingTimer)
           }
-          if (editing !== this.editing && this.keepFocus) {
+          if (editing === this.editing) {
+            // Toggles that cancelled out leave focus alone.
             this.keepFocus = false
-          } else if (editing !== this.editing) {
+          } else if (this.keepFocus) {
+            this.keepFocus = false
+          } else {
             const target = editing === "true"
               ? this.el.querySelector("[aria-pressed='true']") || this.el.querySelector("[aria-pressed]") || this.el.querySelector("[aria-expanded]")
               : this.el.querySelector("[aria-expanded]")
@@ -725,9 +789,13 @@ defmodule ReviewsWeb.ReviewLive.PacketComponents do
         },
         reconnected() {
           this.closing = false
+          this.inflight = 0
+          this.wanted = null
+          this.serverEditing = this.el.dataset.editing
         },
         destroyed() {
           clearTimeout(this.closingTimer)
+          clearTimeout(this.wantedTimer)
           document.removeEventListener("keydown", this.onKey, true)
           document.removeEventListener("click", this.onClick, true)
         }

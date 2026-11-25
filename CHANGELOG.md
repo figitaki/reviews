@@ -6,6 +6,9 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- The section decision button and the split/stacked diff buttons respond on
+  click instead of after the server's reply (issue #235). The server still
+  saves and confirms each change.
 - Generated and vendored files start collapsed (issue #231). `reviews push`
   reads `linguist-generated` and `linguist-vendored` from `.gitattributes`
   and sends them with the diff. The review page labels those files and never

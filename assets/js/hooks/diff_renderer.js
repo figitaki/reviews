@@ -6,6 +6,7 @@
 // and coerced exactly once, here, by the HunkIslandDataset schema.
 
 import { VanillaDiffRenderer } from "../diff_renderer/vanilla_renderer.js"
+import { resolveDiffStyle } from "../diff_renderer/pending_style.js"
 import {
   Thread,
   CreateCommentPayload,
@@ -144,6 +145,20 @@ const DiffRenderer = {
     }
     this._systemThemeQuery?.addEventListener?.("change", this._systemThemeListener)
 
+    // The diff style toolbar announces a new style before the server confirms
+    // it (issue #235). Hold it until the patched dataset agrees, or for a few
+    // seconds if the reply never comes.
+    this._onDiffStyle = ({ detail }) => {
+      this._pendingStyle = detail?.style ?? null
+      clearTimeout(this._pendingStyleTimer)
+      this._pendingStyleTimer = setTimeout(() => {
+        this._pendingStyle = null
+        this.syncIsland()
+      }, 5000)
+      this.syncIsland()
+    }
+    window.addEventListener?.("reviews:diff-style", this._onDiffStyle)
+
     this.handleEvent("open_review_thread", ({ thread_id, file_path, hunk_id }) => {
       if (file_path === filePath && (!hunk_id || hunk_id === this._island?.hunkId)) {
         this._renderer?.openThread(thread_id)
@@ -161,12 +176,17 @@ const DiffRenderer = {
     // both sync from the patched attributes, under any change still saving.
     const island = parseIsland(this.el.dataset)
     if (!island) return
-    this._island = { ...island, ...this._optimistic }
+    const { style, pending } = resolveDiffStyle(island.diffStyle, this._pendingStyle)
+    if (!pending) clearTimeout(this._pendingStyleTimer)
+    this._pendingStyle = pending
+    this._island = { ...island, ...this._optimistic, diffStyle: style }
     this._renderer?.updateStyle(this._island.diffStyle)
     this._renderer?.updateHunkUI(this._island)
   },
 
   destroyed() {
+    window.removeEventListener?.("reviews:diff-style", this._onDiffStyle)
+    clearTimeout(this._pendingStyleTimer)
     this._themeObserver?.disconnect()
     this._themeObserver = null
     this._systemThemeQuery?.removeEventListener?.("change", this._systemThemeListener)
