@@ -6,6 +6,10 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
+- A tab left open across a deploy now says a new version is available and
+  offers a reload link, instead of showing new pages with the old CSS
+  (issue #268). It asks rather than reloads, so a comment in progress is not
+  lost.
 - The server can read its settings from a YAML file named by
   `REVIEWS_CONFIG` (`config/reviews.example.yaml`, docs/CONFIGURATION.md).
   A set environment variable wins over the file, so existing deployments do
