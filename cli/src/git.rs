@@ -121,6 +121,9 @@ pub fn file_attributes(repo: &Path, paths: &[String]) -> Result<Vec<FileAttribut
     if paths.is_empty() {
         return Ok(Vec::new());
     }
+    // Diff paths are relative to the repository root; check-attr resolves
+    // them against its working directory, so run it from the root.
+    let root = run_git(repo, &["rev-parse", "--show-toplevel"])?;
     let mut child = Command::new("git")
         .args([
             "check-attr",
@@ -129,7 +132,7 @@ pub fn file_attributes(repo: &Path, paths: &[String]) -> Result<Vec<FileAttribut
             "linguist-generated",
             "linguist-vendored",
         ])
-        .current_dir(repo)
+        .current_dir(root.trim_end_matches('\n'))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -619,6 +622,11 @@ mod tests {
         assert_eq!(flagged("off.js"), None);
         assert_eq!(flagged("src/main.rs"), None);
         assert_eq!(attrs.len(), 4);
+
+        // From a subdirectory, root-relative diff paths still match root rules.
+        fs::create_dir(repo.join("cli")).unwrap();
+        let from_sub = file_attributes(&repo.join("cli"), &paths).unwrap();
+        assert_eq!(from_sub, attrs);
     }
 
     #[test]
