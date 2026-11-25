@@ -75,7 +75,7 @@ What you get:
 
    ```sh
    helm install reviews oci://ghcr.io/figitaki/charts/reviews \
-     --version 0.0.4 --namespace reviews -f values.yaml --wait --timeout 10m
+     --version 0.0.5 --namespace reviews -f values.yaml --wait --timeout 10m
    ```
 
 The first install takes a minute or two. CloudNativePG starts Postgres and
@@ -106,7 +106,7 @@ file.
 For one release, the chart also sets `PHX_HOST`, `PORT`, `POOL_SIZE`,
 `ECTO_IPV6`, `MCP_*`, `LEGAL_*` and `DNS_CLUSTER_QUERY` as pod environment
 variables, copied from the rendered file so the two always agree. These
-copies go away in the release after this one. Tooling that reads them from
+copies go away in 0.0.6. Tooling that reads them from
 the pod's environment should read the config file instead. [docs/CONFIGURATION.md](../../docs/CONFIGURATION.md) lists every
 setting, its default, whether it is a secret, and the value, `config` key or
 Secret key that sets it.
@@ -245,8 +245,8 @@ redirects to `host`, add it with `config.server.websocket_extra_origins`
 
 ### Versions and image tags
 
-The chart is versioned with the rest of Reviews: chart `0.0.4` is part of
-release `0.0.4`, and by default it runs the image `server-v0.0.4`, the server
+The chart is versioned with the rest of Reviews: chart `0.0.5` is part of
+release `0.0.5`, and by default it runs the image `server-v0.0.5`, the server
 it was released and tested with. To run a release, install the chart
 version of the same number and leave `image.tag` empty.
 
@@ -383,7 +383,7 @@ spec:
   chart:
     spec:
       chart: reviews
-      version: "0.0.4"
+      version: "0.0.5"
       sourceRef:
         kind: HelmRepository
         name: reviews
@@ -540,7 +540,7 @@ Then mark the line in `pins.yaml` that Flux should rewrite:
 
 ```yaml
 image:
-  tag: 0.0.4 # {"$imagepolicy": "flux-system:reviews:tag"}
+  tag: 0.0.5 # {"$imagepolicy": "flux-system:reviews:tag"}
 ```
 
 This changes only the image, not the chart: the release's server then runs
@@ -584,8 +584,8 @@ runs `.github/scripts/check_chart.sh` and pushes the chart to
 `oci://ghcr.io/figitaki/charts/reviews`.
 
 A fix to the chart alone ships as a new patch release: bump every version
-(for example `0.0.4` to `0.0.5`), add the fix to `CHANGELOG.md`, and tag
-`server-v0.0.5`. The release also rebuilds the server image from the same
+(for example `0.0.5` to `0.0.6`), add the fix to `CHANGELOG.md`, and tag
+`server-v0.0.6`. The release also rebuilds the server image from the same
 commit, so the new chart and its default image still match.
 
 To check the chart locally, including that its versions match `mix.exs`:

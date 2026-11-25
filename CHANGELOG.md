@@ -6,28 +6,70 @@ Reviews uses semantic versioning. The first non-alpha release is 0.0.1.
 
 ## [Unreleased]
 
-- Generated and vendored files start collapsed (issue #231). `reviews push`
-  reads `linguist-generated` and `linguist-vendored` from `.gitattributes`
-  and sends them with the diff. The review page labels those files and never
-  opens them on its own, so a lockfile no longer opens with its section.
-  Open one with its toggle. Older CLIs send no flags, so nothing changes for
-  their pushes.
-- A tab left open across a deploy now says a new version is available and
-  offers a reload link, instead of showing new pages with the old CSS
-  (issue #268). It asks rather than reloads, so a comment in progress is not
-  lost.
-- The server can read its settings from a YAML file named by
-  `REVIEWS_CONFIG` (`config/reviews.example.yaml`, docs/CONFIGURATION.md).
-  A set environment variable wins over the file, so existing deployments do
-  not change. Secrets are named by `_file` keys, never written inline.
-  Unknown keys and wrong types stop the server at boot with an error naming
-  the key. The file can also set the rate and body-size limits.
-- The Helm chart writes that file into a ConfigMap, mounts it and sets
-  `REVIEWS_CONFIG`. A new `config` value adds any file key. For this release
-  the chart also still sets `PHX_HOST`, `PORT`, `POOL_SIZE`, `ECTO_IPV6`,
-  `MCP_*`, `LEGAL_*` and `DNS_CLUSTER_QUERY` as pod environment variables,
-  copied from the file. Those copies go away in the release after this one;
-  read the settings from the config file instead.
+## [0.0.5] - 2026-11-25
+
+0.0.5 lets you configure the server with one YAML file instead of a page of
+environment variables, and the Helm chart now uses that file. It also starts
+generated and vendored files collapsed, asks a tab left open across a deploy
+to reload, and fixes a db_connection advisory.
+
+### Added
+
+- **A YAML config file.** The server can read its settings from a file named
+  by `REVIEWS_CONFIG`; `config/reviews.example.yaml` shows every key and
+  docs/CONFIGURATION.md documents them. A set environment variable wins over
+  the file, so existing deployments do not change. Secrets are named by
+  `_file` keys, never written inline. Unknown keys and wrong types stop the
+  server at boot with an error naming the key. The file can also set the
+  rate and body-size limits (#283).
+- **The Helm chart uses the config file.** It writes the file into a
+  ConfigMap, mounts it and sets `REVIEWS_CONFIG`. A new `config` value adds
+  any file key (#283).
+- **Generated and vendored files start collapsed** (issue #231). `reviews
+  push` reads `linguist-generated` and `linguist-vendored` from
+  `.gitattributes` and sends them with the diff. The review page labels
+  those files and never opens them on its own, so a lockfile no longer opens
+  with its section. Open one with its toggle. Older CLIs send no flags, so
+  nothing changes for their pushes (#288).
+- **A reload prompt after a deploy.** A tab left open across a deploy now
+  says a new version is available and offers a reload link, instead of
+  showing new pages with the old CSS (issue #268). It asks rather than
+  reloads, so a comment in progress is not lost (#285).
+
+### Security
+
+- db_connection is 2.10.3, which fixes EEF-CVE-2026-133555
+  (GHSA-gmmq-fw75-wq46): code execution through the `:log` option of a
+  forged `DBConnection.Stream` struct. Reviews builds no streams from client
+  input. 2.10.3 was published on 2026-11-24, inside the 7-day release-age
+  rule; Carey approved an exception for this security fix (#284).
+
+### For integrators
+
+- `POST /api/v1/reviews` and the patchset endpoint accept an optional
+  `file_attributes` list, and `GET /api/v1/reviews/:slug` returns
+  `generated` and `vendored` on each file. A migration adds both columns,
+  defaulting to false. See docs/CONTRACTS.md (#288).
+- The server depends on yaml_elixir 2.12 to read the config file (#283).
+
+### Deprecated
+
+- For this release the chart still also sets `PHX_HOST`, `PORT`,
+  `POOL_SIZE`, `ECTO_IPV6`, `MCP_*`, `LEGAL_*` and `DNS_CLUSTER_QUERY` as pod
+  environment variables, copied from the config file. Those duplicates go
+  away in 0.0.6; tooling that reads them from the pod's environment should
+  read the config file instead (#283).
+
+### Not yet live
+
+- Code storage is still off on reviews.figitaki.dev; its
+  `/api/v1/capabilities` reports it disabled, so pushes there stay
+  diff-only.
+- reviews.figitaki.dev sets no `LEGAL_*` variable, so it shows no legal
+  pages yet.
+- The private aggregate analytics export is off unless its own credentials
+  are set, and the design catalog is on only in development and on previews.
+
 ## [0.0.4] - 2026-11-24
 
 0.0.4 makes Reviews something you can run yourself. A Helm chart runs the
